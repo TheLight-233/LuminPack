@@ -52,6 +52,9 @@ internal sealed partial class PairedDictionaryContext
     /// <param name="capability">The capability supplied to <c>Supports</c>.</param>
     /// <returns>Whether the input satisfies the supports check.</returns>
     internal bool Supports(string capability) => _set.FindFormatter(Dictionary)?.Supports(capability) == true;
+
+    /// <summary>Gets whether the referenced Core can fill a fresh concurrent dictionary while pairs are decoded.</summary>
+    internal bool ConcurrentDictionaryBuilder => _set.Options?.ConcurrentDictionaryBuilder == true;
     /// <summary>Whether both entry operations are raw unmanaged scalar stores.</summary>
     /// <summary>The Union root render model of the value, from the payload element or the closed contract, or null.</summary>
     internal PayloadRenderModel? UnionValue => _checkedUnion ?? (Payload is { UnionRoot: true } payload ? payload :

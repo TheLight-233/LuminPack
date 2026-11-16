@@ -83,8 +83,25 @@ internal static class ConcurrentDictionaryOwnerFile
         w.Line("value = global::LuminPack.Code.LuminPackCollectionAccess.CreateConcurrentDictionary(global::System.Array.Empty<" + c.Pair + ">(), length);");
         w.Line("goto operationComplete_RootRead;");
         w.Close();
-        c.ReadPairs(() => w.Line("value = global::LuminPack.Code.LuminPackCollectionAccess.CreateConcurrentDictionary(pairs, length);"),
-            knownNonEmpty: c.UsesRawOrStringEntries);
+        if (c.ConcurrentDictionaryBuilder)
+        {
+            // Decode and insert each pair into the unpublished dictionary; it is assigned only after the last pair.
+            w.Line("var builder = global::LuminPack.Code.LuminPackCollectionAccess.BeginConcurrentDictionary<" + c.Key + ", " + c.Value + ">(length);");
+            w.Line("int pending = length;");
+            w.Line("do");
+            w.Open();
+            w.Line(c.Key + " k = default !;");
+            w.Line(c.Value + " v = default !;");
+            c.ReadMember(c.Key, "k", fresh: true);
+            c.ReadMember(c.Value, "v", fresh: true);
+            w.Line("builder.Add(k!, v);");
+            w.Close();
+            w.Line("while (--pending != 0);");
+            w.Line("value = builder.Complete();");
+        }
+        else
+            c.ReadPairs(() => w.Line("value = global::LuminPack.Code.LuminPackCollectionAccess.CreateConcurrentDictionary(pairs, length);"),
+                knownNonEmpty: c.UsesRawOrStringEntries);
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();

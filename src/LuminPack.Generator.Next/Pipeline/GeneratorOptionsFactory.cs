@@ -74,7 +74,8 @@ internal static class GeneratorOptionsFactory
             generatedJsonPropertyWriter: net8 && !unity && GeneratedJsonProperty.Available(compilation),
             generatedJsonInt32Reader: net8 && !unity && GeneratedJsonInt32Runs.Available(compilation),
             hashSetRefill: FormatterConcurrentTraits.HasHashSetRefill(compilation),
-            linkedListAppender: FormatterConcurrentTraits.HasLinkedListAppender(compilation));
+            linkedListAppender: FormatterConcurrentTraits.HasLinkedListAppender(compilation),
+            concurrentDictionaryBuilder: FormatterConcurrentTraits.HasConcurrentDictionaryBuilder(compilation));
     }
 
     /// <summary>Checks that the compiler feature enables the generated interception namespace.</summary>

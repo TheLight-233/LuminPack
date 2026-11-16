@@ -138,6 +138,23 @@ internal static class FormatterConcurrentTraits
                 SymbolEqualityComparer.Default.Equals(method.ReturnType, collection.OriginalDefinition.Construct(method.TypeParameters[0])));
     }
 
+    /// <summary>Checks the optional pair-by-pair concurrent dictionary builder.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <returns>Whether the referenced helper has the expected public signature.</returns>
+    internal static bool HasConcurrentDictionaryBuilder(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var builder = compilation.GetTypeByMetadataName("LuminPack.Code.ConcurrentDictionaryBuilder`2");
+        return builder is { DeclaredAccessibility: Accessibility.Public } &&
+            builder.GetMembers("Add").OfType<IMethodSymbol>().Any(method => method.Parameters.Length == 2) &&
+            builder.GetMembers("Complete").OfType<IMethodSymbol>().Any(method => method.Parameters.IsEmpty) &&
+            owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
+            owner.GetMembers("BeginConcurrentDictionary").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 2 } &&
+                method.Parameters.Length == 1 && method.Parameters[0].Type.SpecialType == SpecialType.System_Int32 &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, builder.Construct(method.TypeParameters[0], method.TypeParameters[1])));
+    }
+
     /// <summary>Checks the optional direct linked-list appender.</summary>
     /// <param name="compilation">The consumer's Core and framework references.</param>
     /// <returns>Whether the referenced helper has the expected public signature.</returns>

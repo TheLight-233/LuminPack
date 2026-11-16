@@ -35,6 +35,85 @@ public static partial class LuminPackCollectionAccess
         }
     }
 
+    /// <summary>Starts a fresh concurrent dictionary that is filled pair by pair while the pairs are decoded.</summary>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    /// <param name="count">The validated pair count.</param>
+    /// <returns>A builder over an unpublished dictionary sized as the collection constructor sizes it.</returns>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public static ConcurrentDictionaryBuilder<TKey, TValue> BeginConcurrentDictionary<TKey, TValue>(int count) where TKey : notnull =>
+        new(count);
+
+#if NET10_0_OR_GREATER
+    /// <summary>Gets whether the validated in-place table fill is available for the closed types.</summary>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    /// <returns>Whether the framework table layout passed its probe.</returns>
+    internal static bool ConcurrentDictionaryDirect<TKey, TValue>() where TKey : notnull => ConcurrentConstruction<TKey, TValue>.Available;
+
+    /// <summary>Gets the current table object of a dictionary.</summary>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    /// <param name="map">The dictionary.</param>
+    /// <returns>The framework table object.</returns>
+    internal static object ConcurrentDictionaryTables<TKey, TValue>(ConcurrentDictionary<TKey, TValue> map) where TKey : notnull =>
+        LuminFieldLayout.Field<object>(map, ConcurrentBucketStorage<TKey, TValue>.Tables);
+
+    /// <summary>Gets the node slots of a table.</summary>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    /// <param name="tables">The framework table object.</param>
+    /// <returns>The bucket node references.</returns>
+    internal static Span<object?> ConcurrentDictionaryBuckets<TKey, TValue>(object tables) where TKey : notnull =>
+        ConcurrentConstruction<TKey, TValue>.Buckets(tables);
+
+    /// <summary>Gets the per-stripe counts of a table.</summary>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    /// <param name="tables">The framework table object.</param>
+    /// <returns>The count per lock.</returns>
+    internal static int[] ConcurrentDictionaryCounts<TKey, TValue>(object tables) where TKey : notnull =>
+        LuminFieldLayout.Field<int[]>(tables, ConcurrentConstruction<TKey, TValue>.Counts);
+
+    /// <summary>Gets the comparer held by a table.</summary>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    /// <param name="tables">The framework table object.</param>
+    /// <returns>The comparer, or null for the default value-type comparer.</returns>
+    internal static IEqualityComparer<TKey>? ConcurrentDictionaryComparer<TKey, TValue>(object tables) where TKey : notnull =>
+        LuminFieldLayout.Field<IEqualityComparer<TKey>?>(tables, ConcurrentConstruction<TKey, TValue>.Comparer);
+
+    /// <summary>Gets the per-stripe insertion budget of a dictionary.</summary>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    /// <param name="map">The dictionary.</param>
+    /// <returns>The budget.</returns>
+    internal static int ConcurrentDictionaryBudget<TKey, TValue>(ConcurrentDictionary<TKey, TValue> map) where TKey : notnull =>
+        LuminFieldLayout.Field<int>(map, ConcurrentConstruction<TKey, TValue>.Budget);
+
+    /// <summary>Allocates a framework node.</summary>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    /// <param name="key">The key.</param>
+    /// <param name="value">The value.</param>
+    /// <param name="hash">The table's key hash.</param>
+    /// <returns>The node.</returns>
+    internal static object ConcurrentDictionaryNode<TKey, TValue>(TKey key, TValue value, int hash) where TKey : notnull =>
+        ConcurrentConstruction<TKey, TValue>.NewNode(key, value, hash, null);
+
+    /// <summary>Runs the framework insertion without locks for a pair that did not land in an empty bucket.</summary>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    /// <param name="map">The unpublished dictionary.</param>
+    /// <param name="tables">The table the hash was computed for.</param>
+    /// <param name="key">The key.</param>
+    /// <param name="hash">The hash.</param>
+    /// <param name="value">The value.</param>
+    /// <returns>Whether the key was added; a repeated key keeps its first value.</returns>
+    internal static bool ConcurrentDictionaryInsert<TKey, TValue>(ConcurrentDictionary<TKey, TValue> map, object tables, TKey key, int hash, TValue value)
+        where TKey : notnull => ConcurrentConstruction<TKey, TValue>.Insert(map, tables, key, hash, value, false, false, out _);
+#endif
+
     /// <summary>Checks read pairs for a repeated key under the default comparer.</summary>
     /// <typeparam name="TKey">The key type.</typeparam>
     /// <typeparam name="TValue">The value type.</typeparam>
@@ -58,9 +137,9 @@ public static partial class LuminPackCollectionAccess
     {
         private const string TablesType = "System.Collections.Concurrent.ConcurrentDictionary`2+Tables[[!0],[!1]], System.Collections.Concurrent";
         private const string NodeType = "System.Collections.Concurrent.ConcurrentDictionary`2+Node[[!0],[!1]], System.Collections.Concurrent";
-        private static readonly int Counts;
-        private static readonly int Comparer;
-        private static readonly int Budget;
+        internal static readonly int Counts;
+        internal static readonly int Comparer;
+        internal static readonly int Budget;
         internal static readonly bool Available;
 
         /// <summary>Checks field types, node allocation and insertion without running user key or value methods.</summary>
@@ -100,7 +179,7 @@ public static partial class LuminPackCollectionAccess
         /// <summary>Exposes the single managed node reference proved by the traversal layout.</summary>
         /// <param name="tables">The dictionary's current tables.</param>
         /// <returns>The node slots of its buckets.</returns>
-        private static Span<object?> Buckets(object tables)
+        internal static Span<object?> Buckets(object tables)
         {
             var array = LuminFieldLayout.Field<Array>(tables, ConcurrentBucketStorage<TKey, TValue>.Buckets);
             return MemoryMarshal.CreateSpan(ref Unsafe.As<byte, object?>(ref Unsafe.As<byte[]>(array)[0]), array.Length);
@@ -160,7 +239,7 @@ public static partial class LuminPackCollectionAccess
         /// <returns>The initialized framework node.</returns>
         [UnsafeAccessor(UnsafeAccessorKind.Constructor)]
         [return: UnsafeAccessorType(NodeType)]
-        private static extern object NewNode(TKey key, TValue value, int hash, [UnsafeAccessorType(NodeType)] object? next);
+        internal static extern object NewNode(TKey key, TValue value, int hash, [UnsafeAccessorType(NodeType)] object? next);
 
         /// <summary>Runs the framework constructor's insertion on an occupied bucket or at a growth boundary.</summary>
         /// <param name="map">The unpublished dictionary.</param>
@@ -173,7 +252,7 @@ public static partial class LuminPackCollectionAccess
         /// <param name="result">The existing or inserted value.</param>
         /// <returns>Whether the key was inserted.</returns>
         [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "TryAddInternal")]
-        private static extern bool Insert(ConcurrentDictionary<TKey, TValue> map, [UnsafeAccessorType(TablesType)] object tables,
+        internal static extern bool Insert(ConcurrentDictionary<TKey, TValue> map, [UnsafeAccessorType(TablesType)] object tables,
             TKey key, int? hash, TValue value, bool update, bool acquireLock, out TValue result);
     }
 
@@ -183,4 +262,96 @@ public static partial class LuminPackCollectionAccess
     [UnsafeAccessor(UnsafeAccessorKind.StaticMethod, Name = "get_ConcurrentDictionary_SourceContainsDuplicateKeys")]
     private static extern string DuplicateKeyMessage([UnsafeAccessorType("System.SR, System.Collections.Concurrent")] object? owner);
 #endif
+}
+
+/// <summary>Fills an unpublished concurrent dictionary one decoded pair at a time with the collection constructor's insertion.</summary>
+/// <typeparam name="TKey">The key type.</typeparam>
+/// <typeparam name="TValue">The value type.</typeparam>
+/// <remarks>On validated .NET 10 and 11 x64 layouts a pair whose bucket is empty and whose stripe has budget becomes a new
+/// framework node in place; other pairs use the framework insertion with the hash already computed, which handles equality,
+/// rehashing and growth. A repeated key keeps its first value, as the constructor's duplicate replay does. Other runtimes use
+/// <c>TryAdd</c>. The dictionary is returned only by <see cref="Complete"/>, so a failed read publishes nothing.</remarks>
+[System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+public struct ConcurrentDictionaryBuilder<TKey, TValue> where TKey : notnull
+{
+    private readonly ConcurrentDictionary<TKey, TValue> _map;
+#if NET10_0_OR_GREATER
+    private readonly bool _direct;
+    private object? _tables;
+    private int[]? _counts;
+    private IEqualityComparer<TKey>? _comparer;
+    private int _budget;
+    private ulong _bucketMultiplier;
+    private ulong _stripeMultiplier;
+#endif
+
+    /// <summary>Creates the unpublished dictionary.</summary>
+    /// <param name="count">The validated pair count.</param>
+    internal ConcurrentDictionaryBuilder(int count)
+    {
+        // The collection constructor never sizes below the framework's default capacity of 31.
+        _map = new ConcurrentDictionary<TKey, TValue>(Environment.ProcessorCount, Math.Max(count, 31));
+#if NET10_0_OR_GREATER
+        _direct = LuminPackCollectionAccess.ConcurrentDictionaryDirect<TKey, TValue>();
+        _tables = null;
+        _counts = null;
+        _comparer = null;
+        _budget = 0;
+        _bucketMultiplier = 0;
+        _stripeMultiplier = 0;
+        if (_direct)
+            Refresh();
+#endif
+    }
+
+#if NET10_0_OR_GREATER
+    /// <summary>Captures the dictionary's current table, counts, comparer and budget.</summary>
+    private void Refresh()
+    {
+        _tables = LuminPackCollectionAccess.ConcurrentDictionaryTables(_map);
+        _counts = LuminPackCollectionAccess.ConcurrentDictionaryCounts<TKey, TValue>(_tables);
+        _comparer = LuminPackCollectionAccess.ConcurrentDictionaryComparer<TKey, TValue>(_tables);
+        _budget = LuminPackCollectionAccess.ConcurrentDictionaryBudget<TKey, TValue>(_map);
+        _bucketMultiplier = LuminPackMarshal.GetFastModMultiplier((uint)LuminPackCollectionAccess.ConcurrentDictionaryBuckets<TKey, TValue>(_tables).Length);
+        _stripeMultiplier = LuminPackMarshal.GetFastModMultiplier((uint)_counts.Length);
+    }
+#endif
+
+    /// <summary>Adds one decoded pair, keeping the first value of a repeated key.</summary>
+    /// <param name="key">The decoded key; a null key throws.</param>
+    /// <param name="value">The decoded value.</param>
+    public void Add(TKey key, TValue value)
+    {
+        if (key is null)
+            LuminPackExceptionHelper.ThrowArgumentNullException("key");
+#if NET10_0_OR_GREATER
+        if (_direct)
+        {
+            int hash = _comparer is null ? key.GetHashCode() : _comparer.GetHashCode(key);
+            var buckets = LuminPackCollectionAccess.ConcurrentDictionaryBuckets<TKey, TValue>(_tables!);
+            uint bucket = (uint)hash;
+            if (bucket >= (uint)buckets.Length)
+                bucket = LuminPackMarshal.FastMod(bucket, (uint)buckets.Length, _bucketMultiplier);
+            ref object? slot = ref buckets[(int)bucket];
+            ref int stripe = ref _counts![LuminPackMarshal.FastMod(bucket, (uint)_counts.Length, _stripeMultiplier)];
+            if (slot is null && stripe < _budget)
+            {
+                slot = LuminPackCollectionAccess.ConcurrentDictionaryNode(key, value, hash);
+                stripe++;
+                return;
+            }
+            LuminPackCollectionAccess.ConcurrentDictionaryInsert(_map, _tables!, key, hash, value);
+            if (!ReferenceEquals(_tables, LuminPackCollectionAccess.ConcurrentDictionaryTables(_map)))
+                Refresh();
+            else
+                _budget = LuminPackCollectionAccess.ConcurrentDictionaryBudget<TKey, TValue>(_map);
+            return;
+        }
+#endif
+        _map.TryAdd(key, value);
+    }
+
+    /// <summary>Returns the completed dictionary.</summary>
+    /// <returns>The filled dictionary.</returns>
+    public readonly ConcurrentDictionary<TKey, TValue> Complete() => _map;
 }

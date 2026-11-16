@@ -75,6 +75,9 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <summary>Whether the referenced Core can link linked-list nodes while elements are decoded.</summary>
     internal readonly bool LinkedListAppender;
 
+    /// <summary>Whether the referenced Core can fill a fresh concurrent dictionary while pairs are decoded.</summary>
+    internal readonly bool ConcurrentDictionaryBuilder;
+
     /// <summary>Captures the project facts.</summary>
     /// <param name="net8">Whether to enable net8 for this operation.</param>
     /// <param name="csharpVersion">The csharp version supplied to <c>GeneratorOptions</c>.</param>
@@ -95,12 +98,14 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <param name="generatedJsonInt32Reader">Whether the referenced Core exposes the generated integer-run reader.</param>
     /// <param name="hashSetRefill">Whether the referenced Core exposes the reused hash-set refill preparation.</param>
     /// <param name="linkedListAppender">Whether the referenced Core exposes the direct linked-list appender.</param>
+    /// <param name="concurrentDictionaryBuilder">Whether the referenced Core exposes the concurrent dictionary builder.</param>
     internal GeneratorOptions(bool net8, int csharpVersion, bool @unsafe, bool unity, RegisterMode registerMode, int availableAliases,
         string assemblyName, bool interceptors, bool ilRewrite = false, bool pointerCursor = false, string[]? ambiguousNames = null,
         int formatterInterfaces = 0, bool knownFormatters = false, bool quotedScalarReader = false, bool spanCursor = false,
         bool generatedJsonPropertyWriter = false, bool generatedJsonInt32Reader = false, bool hashSetRefill = false,
-        bool linkedListAppender = false)
+        bool linkedListAppender = false, bool concurrentDictionaryBuilder = false)
     {
+        ConcurrentDictionaryBuilder = concurrentDictionaryBuilder;
         LinkedListAppender = linkedListAppender;
         HashSetRefill = hashSetRefill;
         GeneratedJsonPropertyWriter = generatedJsonPropertyWriter;
@@ -130,6 +135,7 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
         KnownFormatters == other.KnownFormatters && QuotedScalarReader == other.QuotedScalarReader &&
         GeneratedJsonPropertyWriter == other.GeneratedJsonPropertyWriter && GeneratedJsonInt32Reader == other.GeneratedJsonInt32Reader &&
         HashSetRefill == other.HashSetRefill && LinkedListAppender == other.LinkedListAppender &&
+        ConcurrentDictionaryBuilder == other.ConcurrentDictionaryBuilder &&
         System.Linq.Enumerable.SequenceEqual(AmbiguousNames, other.AmbiguousNames);
 
     /// <inheritdoc/>
