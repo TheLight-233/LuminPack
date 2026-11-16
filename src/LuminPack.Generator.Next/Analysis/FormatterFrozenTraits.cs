@@ -27,6 +27,22 @@ internal static class FormatterFrozenTraits
         return access.GetMembers("Rent" + family).OfType<IMethodSymbol>().Any(method => Matches(method, true)) && access.GetMembers("Return" + family).OfType<IMethodSymbol>().Any(method => Matches(method, false));
     }
 
+    /// <summary>Checks the optional raw binary set builder release.</summary>
+    /// <param name="compilation">The actual consumer references.</param>
+    /// <param name="set">The closed set storage type.</param>
+    /// <returns>Whether the runtime accepts the validated count on return.</returns>
+    internal static bool CanReturnRawSet(Compilation compilation, INamedTypeSymbol set)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminFrozenConstruction");
+        return owner is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } &&
+            owner.GetMembers("ReturnRawSet").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } &&
+                method.TypeParameters[0].HasUnmanagedTypeConstraint && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+                method.Parameters.Length == 2 && method.Parameters[0].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, set.Construct(method.TypeParameters[0])) &&
+                method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32);
+    }
+
     /// <summary>Checks the complete raw pair helper against the actual consumer metadata.</summary>
     /// <param name = "compilation">The consumer compilation.</param>
     /// <returns>Whether two scalar spans can use the complete fixed writer contract.</returns>

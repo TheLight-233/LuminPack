@@ -13,6 +13,8 @@ namespace LuminPack.Utility;
 public static class LuminFrozenConstruction
 {
     private const int MaximumRetainedCapacity = 4096;
+    private const int LastRawSetPrimeBelowLimit = 4049;
+    private const int MaximumRetainedRawSetCapacity = 4861;
 
     /// <summary>Rents an exclusive empty dictionary using the default comparer.</summary>
     /// <typeparam name="TKey">The key type.</typeparam>
@@ -62,11 +64,28 @@ public static class LuminFrozenConstruction
     /// <typeparam name="T">The element type.</typeparam>
     /// <param name="value">The exclusively owned construction set.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static void ReturnSet<T>(HashSet<T> value)
+    public static void ReturnSet<T>(HashSet<T> value) => ReturnSet(value, MaximumRetainedCapacity);
+
+    /// <summary>Releases a fixed raw set builder, allowing the framework bucket needed for up to 4096 requested elements.</summary>
+    /// <typeparam name="T">The raw callback-free element type.</typeparam>
+    /// <param name="value">The exclusively owned construction set.</param>
+    /// <param name="requestedCount">The validated count before insertion.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static void ReturnRawSet<T>(HashSet<T> value, int requestedCount) where T : unmanaged =>
+        ReturnSet(value, requestedCount is > LastRawSetPrimeBelowLimit and <= MaximumRetainedCapacity
+            ? MaximumRetainedRawSetCapacity
+            : MaximumRetainedCapacity);
+
+    /// <summary>Clears and releases a bounded private builder.</summary>
+    /// <typeparam name="T">The element type.</typeparam>
+    /// <param name="value">The exclusively owned set.</param>
+    /// <param name="maximumCapacity">The accepted upper bound of retained capacity.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ReturnSet<T>(HashSet<T> value, int maximumCapacity)
     {
         int count = value.Count, capacity = value.EnsureCapacity(0);
         value.Clear();
-        if (capacity <= MaximumRetainedCapacity && capacity <= Math.Max(128, count * 4) && ReferenceEquals(value.Comparer, EqualityComparer<T>.Default))
+        if (capacity <= maximumCapacity && capacity <= Math.Max(128, count * 4) && ReferenceEquals(value.Comparer, EqualityComparer<T>.Default))
             Cache<HashSet<T>>.Items.TryStore(value);
     }
 

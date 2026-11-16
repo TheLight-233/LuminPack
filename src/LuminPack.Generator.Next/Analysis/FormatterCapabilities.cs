@@ -330,7 +330,11 @@ internal static class FormatterCapabilities
             if (RawCallbackFreeSetElement(element) && compilation.GetTypeByMetadataName("System.Collections.Generic.HashSet`1") is { } hashSet &&
                 FormatterRuntimeTraits.HasCollectionTransfer(compilation, hashSet, "LuminPack.Utility.LuminFrozenConstruction",
                     "AddRawSetItems", "LuminPackReader", SpecialType.System_Void, takesCount: true))
+            {
                 result.Add("ReadFrozenRawSetItems");
+                if (modern && !unity && FormatterFrozenTraits.CanReturnRawSet(compilation, hashSet))
+                    result.Add("ReturnRawFrozenSet");
+            }
         }
         if (definition == "System.Collections.Frozen.FrozenDictionary")
         {

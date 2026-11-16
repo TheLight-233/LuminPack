@@ -55,6 +55,7 @@ internal static class FrozenSetOwnerFile
         w.Close();
         w.Blank();
         bool rented = c.Supports("RentFrozenSet");
+        bool raw = !c.Counted && c.Supports("ReadFrozenRawSetItems");
         w.Line(rented ? "var hashSet = global::LuminPack.Utility.LuminFrozenConstruction.RentSet<" + c.Scalar + ">(length);" :
             "var hashSet = new global::System.Collections.Generic.HashSet<" + c.Scalar + ">(length);");
         if (rented)
@@ -62,7 +63,7 @@ internal static class FrozenSetOwnerFile
             w.Line("try");
             w.Open();
         }
-        if (!c.Counted && c.Supports("ReadFrozenRawSetItems"))
+        if (raw)
         {
             w.Line("global::LuminPack.Utility.LuminFrozenConstruction.AddRawSetItems(ref operationState, hashSet, length);");
             w.Line("value = global::System.Collections.Frozen.FrozenSet.ToFrozenSet(hashSet);");
@@ -87,7 +88,9 @@ internal static class FrozenSetOwnerFile
             w.Close();
             w.Line("finally");
             w.Open();
-            w.Line("global::LuminPack.Utility.LuminFrozenConstruction.ReturnSet(hashSet);");
+            w.Line(raw && c.Supports("ReturnRawFrozenSet")
+                ? "global::LuminPack.Utility.LuminFrozenConstruction.ReturnRawSet(hashSet, length);"
+                : "global::LuminPack.Utility.LuminFrozenConstruction.ReturnSet(hashSet);");
             w.Close();
         }
     }
