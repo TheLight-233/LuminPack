@@ -22,6 +22,15 @@ internal static partial class BinaryEmitter
     internal static string RejectUnsupported(string reason) => "global::LuminPack.Security.LuminPackInputPolicy.RejectUnsupported(" +
         Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(reason, true) + ");";
 
+    private static bool HasWriteProfile(PayloadRenderModel model) =>
+        !(model.DeclaredProfile != null && model.MemberWrite) &&
+        (model.Version != null || model.ProfilePayload || model.InlineArray);
+
+    private static bool HasReadProfile(PayloadRenderModel model) =>
+        !(model.DeclaredProfile != null && model.MemberWrite) &&
+        (model.Version != null || model.ProfilePayload || model.InlineArray || model.InlineList ||
+            model.Members.Any(member => member.Kind is not (RenderMemberKind.Fixed or RenderMemberKind.Object)));
+
     /// <summary>Emits the complete binary file body.</summary>
     /// <param name="model">The covered type.</param>
     /// <param name="w">The file writer.</param>
@@ -34,11 +43,8 @@ internal static partial class BinaryEmitter
         // no profile parameter at all.
         bool fixedProfile = model.DeclaredProfile != null && model.MemberWrite;
         // Version-tolerant roots always take the operation's profile, and so does a string anywhere in an inline object below.
-        bool genericWrite = !fixedProfile && (model.Version != null || model.ProfilePayload || model.InlineArray);
-        // A fixed member or an inline object of fixed members needs no profile; anything else, including a string in an inline
-        // object, does.
-        bool genericRead = !fixedProfile && (model.Version != null || model.ProfilePayload || model.InlineArray || model.InlineList ||
-            members.Any(member => member.Kind is not (RenderMemberKind.Fixed or RenderMemberKind.Object)));
+        bool genericWrite = HasWriteProfile(model);
+        bool genericRead = HasReadProfile(model);
         bool allFixed = members.All(member => member.IsFixed);
         string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
         // State parameters are spelled through the imported namespace; the other helper names are qualified until presentation.
@@ -1202,6 +1208,14 @@ internal static partial class BinaryEmitter
                 owner + "." + member.Name + ");");
             return;
         }
+        var child = member.Nested;
+        if (CanCallStreamMemberWriter(child))
+        {
+            string profile = HasWriteProfile(child) ? "<" + Profile + ">" : string.Empty;
+            body.Add(BinaryRoot(w, child) + "RootWrite" + profile +
+                "(ref writer, " + owner + "." + member.Name + ");");
+            return;
+        }
         string name = InlineName(names, "inlineValue", depth);
         body.Add("var " + name + " = " + owner + "." + member.Name + ";");
         body.Add("if (" + name + " is null)");
@@ -1216,6 +1230,16 @@ internal static partial class BinaryEmitter
         AddStreamWrite(body, member.Nested, name, depth + 1, w, names, ref ends, ref cursors, ref spans);
         body.Add("}");
     }
+
+    private static string BinaryRoot(CodeWriter w, PayloadRenderModel model) =>
+        w.A("LuminPackSerializer") + ".LuminRoots_" + model.Readable + ".";
+
+    // A standalone root with the same stream or fixed stores preserves the member's capacity checks and
+    // failure prefix. A reserving root may acquire a different output window.
+    private static bool CanCallStreamMemberWriter(PayloadRenderModel child) =>
+        child.TypeParameters.Length == 0 && child.Bounded == null && !child.Recursive &&
+        child.Rejection == null && !child.HasDictionary && RenderModelFactory.Covered(child) &&
+        (child.StreamRecord || child.Members.All(field => field.IsFixed) && RunEnd(child.Members, 0) == child.Members.Length - 1);
 
     /// <summary>Expands a culture-info member's shared write body in place: the null/object header and the name string record.</summary>
     /// <param name="body">The body lines.</param>
@@ -2617,21 +2641,18 @@ internal static partial class BinaryEmitter
                 body.RemoveAt(index);
         while (body[body.Count - 1].Length == 0)
             body.RemoveAt(body.Count - 1);
-        RenameCheckedReadInstance(body, model, union);
+        RenameCheckedReadInstance(body, model);
         return body;
     }
 
-    /// <summary>Renames the instance local of a read root whose Boolean collection takes the checked completion. The
-    /// untrusted-read projection inlines that root under its entry prefix, which the published file keeps as the role
-    /// name.</summary>
+    /// <summary>Gives both checked framing bodies the same instance local before sharing their statements.</summary>
     /// <param name="body">The statements in the generated operation body.</param>
     /// <param name="model">The normalized model for this contract.</param>
-    /// <param name="union">Whether to enable union for this operation.</param>
-    private static void RenameCheckedReadInstance(List<string> body, PayloadRenderModel model, bool union)
+    private static void RenameCheckedReadInstance(List<string> body, PayloadRenderModel model)
     {
         if (!model.BooleanCollection || model.Trusted)
             return;
-        string name = union ? "lp1_v2" : "lp0_v2";
+        const string name = "lp0_v2";
         var pattern = new System.Text.RegularExpressions.Regex(@"\binstance\b");
         for (int index = 0; index < body.Count; index++)
             body[index] = pattern.Replace(body[index], name);
@@ -2660,7 +2681,7 @@ internal static partial class BinaryEmitter
         while (body.Count != 0 && body[body.Count - 1].Length == 0)
             body.RemoveAt(body.Count - 1);
         ReduceInlineNames(body);
-        RenameCheckedReadInstance(body, model, union);
+        RenameCheckedReadInstance(body, model);
         return body;
     }
 
@@ -2695,6 +2716,11 @@ internal static partial class BinaryEmitter
                     !member.Nested.Members.Any(item => item.Mirrored) &&
                     member.Nested.Members.All(item => item.IsFixed || item.Kind == RenderMemberKind.Text))
                 {
+                    if (CanCallCheckedChildRead(model, member))
+                    {
+                        AddFormatterMemberRead(body, model, member, owner, objectFraming: true, w, names);
+                        continue;
+                    }
                     string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
                     ends++;
                     body.Add("reader.EnsureReadable(1);");
@@ -2710,6 +2736,11 @@ internal static partial class BinaryEmitter
                     bool opensCursorAfter = !prove && index + 1 < members.Length && members[index + 1].IsFixed && RunEnd(members, index + 1) > index + 1;
                     if (!opensCursorAfter)
                         body.Add("");
+                    continue;
+                }
+                if (CanCallInlineMemberRead(model, member, prove, markerSeen))
+                {
+                    AddFormatterMemberRead(body, model, member, owner, prove, w, names);
                     continue;
                 }
                 string name = InlineName(names, "inlineRead", depth);
@@ -2866,6 +2897,63 @@ internal static partial class BinaryEmitter
             body.Add("");
             index = last;
         }
+    }
+
+    // This branch already used the child's exact object read, including the child's checked marker.
+    private static bool CanCallCheckedChildRead(PayloadRenderModel parent, RenderMember member) =>
+        parent.Redirect == null && member.Nested.Limits?.Bounded != true && !member.Nested.Recursive &&
+        member.Nested.Rejection == null && member.Nested.TypeParameters.Length == 0;
+
+    private static bool CanCallInlineMemberRead(PayloadRenderModel parent, RenderMember member, bool prove, bool markerSeen)
+    {
+        var child = member.Nested;
+        // An untrusted payload reader can validate its first lone byte as a marker, including in a child
+        // reached before that marker. Reuse it only when the caller's marker state agrees or cannot matter.
+        bool sameMarkerState = prove || !markerSeen || child.Trusted ||
+            !child.Members.Any(field => field.Scalar == "byte" || field.Kind == RenderMemberKind.Object);
+        return parent.Net8 && !member.Mirrored && !member.Property && !member.Volatile &&
+            parent.Redirect == null && child.Redirect == null && parent.Trusted == child.Trusted &&
+            parent.Limits?.Bounded != true && child.Limits?.Bounded != true &&
+            !child.Recursive && child.Rejection == null && child.Bounded == null && child.TypeParameters.Length == 0 &&
+            child.DeclaredProfile == null && member.ScopeProfile == null && sameMarkerState &&
+            RenderModelFactory.Covered(child);
+    }
+
+    /// <summary>Calls the concrete reader with the existing framing and delays the member assignment until it returns.</summary>
+    /// <param name="body">The parent read statements.</param>
+    /// <param name="parent">The containing record.</param>
+    /// <param name="member">The nested record member.</param>
+    /// <param name="owner">The containing instance expression.</param>
+    /// <param name="objectFraming">Whether the child uses object framing and field address proofs.</param>
+    /// <param name="w">The source writer.</param>
+    /// <param name="names">The local name counters.</param>
+    private static void AddFormatterMemberRead(List<string> body, PayloadRenderModel parent, RenderMember member,
+        string owner, bool objectFraming, CodeWriter w, Dictionary<string, int> names)
+    {
+        var child = member.Nested;
+        string target = owner + "." + member.Name;
+        string local = RoleName(names, "nestedValue");
+        string profile = HasReadProfile(child) ? "<" + Profile + ">" : string.Empty;
+        string root = BinaryRoot(w, child);
+        body.Add("var " + local + " = " + target + ";");
+        if (objectFraming)
+        {
+            body.Add("if (reader.PeekIsNullObject())");
+            body.Add("\t" + local + " = default;");
+            body.Add(root + "RootRead" + profile + "(ref reader, ref " + local + ");");
+        }
+        else
+        {
+            string marker = parent.Trusted ? "reader.Read<byte>() == 255"
+                : w.A("LuminPackInputPolicy") + ".ReadNullMarker(ref reader, " +
+                  child.Members.Length.ToString(CultureInfo.InvariantCulture) + ")";
+            body.Add("if (" + marker + ")");
+            body.Add("\t" + local + " = default;");
+            body.Add("else");
+            body.Add("\t" + root + "RootReadUnion" + profile + "(ref reader, ref " + local + ");");
+        }
+        body.Add(target + " = " + local + "!;");
+        body.Add(string.Empty);
     }
 
     /// <summary>Builds the checked root read of an explicitly untrusted child inside a trusted parent: the child's own null

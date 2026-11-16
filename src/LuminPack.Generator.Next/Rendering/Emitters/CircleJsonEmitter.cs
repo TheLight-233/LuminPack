@@ -40,8 +40,7 @@ internal static class CircleJsonEmitter
         w.Line("internal static void RootWriteJson<" + Profile + ">(scoped ref " + jsonWriter + " writer, " + type + "? input)");
         w.Indented(() => w.Line(constraint));
         w.Open();
-        var writeBody = WriteBody(model, w, helper, new CircleJsonNames(), null, null, true);
-        CircleJsonNames.Resolve(writeBody);
+        var writeBody = WriteBody(model, w, helper);
         JsonEmitter.Lines(w, writeBody);
         w.Close();
         w.Blank();
@@ -123,113 +122,43 @@ internal static class CircleJsonEmitter
     /// <returns>The resulting text.</returns>
     private static string Helper(PayloadRenderModel model) => "global::LuminPack.Generated." + model.Extension + "." + model.JsonHelper;
 
-    /// <summary>Names the locals and exit labels of one JSON write method.</summary>
-    private sealed class CircleJsonNames
-    {
-        private readonly Dictionary<string, int> _counts = new Dictionary<string, int>(StringComparer.Ordinal);
-        private readonly HashSet<string> _used = new HashSet<string>(StringComparer.Ordinal);
-        private int _labels;
-
-        /// <summary>The next occurrence of a role local, dropping a trailing zero when its stem is still free.</summary>
-        /// <param name="canonical">The canonical supplied to <c>Next</c>.</param>
-        /// <returns>The resulting text.</returns>
-        internal string Next(string canonical)
-        {
-            bool first = !_counts.ContainsKey(canonical);
-            _counts[canonical] = first ? 1 : _counts[canonical] + 1;
-            string name;
-            if (first && canonical.Length > 1 && canonical[canonical.Length - 1] == '0' &&
-                char.IsLetter(canonical[canonical.Length - 2]) && !_used.Contains(canonical.Substring(0, canonical.Length - 1)))
-            {
-                name = canonical.Substring(0, canonical.Length - 1);
-                _used.Add(canonical);
-            }
-            else
-                name = canonical;
-            int ordinal = 2;
-            while (!_used.Add(name))
-                name = canonical + ordinal++.ToString(CultureInfo.InvariantCulture);
-            return name;
-        }
-
-        /// <summary>Reserves the placeholder of one inline object's exit label.</summary>
-        /// <returns>The resulting text.</returns>
-        internal string Token() => "\u0004" + (_labels++).ToString(CultureInfo.InvariantCulture) + "\u0004";
-
-        /// <summary>Numbers the exit labels in the order the finished body closes them.</summary>
-        /// <param name="body">The statements in the generated operation body.</param>
-        internal static void Resolve(List<string> body)
-        {
-            var labels = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (string line in body)
-            {
-                if (line.Length == 0 || line[0] != '\u0004')
-                    continue;
-                int end = line.IndexOf('\u0004', 1);
-                if (end < 0)
-                    continue;
-                string token = line.Substring(0, end + 1);
-                if (!labels.ContainsKey(token))
-                    labels.Add(token, "end" + labels.Count.ToString(CultureInfo.InvariantCulture));
-            }
-            if (labels.Count == 0)
-                return;
-            for (int index = 0; index < body.Count; index++)
-                if (body[index].IndexOf('\u0004') >= 0)
-                    foreach (var pair in labels)
-                        body[index] = body[index].Replace(pair.Key, pair.Value);
-        }
-    }
-
     /// <summary>Builds the JSON write body of one record.</summary>
     /// <param name="model">The record being written.</param>
     /// <param name="w">The file writer.</param>
     /// <param name="helper">The record's JSON name-table helper.</param>
-    /// <param name="names">The shared local names of the enclosing root method.</param>
-    /// <param name="body">The lines receiving the body, or null for a new list.</param>
-    /// <param name="inputName">The already named input of an inline copy, or null.</param>
-    /// <param name="expand">Whether a small reference member copies the child's write body.</param>
-    /// <param name="exit">The placeholder an inline copy jumps to instead of returning, or null for a root.</param>
-    /// <param name="stack">The record types whose write bodies are already copied into this method.</param>
-    /// <param name="includeStaticHeads">Whether to emit the bounded property-head path outside the expansion cost calculation.</param>
-    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
-    private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, string helper, CircleJsonNames names, List<string> body,
-        string inputName, bool expand, string exit = null, HashSet<string> stack = null, bool includeStaticHeads = true)
+    /// <returns>The generated write statements.</returns>
+    private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, string helper)
     {
-        body ??= new List<string>();
-        stack ??= new HashSet<string>(StringComparer.Ordinal) { model.GlobalName };
-        string value = inputName ?? names.Next("value");
-        if (inputName == null)
-        {
-            if (model.CircleGuarded)
-                body.Add(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
-            body.Add("var " + value + " = input;");
-        }
+        var body = new List<string>();
+        const string value = "value", isUtf8 = "isUtf8", exists = "existsReference", id = "id";
+        if (model.CircleGuarded)
+            body.Add(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
+        body.Add("var " + value + " = input;");
         body.Add("if (" + value + " == null)");
         body.Add("{");
         body.Add("writer.WriteNull<" + Profile + ">();");
-        body.Add(exit == null ? "return;" : "goto " + exit + ";");
+        body.Add("return;");
         body.Add("}");
         body.Add("");
-        string isUtf8 = names.Next("isUtf8"), exists = names.Next("existsReference"), id = names.Next("id");
         body.Add("bool " + isUtf8 + " = default(" + Profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8;");
         body.Add("var(" + exists + ", " + id + ") = writer.OptionState.GetOrAddReference(" + value + ");");
         body.Add("if (" + exists + ")");
         body.Add("{");
         body.Add("writer.WriteObjectStart<" + Profile + ">();");
-        bool staticHeads = includeStaticHeads && model.GeneratedPropertyHeads;
+        bool staticHeads = model.GeneratedPropertyHeads;
         AppendProperty(body, helper, isUtf8, "@ref", "$ref", staticHeads);
         body.Add("writer.Write<" + Profile + ">(" + id + ");");
         body.Add("writer.WriteObjectEnd<" + Profile + ">();");
-        body.Add(exit == null ? "return;" : "goto " + exit + ";");
+        body.Add("return;");
         body.Add("}");
         body.Add("");
         if (model.Members.Any(member => member.Mirrored))
-            body.Add("ref var " + names.Next("local") + " = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " + value + "!);");
+            body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " + value + "!);");
         body.Add("writer.WriteObjectStart<" + Profile + ">();");
         body.Add("// Write the object reference identifier.");
         AppendProperty(body, helper, isUtf8, "id", "$id", staticHeads);
         body.Add("writer.Write<" + Profile + ">(" + id + ");");
+        int tempCount = 0;
         foreach (var member in model.Members)
         {
             string access = (member.Mirrored ? "local" : value) + "." + member.Name;
@@ -263,24 +192,9 @@ internal static class CircleJsonEmitter
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, in " + access + ");");
                 continue;
             }
-            var child = member.Nested ?? model;
-            string temp = names.Next("temp");
+            string temp = ++tempCount == 1 ? "temp" : "temp" + tempCount.ToString(CultureInfo.InvariantCulture);
             body.Add("var " + temp + " = " + access + ";");
-            if (expand && !stack.Contains(child.GlobalName) && WriteCalls(child) <= 16)
-            {
-                body.Add("{");
-                string childValue = names.Next("value");
-                body.Add("ref " + child.GlobalName + " " + childValue + " = ref " + temp + ";");
-                string token = names.Token();
-                stack.Add(child.GlobalName);
-                WriteBody(child, w, Helper(child), names, body, childValue, expand: true, exit: token, stack: stack);
-                stack.Remove(child.GlobalName);
-                body.Add(token + ":");
-                body.Add("\t;");
-                body.Add("}");
-            }
-            else
-                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + temp + ");");
+            body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + temp + ");");
             body.Add("");
         }
         body.Add("writer.WriteObjectEnd<" + Profile + ">();");
@@ -307,16 +221,6 @@ internal static class CircleJsonEmitter
         body.Add("\twriter.WritePropertyName<" + Profile + ">(" + helper + ".Utf16." + member + ");");
         if (staticHead)
             body.Add("}");
-    }
-
-    /// <summary>Counts the calls of a record's JSON write body, which decide whether a parent copies it inline.</summary>
-    /// <param name="model">The normalized model for this contract.</param>
-    /// <returns>The resulting <c>int</c>.</returns>
-    private static int WriteCalls(PayloadRenderModel model)
-    {
-        using var writer = new CodeWriter(-1);
-        var body = WriteBody(model, writer, Helper(model), new CircleJsonNames(), null, null, expand: false, includeStaticHeads: false);
-        return InvocationCounter.Count(body);
     }
 
     /// <summary>Builds the JSON read body of one record.</summary>

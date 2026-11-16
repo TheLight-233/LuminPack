@@ -538,7 +538,7 @@ internal static class RenderModelFactory
     /// <summary>Accepts the expandable element record shapes the direct emitters write in place.</summary>
     /// <param name="element">The element render model.</param>
     /// <returns>Whether the element's complete record body expands in a loop.</returns>
-    private static bool Covered(PayloadRenderModel element) => !element.IsStruct && element.Version == null &&
+    internal static bool Covered(PayloadRenderModel element) => !element.IsStruct && element.Version == null &&
         element.ConstructorArguments == null && element.Mirror == null && !element.HasCallbacks && element.Rent == null &&
         !element.MixedRecord && element.Members.Length != 0 &&
         element.Members.All(member => !member.Mirrored && !(member.Kind == RenderMemberKind.Dictionary && member.Dictionary.Pair) &&

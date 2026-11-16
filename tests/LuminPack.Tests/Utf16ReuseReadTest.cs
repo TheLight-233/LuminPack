@@ -148,6 +148,32 @@ public sealed class Utf16ReuseReadTest
         Assert.Equal(source.Tags, copy.Tags);
     }
 
+    /// <summary>Publishes a nested binary field only after its formatter completes and clears reuse on a null marker.</summary>
+    [Fact]
+    public void NestedBinaryReadKeepsPublicationAndNullSemantics()
+    {
+        var source = new Utf16NestedRecord { Child = new Utf16ReuseChild { Text = "nested" } };
+        byte[] record = LuminPackSerializer.Serialize<Utf16NestedRecord, LuminPackUtf16LengthOptions>(source);
+        var target = new Utf16NestedRecord();
+        Assert.ThrowsAny<Exception>(() =>
+            LuminPackSerializer.Deserialize<Utf16NestedRecord, LuminPackUtf16LengthOptions>(record.AsSpan(0, record.Length - 1), ref target));
+        Assert.Null(target.Child);
+
+        target.Child = new Utf16ReuseChild { Text = "existing" };
+        var child = target.Child;
+        Assert.ThrowsAny<Exception>(() =>
+            LuminPackSerializer.Deserialize<Utf16NestedRecord, LuminPackUtf16LengthOptions>(record.AsSpan(0, record.Length - 1), ref target));
+        Assert.Same(child, target.Child);
+        Assert.Equal("existing", child.Text);
+        LuminPackSerializer.Deserialize<Utf16NestedRecord, LuminPackUtf16LengthOptions>(record, ref target);
+        Assert.Same(child, target.Child);
+        Assert.Equal("nested", child.Text);
+
+        byte[] nullRecord = LuminPackSerializer.Serialize<Utf16NestedRecord, LuminPackUtf16LengthOptions>(new Utf16NestedRecord());
+        LuminPackSerializer.Deserialize<Utf16NestedRecord, LuminPackUtf16LengthOptions>(nullRecord, ref target);
+        Assert.Null(target.Child);
+    }
+
     /// <summary>Checks the complete record over several unaligned windows with immutable guards.</summary>
     /// <typeparam name="TOptions">The selected complete UTF-16 profile.</typeparam>
     /// <param name="record">The exact independently constructed record.</param>
@@ -230,4 +256,11 @@ public sealed class Utf16ReusePayload
 public sealed class Utf16ReuseChild
 {
     public string Text = string.Empty;
+}
+
+/// <summary>Holds an optional child whose publication can be observed after a failed read.</summary>
+[LuminPackable]
+public sealed class Utf16NestedRecord
+{
+    public Utf16ReuseChild? Child;
 }

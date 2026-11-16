@@ -68,7 +68,6 @@ internal static class JsonEmitter
                 w.Line(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
             var names = new JsonTable();
             var writeBody = WriteBody(model, w, helper, names);
-            JsonTable.Resolve(writeBody);
             Lines(w, writeBody);
         }
         w.Close();
@@ -205,7 +204,6 @@ internal static class JsonEmitter
     private sealed class JsonTable
     {
         private readonly Dictionary<string, int> _counts = new(StringComparer.Ordinal);
-        private int _tokens;
 
         /// <summary>The next occurrence of a role-named local.</summary>
         /// <param name="role">The role supplied to <c>Next</c>.</param>
@@ -216,35 +214,6 @@ internal static class JsonEmitter
             _counts[role] = count;
             return count == 1 ? role : role + count.ToString(CultureInfo.InvariantCulture);
         }
-
-        /// <summary>Reserves the placeholder of one inline object's exit label.</summary>
-        /// <returns>The resulting text.</returns>
-        internal string Token() => "\u0004" + (_tokens++).ToString(CultureInfo.InvariantCulture) + "\u0004";
-
-        /// <summary>Numbers the exit labels in the order the finished body closes them, which is the post-order the original
-        /// inline expansion numbers them in, and replaces their placeholders.</summary>
-        /// <param name="body">The statements in the generated operation body.</param>
-        internal static void Resolve(List<string> body)
-        {
-            var labels = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (string line in body)
-            {
-                if (line.Length == 0 || line[0] != '\u0004')
-                    continue;
-                int end = line.IndexOf('\u0004', 1);
-                if (end < 0)
-                    continue;
-                string token = line.Substring(0, end + 1);
-                if (!labels.ContainsKey(token))
-                    labels.Add(token, "end" + labels.Count.ToString(CultureInfo.InvariantCulture));
-            }
-            if (labels.Count == 0)
-                return;
-            for (int index = 0; index < body.Count; index++)
-                if (body[index].IndexOf('\u0004') >= 0)
-                    foreach (var pair in labels)
-                        body[index] = body[index].Replace(pair.Key, pair.Value);
-        }
     }
 
     /// <summary>Builds the JSON write body.</summary>
@@ -252,12 +221,10 @@ internal static class JsonEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="helper">The JSON name-table helper of the record.</param>
     /// <param name="names">The shared local names of the enclosing root method, or null for a standalone body.</param>
-    /// <param name="expand">Whether a small inline object member copies the child's write body into this one instead of calling its
-    /// formatter; the inline budget of the original pipeline is measured on the copy that keeps the call.</param>
     /// <param name="inputName">The already named input parameter of an inline object copy, or null.</param>
     /// <param name="exit">The placeholder an inline object copy jumps to instead of returning, or null for a root.</param>
     /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
-    private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, string helper, JsonTable names = null, bool expand = true,
+    private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, string helper, JsonTable names = null,
         string inputName = null, string exit = null)
     {
         names ??= new JsonTable();
@@ -333,14 +300,7 @@ internal static class JsonEmitter
             }
             if (member.Raw)
             {
-                // A small declared struct copies its object body in place; a built-in or larger one keeps its formatter call.
-                if (!member.Builtin && member.Nested != null && expand && WriteCalls(member.Nested) <= 16)
-                {
-                    ExpandStruct(body, member, owner, w, names);
-                    body.Add("");
-                    continue;
-                }
-                // A raw struct is written by its binary formatter owner from a copy, without a null branch.
+                // The struct formatter writes the copied value without a null branch.
                 string temp = names.Next("temp");
                 body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + temp + ");");
@@ -367,9 +327,7 @@ internal static class JsonEmitter
             body.Add("}");
             body.Add("else");
             body.Add("{");
-            if (member.Kind == RenderMemberKind.Object && expand && WriteCalls(member.Nested) <= 16)
-                Expand(body, member, owner, w, names);
-            else if (member.Kind == RenderMemberKind.Text)
+            if (member.Kind == RenderMemberKind.Text)
                 body.Add("writer.Write<" + Profile + ">(" + owner + "." + member.Name + ");");
             else
             {
@@ -405,48 +363,11 @@ internal static class JsonEmitter
             "ref readonly " + element.GlobalName + " " + input + " = ref " + temp + ";",
         };
         string helper = "global::LuminPack.Generated." + element.Extension + "." + element.JsonHelper;
-        body.AddRange(WriteBody(element, w, helper, names, expand: true, inputName: input, exit: exit));
+        body.AddRange(WriteBody(element, w, helper, names, inputName: input, exit: exit));
         body.Add(exit + ":");
         body.Add(";");
         body.Add("}");
         return body;
-    }
-
-    /// <summary>Copies a declared struct member's write body in place: a struct value is read-only, has no null branch and
-    /// needs no exit label.</summary>
-    /// <param name="body">The statements in the generated operation body.</param>
-    /// <param name="member">The member being analyzed or emitted.</param>
-    /// <param name="owner">The type or declaration that owns the operation.</param>
-    /// <param name="w">The generated source writer.</param>
-    /// <param name="names">The names supplied to <c>ExpandStruct</c>.</param>
-    private static void ExpandStruct(List<string> body, RenderMember member, string owner, CodeWriter w, JsonTable names)
-    {
-        string temp = names.Next("temp");
-        body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
-        string input = names.Next("input");
-        body.Add("ref readonly " + member.Nested.GlobalName + " " + input + " = ref " + temp + ";");
-        string helper = "global::LuminPack.Generated." + member.Nested.Extension + "." + member.Nested.JsonHelper;
-        body.AddRange(WriteBody(member.Nested, w, helper, names, expand: true, inputName: input));
-    }
-
-    /// <summary>Copies an inline object's write body into its parent's method, renaming its locals and turning its return into a
-    /// jump to a label placed where the copy closes.</summary>
-    /// <param name="body">The statements in the generated operation body.</param>
-    /// <param name="member">The member being analyzed or emitted.</param>
-    /// <param name="owner">The type or declaration that owns the operation.</param>
-    /// <param name="w">The generated source writer.</param>
-    /// <param name="names">The names supplied to <c>Expand</c>.</param>
-    private static void Expand(List<string> body, RenderMember member, string owner, CodeWriter w, JsonTable names)
-    {
-        string temp = names.Next("temp"), input = names.Next("input"), token = names.Token();
-        body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
-        body.Add("{");
-        body.Add("ref readonly " + member.Nested.GlobalName + " " + input + " = ref " + temp + ";");
-        string helper = "global::LuminPack.Generated." + member.Nested.Extension + "." + member.Nested.JsonHelper;
-        body.AddRange(WriteBody(member.Nested, w, helper, names, expand: true, inputName: input, exit: token));
-        body.Add(token + ":");
-        body.Add("\t;");
-        body.Add("}");
     }
 
     /// <summary>Lists the former names of the members, in member order, as the original name tables number them.</summary>
@@ -466,16 +387,6 @@ internal static class JsonEmitter
     /// <param name="model">The normalized model for this contract.</param>
     /// <returns>The resulting text.</returns>
     private static string Value(PayloadRenderModel model) => model.IsStruct ? "value." : "value!.";
-
-    /// <summary>Counts the calls of a type's JSON write body, which decide whether a containing operation copies it inline: a body
-    /// of more than sixteen calls stays behind its formatter's call.</summary>
-    /// <param name="model">The normalized model for this contract.</param>
-    /// <returns>The resulting <c>int</c>.</returns>
-    internal static int WriteCalls(PayloadRenderModel model)
-    {
-        using var writer = new CodeWriter(-1);
-        return InvocationCounter.Count(WriteBody(model, writer, model.JsonHelper, expand: false));
-    }
 
     /// <summary>Writes a property head as a generated literal when it spans eight to sixteen bytes on .NET 8 or later, otherwise as
     /// its raw span.</summary>
