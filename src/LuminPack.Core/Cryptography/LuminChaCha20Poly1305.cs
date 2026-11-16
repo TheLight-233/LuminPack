@@ -22,7 +22,7 @@ namespace LuminPack.Cryptography
     /// ciphertext (it is not authenticated).
     /// </para>
     /// </summary>
-    public static class LuminChaCha20Poly1305
+    internal static class LuminChaCha20Poly1305
     {
         /// <summary>Stores the key size.</summary>
         public const int KeySize = 32;        // 256-bit

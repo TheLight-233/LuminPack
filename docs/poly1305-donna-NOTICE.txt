@@ -1,0 +1,14 @@
+Poly1305-donna by Andrew Moon
+
+LuminPack's Poly1305 authenticator follows the 26-bit limb arithmetic of
+the 32-bit poly1305-donna implementation.
+
+Reference source:
+https://github.com/floodyberry/poly1305-donna/blob/e6ad6e091d30d7f4ec2d4f978be1fcfcbce72781/poly1305-donna-32.h
+
+The upstream project offers its code under the MIT License or in the
+public domain. LuminPack uses the public-domain option for this material.
+https://github.com/floodyberry/poly1305-donna/blob/e6ad6e091d30d7f4ec2d4f978be1fcfcbce72781/README.md#license
+
+Algorithm specification:
+https://www.rfc-editor.org/rfc/rfc8439.html

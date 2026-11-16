@@ -74,7 +74,7 @@ Constructors, callbacks, pooling/reuse handlers and custom formatters can execut
 
 ## Authentication and native extensions
 
-Serialization provides no authenticity or confidentiality. The separate ChaCha20-Poly1305 helper verifies authentication before decrypting into the destination. Keep its tag comparison on the existing constant-time path. Key management, nonce uniqueness per key and authenticated protocol context remain application responsibilities. Use the standard 256-bit-key RFC 8439 construction for interoperability.
+Applications that need authenticity or confidentiality supply their own protection for serialized bytes. Key management, nonce uniqueness per key and authenticated protocol context remain application responsibilities.
 
 The netstandard2.1-only `LuminPackBurst` table is a trusted native extension point, never initialized from payload data. Its pointers must obey [the native hook contract](burst-hooks.md). Managed count checks cannot undo an incorrect native memory access. Enable only a backend verified on the actual runtime and CPU.
 

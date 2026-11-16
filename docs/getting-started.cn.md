@@ -123,7 +123,7 @@ LuminPackSerializer.Serialize(person, output);
 - 追加的 JSON 文档之间不会插入分隔符，请自己记录边界。
 - 返回 `byte[]`、`string` 的重载以及流、`IBufferWriter<byte>` 重载自己管理缓冲区和状态。
 
-## 压缩与加密工具
+## 压缩
 
 `LuminCompressor`（位于 `LuminPack.Utility`）用 LuminPack LZ 帧格式压缩任意字节序列；`[LuminPackCompress]` 用于压缩单个非托管数组成员：
 
@@ -133,8 +133,6 @@ byte[] unpacked = LuminCompressor.Decompress(packed);
 ```
 
 编解码器采用带紧凑长度扩展的 `LUM2` 帧。缓冲区容量、帧编码和验证规则参见[压缩](compression.cn.md)。
-
-`LuminChaCha20Poly1305`（位于 `LuminPack.Cryptography`）提供 RFC 8439 认证加密（32 字节密钥、12 字节 nonce、16 字节标签），支持同步和异步。解密时先校验标签，再写出明文。密钥管理和 nonce 唯一性由你负责。
 
 ## 下一步
 

@@ -1,3 +1,6 @@
+// The 26-bit limb arithmetic follows Andrew Moon's poly1305-donna implementation.
+// See docs/poly1305-donna-NOTICE.txt for the upstream source and license terms.
+
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 

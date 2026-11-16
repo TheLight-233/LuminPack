@@ -40,6 +40,7 @@
     <ProjectReference Include="..\LuminPack.Generator\LuminPack.Generator.csproj" Private="false" Condition="'$(LuminPackLegacyGeneratorReference)' != 'false'" />
     <None Include="../../README.md" Pack="true" PackagePath="\" />
     <None Include="../../docs/xxhash-LICENSE.txt" Pack="true" PackagePath="licenses/xxhash-LICENSE.txt" />
+    <None Include="../../docs/poly1305-donna-NOTICE.txt" Pack="true" PackagePath="licenses/poly1305-donna-NOTICE.txt" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
     <PackageReference Include="System.Collections.Immutable" Version="9.0.8" />
