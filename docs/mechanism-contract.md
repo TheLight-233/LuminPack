@@ -182,6 +182,7 @@ The history of individual approvals lives in Git. When this document, the code a
 - README, CONTRIBUTING and feature guides exist in English (`name.md`) and Chinese (`name.cn.md`); change both editions together. `AGENTS.md` is English only. All Chinese editions live under `docs`: root-page translations directly in `docs`, module README translations in `docs/modules/<module>.cn.md`, and feature translations beside their English guides. English documents keep their existing locations.
 - README is introduction, installation and usage. No release notes, version histories, migration notices or experiment reports, in README or in `docs`. Those records stay out of version control.
 - Do not remove externally usable or generated members based only on call-site searches.
+- Generator changes go only to `src/LuminPack.Generator.Next`. The legacy generator (`src/LuminPack.Generator`) is frozen and no longer maintained: do not modify it, mirror Next changes into it, or keep its parity tests current.
 - Every maintained source method has XML documentation (checked by `tools/LuminPack.RepositoryChecks`). Generated XML is limited to directly callable `LuminPackSerializer` APIs and the facade type. Execution roots, retained internal state forwarders, layout helpers, dispatch slots and private support do not carry XML. Generated files suppress CS1591 for these intentionally undocumented implementation details.
 
 ## 7. Verification

@@ -182,6 +182,7 @@
 - README、CONTRIBUTING 以及功能指南都有英文版（`name.md`）和中文版（`name.cn.md`）；两个版本一起修改。`AGENTS.md` 只有英文版。所有中文版统一放在 `docs` 下：根目录页面译文直接放在 `docs`，模块 README 译文放在 `docs/modules/<模块名>.cn.md`，功能指南译文与英文版放在一起。英文文档保留原有位置。
 - README 只放介绍、安装和使用。发布说明、版本历史、迁移通知和实验报告既不放 README 也不放 `docs`，这些记录不纳入版本控制。
 - 不要仅凭调用点搜索就删除外部可用或生成代码使用的成员。
+- 生成器改动只进入 `src/LuminPack.Generator.Next`。旧版生成器（`src/LuminPack.Generator`）已冻结，不再维护：不要修改它，不要把 Next 的改动同步过去，也不必维持它的对照测试。
 - 维护的源码中每个方法都要有 XML 文档（由 `tools/LuminPack.RepositoryChecks` 检查）。生成的 XML 仅用于可直接调用的 `LuminPackSerializer` API 和门面类型。执行根方法、保留的内部状态转发方法、布局辅助方法、派发槽及私有辅助代码不生成 XML。生成文件对这些有意省略文档的实现细节屏蔽 CS1591。
 
 ## 7. 验证

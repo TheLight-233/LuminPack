@@ -77,6 +77,9 @@ experiments/    untracked, isolated performance experiments; nothing here ships
 5. **Wire bytes are a contract.** Names, member order, enum values, null markers, string modes, framing and storage
    views reach persisted data. A wire change needs explicit approval and updated wire fixtures.
 6. **Don't remove** storage placeholders or externally usable or generated members based only on call-site searches.
+7. **Next generator only.** Generator changes go only to `src/LuminPack.Generator.Next`. The legacy generator
+   (`src/LuminPack.Generator`) is frozen and no longer maintained: do not modify it, mirror Next changes into it, or keep
+   its parity tests current.
 
 ## Evidence
 
