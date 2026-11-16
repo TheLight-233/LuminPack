@@ -70,6 +70,9 @@ internal static class InterfaceOwnerFile
         bool outlineFallback = c.Counted || setInterface;
         bool stringSpan = !setInterface && c.Text && c.Supports("WriteInterfaceStrings");
         var reservedElement = setInterface ? null : c.ReservableListElement();
+        bool rawSpan = !setInterface && !c.Counted;
+        if (rawSpan)
+            w.Line("global::System.ReadOnlySpan<" + scalar + "> items;");
         w.Line("if (value.GetType() == typeof(" + type + "))");
         w.Open();
         if (stringSpan)
@@ -89,11 +92,7 @@ internal static class InterfaceOwnerFile
         else if (setInterface)
             w.Line("global::LuminPack.Code.LuminPackMarshal.WriteHashSetRaw(ref operationState, " + c.Memory + ".As<" + type + ">(value));");
         else
-        {
-            w.Line("var items = global::LuminPack.Code.LuminPackMarshal.GetListSpan(" + c.Memory + ".As<" + type + ">(value));");
-            w.Line("operationState.Write<" + scalar + ">(items, items.Length);");
-            w.Line("operationState.CheckBuffer();");
-        }
+            w.Line("items = global::LuminPack.Code.LuminPackMarshal.GetListSpan(" + c.Memory + ".As<" + type + ">(value));");
         w.Close();
         if (!setInterface)
         {
@@ -105,11 +104,7 @@ internal static class InterfaceOwnerFile
             else if (c.Counted)
                 w.Line("WriteArray(ref operationState, " + array + ");");
             else
-            {
-                w.Line("global::System.ReadOnlySpan<" + scalar + "> items = " + array + ";");
-                w.Line("operationState.Write<" + scalar + ">(items, items.Length);");
-                w.Line("operationState.CheckBuffer();");
-            }
+                w.Line("items = " + array + ";");
             w.Close();
         }
         if (setInterface)
@@ -131,7 +126,13 @@ internal static class InterfaceOwnerFile
         {
             w.Open();
             c.CountedWrite("value");
+            w.Line("goto operationComplete_RootWrite;");
             w.Close();
+        }
+        if (rawSpan)
+        {
+            w.Line("operationState.Write<" + scalar + ">(items, items.Length);");
+            w.Line("operationState.CheckBuffer();");
         }
         w.Blank();
 
