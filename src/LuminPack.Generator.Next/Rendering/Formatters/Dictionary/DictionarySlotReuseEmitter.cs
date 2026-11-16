@@ -85,9 +85,8 @@ internal static class DictionarySlotReuseEmitter
         w.Line("if (!keys.Add(key)) destination.Add(key, destination[key]);");
         w.Close();
         w.Line("while (++index < count);");
-        w.Line("var stale = new global::System.Collections.Generic.List<" + key.Type + ">();");
-        w.Line("foreach (var item in destination) if (!keys.Contains(item.Key)) stale.Add(item.Key);");
-        w.Line("foreach (var staleKey in stale) destination.Remove(staleKey);");
+        // The modern Dictionary enumerator remains valid when Remove deletes its current entry.
+        w.Line("foreach (var item in destination) if (!keys.Contains(item.Key)) destination.Remove(item.Key);");
         w.Close();
         w.Close();
         w.Line("finally");

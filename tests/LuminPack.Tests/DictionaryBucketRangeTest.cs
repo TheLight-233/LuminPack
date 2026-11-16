@@ -160,6 +160,47 @@ public class DictionaryBucketRangeTest
         Assert.Equal(11, target[1]);
     }
 
+    /// <summary>Checks that a reordered subset keeps its original entries and removes every stale key after the read.</summary>
+    [Fact]
+    public void ScalarSubsetRefillKeepsSurvivingOrder()
+    {
+        string first = new string("first".AsSpan());
+        string second = new string("second".AsSpan());
+        var target = new Dictionary<int, string>
+        {
+            [1] = "stale before",
+            [2] = first,
+            [3] = "stale between",
+            [4] = second,
+            [5] = "stale after"
+        };
+        var original = target;
+        byte[] payload = LuminPackSerializer.Serialize(new Dictionary<int, string> { [4] = "second", [2] = "first" });
+
+        Assert.Equal(payload.Length, LuminPackSerializer.Deserialize(payload.AsSpan(), ref target));
+        Assert.Same(original, target);
+        Assert.Equal(new[] { 2, 4 }, target.Keys);
+        Assert.Same(first, target[2]);
+        Assert.Same(second, target[4]);
+    }
+
+    /// <summary>Checks that duplicate keys are rejected before any stale destination entries are removed.</summary>
+    [Fact]
+    public void ScalarSubsetRefillRejectsDuplicatesBeforePruning()
+    {
+        var target = new Dictionary<int, int> { [1] = 20, [2] = 22, [3] = 24 };
+        var original = target;
+        byte[] payload = LuminPackSerializer.Serialize(new Dictionary<int, int> { [1] = 11, [2] = 13 });
+        payload.AsSpan(sizeof(int), sizeof(int)).CopyTo(payload.AsSpan(3 * sizeof(int)));
+
+        Assert.Throws<ArgumentException>(() => LuminPackSerializer.Deserialize(payload.AsSpan(), ref target));
+        Assert.Same(original, target);
+        Assert.Equal(new[] { 1, 2, 3 }, target.Keys);
+        Assert.Equal(13, target[1]);
+        Assert.Equal(22, target[2]);
+        Assert.Equal(24, target[3]);
+    }
+
     /// <summary>Preserves immutable keys, enumeration version effects and staged failure publication for scalar refills.</summary>
     [Fact]
     public void StringScalarRefillsRetainKeysAndCheckedFailurePublication()

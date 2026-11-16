@@ -56,9 +56,8 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                    {");
         sb.AppendLine($"                        var keys = new global::System.Collections.Generic.HashSet<{keyType}>();");
         sb.AppendLine("                        for (int i = 0; i < count; i++) if (!keys.Add(seen[i])) destination.Add(seen[i], destination[seen[i]]);");
-        sb.AppendLine($"                        var stale = new global::System.Collections.Generic.List<{keyType}>();");
-        sb.AppendLine("                        foreach (var pair in destination) if (!keys.Contains(pair.Key)) stale.Add(pair.Key);");
-        sb.AppendLine("                        foreach (var key in stale) destination.Remove(key);");
+        // The modern Dictionary enumerator remains valid when Remove deletes its current entry.
+        sb.AppendLine("                        foreach (var pair in destination) if (!keys.Contains(pair.Key)) destination.Remove(pair.Key);");
         sb.AppendLine("                    }");
         sb.AppendLine("                }");
         sb.AppendLine("                finally");
