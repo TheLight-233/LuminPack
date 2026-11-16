@@ -257,6 +257,8 @@ internal static class FormatterCapabilities
 
         if (definition == "System.Collections.Concurrent.ConcurrentBag")
         {
+            if (modern && !unity && FormatterConcurrentTraits.HasBagFreshSizing(compilation, named))
+                result.Add("BagFreshSizing");
             if (FormatterConcurrentTraits.HasBagSnapshot(compilation, false))
                 result.Add("BagSnapshot");
             if (FormatterConcurrentTraits.HasBagSnapshot(compilation, true))

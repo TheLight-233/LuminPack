@@ -34,8 +34,11 @@ internal static class ConcurrentBagTextOwnerFile
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;
+        bool presize = c.Supports("BagFreshSizing");
+        if (presize)
+            w.Line(c.Sequence + "? fresh = null;");
         w.Line("if (value is null)");
-        w.Indented(() => w.Line("value = new " + c.Sequence + "();"));
+        w.Indented(() => w.Line("value = " + (presize ? "fresh = " : "") + "new " + c.Sequence + "();"));
         w.Line("else");
         w.Indented(() => w.Line("value.Clear();"));
         w.Blank();
@@ -45,12 +48,7 @@ internal static class ConcurrentBagTextOwnerFile
         c.PooledRead(() =>
         {
             w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
-            w.Line("int index = 0;");
-            w.Line("do");
-            w.Open();
-            w.Line("value.Add(" + c.Memory + ".Add(ref first, (nint)(uint)index));");
-            w.Close();
-            w.Line("while (++index < length);");
+            ConcurrentBagOwnerFile.AddStagedItems(w, c.Memory, presize);
         });
     }
 }

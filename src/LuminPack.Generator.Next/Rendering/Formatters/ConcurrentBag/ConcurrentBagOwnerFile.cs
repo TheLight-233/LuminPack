@@ -47,6 +47,29 @@ internal static class ConcurrentBagOwnerFile
         w.Close();
     }
 
+    /// <summary>Adds the original staged values in input order, with optional sizing after the first Add.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="memory">The source-ready Unsafe name.</param>
+    /// <param name="presize">Whether the referenced Core offers the exact sizing helper.</param>
+    internal static void AddStagedItems(CodeWriter w, string memory, bool presize)
+    {
+        w.Line("int index = 0;");
+        if (presize)
+        {
+            w.Line("if (length >= 64 && fresh is not null && global::System.Object.ReferenceEquals(value, fresh))");
+            w.Open();
+            w.Line("value.Add(first);");
+            w.Line("global::LuminPack.Code.LuminPackCollectionAccess.PresizeFreshConcurrentBag(fresh, length);");
+            w.Line("index = 1;");
+            w.Close();
+        }
+        w.Line("do");
+        w.Open();
+        w.Line("value.Add(" + memory + ".Add(ref first, (nint)(uint)index));");
+        w.Close();
+        w.Line("while (++index < length);");
+    }
+
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
     /// <param name="fact">The closed sequence owner.</param>
@@ -205,8 +228,11 @@ internal static class ConcurrentBagOwnerFile
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
                     w.Blank();
+                    bool presize = set.FindFormatter(bag)?.Supports("BagFreshSizing") == true;
+                    if (presize)
+                        w.Line(bag + "? fresh = null;");
                     w.Line("if (value is null)");
-                    w.Indented(() => w.Line("value = new " + bag + "();"));
+                    w.Indented(() => w.Line("value = " + (presize ? "fresh = " : "") + "new " + bag + "();"));
                     w.Line("else");
                     w.Indented(() => w.Line("value.Clear();"));
                     w.Blank();
@@ -222,12 +248,7 @@ internal static class ConcurrentBagOwnerFile
                         w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref first),");
                         w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
                     });
-                    w.Line("int index = 0;");
-                    w.Line("do");
-                    w.Open();
-                    w.Line("value.Add(" + memory + ".Add(ref first, (nint)(uint)index));");
-                    w.Close();
-                    w.Line("while (++index < length);");
+                    AddStagedItems(w, memory, presize);
                     w.Close();
                     w.Line("finally");
                     w.Open();

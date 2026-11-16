@@ -339,6 +339,36 @@ public class CollectionFastPathTest
         }
     }
 
+    /// <summary>Checks local bag order and reuse across the first and last preallocation boundaries.</summary>
+    /// <param name="count">The number of staged string records.</param>
+    [Theory]
+    [InlineData(63)]
+    [InlineData(64)]
+    [InlineData(4096)]
+    [InlineData(4097)]
+    public void ConcurrentBagReadPreservesLocalOrderAndExistingTarget(int count)
+    {
+        var source = new ConcurrentBag<string?>(Enumerable.Range(0, count).Select(index =>
+            index % 8 == 0 ? null : $"item-{index:D6}"));
+        string?[] expected = source.ToArray().Reverse().ToArray();
+        byte[] payload = LuminPackSerializer.Serialize(source);
+        ConcurrentBag<string?>? target = null;
+        Assert.Equal(payload.Length, LuminPackSerializer.Deserialize(payload.AsSpan(), ref target));
+        Assert.Equal(expected, target!.ToArray());
+        Assert.True(target.TryTake(out string? item));
+        Assert.Equal(expected[0], item);
+
+        var retained = target;
+        target.Add("stale");
+        Assert.Equal(payload.Length, LuminPackSerializer.Deserialize(payload.AsSpan(), ref target));
+        Assert.Same(retained, target);
+        Assert.Equal(expected, target!.ToArray());
+
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(payload.AsSpan(0, payload.Length - 1), ref target));
+        Assert.Same(retained, target);
+        Assert.Empty(target!);
+    }
+
     /// <summary>Checks sorted collections, including the bulk fresh constructions and the reused-instance paths.</summary>
     [Fact]
     public void SortedCollectionsRoundTrip()

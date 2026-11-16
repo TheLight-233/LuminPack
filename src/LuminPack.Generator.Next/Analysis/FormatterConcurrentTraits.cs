@@ -173,6 +173,24 @@ internal static class FormatterConcurrentTraits
         return owner.GetMembers("PublishConcurrentStack").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.DeclaredAccessibility == Accessibility.Public && method.Arity == 1 && method.ReturnsVoid && method.Parameters.Length == 4 && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) && method.TypeParameters[0].ConstraintTypes.IsEmpty && !method.TypeParameters[0].HasReferenceTypeConstraint && !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint && !method.TypeParameters[0].HasConstructorConstraint && !method.TypeParameters[0].HasNotNullConstraint && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, stack.Construct(method.TypeParameters[0])) && method.Parameters[1].Type is IArrayTypeSymbol { Rank: 1 } array && SymbolEqualityComparer.Default.Equals(array.ElementType, method.TypeParameters[0]) && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32 && method.Parameters[3].Type.SpecialType == SpecialType.System_Boolean);
     }
 
+    /// <summary>Checks the optional initial work-queue sizing operation.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <param name="bag">The exact framework bag definition.</param>
+    /// <returns>Whether the referenced helper has the expected public signature.</returns>
+    internal static bool HasBagFreshSizing(Compilation compilation, INamedTypeSymbol bag)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        return owner is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } &&
+            owner.GetMembers("PresizeFreshConcurrentBag").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } &&
+                method.Parameters.Length == 2 && method.Parameters[0].RefKind == RefKind.None &&
+                method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32 &&
+                !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasReferenceTypeConstraint &&
+                !method.TypeParameters[0].HasConstructorConstraint && !method.TypeParameters[0].HasNotNullConstraint &&
+                method.TypeParameters[0].ConstraintTypes.IsEmpty && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type,
+                    bag.OriginalDefinition.Construct(method.TypeParameters[0])));
+    }
+
     /// <summary>Checks the exact lease or raw snapshot API before selecting it.</summary>
     /// <param name = "compilation">The actual runtime metadata.</param>
     /// <param name = "raw">Whether to check direct unmanaged output.</param>
