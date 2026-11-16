@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using LuminPack.Core;
 
 namespace LuminPack.Code;
@@ -161,7 +163,14 @@ public static partial class LuminPackCollectionAccess
 
         int childCount = count - 1;
         int acceptedChildren = 0;
-        ref var slot = ref Unsafe.Add(ref first, 1);
+        if (typeof(TPriority) == typeof(int) && elementBytes == sizeof(int) && PriorityQueuePairLayout<TElement, TPriority>.Packed &&
+            Sse.IsSupported && Sse2.IsSupported && childCount >= 4)
+        {
+            acceptedChildren = AcceptPackedInt32Children(ref Unsafe.Subtract(ref input, pairBytes),
+                ref Unsafe.As<(TElement Element, TPriority Priority), byte>(ref first), childCount);
+            input = ref Unsafe.Add(ref input, (nint)(uint)acceptedChildren * 8);
+        }
+        ref var slot = ref Unsafe.Add(ref first, (nint)(uint)(acceptedChildren + 1));
         for (; acceptedChildren < childCount; acceptedChildren++)
         {
             TPriority priority = LuminPackReader.Read<TPriority>(ref Unsafe.Add(ref input, (nint)(uint)elementBytes));
@@ -190,6 +199,36 @@ public static partial class LuminPackCollectionAccess
             queue.Enqueue(element, priority);
         } while (++index < count);
         return true;
+    }
+
+    /// <summary>Copies complete groups of four packed children while none orders before their shared parent.</summary>
+    /// <param name="pairs">The checked input pairs, starting at the root.</param>
+    /// <param name="nodes">The packed destination heap, whose root is already stored.</param>
+    /// <param name="childCount">The number of children after the root.</param>
+    /// <returns>The accepted children, a multiple of four; the scalar loop resumes at the first unchecked child.</returns>
+    /// <remarks>A quaternary heap stores the four children of node <c>p</c> at <c>4p + 1</c> through <c>4p + 4</c>, so each
+    /// group compares one broadcast parent priority. Every load and store stays within the checked input and node ranges.</remarks>
+    private static int AcceptPackedInt32Children(ref byte pairs, ref byte nodes, int childCount)
+    {
+        ref byte children = ref Unsafe.Add(ref pairs, 8);
+        ref byte destination = ref Unsafe.Add(ref nodes, 8);
+        ref byte parentPriority = ref Unsafe.Add(ref pairs, 4);
+        int accepted = 0;
+        do
+        {
+            var low = Vector128.LoadUnsafe(ref children);
+            var high = Vector128.LoadUnsafe(ref children, 16);
+            var priorities = Sse.Shuffle(low.AsSingle(), high.AsSingle(), 0b11_01_11_01).AsInt32();
+            if (Sse2.MoveMask(Sse2.CompareGreaterThan(Vector128.Create(Unsafe.ReadUnaligned<int>(ref parentPriority)), priorities).AsByte()) != 0)
+                break;
+            low.StoreUnsafe(ref destination);
+            high.StoreUnsafe(ref destination, 16);
+            children = ref Unsafe.Add(ref children, 32);
+            destination = ref Unsafe.Add(ref destination, 32);
+            parentPriority = ref Unsafe.Add(ref parentPriority, 8);
+            accepted += 4;
+        } while (accepted <= childCount - 4);
+        return accepted;
     }
 
     /// <summary>Probes the parent and tie behavior used by the default framework heap.</summary>
