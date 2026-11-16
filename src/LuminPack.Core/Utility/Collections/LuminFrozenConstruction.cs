@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+#if NET10_0_OR_GREATER
+using System.Collections.Frozen;
+#endif
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -110,6 +113,87 @@ public static class LuminFrozenConstruction
             source = ref Unsafe.Add(ref source, (nint)(uint)width);
         } while (--count != 0);
     }
+
+#if NET10_0_OR_GREATER
+    /// <summary>Reuses a previously certified immutable raw set or freezes the checked payload.</summary>
+    /// <typeparam name="T">The callback-free raw element type.</typeparam>
+    /// <param name="reader">The reader immediately after the complete checked count.</param>
+    /// <param name="value">The existing frozen set and the result.</param>
+    /// <param name="length">The strictly positive encoded element count.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static void ReadRawSetReuse<T>(scoped ref LuminPackReader reader, scoped ref FrozenSet<T>? value, int length)
+        where T : unmanaged
+    {
+        ReadOnlySpan<byte> input = default;
+        if (RawSetCertificate<T>.Available)
+        {
+            int bytes = checked(length * Unsafe.SizeOf<T>());
+            int position = reader.Position;
+            ReadOnlySpan<byte> buffer = reader.Buffer;
+            ref byte start = ref MemoryMarshal.GetReference(buffer);
+            if (bytes > 0 && (uint)position <= (uint)buffer.Length && bytes <= buffer.Length - position &&
+                Unsafe.AreSame(ref reader.CurrentReference, ref Unsafe.Add(ref start, position)))
+                input = buffer.Slice(position, bytes);
+
+            var existing = value;
+            if (!input.IsEmpty && existing is not null && RawSetCertificate<T>.Last is { } previous &&
+                previous.TryGetTarget(out var known) && ReferenceEquals(known, existing) &&
+                input.SequenceEqual(MemoryMarshal.AsBytes(existing.Items.AsSpan())))
+            {
+                reader.Advance(bytes);
+                return;
+            }
+        }
+
+        var builder = RentSet<T>(length);
+        try
+        {
+            AddRawSetItems(ref reader, builder, length);
+            var result = builder.ToFrozenSet();
+            value = result;
+            if (!input.IsEmpty && ReferenceEquals(result.Comparer, EqualityComparer<T>.Default) &&
+                input.SequenceEqual(MemoryMarshal.AsBytes(result.Items.AsSpan())))
+                RawSetCertificate<T>.Remember(result);
+        }
+        finally
+        {
+            ReturnRawSet(builder, length);
+        }
+    }
+
+    /// <summary>Remembers one stock fixed point weakly per raw type and thread.</summary>
+    /// <typeparam name="T">The raw element type.</typeparam>
+    private static class RawSetCertificate<T> where T : unmanaged
+    {
+        /// <summary>Whether the framework freeze uses deterministic callback-free hashing in this runtime.</summary>
+        internal static readonly bool Available = RuntimeFeature.IsDynamicCodeCompiled &&
+            Environment.Version is { Major: 10 or 11, Minor: 0 } &&
+            typeof(FrozenSet<T>).Assembly.GetName().Version?.Major == Environment.Version.Major &&
+            typeof(T) != typeof(bool) && (typeof(T).IsPrimitive || typeof(T).IsEnum);
+
+        /// <summary>The last certified immutable result for the current thread.</summary>
+        [ThreadStatic] internal static WeakReference<FrozenSet<T>>? Last;
+
+        /// <summary>Records a result whose Items exactly match its checked input in order.</summary>
+        /// <param name="value">The result of ordinary freezing.</param>
+        internal static void Remember(FrozenSet<T> value)
+        {
+            if (Last is { } previous)
+            {
+                previous.SetTarget(value);
+                return;
+            }
+            try
+            {
+                Last = new WeakReference<FrozenSet<T>>(value);
+            }
+            catch (OutOfMemoryException)
+            {
+                // The optional certificate does not change allocation failure of the existing read.
+            }
+        }
+    }
+#endif
 
     /// <summary>Writes matching scalar key/value arrays after one complete payload reservation.</summary>
     /// <typeparam name="TKey">The complete raw scalar key representation.</typeparam>

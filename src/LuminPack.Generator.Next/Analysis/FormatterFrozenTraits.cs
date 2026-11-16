@@ -43,6 +43,25 @@ internal static class FormatterFrozenTraits
                 method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32);
     }
 
+    /// <summary>Checks the complete optional reuse helper for raw frozen set values.</summary>
+    /// <param name="compilation">The actual consumer references.</param>
+    /// <param name="set">The closed frozen set type.</param>
+    /// <returns>Whether the generator may call the checked reuse helper.</returns>
+    internal static bool CanReadRawSetReuse(Compilation compilation, INamedTypeSymbol set)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminFrozenConstruction");
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader");
+        return reader != null && owner is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } &&
+            owner.GetMembers("ReadRawSetReuse").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } &&
+                method.TypeParameters[0].HasUnmanagedTypeConstraint && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+                method.Parameters.Length == 3 && method.Parameters[0].RefKind == RefKind.Ref &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, reader) &&
+                method.Parameters[1].RefKind == RefKind.Ref &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, set.OriginalDefinition.Construct(method.TypeParameters[0])) &&
+                method.Parameters[2].RefKind == RefKind.None && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32);
+    }
+
     /// <summary>Checks the complete raw pair helper against the actual consumer metadata.</summary>
     /// <param name = "compilation">The consumer compilation.</param>
     /// <returns>Whether two scalar spans can use the complete fixed writer contract.</returns>

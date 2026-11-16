@@ -56,6 +56,14 @@ internal static class FrozenSetOwnerFile
         w.Blank();
         bool rented = c.Supports("RentFrozenSet");
         bool raw = !c.Counted && c.Supports("ReadFrozenRawSetItems");
+        if (raw && rented && c.Supports("ReturnRawFrozenSet") && c.Supports("ReadRawFrozenSetReuse"))
+        {
+            w.Line("if (value is not null)");
+            w.Open();
+            w.Line("global::LuminPack.Utility.LuminFrozenConstruction.ReadRawSetReuse(ref operationState, ref value, length);");
+            w.Line("goto operationComplete_RootRead;");
+            w.Close();
+        }
         w.Line(rented ? "var hashSet = global::LuminPack.Utility.LuminFrozenConstruction.RentSet<" + c.Scalar + ">(length);" :
             "var hashSet = new global::System.Collections.Generic.HashSet<" + c.Scalar + ">(length);");
         if (rented)

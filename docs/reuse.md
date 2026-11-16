@@ -27,6 +27,7 @@ What is kept:
 | `IDictionary<K,V>`, `IReadOnlyDictionary<K,V>` | Reuse an exact `Dictionary<K,V>` behind them. |
 | `Memory<T>`, `ArraySegment<T>` | Reuse array-backed storage of the same length, keeping offset and count. |
 | Immutable sets of scalars or strings | Kept when the incoming contents are identical. |
+| Binary `FrozenSet<T>` of supported raw scalars | Next can retain a set after verifying that a prior reuse read on the current thread produced the exact incoming item bytes and order. This optimization applies on supported .NET 10 and 11 runtimes. |
 | Strings | An unchanged string keeps its reference, in every string profile. |
 | Union | Only a case of the exact same type is reused; another tag constructs the new case. |
 | Version-tolerant objects | Reused, with missing members reset to `default`. |

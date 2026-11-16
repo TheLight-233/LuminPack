@@ -334,6 +334,8 @@ internal static class FormatterCapabilities
                 result.Add("ReadFrozenRawSetItems");
                 if (modern && !unity && FormatterFrozenTraits.CanReturnRawSet(compilation, hashSet))
                     result.Add("ReturnRawFrozenSet");
+                if (modern && !unity && FormatterFrozenTraits.CanReadRawSetReuse(compilation, named))
+                    result.Add("ReadRawFrozenSetReuse");
             }
         }
         if (definition == "System.Collections.Frozen.FrozenDictionary")
