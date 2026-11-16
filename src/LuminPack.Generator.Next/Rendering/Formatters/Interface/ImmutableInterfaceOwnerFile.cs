@@ -471,7 +471,9 @@ internal static class ImmutableInterfaceOwnerFile
         {
             w.Line(c.Supports("ImmutableSpan") ?
                 "value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + c.Scalar + ">(pooled, 0, length));" :
-                "value = global::System.Collections.Immutable.ImmutableList.CreateRange(new global::System.ArraySegment<" + c.Scalar + ">(pooled, 0, length));");
+                "value = global::System.Collections.Immutable.ImmutableList.CreateRange(length == pooled.Length ? " +
+                "(global::System.Collections.Generic.IEnumerable<" + c.Scalar + ">)pooled : " +
+                "new global::System.ArraySegment<" + c.Scalar + ">(pooled, 0, length));");
             return;
         }
         if (c.Supports("BuildIdentityImmutableHashSet"))
