@@ -99,6 +99,9 @@ internal static class VersionOwnerFile
         w.Line("build = reader.Read<int>();");
         w.Line("revision = reader.Read<int>();");
         w.Close();
+        w.Line("if (value is not null && value.Major == major && value.Minor == minor &&");
+        w.Line("    value.Build == build && value.Revision == revision)");
+        w.Line("    return;");
         w.Line("if (revision == -1)");
         w.Open();
         w.Line("value = build == -1 ? new global::System.Version(major, minor) : new global::System.Version(major, minor, build);");
