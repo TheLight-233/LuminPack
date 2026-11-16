@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Collections.Immutable;
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LuminPack.Code;
@@ -47,7 +48,7 @@ public static partial class LuminTreeStorage
             destination[position++] = item;
     }
 
-    /// <summary>Writes the UTF-8 integer elements of an exact sorted set in enumeration order.</summary>
+    /// <summary>Writes the integer elements of an exact sorted set in enumeration order.</summary>
     /// <typeparam name="TOptions">The compiled JSON profile.</typeparam>
     /// <typeparam name="T">The framework integer type.</typeparam>
     /// <param name="writer">The JSON writer after opening the array.</param>
@@ -57,10 +58,29 @@ public static partial class LuminTreeStorage
     public static bool TryWriteIntegerSortedSetJson<TOptions, T>(scoped ref LuminPackJsonWriter writer, SortedSet<T> set)
         where TOptions : struct, ILuminPackOptions where T : unmanaged
     {
-        if (default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8 ||
+        var encoding = default(TOptions).StringEncoding;
+        if ((encoding != LuminPackStringEncoding.UTF8 &&
+             (encoding != LuminPackStringEncoding.UTF16 ||
+              !LuminPackJsonWriter.HasConstantGeneratedPropertyEncoding<TOptions>() ||
+              writer.Output is not null || writer.Owner is null)) ||
             (typeof(T) != typeof(int) && typeof(T) != typeof(long)) ||
             !SortedSetLayout<T>.Available || set.GetType() != typeof(SortedSet<T>))
             return false;
+
+        if (encoding == LuminPackStringEncoding.UTF16)
+        {
+            // A custom culture or an owner growth can call consumer code during an integer write.
+            Span<byte> buffer = writer.Buffer;
+#if NET8_0_OR_GREATER
+            nint position = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(buffer), ref writer.Cursor);
+#else
+            nint position = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(buffer), ref MemoryMarshal.GetReference(writer.Cursor));
+#endif
+            int width = typeof(T) == typeof(int) ? 24 : 42;
+            if (CultureInfo.CurrentCulture.GetType() != typeof(CultureInfo) ||
+                (nuint)position > (nuint)buffer.Length || set.Count > (buffer.Length - (int)position) / width)
+                return false;
+        }
 
         ref int version = ref Field<int>(set, SortedSetLayout<T>.Version);
         int captured = version;
