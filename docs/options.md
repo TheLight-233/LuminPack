@@ -34,7 +34,7 @@ public partial class Message
 | `StandardFormat` | `"G"` | A constant handed to explicit formatted and `Custom` kernels. It does not change built-in number or date formats. |
 | `WideTag` | `false` | Wide Union reader support on this class or interface; does not inherit enclosing options. |
 | `SingleImplementation` | `false` | This class or interface promises one implementation everywhere; retains existing Union framing and virtual dispatch. |
-| `ReuseRectangularArraySlots` | `false` | Next can reuse existing objects in binary rank-two arrays on .NET 8 and later. Set it directly on the ordinary object element class. See [object matrix reuse](reuse.md#opt-in-binary-object-matrix-reuse). |
+| `ReuseRectangularArraySlots` | `true` | Next reuses existing objects in binary rank-two arrays on .NET 8 and later. Set it to `false` directly on the ordinary object element class to replace the array. See [object matrix reuse](reuse.md#binary-object-matrix-reuse). |
 | `StructLayout` | `Tagged` | Storage of unmanaged structs; see below. Only valid on assemblies and structs. |
 | `UntrustedData` and limits | on, limits unbounded | Checked reads for untrusted input; declare limits for hostile input; see [Security](security.md). |
 

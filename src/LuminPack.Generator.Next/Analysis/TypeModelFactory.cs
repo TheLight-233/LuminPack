@@ -3788,8 +3788,9 @@ internal static partial class TypeModelFactory
     /// <summary>Reads a named Boolean declaration switch on the symbol's option attributes.</summary>
     /// <param name="symbol">The attributed symbol.</param>
     /// <param name="name">The named argument.</param>
-    /// <returns>Whether any option declaration sets the switch to true.</returns>
-    private static bool OptionSwitch(ISymbol symbol, string name)
+    /// <param name="fallback">The value when no option declaration sets the switch.</param>
+    /// <returns>The first explicit setting, or <paramref name="fallback"/>.</returns>
+    private static bool OptionSwitch(ISymbol symbol, string name, bool fallback = false)
     {
         foreach (var attribute in symbol.GetAttributes())
         {
@@ -3799,7 +3800,7 @@ internal static partial class TypeModelFactory
                 if (argument.Key == name && argument.Value.Value is bool enabled)
                     return enabled;
         }
-        return false;
+        return fallback;
     }
 
     /// <summary>Whether a type carries the packable attribute.</summary>

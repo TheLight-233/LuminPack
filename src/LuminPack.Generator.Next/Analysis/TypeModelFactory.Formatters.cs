@@ -134,7 +134,7 @@ internal static partial class TypeModelFactory
                     reuseArraySlots |= Options.Net8 && element is
                         { OrdinaryObject: true, Definition: FormatterDefinitions.PayloadReference,
                             Payload: RecordModel { Versioned: false, Derived: false, Constructor: null, Callbacks: null, Rent: null, Rejection: null } } &&
-                        array.ElementType is INamedTypeSymbol declaration && OptionSwitch(declaration, "ReuseRectangularArraySlots");
+                        array.ElementType is INamedTypeSymbol declaration && OptionSwitch(declaration, "ReuseRectangularArraySlots", true);
                 }
                 return new FormatterModel(spelling, FormatterDefinitions.Array, new[] { element }, rank: array.Rank, reuseArraySlots: reuseArraySlots);
             }

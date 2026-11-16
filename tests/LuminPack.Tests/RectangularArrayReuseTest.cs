@@ -6,7 +6,7 @@ using Xunit;
 
 namespace LuminPackUnitTest;
 
-/// <summary>Checks the declared binary rectangular array slot reuse contract.</summary>
+/// <summary>Checks the binary rectangular array slot reuse contract.</summary>
 public sealed class RectangularArrayReuseTest
 {
     /// <summary>Reuses matching slot graphs and supports null and new elements in row-major order.</summary>
@@ -62,16 +62,25 @@ public sealed class RectangularArrayReuseTest
         Assert.Null(empty);
     }
 
-    /// <summary>Checks that default declarations, higher ranks and JSON continue to replace existing arrays.</summary>
+    /// <summary>Checks that undeclared elements reuse slots by default, while opt-out declarations, higher ranks and JSON replace existing arrays.</summary>
     [Fact]
-    public void DefaultAndOtherFormatsKeepReplacement()
+    public void DefaultReusesWhileOptOutAndOtherFormatsKeepReplacement()
     {
         PlainMatrixEntry[,] plain = { { new() { Id = 11 } } };
         PlainMatrixEntry[,] plainAlias = { { new() { Id = -1 } } };
+        var plainSlot = plainAlias[0, 0];
         var plainTarget = plainAlias;
         LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(plain), ref plainTarget);
-        Assert.NotSame(plainAlias, plainTarget);
-        Assert.Equal(-1, plainAlias[0, 0].Id);
+        Assert.Same(plainAlias, plainTarget);
+        Assert.Same(plainSlot, plainTarget[0, 0]);
+        Assert.Equal(11, plainSlot.Id);
+
+        ReplacedMatrixEntry[,] replaced = { { new() { Id = 11 } } };
+        ReplacedMatrixEntry[,] replacedAlias = { { new() { Id = -1 } } };
+        var replacedTarget = replacedAlias;
+        LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(replaced), ref replacedTarget);
+        Assert.NotSame(replacedAlias, replacedTarget);
+        Assert.Equal(-1, replacedAlias[0, 0].Id);
 
         ReusableMatrixEntry[,,] cube = { { { new() { Id = 11 } } } };
         ReusableMatrixEntry[,,] cubeAlias = { { { new() { Id = -1 } } } };
@@ -149,9 +158,17 @@ public partial class ReusableMatrixEntry
 /// <summary>Supplies a covariant runtime array that needs replacement.</summary>
 public sealed class CovariantMatrixEntry : ReusableMatrixEntry;
 
-/// <summary>A regular element with the default replacement contract.</summary>
+/// <summary>A regular element with the default slot reuse contract.</summary>
 [LuminPackable]
 public partial class PlainMatrixEntry
+{
+    /// <summary>The entry identifier.</summary>
+    public int Id;
+}
+
+/// <summary>An element that opts out of slot reuse and keeps array replacement.</summary>
+[LuminPackable, LuminPackOption(ReuseRectangularArraySlots = false)]
+public partial class ReplacedMatrixEntry
 {
     /// <summary>The entry identifier.</summary>
     public int Id;

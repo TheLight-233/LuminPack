@@ -345,13 +345,14 @@ public sealed class LuminPackOptionAttribute : System.Attribute
     /// <remarks>Applies only to this class or interface. Retains the existing Union framing and virtual dispatch contract.</remarks>
     public bool SingleImplementation { get; set; }
 
-    /// <summary>Gets or sets whether Next can reuse existing slots when reading a binary rank-two array of this class.</summary>
+    /// <summary>Gets or sets whether Next reuses existing slots when reading a binary rank-two array of this class.</summary>
     /// <remarks>
     /// Applies to supported ordinary object element declarations on .NET 8 or later. The destination must have the exact array type,
-    /// matching dimensions and zero lower bounds. Each slot must own an independent mutable object graph. A failed read can update
-    /// the existing array and its elements in place. The default is false.
+    /// matching dimensions and zero lower bounds. Like single-dimensional arrays and lists, each existing element is read in place, so
+    /// slots that share one object observe the last record read into it. A failed read can update the existing array and its elements
+    /// in place. The default is true; set it to false to replace the array on every read.
     /// </remarks>
-    public bool ReuseRectangularArraySlots { get; set; }
+    public bool ReuseRectangularArraySlots { get; set; } = true;
 
     /// <summary>Gets or sets the binary string encoding, or the JSON document encoding at its root.</summary>
     public LuminPackStringEncoding StringEncoding { get; set; } = LuminPackStringEncoding.UTF16;
