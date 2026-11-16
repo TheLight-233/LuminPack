@@ -508,7 +508,7 @@ internal sealed partial class PairedDictionaryContext
             "ref var pair = ref " + Memory + ".Add(ref firstPair, (nint)(uint)index);");
         bool mixed = ParallelDictionaryWrite.SupportsMixed(this);
         bool stringPairs = UsesRawOrStringEntries && Key == "string" && Value == "string" && Supports("BinaryStringPairPrefix");
-        bool boundedKey = Key == "string" && OrdinaryObjectValue && Supports("ImmutableSortedTreeBinaryBoundedKey");
+        bool boundedKey = Key == "string" && OrdinaryObjectValue && Supports("SortedTreeBinaryBoundedKey");
         if (mixed || stringPairs || boundedKey)
             W.Line("bool utf16Length = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ";");
         W.Line("int index = 0;");
