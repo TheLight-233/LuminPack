@@ -113,6 +113,27 @@ internal static class FormatterRuntimeTraits
                 SymbolEqualityComparer.Default.Equals(method.TypeParameters[1].ConstraintTypes[0], options));
     }
 
+    /// <summary>Checks the optional dictionary backing getter for a framework read-only wrapper.</summary>
+    /// <param name="compilation">The consuming compilation and its Core references.</param>
+    /// <param name="wrapper">The dictionary wrapper symbol.</param>
+    /// <returns>Whether the referenced helper has the expected signature.</returns>
+    internal static bool HasReadOnlyStringDictionaryStorage(Compilation compilation, INamedTypeSymbol wrapper)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var dictionary = compilation.GetTypeByMetadataName("System.Collections.Generic.Dictionary`2");
+        var text = compilation.GetSpecialType(SpecialType.System_String);
+        return access is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } && dictionary != null &&
+            access.GetMembers("GetReadOnlyStringDictionaryStorage").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1,
+                    ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                method.TypeParameters[0] is { HasValueTypeConstraint: false, HasReferenceTypeConstraint: false, HasConstructorConstraint: false } parameter &&
+                parameter.ConstraintTypes.IsEmpty &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type,
+                    wrapper.OriginalDefinition.Construct(text, parameter)) &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, dictionary.Construct(text, parameter)));
+    }
+
     /// <summary>Checks the binary writer that accepts an enumerable string wrapper.</summary>
     /// <param name="compilation">The referenced runtime and framework metadata.</param>
     /// <returns>Whether the exact profile-aware operation is available.</returns>

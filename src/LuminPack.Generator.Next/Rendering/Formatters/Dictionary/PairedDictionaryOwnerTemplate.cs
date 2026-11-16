@@ -273,7 +273,8 @@ internal sealed partial class PairedDictionaryContext
 
     /// <summary>Emits the counted enumeration write of a nonnull dictionary named <c>value</c>.</summary>
     /// <param name="allowMixedPairs">Whether the exact wrapper can write a captured native and string pair in one reservation.</param>
-    internal void CountedWrite(bool allowMixedPairs = false)
+    /// <param name="unwrapReferenceDictionary">Whether a typed wrapper backing can enumerate the same pairs.</param>
+    internal void CountedWrite(bool allowMixedPairs = false, bool unwrapReferenceDictionary = false)
     {
         bool mixed = allowMixedPairs && ParallelDictionaryWrite.SupportsMixed(this) && Key != "bool" && Value != "bool";
         bool outlineKey = allowMixedPairs && Key == "string" && Value == "string";
@@ -281,19 +282,19 @@ internal sealed partial class PairedDictionaryContext
         W.Line("int count = 0;");
         if (mixed)
             W.Line("bool utf16Length = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + " && value.GetType() == typeof(" + Dictionary + ");");
-        W.Line("foreach (var item in " + Source + ")");
-        W.Open();
-        W.Line("count++;");
-        W.Line(Key + " key = item." + KeyMember + ";");
-        if (mixed)
-            ParallelDictionaryWrite.WriteMixedIfFits(this, "key", "item." + ValueMember, byRef: false);
-        if (outlineKey)
-            W.Line("WriteKey(ref operationState, key);");
-        else
-            WriteMember(Key, "key");
-        W.Line(Value + " itemValue = item." + ValueMember + ";");
-        WriteMember(Value, "itemValue");
-        W.Close();
+        if (unwrapReferenceDictionary)
+        {
+            W.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.GetReadOnlyStringDictionaryStorage(value) is { Count: > 0 } stored)");
+            W.Open();
+            W.Line("bool writeUtf16Pairs = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ";");
+            Entries("stored", combineText: true);
+            W.Close();
+            W.Line("else");
+            W.Open();
+        }
+        Entries(Source);
+        if (unwrapReferenceDictionary)
+            W.Close();
         W.Line("operationState.EndCollection(countPosition, count);");
         W.Line("operationState.CheckBuffer();");
         if (outlineKey)
@@ -302,6 +303,40 @@ internal sealed partial class PairedDictionaryContext
             W.Line("static void WriteKey(scoped ref global::LuminPack.Core.LuminPackWriter operationState, string key)");
             W.Open();
             WriteMember(Key, "key");
+            W.Close();
+        }
+
+        void Entries(string source, bool combineText = false)
+        {
+            W.Line("foreach (var item in " + source + ")");
+            W.Open();
+            W.Line("count++;");
+            W.Line(Key + " key = item." + KeyMember + ";");
+            if (combineText)
+            {
+                const string writer = "global::LuminPack.Core.LuminPackWriter";
+                W.Line("if (writeUtf16Pairs)");
+                W.Open();
+                W.Line("string trailing = item." + ValueMember + ";");
+                W.Line("if ((long)operationState.RecordRoom() >= 2 * sizeof(int) + sizeof(char) * ((long)(key?.Length ?? 0) + (trailing?.Length ?? 0)))");
+                W.Open();
+                W.Line("ref byte record = ref operationState.Cursor;");
+                W.Line("int keyBytes = " + writer + ".WriteReservedUtf16Record(ref record, key);");
+                W.Line("int valueBytes = " + writer + ".WriteReservedUtf16Record(ref " + Memory +
+                    ".Add(ref record, (nint)(uint)keyBytes), trailing);");
+                W.Line("operationState.CompleteRun(keyBytes + valueBytes);");
+                W.Line("continue;");
+                W.Close();
+                W.Close();
+            }
+            if (mixed)
+                ParallelDictionaryWrite.WriteMixedIfFits(this, "key", "item." + ValueMember, byRef: false);
+            if (outlineKey)
+                W.Line("WriteKey(ref operationState, key);");
+            else
+                WriteMember(Key, "key");
+            W.Line(Value + " itemValue = item." + ValueMember + ";");
+            WriteMember(Value, "itemValue");
             W.Close();
         }
     }

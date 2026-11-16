@@ -13,6 +13,22 @@ namespace LuminPack.Code;
 
 public static partial class LuminPackCollectionAccess
 {
+    /// <summary>Gets the exact dictionary backing that the framework wrapper enumerates.</summary>
+    /// <typeparam name="TValue">The type stored as the value in the backing dictionary.</typeparam>
+    /// <param name="wrapper">The original read-only dictionary.</param>
+    /// <returns>The exact dictionary, or null when its public wrapper must enumerate.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static Dictionary<string, TValue>? GetReadOnlyStringDictionaryStorage<TValue>(ReadOnlyDictionary<string, TValue> wrapper)
+    {
+        if (wrapper.GetType() != typeof(ReadOnlyDictionary<string, TValue>))
+            return null;
+        int offset = ReadOnlyDictionaryStorage<string, TValue>.Offset;
+        if (offset < 0)
+            return null;
+        var storage = LuminFieldLayout.Field<IDictionary<string, TValue>>(wrapper, offset);
+        return storage?.GetType() == typeof(Dictionary<string, TValue>) ? Unsafe.As<Dictionary<string, TValue>>(storage) : null;
+    }
+
     /// <summary>Bounds each retained value staging array.</summary>
     private const int MaximumStableDictionaryCount = 4096;
 
