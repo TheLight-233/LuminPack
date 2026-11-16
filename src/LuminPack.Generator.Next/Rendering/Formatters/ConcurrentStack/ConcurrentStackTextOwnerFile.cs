@@ -76,7 +76,9 @@ internal static class ConcurrentStackTextOwnerFile
         w.Line("if (length == 0)");
         w.Indented(() => w.Line("goto operationComplete_RootRead;"));
         w.Blank();
-        c.PooledRead(() => w.Line("value.PushRange(pooled, 0, length);"));
+        c.PooledRead(() => w.Line(c.Supports("PushConcurrentStackRange")
+            ? "global::LuminPack.Code.LuminPackCollectionAccess.PushConcurrentStackRange(value, pooled, length);"
+            : "value.PushRange(pooled, 0, length);"));
     }
 
     /// <summary>Handles before for <c>ConcurrentStackTextOwnerFile</c>.</summary>
@@ -106,7 +108,9 @@ internal static class ConcurrentStackTextOwnerFile
         w.Line("try");
         w.Open();
         w.Line("value.Clear();");
-        w.Line("if (count != 0) value.PushRange(snapshot, 0, count);");
+        w.Line(c.Supports("PushConcurrentStackRange")
+            ? "if (count != 0) global::LuminPack.Code.LuminPackCollectionAccess.PushConcurrentStackRange(value, snapshot, count);"
+            : "if (count != 0) value.PushRange(snapshot, 0, count);");
         w.Close();
         w.Line("finally");
         w.Open();

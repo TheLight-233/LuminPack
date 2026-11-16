@@ -293,6 +293,8 @@ internal static class FormatterCapabilities
 
         if (definition == "System.Collections.Concurrent.ConcurrentStack" && FormatterConcurrentTraits.CanStageStack(compilation, named.TypeArguments[0]))
             result.Add("StageConcurrentStack");
+        if (definition == "System.Collections.Concurrent.ConcurrentStack" && FormatterConcurrentTraits.HasStackRangePush(compilation, named))
+            result.Add("PushConcurrentStackRange");
         if (definition == "System.Collections.Generic.IReadOnlySet" && modern &&
             compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenSet`1") is { } frozenSet &&
             frozenSet.Construct(named.TypeArguments[0]).AllInterfaces.Any(candidate => SymbolEqualityComparer.Default.Equals(candidate, named)))

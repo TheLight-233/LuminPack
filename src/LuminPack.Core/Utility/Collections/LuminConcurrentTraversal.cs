@@ -24,7 +24,7 @@ public static partial class LuminPackCollectionAccess
             stack.Clear();
         }
         if (count != 0)
-            stack.PushRange(items, 0, count);
+            PushConcurrentStackRange(stack, items, count);
     }
 
     /// <summary>Captures the same immutable node chain as the public stack enumerator.</summary>
