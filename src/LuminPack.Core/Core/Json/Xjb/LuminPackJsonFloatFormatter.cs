@@ -456,7 +456,7 @@ namespace LuminPack.Core
             uint absBits = bits & 0x7FFF_FFFFu;
             uint exponent = (absBits >> 23) & 0xFFu;
             bool negative = (bits & 0x8000_0000u) != 0;
-            double magnitude = negative ? -(double)value : value;
+            double magnitude = Math.Abs((double)value);
 
             if (TryWriteIntegralUtf8(dest, magnitude, absBits, exponent, negative, FloatLegacyLowExponent, 16_777_216.0, out int written))
                 return written;
@@ -479,7 +479,7 @@ namespace LuminPack.Core
             ulong absBits = bits & 0x7FFF_FFFF_FFFF_FFFFUL;
             ulong exponent = (absBits >> 52) & 0x7FFUL;
             bool negative = (bits & 0x8000_0000_0000_0000UL) != 0;
-            double magnitude = negative ? -value : value;
+            double magnitude = Math.Abs(value);
 
             if (TryWriteIntegralUtf8(dest, magnitude, absBits, exponent, negative, DoubleLegacyLowExponent, 9_007_199_254_740_992.0, out int written))
                 return written;
@@ -502,7 +502,7 @@ namespace LuminPack.Core
             uint absBits = bits & 0x7FFF_FFFFu;
             uint exponent = (absBits >> 23) & 0xFFu;
             bool negative = (bits & 0x8000_0000u) != 0;
-            double magnitude = negative ? -(double)value : value;
+            double magnitude = Math.Abs((double)value);
 
             if (TryWriteIntegralUtf16(dest, magnitude, absBits, exponent, negative, FloatLegacyLowExponent, 16_777_216.0, out int written))
                 return written;
@@ -525,7 +525,7 @@ namespace LuminPack.Core
             ulong absBits = bits & 0x7FFF_FFFF_FFFF_FFFFUL;
             ulong exponent = (absBits >> 52) & 0x7FFUL;
             bool negative = (bits & 0x8000_0000_0000_0000UL) != 0;
-            double magnitude = negative ? -value : value;
+            double magnitude = Math.Abs(value);
 
             if (TryWriteIntegralUtf16(dest, magnitude, absBits, exponent, negative, DoubleLegacyLowExponent, 9_007_199_254_740_992.0, out int written))
                 return written;
