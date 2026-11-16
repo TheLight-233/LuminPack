@@ -16,7 +16,7 @@ namespace LuminPackUnitTest;
 /// <summary>Checks the publication and fallback rules of binary read-only dictionary reuse.</summary>
 public sealed class ReadOnlyDictionaryReuseTest
 {
-    /// <summary>Updates existing values only when the complete ordered key sequence matches.</summary>
+    /// <summary>Keeps the wrapper and its exact backing dictionary, retaining strings on the stable ordered path.</summary>
     [Fact]
     public void OrderedStringKeysCanKeepTheWrapper()
     {
@@ -36,10 +36,12 @@ public sealed class ReadOnlyDictionaryReuseTest
         bool supported = LuminPackCollectionAccess.TryReadStableReadOnlyDictionary<string?, LuminPackUtf16LengthOptions>(ref reader, probe);
 
         Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref target));
-        Assert.Equal(supported, ReferenceEquals(alias, target));
+        if (supported)
+            Assert.Same(alias, target);
+        bool kept = ReferenceEquals(alias, target);
         Assert.Equal(unchanged, target!["first"]);
         Assert.Null(target["second"]);
-        Assert.Equal(supported ? null : "old", initial["second"]);
+        Assert.Equal(kept ? null : "old", initial["second"]);
         if (supported)
             Assert.Same(unchanged, target["first"]);
 
@@ -49,14 +51,16 @@ public sealed class ReadOnlyDictionaryReuseTest
         });
         var previous = target;
         LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(reordered), ref target);
-        Assert.NotSame(previous, target);
+        // Reordered keys leave the stable path; the exact backing dictionary is still read like a reused dictionary.
+        Assert.Equal(kept, ReferenceEquals(previous, target));
         Assert.Equal("new", target!["second"]);
-        Assert.Null(previous["second"]);
+        Assert.Equal("changed", target["first"]);
+        Assert.Equal(kept ? "new" : null, previous["second"]);
     }
 
-    /// <summary>Preserves the original backing if the input ends early or contains duplicate keys.</summary>
+    /// <summary>Keeps the wrapper when the input ends early or contains duplicate keys.</summary>
     [Fact]
-    public void InvalidInputLeavesTheExistingBackingUnchanged()
+    public void InvalidInputKeepsTheWrapper()
     {
         var backing = new Dictionary<string, int> { ["AA"] = -1, ["BB"] = -2 };
         var alias = new ReadOnlyDictionary<string, int>(backing);
@@ -69,8 +73,11 @@ public sealed class ReadOnlyDictionaryReuseTest
         key.CopyTo(bytes, sizeof(int) + key.Length + sizeof(int));
         Assert.Throws<ArgumentException>(() => LuminPackSerializer.Deserialize(bytes, ref target));
         Assert.Same(alias, target);
-        Assert.Equal(-1, backing["AA"]);
-        Assert.Equal(-2, backing["BB"]);
+        // A failed read may leave partial updates, as a reused dictionary does; a complete record restores the values.
+        LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(source), ref target);
+        Assert.Same(alias, target);
+        Assert.Equal(1, backing["AA"]);
+        Assert.Equal(2, backing["BB"]);
     }
 
     /// <summary>Preserves the root's string quota when the dictionary is reached through another object.</summary>

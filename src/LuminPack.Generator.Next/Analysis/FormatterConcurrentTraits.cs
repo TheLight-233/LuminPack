@@ -138,6 +138,35 @@ internal static class FormatterConcurrentTraits
                 SymbolEqualityComparer.Default.Equals(method.ReturnType, collection.OriginalDefinition.Construct(method.TypeParameters[0])));
     }
 
+    /// <summary>Checks the optional accessor for the array behind an existing read-only collection.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <returns>Whether the referenced helper has the expected public signature.</returns>
+    internal static bool HasReadOnlyCollectionRefill(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var wrapper = compilation.GetTypeByMetadataName("System.Collections.ObjectModel.ReadOnlyCollection`1");
+        return wrapper is not null && owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
+            owner.GetMembers("GetArrayBackedWrapperItems").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1 } && method.Parameters.Length == 2 &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type.OriginalDefinition, wrapper) &&
+                method.Parameters[1].Type.SpecialType == SpecialType.System_Int32 && method.ReturnType is IArrayTypeSymbol);
+    }
+
+    /// <summary>Checks the optional accessor for the dictionary behind an existing read-only dictionary.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <returns>Whether the referenced helper has the expected public signature.</returns>
+    internal static bool HasReadOnlyDictionaryRefill(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var wrapper = compilation.GetTypeByMetadataName("System.Collections.ObjectModel.ReadOnlyDictionary`2");
+        var dictionary = compilation.GetTypeByMetadataName("System.Collections.Generic.Dictionary`2");
+        return wrapper is not null && dictionary is not null && owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
+            owner.GetMembers("GetReadOnlyDictionaryStorage").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 2 } && method.Parameters.Length == 1 &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type.OriginalDefinition, wrapper) &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType.OriginalDefinition, dictionary));
+    }
+
     /// <summary>Checks the optional in-place stack refill operations.</summary>
     /// <param name="compilation">The consumer's Core and framework references.</param>
     /// <returns>Whether both referenced helpers have the expected public signatures.</returns>

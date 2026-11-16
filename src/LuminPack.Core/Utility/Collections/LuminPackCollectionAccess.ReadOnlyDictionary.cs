@@ -29,6 +29,24 @@ public static partial class LuminPackCollectionAccess
         return storage?.GetType() == typeof(Dictionary<string, TValue>) ? Unsafe.As<Dictionary<string, TValue>>(storage) : null;
     }
 
+    /// <summary>Gets the exact dictionary behind an existing read-only dictionary so a read can reuse it in place.</summary>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    /// <param name="wrapper">The existing wrapper.</param>
+    /// <returns>The exact backing dictionary, or <see langword="null"/> for another wrapper or backing type.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static Dictionary<TKey, TValue>? GetReadOnlyDictionaryStorage<TKey, TValue>(ReadOnlyDictionary<TKey, TValue>? wrapper)
+        where TKey : notnull
+    {
+        if (wrapper is null || wrapper.GetType() != typeof(ReadOnlyDictionary<TKey, TValue>))
+            return null;
+        int offset = ReadOnlyDictionaryStorage<TKey, TValue>.Offset;
+        if (offset < 0)
+            return null;
+        var storage = LuminFieldLayout.Field<IDictionary<TKey, TValue>>(wrapper, offset);
+        return storage?.GetType() == typeof(Dictionary<TKey, TValue>) ? Unsafe.As<Dictionary<TKey, TValue>>(storage) : null;
+    }
+
     /// <summary>Bounds each retained value staging array.</summary>
     private const int MaximumStableDictionaryCount = 4096;
 

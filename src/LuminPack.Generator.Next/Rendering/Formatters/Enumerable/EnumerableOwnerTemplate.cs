@@ -55,6 +55,9 @@ internal sealed partial class EnumerableOwnerContext
 
     /// <summary>Gets whether the referenced Core can refill a stack's backing array in place.</summary>
     internal bool StackRefill => _set.Options?.StackRefill == true;
+
+    /// <summary>Gets whether the referenced Core exposes the array behind an existing read-only collection.</summary>
+    internal bool ReadOnlyCollectionRefill => _set.Options?.ReadOnlyCollectionRefill == true;
     internal bool RawTreeElements => GenericFormatterReuse.Real(Scalar) != "bool" &&
         (Forwarded ? _element is { Raw: true, RawStorage: true, Layout: null } : !Text && Payload == null);
     private readonly FormatterModel? _element;

@@ -77,7 +77,9 @@ internal static class GeneratorOptionsFactory
             linkedListAppender: FormatterConcurrentTraits.HasLinkedListAppender(compilation),
             concurrentDictionaryBuilder: FormatterConcurrentTraits.HasConcurrentDictionaryBuilder(compilation),
             queueRefill: FormatterConcurrentTraits.HasQueueRefill(compilation),
-            stackRefill: FormatterConcurrentTraits.HasStackRefill(compilation));
+            stackRefill: FormatterConcurrentTraits.HasStackRefill(compilation),
+            readOnlyCollectionRefill: FormatterConcurrentTraits.HasReadOnlyCollectionRefill(compilation),
+            readOnlyDictionaryRefill: FormatterConcurrentTraits.HasReadOnlyDictionaryRefill(compilation));
     }
 
     /// <summary>Checks that the compiler feature enables the generated interception namespace.</summary>

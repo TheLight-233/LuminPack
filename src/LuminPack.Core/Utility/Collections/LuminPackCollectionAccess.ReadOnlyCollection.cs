@@ -44,9 +44,35 @@ public static partial class LuminPackCollectionAccess
         return true;
     }
 
+    /// <summary>Gets the exact array backing an existing read-only wrapper so its elements can be read in place.</summary>
+    /// <typeparam name="T">The element type.</typeparam>
+    /// <param name="value">The existing wrapper.</param>
+    /// <param name="length">The validated element count.</param>
+    /// <returns>The backing array when the wrapper is an exact <see cref="ReadOnlyCollection{T}"/> over an exact array of
+    /// <paramref name="length"/> elements; otherwise <see langword="null"/>.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static T[]? GetArrayBackedWrapperItems<T>(ReadOnlyCollection<T>? value, int length)
+    {
+        if (value is null || value.GetType() != typeof(ReadOnlyCollection<T>))
+            return null;
+
+        int offset = ReadOnlyWrapperArray<T>.Offset;
+        if (offset < 0)
+            return null;
+
+        // The exact type check excludes arrays of a derived element type, which would reject stores.
+        var items = LuminFieldLayout.Field<IList<T>>(value, offset);
+        if (items?.GetType() != typeof(T[]))
+            return null;
+
+        var array = Unsafe.As<T[]>(items);
+        return array.Length == length ? array : null;
+    }
+
     /// <summary>Checks the field on the exact closed wrapper and confirms its backing array.</summary>
     /// <typeparam name="T">The element type of the array.</typeparam>
-    private static class ReadOnlyWrapperArray<T> where T : unmanaged
+    private static class ReadOnlyWrapperArray<T>
     {
         /// <summary>The verified offset or an unavailable marker.</summary>
         internal static readonly int Offset = FindOffset();

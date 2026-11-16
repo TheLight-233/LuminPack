@@ -36,18 +36,41 @@ internal static class ReadOnlyCollectionBuilderOwnerFile
         string t = c.Scalar;
         w.Line("if (value is null)");
         w.Indented(() => w.Line("value = new " + c.Sequence + "(length);"));
-        w.Line("else");
-        w.Open();
-        w.Line("value.Clear();");
-        w.Line("if (value.Capacity < length)");
-        w.Indented(() => w.Line("value.Capacity = length;"));
-        w.Close();
+        if (c.Counted)
+        {
+            // Counted elements are read in place over the previous items like a reused list: growing copies them, a
+            // shorter record clears the rest, and the self-assignment advances the version that the indexer setter owns.
+            w.Line("else if (length == 0)");
+            w.Indented(() => w.Line("value.Clear();"));
+            w.Line("else");
+            w.Open();
+            w.Line("if (value.Capacity < length)");
+            w.Indented(() => w.Line("value.Capacity = length;"));
+            w.Line("var reusedView = global::LuminPack.Code.LuminPackMarshal.As<" + c.Sequence + ", global::LuminPack.Code.ReadOnlyCollectionBuilderView<" + t + ">>(ref value);");
+            w.Line("if (reusedView.size > length)");
+            w.Indented(() => w.Line("global::System.Array.Clear(reusedView.items, length, reusedView.size - length);"));
+            w.Line("reusedView.size = length;");
+            w.Line("value[0] = value[0];");
+            w.Close();
+        }
+        else
+        {
+            w.Line("else");
+            w.Open();
+            w.Line("value.Clear();");
+            w.Line("if (value.Capacity < length)");
+            w.Indented(() => w.Line("value.Capacity = length;"));
+            w.Close();
+        }
         w.Blank();
         w.Line("var view = global::LuminPack.Code.LuminPackMarshal.As<" + c.Sequence + ", global::LuminPack.Code.ReadOnlyCollectionBuilderView<" + t + ">>(ref value);");
         w.Line("if (length != 0)");
         w.Open();
         w.Line("global::System.Span<" + t + "> span = global::System.MemoryExtensions.AsSpan(view.items, 0, length);");
-        WrapperTraversal.ReadSpan(c, "span");
+        if (c.Counted)
+            c.ReadBlockInPlace("span");
+        else
+            WrapperTraversal.ReadSpan(c, "span");
         w.Close();
         w.Line("view.size = length;");
     }

@@ -51,7 +51,27 @@ internal static class ReadOnlyDictionaryOwnerFile
                 c.Value + ", TLuminProfile>(ref operationState, value))");
             c.W.Indented(() => c.W.Line("goto operationComplete_RootRead;"));
         }
-        ReadFresh(c);
+        if (c.ReadOnlyDictionaryRefill)
+            ReadInPlace(c);
+        else
+            ReadFresh(c);
+    }
+
+    /// <summary>Reads into the exact dictionary behind an existing wrapper, reusing its entries like a reused dictionary.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
+    private static void ReadInPlace(PairedDictionaryContext c)
+    {
+        var w = c.W;
+        string concrete = "global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">";
+        string owner = "global::LuminPack.Binary_" + c.Extension + "_" + ReadableTypeName.Of(GeneratedNames.PayloadKey(concrete));
+        w.Line(concrete + "? dictionary = global::LuminPack.Code.LuminPackCollectionAccess.GetReadOnlyDictionaryStorage(value);");
+        w.Line("var existingDictionary = dictionary;");
+        w.Line(owner + ".Read<TLuminProfile>(ref operationState, ref dictionary);");
+        // The wrapper is kept when the backing dictionary was reused.
+        w.Line("if (dictionary is null)");
+        w.Indented(() => w.Line("value = null;"));
+        w.Line("else if (!object.ReferenceEquals(dictionary, existingDictionary))");
+        w.Indented(() => w.Line("value = new " + c.Dictionary + "(dictionary);"));
     }
 
     /// <summary>Reads through the original fresh concrete owner and wraps the published result.</summary>

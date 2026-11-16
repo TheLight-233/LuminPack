@@ -31,6 +31,20 @@ internal static class ReadOnlyCollectionOwnerFile
             w.Line("if (value is not null && length != 0 && global::LuminPack.Code.LuminPackCollectionAccess.TryReadArrayBackedWrapper(ref operationState, value, length))");
             w.Indented(() => w.Line("goto operationComplete_RootRead;"));
         }
+        else if (c.Counted && c.ReadOnlyCollectionRefill)
+        {
+            // Counted elements are read in place over the existing wrapper's equally long array, reusing its items.
+            w.Line("if (value is not null && length != 0)");
+            w.Open();
+            w.Line("var reusedArray = global::LuminPack.Code.LuminPackCollectionAccess.GetArrayBackedWrapperItems(value, length);");
+            w.Line("if (reusedArray is not null)");
+            w.Open();
+            w.Line("var reusedSpan = global::System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref global::LuminPack.Code.LuminPackMarshal.GetArrayReference(reusedArray), length);");
+            c.ReadBlockInPlace("reusedSpan");
+            w.Line("goto operationComplete_RootRead;");
+            w.Close();
+            w.Close();
+        }
         w.Line("var array = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<" + t + ">(length);");
         w.Line("if (length != 0)");
         w.Open();

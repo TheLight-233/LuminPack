@@ -3,8 +3,9 @@ using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared owner of one closed <c>Collection&lt;T&gt;</c> of raw scalars.</summary>
-/// <remarks>The write is the shared wrapper write. The read creates the collection over an exactly sized list or clears the
-/// reused one, then fills the list storage in place, or adds each element when the wrapper holds another list type.</remarks>
+/// <remarks>The write is the shared wrapper write. The read creates the collection over an exactly sized list, or keeps the
+/// items of a reused exact collection like a reused list and clears any other one, then fills the list storage in place, or
+/// adds each element when the wrapper holds another list type.</remarks>
 internal static class CollectionOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(WrapperTraversal.WriteRoot, Read, "value.Add(item);",
@@ -31,7 +32,9 @@ internal static class CollectionOwnerFile
         string t = c.Scalar;
         w.Line("if (value is null)");
         w.Indented(() => w.Line("value = new " + c.Sequence + "(new global::System.Collections.Generic.List<" + t + ">(length));"));
-        w.Line("else");
+        // An exact collection's Clear only clears its list, so the list's items stay as reuse seeds like a reused list;
+        // a derived collection keeps its overridden ClearItems.
+        w.Line("else if (length == 0 || value.GetType() != typeof(" + c.Sequence + "))");
         w.Indented(() => w.Line("value.Clear();"));
         w.Blank();
         w.Line("if (length == 0)");
@@ -41,6 +44,8 @@ internal static class CollectionOwnerFile
         // An existing wrapper may hold any list; only an exact List matches the storage view.
         w.Line("if (view.items is null || view.items.GetType() != typeof(global::System.Collections.Generic.List<" + t + ">))");
         w.Open();
+        w.Line("if (value.Count != 0)");
+        w.Indented(() => w.Line("value.Clear();"));
         w.Line("int index = 0;");
         w.Line("do");
         w.Open();
@@ -53,6 +58,6 @@ internal static class CollectionOwnerFile
         w.Close();
         w.Blank();
         w.Line("var span = global::LuminPack.Code.LuminPackMarshal.GetListSpan(view.items!, length);");
-        WrapperTraversal.ReadSpan(c, "span");
+        c.ReadBlockInPlace("span");
     }
 }
