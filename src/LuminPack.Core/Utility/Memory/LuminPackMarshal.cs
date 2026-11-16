@@ -496,10 +496,18 @@ public static partial class LuminPackMarshal
         {
             ref byte destination = ref Unsafe.Add(ref cursor, sizeof(int));
             var view = GetHashSetView(set);
-            ref var entry = ref GetArrayReference(view._entries);
+            var entries = view._entries;
+            ref var entry = ref GetArrayReference(entries);
             int used = view._count;
             if (used == count)
             {
+#if NET8_0_OR_GREATER
+                if (TryWriteDenseHashSetInt32(ref destination, ref entry, count, entries.Length))
+                {
+                    writer.AdvanceSafe(sizeof(int) + bytes);
+                    return;
+                }
+#endif
                 // Cursors instead of an index: the indexed form scaled the element width and recomputed
                 // both addresses every iteration, which the JIT lowered to a sign extension and an extra
                 // scaled address per element.

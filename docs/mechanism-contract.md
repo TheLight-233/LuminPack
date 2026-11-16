@@ -119,6 +119,7 @@ The history of individual approvals lives in Git. When this document, the code a
 - **Pooled fresh reads.** In ordinary (`Object` mode) binary reads, a reference type with `[LuminPackPoolRent]` rents its instance when the target is null, at the root and as an inline member, and then reads into it like an existing instance. Version-tolerant and reference-tracked modes keep their staged members and late commit.
 - **Callbacks** run at their established points and order.
 
+- **Dense raw binary HashSet writes.** On x64 with SSE, the shared writer may gather four 32-bit values per store in enumeration order when a runtime probe confirms the twelve-byte framework entry stride and the value at offset eight. The complete record is reserved first and each vector load stays within the captured dense entries. Sparse or overlapping storage, unavailable probe data, other widths and platforms use the existing scalar writes. The bounded tail uses the ordinary scalar writer.
 ### Options and generation
 
 - **Compile-time options.** `[LuminPackOption]` scopes (assembly, type, member) and stateless `ILuminPackOptions` profiles are compiled in. There is no runtime options object or mutable global default. JSON encoding, depth and syntax policy apply to a whole document, selected by its root.
