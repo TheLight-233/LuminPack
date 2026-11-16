@@ -509,11 +509,15 @@ namespace LuminPack.Core
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 &&
                 default(TOptions).StringRecording == LuminPackStringRecording.Length &&
                 Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 &&
-                !strings.IsEmpty && strings[0] is null && RemainingWindowBytes >= sizeof(int))
+                !strings.IsEmpty && strings[0] is null)
             {
-                int header = Read<int>(ref Current);
-                if (IsShortLatin1Header(header))
-                    strings = strings.Slice(ReadFreshLatin1Prefix(strings, header));
+                nint available = Unsafe.ByteOffset(ref Cursor, ref _end);
+                if (unchecked((nuint)(available - sizeof(int))) <= int.MaxValue - sizeof(int))
+                {
+                    int header = Read<int>(ref Current);
+                    if (IsShortLatin1Header(header))
+                        strings = strings.Slice(ReadFreshLatin1Prefix(strings, header, (uint)available));
+                }
             }
 #endif
             ref string? first = ref MemoryMarshal.GetReference(strings);
@@ -538,9 +542,10 @@ namespace LuminPack.Core
         /// <summary>Fills leading empty slots from short Latin-1 length records.</summary>
         /// <param name="slots">The destination slots, starting with an empty slot.</param>
         /// <param name="header">The first short Latin-1 header, already read at the cursor.</param>
+        /// <param name="remaining">The validated number of bytes from the current position.</param>
         /// <returns>The number of complete string records read.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private int ReadFreshLatin1Prefix(Span<string?> slots, int header)
+        private int ReadFreshLatin1Prefix(Span<string?> slots, int header, uint remaining)
         {
             int i = 0;
             ref string? first = ref MemoryMarshal.GetReference(slots);
@@ -548,9 +553,11 @@ namespace LuminPack.Core
             {
                 int length = header >> 1;
                 ref byte payload = ref Unsafe.Add(ref Current, sizeof(int));
-                Advance(sizeof(int) + length);
+                int recordBytes = sizeof(int) + length;
+                AdvanceInStringWindow(recordBytes, remaining);
+                remaining -= (uint)recordBytes;
                 Unsafe.Add(ref first, i++) = StringSerializer.CreateShortLatin1String(ref payload, length);
-                if (i == slots.Length || Unsafe.Add(ref first, i) is not null || RemainingWindowBytes < sizeof(int))
+                if (i == slots.Length || Unsafe.Add(ref first, i) is not null || remaining < sizeof(int))
                     break;
                 header = Read<int>(ref Current);
             } while (IsShortLatin1Header(header));
@@ -600,12 +607,12 @@ namespace LuminPack.Core
                         ref byte text = ref Unsafe.Add(ref Current, sizeof(int));
                         if ((header & 1) == 0)
                         {
-                            AdvanceInStringWindow(unchecked(sizeof(int) + header), (nuint)available);
+                            AdvanceInStringWindow(unchecked(sizeof(int) + header), (uint)available);
                             return StringSerializer.ReadUtf16Payload(ref text, header, current);
                         }
 
                         int length = header >> 1;
-                        AdvanceInStringWindow(sizeof(int) + length, (nuint)available);
+                        AdvanceInStringWindow(sizeof(int) + length, (uint)available);
                         return StringSerializer.ReadLatin1Payload(ref text, length, current);
                     }
                 }
@@ -651,9 +658,9 @@ namespace LuminPack.Core
         /// <param name="byteCount">The complete record width, with a negative value indicating overflow.</param>
         /// <param name="available">The previously measured readable window, at most <see cref="int.MaxValue"/>.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void AdvanceInStringWindow(int byteCount, nuint available)
+        private void AdvanceInStringWindow(int byteCount, uint available)
         {
-            if (unchecked((nuint)byteCount) > available)
+            if (unchecked((uint)byteCount) > available)
                 LuminPackExceptionHelper.ThrowReaderSpanOutOfRange(
                     Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref Cursor), byteCount);
             AdvanceValidated(byteCount);
