@@ -138,6 +138,23 @@ internal static class FormatterConcurrentTraits
                 SymbolEqualityComparer.Default.Equals(method.ReturnType, collection.OriginalDefinition.Construct(method.TypeParameters[0])));
     }
 
+    /// <summary>Checks the optional reused-queue drain operation.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <param name="queue">The exact closed framework queue.</param>
+    /// <returns>Whether the referenced helper has the expected public signature.</returns>
+    internal static bool HasQueueDrain(Compilation compilation, INamedTypeSymbol queue)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        return owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
+            owner.GetMembers("DrainConcurrentQueue").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                method.TypeParameters[0].ConstraintTypes.IsEmpty && !method.TypeParameters[0].HasValueTypeConstraint &&
+                !method.TypeParameters[0].HasReferenceTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+                !method.TypeParameters[0].HasNotNullConstraint && !method.TypeParameters[0].HasConstructorConstraint &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, queue.OriginalDefinition.Construct(method.TypeParameters[0])));
+    }
+
     /// <summary>Checks the optional exact concurrent queue reset in the referenced Core.</summary>
     /// <param name="compilation">The actual consumer metadata.</param>
     /// <param name="queue">The declared concurrent queue.</param>

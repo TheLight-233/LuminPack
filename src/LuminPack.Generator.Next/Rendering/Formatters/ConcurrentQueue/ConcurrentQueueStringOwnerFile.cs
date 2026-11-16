@@ -201,7 +201,7 @@ internal static class ConcurrentQueueStringOwnerFile
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
                     w.Blank();
-                    w.Line("value.Clear();");
+                    w.Line(ConcurrentQueueOwnerFile.ResetLine(set, queue));
                     w.Line("if (length == 0)");
                     w.Indented(() => w.Line("goto operationComplete_RootRead;"));
                     w.Line("int remaining = length;");
@@ -357,7 +357,7 @@ internal static class ConcurrentQueueStringOwnerFile
                     w.Close();
                     w.Line("else");
                     w.Open();
-                    w.Line("value.Clear();");
+                    w.Line(ConcurrentQueueOwnerFile.ResetLine(set, queue));
                     w.Close();
                     w.Blank();
                     w.Line("while (reader.Read<TLuminProfile>())");

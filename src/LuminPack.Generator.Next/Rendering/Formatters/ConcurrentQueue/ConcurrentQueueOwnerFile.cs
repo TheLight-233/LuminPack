@@ -9,6 +9,15 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// its raw storage.</remarks>
 internal static class ConcurrentQueueOwnerFile
 {
+    /// <summary>Returns the statement that empties a reused queue before its ordered refill.</summary>
+    /// <param name="set">The required owners and capabilities.</param>
+    /// <param name="queue">The closed queue type.</param>
+    /// <returns>The drain helper when the referenced Core exposes it, otherwise the framework clear.</returns>
+    internal static string ResetLine(SharedFormatterSet set, string queue) =>
+        set.FindFormatter(queue)?.Supports("DrainConcurrentQueue") == true
+            ? "global::LuminPack.Code.LuminPackCollectionAccess.DrainConcurrentQueue(value);"
+            : "value.Clear();";
+
     /// <summary>Emits queue construction from an already decoded rented array prefix.</summary>
     /// <param name="w">The generated source writer.</param>
     /// <param name="set">The referenced Core capabilities for this owner.</param>
@@ -217,7 +226,9 @@ internal static class ConcurrentQueueOwnerFile
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
                     w.Blank();
-                    if (!ownerRead && set.FindFormatter(queue)?.Supports("ClearConcurrentQueue") == true)
+                    if (set.FindFormatter(queue)?.Supports("DrainConcurrentQueue") == true)
+                        w.Line(ResetLine(set, queue));
+                    else if (!ownerRead && set.FindFormatter(queue)?.Supports("ClearConcurrentQueue") == true)
                     {
                         w.Line("if (length is <= 32 or > 4096 || !global::LuminPack.Code.LuminPackCollectionAccess.TryClearConcurrentQueue(value, length))");
                         w.Indented(() => w.Line("value.Clear();"));
@@ -377,7 +388,7 @@ internal static class ConcurrentQueueOwnerFile
                     w.Close();
                     w.Line("else");
                     w.Open();
-                    w.Line("value.Clear();");
+                    w.Line(ResetLine(set, queue));
                     w.Close();
                     w.Blank();
                     w.Line("while (reader.Read<TLuminProfile>())");
