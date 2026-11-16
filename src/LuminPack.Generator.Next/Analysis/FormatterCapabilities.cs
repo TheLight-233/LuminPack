@@ -137,6 +137,10 @@ internal static class FormatterCapabilities
                 if ((concrete == sorted || named.Name.StartsWith("IImmutable", StringComparison.Ordinal)) &&
                     FormatterImmutableTraits.HasTreeCopy(compilation, sorted, named.Arity))
                     result.Add("CopyImmutableSortedTree");
+                if (definition == "System.Collections.Immutable.ImmutableSortedDictionary" && modern && !unity &&
+                    named.TypeArguments.All(argument => argument.SpecialType == SpecialType.System_String) &&
+                    FormatterImmutableTraits.HasBinaryStringPairPrefix(compilation))
+                    result.Add("BinaryStringPairPrefix");
                 if (named.Arity == 1)
                 {
                     ContiguousCapabilities(compilation, named.TypeArguments[0], result);

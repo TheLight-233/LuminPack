@@ -56,6 +56,29 @@ internal static class FormatterImmutableTraits
                 pair!.Construct(method.TypeParameters.Cast<ITypeSymbol>().ToArray()))));
     }
 
+    /// <summary>Checks the optional bounded prefix operation for staged string pairs.</summary>
+    /// <param name="compilation">The consuming compilation and its runtime references.</param>
+    /// <returns>Whether the profile-aware operation accepts a concrete pair span.</returns>
+    internal static bool HasBinaryStringPairPrefix(Compilation compilation)
+    {
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
+        var pair = compilation.GetTypeByMetadataName("System.Collections.Generic.KeyValuePair`2");
+        var text = compilation.GetSpecialType(SpecialType.System_String);
+        if (writer is null || options is null || span is null || pair is null)
+            return false;
+        var pairs = span.Construct(pair.Construct(text, text));
+        return writer.GetMembers("WriteStringPairPrefix").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+            method.ReturnType.SpecialType == SpecialType.System_Int32 &&
+            method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+            method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+            SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options) &&
+            method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, pairs));
+    }
+
     /// <summary>Checks for set factory.</summary>
     /// <param name="compilation">The compilation that supplies source symbols and references.</param>
     /// <param name="family">The family supplied to <c>HasSetFactory</c>.</param>

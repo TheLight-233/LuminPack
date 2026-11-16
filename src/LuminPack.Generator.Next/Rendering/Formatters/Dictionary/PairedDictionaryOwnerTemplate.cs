@@ -507,7 +507,8 @@ internal sealed partial class PairedDictionaryContext
         bool fused = batchRaw && BeginRawRun("pair.Key", "pair.Value",
             "ref var pair = ref " + Memory + ".Add(ref firstPair, (nint)(uint)index);");
         bool mixed = ParallelDictionaryWrite.SupportsMixed(this);
-        if (mixed)
+        bool stringPairs = UsesRawOrStringEntries && Key == "string" && Value == "string" && Supports("BinaryStringPairPrefix");
+        if (mixed || stringPairs)
             W.Line("bool utf16Length = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ";");
         W.Line("int index = 0;");
         W.Line("do");
@@ -515,6 +516,15 @@ internal sealed partial class PairedDictionaryContext
         W.Line("ref var pair = ref " + Memory + ".Add(ref firstPair, (nint)(uint)index);");
         if (mixed)
             ParallelDictionaryWrite.WriteMixedIfFits(this, "pair.Key", "pair.Value", byRef: false);
+        if (stringPairs)
+        {
+            W.Line("if (utf16Length)");
+            W.Open();
+            W.Line("index += operationState.WriteStringPairPrefix<TLuminProfile>(" + marshal + ".CreateSpan(ref pair, count - index));");
+            W.Line("if (index == count) break;");
+            W.Line("pair = ref " + Memory + ".Add(ref firstPair, (nint)(uint)index);");
+            W.Close();
+        }
         W.Line(Key + " key = pair.Key;");
         WriteMember(Key, "key");
         W.Line(Value + " itemValue = pair.Value;");
