@@ -16,7 +16,11 @@ namespace LuminPack.Utility;
 public interface ILuminPortableLayout
 {
     /// <summary>Gets the packed, declaration-ordered wire width of one element.</summary>
-    int WireSize { get; }
+    int WireSize
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get;
+    }
 
     /// <summary>Writes, for each wire byte, the offset of the storage byte it carries.</summary>
     /// <param name="storageOffsets">One entry per wire byte.</param>

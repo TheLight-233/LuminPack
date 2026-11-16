@@ -14,7 +14,11 @@ namespace LuminPack.Utility;
 public interface ILuminStorageLayout : ILuminPortableLayout
 {
     /// <summary>Gets the number of generated models; their tags are one through this count.</summary>
-    int ModelCount { get; }
+    int ModelCount
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get;
+    }
 
     /// <summary>Gets the width of one native element in a model.</summary>
     /// <param name="tag">The model tag.</param>

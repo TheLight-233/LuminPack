@@ -78,21 +78,22 @@ internal static class ProfileSource
     /// <param name="components">The component declarations.</param>
     private static void Add(StringProfile profile, SortedDictionary<string, string> components)
     {
+        const string inline = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]";
         if (profile.Format != 'G' || profile.Precision != byte.MaxValue)
         {
             string name = ProfileNames.Format(profile);
             if (!components.ContainsKey(name))
                 components.Add(name, "    /// <summary>Provides a declaration-time standard format.</summary>\n    public readonly struct " + name +
-                    " : global::LuminPack.Option.ILuminPackFormatOptions\n    {\n        /// <inheritdoc/>\n        public global::System.Buffers.StandardFormat Value => new global::System.Buffers.StandardFormat((char)" +
-                    ((int)profile.Format).ToString(CultureInfo.InvariantCulture) + ", (byte)" + profile.Precision.ToString(CultureInfo.InvariantCulture) + ");\n    }\n");
+                    " : global::LuminPack.Option.ILuminPackFormatOptions\n    {\n        /// <inheritdoc/>\n        public global::System.Buffers.StandardFormat Value { " + inline + " get => new global::System.Buffers.StandardFormat((char)" +
+                    ((int)profile.Format).ToString(CultureInfo.InvariantCulture) + ", (byte)" + profile.Precision.ToString(CultureInfo.InvariantCulture) + "); }\n    }\n");
         }
         if (profile.Depth != 1024)
         {
             string name = ProfileNames.Depth(profile);
             if (!components.ContainsKey(name))
                 components.Add(name, "    /// <summary>Provides a declaration-time JSON depth bound.</summary>\n    public readonly struct " + name +
-                    " : global::LuminPack.Option.ILuminPackDepthOptions\n    {\n        /// <inheritdoc/>\n        public int Value => " +
-                    profile.Depth.ToString(CultureInfo.InvariantCulture) + ";\n    }\n");
+                    " : global::LuminPack.Option.ILuminPackDepthOptions\n    {\n        /// <inheritdoc/>\n        public int Value { " + inline + " get => " +
+                    profile.Depth.ToString(CultureInfo.InvariantCulture) + "; }\n    }\n");
         }
     }
 }

@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
 
 namespace LuminPack.Option;
 
@@ -7,28 +8,68 @@ namespace LuminPack.Option;
 public interface ILuminPackOptions
 {
     /// <summary>Gets the selected string encoding.</summary>
-    LuminPackStringEncoding StringEncoding { get; }
+    LuminPackStringEncoding StringEncoding
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get;
+    }
     /// <summary>Gets the binary string boundary representation.</summary>
-    LuminPackStringRecording StringRecording { get; }
+    LuminPackStringRecording StringRecording
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get;
+    }
     /// <summary>Gets the standard format for supported formatted values.</summary>
-    StandardFormat StandardFormat { get; }
+    StandardFormat StandardFormat
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get;
+    }
     /// <summary>Gets the complete JSON document's maximum depth.</summary>
-    int MaxJsonDepth { get; }
+    int MaxJsonDepth
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get;
+    }
     /// <summary>Gets whether the complete JSON document requires strict grammar validation.</summary>
-    bool ValidateJsonSyntax { get; }
+    bool ValidateJsonSyntax
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get;
+    }
 }
 
 /// <summary>Provides the fixed UTF-16, length-prefixed, trusted-JSON library defaults.</summary>
 public readonly struct LuminPackDefaultOptions : ILuminPackOptions
 {
     /// <inheritdoc/>
-    public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF16;
+    public LuminPackStringEncoding StringEncoding
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => LuminPackStringEncoding.UTF16;
+    }
     /// <inheritdoc/>
-    public LuminPackStringRecording StringRecording => LuminPackStringRecording.Length;
+    public LuminPackStringRecording StringRecording
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => LuminPackStringRecording.Length;
+    }
     /// <inheritdoc/>
-    public StandardFormat StandardFormat => new('G');
+    public StandardFormat StandardFormat
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => new('G');
+    }
     /// <inheritdoc/>
-    public int MaxJsonDepth => 1024;
+    public int MaxJsonDepth
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => 1024;
+    }
     /// <inheritdoc/>
-    public bool ValidateJsonSyntax => false;
+    public bool ValidateJsonSyntax
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => false;
+    }
 }

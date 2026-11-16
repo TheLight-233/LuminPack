@@ -11,6 +11,8 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 /// <summary>Emits padding-free transfers while retaining the existing Local/As storage mechanism.</summary>
 internal static class PortableStructEmitter
 {
+    private const string Inline = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]";
+
     /// <summary>Finds the portable view marker with a bounded short scan or overlapping rented windows.</summary>
     /// <param name="builder">The operation text accumulated so far.</param>
     /// <returns>Whether the complete marker appears anywhere in that text.</returns>
@@ -151,7 +153,7 @@ internal static class PortableStructEmitter
             sb.AppendLine("        private readonly struct " + LayoutName(plan) + " : global::LuminPack.Utility." +
                 (plan.Tagged ? "ILuminStorageLayout" : "ILuminPortableLayout"));
             sb.AppendLine("        {");
-            sb.AppendLine("            public int WireSize => " + plan.WireSize + ";");
+            sb.AppendLine("            public int WireSize { " + Inline + " get => " + plan.WireSize + "; }");
             sb.AppendLine("            public void Describe(global::System.Span<int> storageOffsets)");
             sb.AppendLine("            {");
             sb.AppendLine("                " + type + " __probe = default;");
@@ -191,7 +193,7 @@ internal static class PortableStructEmitter
     /// <param name="plan">The tagged storage plan.</param>
     private static void AppendModels(StringBuilder sb, PortableStructPlan plan)
     {
-        sb.AppendLine("            public int ModelCount => " + plan.Models.Length + ";");
+        sb.AppendLine("            public int ModelCount { " + Inline + " get => " + plan.Models.Length + "; }");
         sb.AppendLine("            public int ModelSize(int tag)");
         sb.AppendLine("            {");
         for (int model = 0; model < plan.Models.Length; model++)

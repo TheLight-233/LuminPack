@@ -65,9 +65,10 @@ internal static class FormatterStorageEmitter
 
             if (current.Volatile)
                 return;
+            string inline = w.MethodImpl("AggressiveInlining");
             w.Line("private readonly struct " + Layout(current) + " : global::LuminPack.Utility." + (current.Tagged ? "ILuminStorageLayout" : "ILuminPortableLayout"));
             w.Open();
-            w.Line("public int WireSize => " + current.WireSize.ToString(CultureInfo.InvariantCulture) + ";");
+            w.Line("public int WireSize { " + inline + " get => " + current.WireSize.ToString(CultureInfo.InvariantCulture) + "; }");
             w.Line("public void Describe(global::System.Span<int> storageOffsets)");
             w.Open();
             w.Line(current.Type + " probe = default;");
@@ -89,7 +90,7 @@ internal static class FormatterStorageEmitter
             w.Close();
             if (current.Tagged)
             {
-                w.Line("public int ModelCount => " + current.ModelSizes.Length.ToString(CultureInfo.InvariantCulture) + ";");
+                w.Line("public int ModelCount { " + inline + " get => " + current.ModelSizes.Length.ToString(CultureInfo.InvariantCulture) + "; }");
                 w.Line("public int ModelSize(int tag)");
                 w.Open();
                 for (int i = 0; i < current.ModelSizes.Length; i++)

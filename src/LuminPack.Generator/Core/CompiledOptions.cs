@@ -218,16 +218,17 @@ internal sealed class CompiledOptions
     /// <returns>Stable component identities and their complete namespace declarations.</returns>
     internal IEnumerable<KeyValuePair<string, string>> Declarations()
     {
+        const string inline = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]";
         if (!ReferenceEquals(JsonInput, this))
             foreach (var declaration in JsonInput.Declarations())
                 yield return declaration;
         if (Format != 'G' || Precision != byte.MaxValue)
             yield return new KeyValuePair<string, string>(FormatIdentity, "namespace LuminPack.Generated {\n" +
                 "/// <summary>Provides a declaration-time standard-format constant.</summary>\npublic readonly struct " + FormatIdentity + " : global::LuminPack.Option.ILuminPackFormatOptions {\n" +
-                "/// <inheritdoc/>\npublic global::System.Buffers.StandardFormat Value => new global::System.Buffers.StandardFormat((char)" + (int)Format + ", (byte)" + Precision + ");\n} }\n");
+                "/// <inheritdoc/>\npublic global::System.Buffers.StandardFormat Value { " + inline + " get => new global::System.Buffers.StandardFormat((char)" + (int)Format + ", (byte)" + Precision + "); }\n} }\n");
         if (Depth != 1024)
             yield return new KeyValuePair<string, string>(DepthIdentity, "namespace LuminPack.Generated {\n" +
                 "/// <summary>Provides a declaration-time JSON depth bound.</summary>\npublic readonly struct " + DepthIdentity + " : global::LuminPack.Option.ILuminPackDepthOptions {\n" +
-                "/// <inheritdoc/>\npublic int Value => " + Depth.ToString(CultureInfo.InvariantCulture) + ";\n} }\n");
+                "/// <inheritdoc/>\npublic int Value { " + inline + " get => " + Depth.ToString(CultureInfo.InvariantCulture) + "; }\n} }\n");
     }
 }
