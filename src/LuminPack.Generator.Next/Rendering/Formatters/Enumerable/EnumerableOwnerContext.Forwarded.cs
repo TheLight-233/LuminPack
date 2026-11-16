@@ -87,15 +87,16 @@ internal sealed partial class EnumerableOwnerContext
         string array = ContiguousOwnerFile.ArrayType(Scalar);
         W.Line(Sequence + " selected;");
         W.Line("global::System.Span<" + Scalar + "> target;");
+        // The exact type tests also prove each reference reinterpretation.
         W.Line("if (value is not null && value.GetType() == typeof(" + list + "))");
         W.Open();
-        W.Line("var list = (" + list + ")value;");
+        W.Line("var list = " + Memory + ".As<" + list + ">(value);");
         W.Line("target = " + PackMarshal + ".GetListSpan(list, length);");
         W.Line("selected = list;");
         W.Close();
         W.Line("else if (value is not null && value.GetType() == typeof(" + array + "))");
         W.Open();
-        W.Line("var array = (" + array + ")value;");
+        W.Line("var array = " + Memory + ".As<" + array + ">(value);");
         W.Line("if (array.Length != length)");
         W.Indented(() => W.Line("array = " + PackMarshal + ".AllocateUninitializedArray<" + Scalar + ">(length);"));
         W.Line("target = " + ArraySpan("array") + ";");
@@ -133,7 +134,7 @@ internal sealed partial class EnumerableOwnerContext
         string array = ContiguousOwnerFile.ArrayType(Scalar);
         W.Line("if (value is not null && value.GetType() == typeof(" + list + "))");
         W.Open();
-        W.Line("var selected = (" + list + ")value;");
+        W.Line("var selected = " + Memory + ".As<" + list + ">(value);");
         W.Line("var target = global::LuminPack.Code.LuminPackMarshal.GetListSpan(selected, length);");
         ReadBlock("target");
         W.Line("value = selected;");
@@ -141,7 +142,7 @@ internal sealed partial class EnumerableOwnerContext
         W.Close();
         W.Line("if (value is not null && value.GetType() == typeof(" + array + "))");
         W.Open();
-        W.Line("var selected = (" + array + ")value;");
+        W.Line("var selected = " + Memory + ".As<" + array + ">(value);");
         W.Line("if (selected.Length != length) selected = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<" + Scalar + ">(length);");
         W.Line("var target = " + PackMarshal + ".CreateSpan(ref " + PackMarshal + ".GetNotNullArrayReference(selected), length);");
         ReadBlock("target");
