@@ -13,7 +13,7 @@ internal static class ClosedGenericOwnerFile
     internal static bool ReusesStringComponents(string definition) =>
         definition is GenericIdentity.KeyValuePair or GenericIdentity.Tuple or GenericIdentity.ValueTuple;
 
-    /// <summary>Renders the common outlined string reader once per consuming assembly.</summary>
+    /// <summary>Renders the shared string reader once per consuming assembly.</summary>
     /// <param name="set">The shared formatter publication facts.</param>
     /// <returns>The source for the reusable string operation.</returns>
     internal static string RenderStringReader(SharedFormatterSet set)
@@ -23,7 +23,7 @@ internal static class ClosedGenericOwnerFile
         w.Open();
         w.Line("public static partial class LuminPackSerializer");
         w.Open();
-        w.Line(w.MethodImpl("NoInlining"));
+        w.Line(w.MethodImpl("AggressiveInlining"));
         w.Line("internal static string ReadCompoundString<TLuminProfile>(ref " + w.A("LuminPackReader") + " reader, string value)");
         w.Line("    where TLuminProfile : struct, " + w.A("ILuminPackOptions") + " => reader.Read<TLuminProfile>(value)!;");
         w.Close();
@@ -174,8 +174,7 @@ internal static class ClosedGenericOwnerFile
                 w.Close();
             }
 
-            // As the original compound read, a string component starts from the existing component and keeps it when the text is
-            // equal; the string operation keeps its own inlining budget.
+            // As in the original compound read, a string component starts from the existing component and keeps it when the text is equal.
             bool reuseText = ReusesStringComponents(model.Definition);
             for (int i = 0; i < model.Arguments.Length; i++)
             {
