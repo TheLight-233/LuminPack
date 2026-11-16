@@ -28,27 +28,97 @@ public static partial class LuminPackCollectionAccess
             !TryGetPriorityQueueTraversal(queue, out var nodes, out int version))
             return false;
         long payloadBytes = (long)nodes.Length * pairBytes;
-        if (writer.RecordRoom() < sizeof(int) + payloadBytes || MemoryMarshal.AsBytes(nodes).Overlaps(writer.Buffer))
+        if (writer.RecordRoom() < sizeof(int) + payloadBytes)
+            return false;
+        var storage = MemoryMarshal.AsBytes(nodes);
+        if (storage.Overlaps(writer.Buffer))
             return false;
         int header = writer.BeginCollection();
         if (!nodes.IsEmpty)
         {
             ref byte output = ref writer.Cursor;
-            ref var first = ref MemoryMarshal.GetReference(nodes);
-            int index = 0;
-            do
+            if (PriorityQueuePairLayout<TElement, TPriority>.Packed)
             {
-                ref readonly var node = ref Unsafe.Add(ref first, (nint)(uint)index);
-                LuminPackWriter.Write(ref output, in node.Element);
-                LuminPackWriter.Write(ref Unsafe.Add(ref output, (nint)(uint)elementBytes), in node.Priority);
-                output = ref Unsafe.Add(ref output, (nint)(uint)pairBytes);
-            } while (++index < nodes.Length);
+                LuminPackMarshal.CopyBlockUnaligned(ref output, ref MemoryMarshal.GetReference(storage), (uint)storage.Length);
+            }
+            else
+            {
+                ref var first = ref MemoryMarshal.GetReference(nodes);
+                int index = 0;
+                do
+                {
+                    ref readonly var node = ref Unsafe.Add(ref first, (nint)(uint)index);
+                    LuminPackWriter.Write(ref output, in node.Element);
+                    LuminPackWriter.Write(ref Unsafe.Add(ref output, (nint)(uint)elementBytes), in node.Priority);
+                    output = ref Unsafe.Add(ref output, (nint)(uint)pairBytes);
+                } while (++index < nodes.Length);
+            }
         }
         writer.CompleteRun((int)payloadBytes);
         CheckPriorityQueueTraversalVersion(queue, version);
         writer.EndCollection(header, nodes.Length);
         return true;
     }
+
+    /// <summary>Copies the count and a packed heap snapshot into the final binary output array.</summary>
+    /// <typeparam name="TElement">The supported raw integer element type.</typeparam>
+    /// <typeparam name="TPriority">The supported raw integer priority type.</typeparam>
+    /// <param name="queue">The possible framework source queue.</param>
+    /// <returns>The complete record, or null when the ordinary writer must run.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static byte[]? TryAllocatePriorityQueueRecord<TElement, TPriority>(PriorityQueue<TElement, TPriority>? queue)
+        where TElement : unmanaged where TPriority : unmanaged
+    {
+        if (!PriorityQueuePairLayout<TElement, TPriority>.Packed || queue is null ||
+            queue.GetType() != typeof(PriorityQueue<TElement, TPriority>) ||
+            !TryGetPriorityQueueTraversal(queue, out var nodes, out int version))
+            return null;
+
+        long length = sizeof(int) + (long)nodes.Length * Unsafe.SizeOf<(TElement, TPriority)>();
+        if (length > Array.MaxLength)
+            return null;
+        var storage = MemoryMarshal.AsBytes(nodes);
+        var result = LuminPackMarshal.AllocateUninitializedArray<byte>((int)length);
+        ref byte start = ref LuminPackMarshal.GetNotNullArrayReference(result);
+        int count = nodes.Length;
+        LuminPackWriter.Write(ref start, in count);
+        if (!storage.IsEmpty)
+            LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref start, sizeof(int)), ref MemoryMarshal.GetReference(storage),
+                (uint)storage.Length, destinationIsNew: true);
+        CheckPriorityQueueTraversalVersion(queue, version);
+        return result;
+    }
+
+    /// <summary>Checks whether the heap tuple matches the wire's member order and width.</summary>
+    /// <typeparam name="TElement">The element as stored in the node array.</typeparam>
+    /// <typeparam name="TPriority">The priority as stored in the node array.</typeparam>
+    private static class PriorityQueuePairLayout<TElement, TPriority>
+        where TElement : unmanaged where TPriority : unmanaged
+    {
+        /// <summary>Whether a complete node can be copied as its raw wire pair.</summary>
+        internal static readonly bool Packed = Check();
+
+        /// <summary>Verifies adjacent physical members without padding or reordering.</summary>
+        /// <returns>Whether the heap node matches the binary pair.</returns>
+        private static bool Check()
+        {
+            if (IntPtr.Size != 8 || !IsPackedPriorityInteger<TElement>() || !IsPackedPriorityInteger<TPriority>() ||
+                Unsafe.SizeOf<(TElement, TPriority)>() != Unsafe.SizeOf<TElement>() + Unsafe.SizeOf<TPriority>())
+                return false;
+            var entries = new (TElement Element, TPriority Priority)[2];
+            ref var pair = ref entries[0];
+            ref byte start = ref Unsafe.As<(TElement, TPriority), byte>(ref pair);
+            return Unsafe.ByteOffset(ref start, ref Unsafe.As<TElement, byte>(ref pair.Element)) == 0 &&
+                Unsafe.ByteOffset(ref start, ref Unsafe.As<TPriority, byte>(ref pair.Priority)) == Unsafe.SizeOf<TElement>() &&
+                Unsafe.ByteOffset(ref start, ref Unsafe.As<(TElement, TPriority), byte>(ref entries[1])) == Unsafe.SizeOf<(TElement, TPriority)>();
+        }
+    }
+
+    /// <summary>Limits complete heap transfers to known native integer encodings.</summary>
+    /// <typeparam name="T">The stored heap field type.</typeparam>
+    /// <returns>Whether the field uses a supported raw integer width.</returns>
+    private static bool IsPackedPriorityInteger<T>() => typeof(T) == typeof(int) || typeof(T) == typeof(uint) ||
+        typeof(T) == typeof(long) || typeof(T) == typeof(ulong);
 
     /// <summary>Fills a default-comparer heap directly while each pair already belongs in the next heap slot.</summary>
     /// <typeparam name="TElement">The reference-free element.</typeparam>

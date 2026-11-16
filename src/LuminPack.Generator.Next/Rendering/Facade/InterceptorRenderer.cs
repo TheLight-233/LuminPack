@@ -487,6 +487,8 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             return BigIntegerWrite;
         if (shape.Kind == EntryKind.TimeZoneSnapshot)
             return TimeZoneSnapshotWrite + PooledWrite;
+        if (shape.Kind == EntryKind.PackedPriorityQueue)
+            return PackedPriorityQueueWrite + PooledWrite;
         if (shape.Kind is EntryKind.ExactList or EntryKind.ExactListStatelessRead or EntryKind.ExactListForReadOnlyCollection or
             EntryKind.ExactHashSet or EntryKind.ExactSmallHashSet)
             return ExactInterfaceWrite(shape);
@@ -561,6 +563,11 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                             global::LuminPack.Code.LuminPackTimeZoneInfoCache.WriteTimeZoneText<%PROFILE%>(ref writer, snapshot, capacityReserved: true);
                             return buffer;
                         }
+        """ + "\n";
+
+    private const string PackedPriorityQueueWrite = """
+                        if (global::LuminPack.Code.LuminPackCollectionAccess.TryAllocatePriorityQueueRecord(value) is { } direct)
+                            return direct;
         """ + "\n";
 
     private const string PooledWrite = """

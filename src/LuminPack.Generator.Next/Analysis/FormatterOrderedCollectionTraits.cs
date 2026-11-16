@@ -28,6 +28,27 @@ internal static class FormatterOrderedCollectionTraits
         collection.TypeArguments.All(type => type.IsUnmanagedType) &&
         HasPriorityStorageTransfer(compilation, collection, "TryWritePriorityQueueStorage", "LuminPackWriter", 2);
 
+    /// <summary>Checks the optional exact-array writer for native integer heap pairs.</summary>
+    /// <param name="compilation">The actual consumer references.</param>
+    /// <param name="collection">The closed framework queue.</param>
+    /// <returns>Whether the runtime publishes the exact writer and both members use the supported wire widths.</returns>
+    internal static bool HasPriorityAllocatingWriter(Compilation compilation, INamedTypeSymbol collection)
+    {
+        if (!collection.TypeArguments.All(argument => argument.SpecialType is SpecialType.System_Int32 or SpecialType.System_UInt32 or
+            SpecialType.System_Int64 or SpecialType.System_UInt64))
+            return false;
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        return access is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } &&
+            access.GetMembers("TryAllocatePriorityQueueRecord").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 2,
+                    ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.ReturnType is IArrayTypeSymbol { Rank: 1, ElementType.SpecialType: SpecialType.System_Byte } &&
+                method.TypeParameters.All(type => type.HasUnmanagedTypeConstraint && type.ConstraintTypes.IsEmpty) &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type,
+                    collection.OriginalDefinition.Construct(method.TypeParameters[0], method.TypeParameters[1])));
+    }
+
     /// <summary>Matches the reader or writer state, framework queue and optional collection count.</summary>
     /// <param name="compilation">The actual consumer references.</param>
     /// <param name="collection">The closed framework queue.</param>

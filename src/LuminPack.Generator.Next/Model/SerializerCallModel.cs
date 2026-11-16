@@ -140,6 +140,9 @@ internal enum EntryKind
 
     /// <summary>An exact hash set using the small-element grouped writer.</summary>
     ExactSmallHashSet,
+
+    /// <summary>An exact integer priority queue with an optional packed allocating writer.</summary>
+    PackedPriorityQueue,
 }
 
 /// <summary>The entry form of a closed payload and its element spelling where the form needs one.</summary>

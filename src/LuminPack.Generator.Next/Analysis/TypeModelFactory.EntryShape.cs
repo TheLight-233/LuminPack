@@ -54,6 +54,10 @@ internal static partial class TypeModelFactory
                 return new EntryShape(EntryKind.RawScalar);
             if (name == "global::System.TimeZoneInfo")
                 return new EntryShape(EntryKind.TimeZoneSnapshot);
+            if (type is INamedTypeSymbol { Name: "PriorityQueue", TypeArguments.Length: 2 } heap &&
+                IsFrameworkCollection(heap, "System.Collections.Generic.PriorityQueue`2") &&
+                FormatterOrderedCollectionTraits.HasPriorityAllocatingWriter(_compilation, heap))
+                return new EntryShape(EntryKind.PackedPriorityQueue);
             bool fixedEnum = type.TypeKind == TypeKind.Enum && !containsReferences;
             bool fixedRecord = IsFixedRecord(type) || fixedEnum;
             if (fixedRecord || IsDirectRecord(type))
