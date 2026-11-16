@@ -127,6 +127,41 @@ public partial class JsonFormattedScalarTest
         }
     }
 
+    /// <summary>Checks timestamp kind, explicit offset and failure through the invariant UTF-16 roots.</summary>
+    [Fact]
+    public void CanonicalTimestampReadsKeepKindOffsetAndFailedTargets()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            var utc = new DateTime(2024, 2, 29, 23, 59, 58, DateTimeKind.Utc).AddTicks(1234567);
+            var utcInput = Encoding.Unicode.GetBytes("\"2024-02-29T23:59:58.1234567Z\"");
+            var readUtc = LuminPackSerializer.DeserializeJson<DateTime, LuminPackUtf16LengthOptions>(utcInput);
+            Assert.Equal(utc.ToBinary(), readUtc.ToBinary());
+
+            var offset = new DateTimeOffset(utc.Ticks, TimeSpan.FromMinutes(-510));
+            var offsetInput = Encoding.Unicode.GetBytes("\"2024-02-29T23:59:58.1234567-08:30\"");
+            var readOffset = LuminPackSerializer.DeserializeJson<DateTimeOffset, LuminPackUtf16LengthOptions>(offsetInput);
+            Assert.Equal(offset.Ticks, readOffset.Ticks);
+            Assert.Equal(offset.Offset, readOffset.Offset);
+
+            foreach (string invalid in new[] { "\"2024-02-29T23:59:58.1234567+14:01\"", "\"0001-01-01T00:00:00.0000000+00:01\"" })
+            {
+                var target = offset;
+                var malformed = Encoding.Unicode.GetBytes(invalid);
+                Assert.Throws<FormatException>(() =>
+                    LuminPackSerializer.DeserializeJson<DateTimeOffset, LuminPackUtf16LengthOptions>(malformed, ref target));
+                Assert.Equal(offset.Ticks, target.Ticks);
+                Assert.Equal(offset.Offset, target.Offset);
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
+
     /// <summary>Checks that strict JSON scalar reads avoid allocating a string for each quoted token.</summary>
     [Fact]
     public void StrictQuotedScalarReadsDoNotAllocateTokenStrings()

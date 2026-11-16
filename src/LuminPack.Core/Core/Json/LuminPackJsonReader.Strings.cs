@@ -57,6 +57,10 @@ namespace LuminPack.Core
                     token.CopyTo(text);
                     CompleteValue();
                     if (typeof(TOptions) == typeof(LuminPackUtf16LengthOptions) &&
+                        (typeof(T) == typeof(DateTime) || typeof(T) == typeof(DateTimeOffset)) &&
+                        TryParseCanonicalTimestamp(text, out T timestamp))
+                        return timestamp;
+                    if (typeof(TOptions) == typeof(LuminPackUtf16LengthOptions) &&
                         (typeof(T) == typeof(TimeOnly) || typeof(T) == typeof(TimeSpan)) &&
                         TryParseCanonicalClock(text, out long ticks))
                     {
@@ -76,6 +80,40 @@ namespace LuminPack.Core
                 return ParseQuotedScalar<T>(fullText);
             }
             return ParseQuotedScalar<T>(Read<string, TOptions>());
+        }
+
+        /// <summary>Parses a complete invariant timestamp with an explicit UTC marker or numeric offset.</summary>
+        /// <typeparam name="T">DateTime or DateTimeOffset.</typeparam>
+        /// <param name="text">The complete private token.</param>
+        /// <param name="value">The parsed value when the exact format is recognized.</param>
+        /// <returns>Whether the token matches the bounded round-trip form.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool TryParseCanonicalTimestamp<T>(scoped ReadOnlySpan<char> text, out T value) where T : struct
+        {
+            value = default;
+            bool utc = typeof(T) == typeof(DateTime);
+            int width = utc ? 28 : 33;
+            if (text.Length != width || (utc ? text[27] != 'Z' : text[27] is not ('+' or '-')) ||
+                !ReferenceEquals(CultureInfo.CurrentCulture, CultureInfo.InvariantCulture))
+                return false;
+
+            Span<byte> bytes = stackalloc byte[width];
+            if (Ascii.FromUtf16(text, bytes, out _) != OperationStatus.Done)
+                return false;
+
+            if (utc)
+            {
+                if (!Utf8Parser.TryParse(bytes, out DateTime time, out int consumed, 'O') || consumed != width ||
+                    time.Kind != DateTimeKind.Utc)
+                    return false;
+                value = Unsafe.As<DateTime, T>(ref time);
+                return true;
+            }
+
+            if (!Utf8Parser.TryParse(bytes, out DateTimeOffset offset, out int offsetConsumed, 'O') || offsetConsumed != width)
+                return false;
+            value = Unsafe.As<DateTimeOffset, T>(ref offset);
+            return true;
         }
 
         /// <summary>Parses the shared invariant round-trip form of a clock or sub-day duration.</summary>
