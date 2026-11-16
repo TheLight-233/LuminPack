@@ -129,6 +129,12 @@ internal enum EntryKind
     /// <summary>An exact built-in list implementation of a scalar interface.</summary>
     ExactList,
 
+    /// <summary>An exact list write of a collection that retains its stateless binary read.</summary>
+    ExactListStatelessRead,
+
+    /// <summary>An exact list write of a read-only collection that retains its pooled binary read.</summary>
+    ExactListForReadOnlyCollection,
+
     /// <summary>An exact built-in hash set implementation of a scalar interface.</summary>
     ExactHashSet,
 
@@ -156,7 +162,7 @@ internal readonly struct EntryShape : IEquatable<EntryShape>
 
     /// <summary>Whether the binary reads construct a plain reader without leasing reference-tracking state.</summary>
     internal bool StatelessRead => Kind is EntryKind.FixedRecord or EntryKind.DirectRecord or EntryKind.CompoundDirect or
-        EntryKind.FixedEnum or EntryKind.NullableDirect or EntryKind.BigInteger or EntryKind.StatelessRead;
+        EntryKind.FixedEnum or EntryKind.NullableDirect or EntryKind.BigInteger or EntryKind.StatelessRead or EntryKind.ExactListStatelessRead;
 
     /// <summary>Compares this value with the supplied value.</summary>
     /// <param name="other">The value to compare with this instance.</param>

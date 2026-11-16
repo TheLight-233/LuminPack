@@ -487,7 +487,8 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             return BigIntegerWrite;
         if (shape.Kind == EntryKind.TimeZoneSnapshot)
             return TimeZoneSnapshotWrite + PooledWrite;
-        if (shape.Kind is EntryKind.ExactList or EntryKind.ExactHashSet or EntryKind.ExactSmallHashSet)
+        if (shape.Kind is EntryKind.ExactList or EntryKind.ExactListStatelessRead or EntryKind.ExactListForReadOnlyCollection or
+            EntryKind.ExactHashSet or EntryKind.ExactSmallHashSet)
             return ExactInterfaceWrite(shape);
         string? size = shape.Kind switch
         {
@@ -514,11 +515,14 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     /// <returns>The resulting text.</returns>
     private static string ExactInterfaceWrite(EntryShape shape)
     {
-        bool list = shape.Kind == EntryKind.ExactList;
+        bool captureList = shape.Kind is EntryKind.ExactListStatelessRead or EntryKind.ExactListForReadOnlyCollection;
+        bool list = shape.Kind == EntryKind.ExactList || captureList;
         string implementation = "global::System.Collections.Generic." + (list ? "List" : "HashSet") + "<" + shape.Element + ">";
         const string marshal = "global::LuminPack.Code.LuminPackMarshal";
+        const string listSpan = "var items = " + marshal + ".GetListSpan(exact);\n";
+        string capture = captureList ? "                " + listSpan : string.Empty;
         string write = list
-            ? "                    var items = " + marshal + ".GetListSpan(exact);\n" +
+            ? (captureList ? string.Empty : "                    " + listSpan) +
               "                    writer.Write<" + shape.Element + ">(items, items.Length);\n"
             : "                    " + marshal + "." + (shape.Kind == EntryKind.ExactSmallHashSet ? "WriteSmallHashSetRaw" : "WriteHashSetRaw") +
               "(ref writer, exact);\n";
@@ -527,11 +531,12 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                         if (selectedValue is not null && selectedValue.GetType() == typeof(%IMPLEMENTATION%))
                         {
                             var exact = Unsafe.As<%IMPLEMENTATION%>(selectedValue);
-                            int directLength = checked(sizeof(int) + exact.Count * Unsafe.SizeOf<%ELEMENT%>());
+            %CAPTURE%                int directLength = checked(sizeof(int) + %COUNT% * Unsafe.SizeOf<%ELEMENT%>());
                             var directBuffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(directLength);
                             var directSpan = directBuffer.AsSpan();
                             var writer = new LuminPackWriter(ref directSpan);
-            """.Replace("%IMPLEMENTATION%", implementation).Replace("%ELEMENT%", shape.Element!) + "\n" + write +
+            """.Replace("%IMPLEMENTATION%", implementation).Replace("%ELEMENT%", shape.Element!)
+                .Replace("%CAPTURE%", capture).Replace("%COUNT%", captureList ? "items.Length" : "exact.Count") + "\n" + write +
             """
                             if (writer.Position == directLength)
                                 return directBuffer;

@@ -89,10 +89,11 @@ internal static partial class TypeModelFactory
             {
                 string definition = collection.OriginalDefinition.ToDisplayString();
                 ITypeSymbol element = collection.TypeArguments[0];
-                if (definition is "System.Collections.Generic.IEnumerable<T>" or "System.Collections.Generic.ICollection<T>" or
-                    "System.Collections.Generic.IReadOnlyList<T>" && IsKnownScalar(element))
-                    return new EntryShape(EntryKind.StatelessRead);
-                if (definition is "System.Collections.Generic.IList<T>" or "System.Collections.Generic.ISet<T>" or
+                bool statelessRead = definition is "System.Collections.Generic.IEnumerable<T>" or "System.Collections.Generic.ICollection<T>" or
+                    "System.Collections.Generic.IReadOnlyList<T>";
+                bool exactCollection = (statelessRead || definition == "System.Collections.Generic.IReadOnlyCollection<T>") &&
+                    IsFrameworkCollection(collection, "System.Collections.Generic." + collection.Name + "`1");
+                if (exactCollection || definition is "System.Collections.Generic.IList<T>" or "System.Collections.Generic.ISet<T>" or
                     "System.Collections.Generic.IReadOnlySet<T>")
                 {
                     string spelling = FormatterName(element);
@@ -100,11 +101,15 @@ internal static partial class TypeModelFactory
                     if ((element.SpecialType != SpecialType.None || spelling != "global::System.Runtime.InteropServices.GCHandle" &&
                          FrameworkScalarBody.Contains(spelling)) && KnownValueTypes.Contains(spelling) && CanUseUnmanagedSerialization(element))
                     {
+                        if (exactCollection)
+                            return new EntryShape(statelessRead ? EntryKind.ExactListStatelessRead : EntryKind.ExactListForReadOnlyCollection, spelling);
                         EntryKind kind = definition == "System.Collections.Generic.IList<T>" ? EntryKind.ExactList :
                             FormatterRuntimeTraits.CanGroupSmallHashSetWrites(element, _compilation) ? EntryKind.ExactSmallHashSet : EntryKind.ExactHashSet;
                         return new EntryShape(kind, spelling);
                     }
                 }
+                if (statelessRead && IsKnownScalar(element))
+                    return new EntryShape(EntryKind.StatelessRead);
             }
             return EntryShape.Pooled;
         }
