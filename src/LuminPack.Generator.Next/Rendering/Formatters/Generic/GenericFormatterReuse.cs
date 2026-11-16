@@ -812,7 +812,7 @@ internal static class GenericFormatterReuse
         private void AppendBlock(StringBuilder text, string type, FormatterStorageModel layout, GeneratedOperations blocks, string scoped)
         {
             const string inline = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]";
-            using var w = new CodeWriter(-1) { Scoped = scoped.Length != 0 };
+            using var w = new CodeWriter(0) { Scoped = scoped.Length != 0 };
             w.Line("private static class StorageBlock");
             w.Open();
             FormatterStorageEmitter.Support(w, layout);
