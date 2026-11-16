@@ -101,10 +101,11 @@ namespace LuminPack.Core
             where T : unmanaged
         {
             int bytes = checked(value.Length * Unsafe.SizeOf<T>());
-            ValidateCollectionPayload(Position, bytes);
+            ref byte input = ref Current;
+            ValidateCurrentCollectionPayload(ref input, bytes);
             if (bytes != 0)
-                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(value)), ref Current, (uint)bytes);
-            Advance(bytes);
+                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(value)), ref input, (uint)bytes);
+            AdvanceValidated(bytes);
         }
 
         /// <summary>Reads a collection count and rejects a payload that cannot fit before allocation.</summary>
@@ -113,19 +114,35 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadLength(int minimumElementSize = 1)
         {
-            int position = Position;
-            ValidateCollectionPayload(position, sizeof(int));
-            LuminPackReader.Read(ref Current, out int count);
+            ref byte input = ref Current;
+            int room = ValidateCurrentCollectionPayload(ref input, sizeof(int));
+            LuminPackReader.Read(ref input, out int count);
             if (count < -1)
                 LuminPackExceptionHelper.ThrowInvalidCollectionLength(count);
             if (minimumElementSize != 0 && count >= 0)
             {
-                // A forged count can overflow the product, which must fail like any other payload larger than the input.
+                // Keep the existing overflow limit and range diagnostic for a forged count.
                 long required = (long)count * minimumElementSize;
-                ValidateCollectionPayload(position + sizeof(int), required > int.MaxValue ? int.MaxValue : (int)required);
+                int width = required > int.MaxValue ? int.MaxValue : (int)required;
+                if ((uint)width > (uint)room)
+                    ThrowPayloadOutOfRange(_buffer.Length - room, width);
             }
-            Advance(sizeof(int));
+            AdvanceValidated(sizeof(int));
             return count;
+        }
+
+        /// <summary>Validates the current source window and returns the unread width after the requested bytes.</summary>
+        /// <param name="input">The reader's current byte.</param>
+        /// <param name="byteCount">The nonnegative collection header or payload width.</param>
+        /// <returns>The readable bytes after this range.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private int ValidateCurrentCollectionPayload(ref byte input, int byteCount)
+        {
+            nint index = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref input);
+            int last = _buffer.Length - byteCount;
+            if (last < 0 || unchecked((nuint)index) > (nuint)last)
+                ThrowPayloadOutOfRange((int)index, byteCount);
+            return last - (int)index;
         }
 
         /// <summary>Reads, validates and advances past a collection length.</summary>
