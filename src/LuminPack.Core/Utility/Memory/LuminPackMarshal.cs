@@ -504,13 +504,34 @@ public static partial class LuminPackMarshal
                 // scaled address per element.
                 ref var entryCursor = ref entry;
                 ref byte at = ref destination;
-                int left = count;
-                do
+                int width = Unsafe.SizeOf<T>();
+                if (Unsafe.SizeOf<IntPtr>() == 8 && width is 4 or 8)
                 {
-                    LuminPackWriter.Write(ref at, in entryCursor.Value);
-                    entryCursor = ref Unsafe.Add(ref entryCursor, 1);
-                    at = ref Unsafe.Add(ref at, Unsafe.SizeOf<T>());
-                } while (--left != 0);
+                    // Keep both scalar transfers in entry order while advancing the cursors once per pair.
+                    int pairs = count >> 1;
+                    if (pairs != 0)
+                    {
+                        do
+                        {
+                            LuminPackWriter.Write(ref at, in entryCursor.Value);
+                            LuminPackWriter.Write(ref Unsafe.Add(ref at, width), in Unsafe.Add(ref entryCursor, 1).Value);
+                            entryCursor = ref Unsafe.Add(ref entryCursor, 2);
+                            at = ref Unsafe.Add(ref at, 2 * width);
+                        } while (--pairs != 0);
+                    }
+                    if ((count & 1) != 0)
+                        LuminPackWriter.Write(ref at, in entryCursor.Value);
+                }
+                else
+                {
+                    int left = count;
+                    do
+                    {
+                        LuminPackWriter.Write(ref at, in entryCursor.Value);
+                        entryCursor = ref Unsafe.Add(ref entryCursor, 1);
+                        at = ref Unsafe.Add(ref at, width);
+                    } while (--left != 0);
+                }
             }
             else
             {
