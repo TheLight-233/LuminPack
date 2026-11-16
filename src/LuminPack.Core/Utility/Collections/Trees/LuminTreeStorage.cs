@@ -1218,7 +1218,13 @@ public static partial class LuminTreeStorage
     {
 #if NET10_0_OR_GREATER
         if (BclTrees.SortedSet<T>.Available)
+        {
+            if (typeof(T).IsClass && typeof(T) != typeof(string) && count > 1 &&
+                count <= int.MaxValue / 2 && (uint)count <= (uint)items.Length &&
+                TypedSortedSetNodes<T>.Factory is { } construct)
+                return construct(ref MemoryMarshal.GetArrayDataReference(items), 0, count - 1, null);
             return BclTrees.SortedSet<T>.Build(items, count);
+        }
 #endif
         return LinkRedBlack(in offsets, items, 0, count - 1, null);
     }
