@@ -880,8 +880,15 @@ internal static class EnumerableOwnerTemplate
             // The built-in integer formatter starts by replacing the destination from the canonical scalar reader.
             string? integerRead = GenericFormatterReuse.Real(scalar) is "int" or "long"
                 ? "reader.Read<" + scalar + ", TLuminProfile>()" : null;
+            // The streaming interface list loop has already selected an element token. An ordinary generated record's
+            // state entry only selects a token if needed, calls its read root and completes the value.
+            string? itemRoot = null;
+            if (spec.InterfaceListReuse && element is { OrdinaryObject: true, Definition: FormatterDefinitions.PayloadReference, Payload: RecordModel record } &&
+                !record.Identity.IsGeneric && scalar.IndexOf('<') < 0 &&
+                RenderModelFactory.Create(record, set.Options, json: true) is { Rejection: null } itemPayload)
+                itemRoot = serializer + ".LuminRoots_" + itemPayload.Readable + ".RootReadJson<TLuminProfile>";
 
-            void ReadItem(string seed)
+            void ReadItem(string seed, bool selected = false)
             {
                 if (integerRead != null)
                 {
@@ -889,7 +896,13 @@ internal static class EnumerableOwnerTemplate
                     return;
                 }
                 w.Line(scalar + " item = " + seed + ";");
-                w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
+                if (selected && itemRoot != null)
+                {
+                    w.Line(itemRoot + "(ref reader, ref item);");
+                    w.Line("reader.CompleteValue();");
+                }
+                else
+                    w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
             }
 
             void AppendJsonItem()
@@ -984,7 +997,7 @@ internal static class EnumerableOwnerTemplate
                         w.Line("    break;");
                         w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
                         w.Line("    continue;");
-                        ReadItem("count < list.Count ? list[count] : default!");
+                        ReadItem("count < list.Count ? list[count] : default!", selected: true);
                         w.Line("if (count < list.Count)");
                         w.Line("    list[count] = item;");
                         w.Line("else");
