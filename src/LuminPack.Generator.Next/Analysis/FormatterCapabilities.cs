@@ -39,6 +39,11 @@ internal static class FormatterCapabilities
             "System.Runtime.CompilerServices.ReadOnlyCollectionBuilder")
         {
             var element = named.TypeArguments[0];
+            if (definition == "System.Collections.ObjectModel.ReadOnlyCollection" && modern && !unity &&
+                element.SpecialType != SpecialType.System_Boolean &&
+                FormatterRuntimeTraits.HasCollectionTransfer(compilation, named, "LuminPack.Code.LuminPackCollectionAccess",
+                    "TryReadArrayBackedWrapper", "LuminPackReader", SpecialType.System_Boolean, takesCount: true))
+                result.Add("ReadArrayBackedWrapper");
             if (FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))
                 result.Add("WrapperJsonCapacity");
             if (definition == "System.Runtime.CompilerServices.ReadOnlyCollectionBuilder" && FormatterRuntimeTraits.HasBuilderTraversal(compilation, named))

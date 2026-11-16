@@ -3,8 +3,8 @@ using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared owner of one closed <c>ReadOnlyCollection&lt;T&gt;</c> of raw scalars.</summary>
-/// <remarks>The write is the shared wrapper write. The read allocates an uninitialized array, fills it in place and wraps it; the
-/// JSON read stages its elements in a list that the new wrapper then holds.</remarks>
+/// <remarks>The write is the shared wrapper write. The binary reader can refill an existing array-backed wrapper or allocate an array and wrap it. The JSON read stages
+/// its elements in a list that the new wrapper then holds.</remarks>
 internal static class ReadOnlyCollectionOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(WrapperTraversal.WriteRoot, Read, "staged.Add(item);",
@@ -25,6 +25,12 @@ internal static class ReadOnlyCollectionOwnerFile
     {
         var w = c.W;
         string t = c.Scalar;
+
+        if (!c.Counted && c.Supports("ReadArrayBackedWrapper"))
+        {
+            w.Line("if (value is not null && length != 0 && global::LuminPack.Code.LuminPackCollectionAccess.TryReadArrayBackedWrapper(ref operationState, value, length))");
+            w.Indented(() => w.Line("goto operationComplete_RootRead;"));
+        }
         w.Line("var array = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<" + t + ">(length);");
         w.Line("if (length != 0)");
         w.Open();
