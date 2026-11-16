@@ -109,7 +109,11 @@ public sealed unsafe class JsonIntegerUtf16WriteTest
             Array.Fill(bytes, (byte)0xcc);
             Span<byte> window = bytes.AsSpan(16, 64);
             var writer = new LuminPackJsonWriter(ref window, null!);
+#if LUMINPACK_TEST_NETSTANDARD_CORE
+            writer.Cursor = bytes.AsSpan(8, 1);
+#else
             writer.Cursor = ref bytes[8];
+#endif
             Exception? failure = null;
             try
             {

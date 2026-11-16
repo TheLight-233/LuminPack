@@ -350,7 +350,8 @@ public class CollectionFastPathTest
     {
         var source = new ConcurrentBag<string?>(Enumerable.Range(0, count).Select(index =>
             index % 8 == 0 ? null : $"item-{index:D6}"));
-        string?[] expected = source.ToArray().Reverse().ToArray();
+        string?[] expected = source.ToArray();
+        Array.Reverse(expected);
         byte[] payload = LuminPackSerializer.Serialize(source);
         ConcurrentBag<string?>? target = null;
         Assert.Equal(payload.Length, LuminPackSerializer.Deserialize(payload.AsSpan(), ref target));

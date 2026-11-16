@@ -16,6 +16,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <TargetFrameworks>net9.0;net10.0;net11.0</TargetFrameworks>
     <TargetFrameworks Condition="'$(LuminPackTestArea)' == 'Hooks'">net9.0;net10.0</TargetFrameworks>
+    <DefineConstants Condition="'$(LuminPackTestArea)' == 'Hooks'">$(DefineConstants);LUMINPACK_TEST_NETSTANDARD_CORE</DefineConstants>
     <GenerateProgramFile Condition="'$(LuminPackTestArea)' == 'All'">false</GenerateProgramFile>
     <GenerateProgramFile Condition="'$(LuminPackTestArea)' != 'All'">true</GenerateProgramFile>
     <LangVersion>latest</LangVersion>
