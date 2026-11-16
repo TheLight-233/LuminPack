@@ -591,22 +591,21 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
                 // Complete nonempty records validate before comparison or allocation. Equal candidates retain
                 // their immutable storage; null, empty and malformed records keep the shared reader's failures.
-                if (RemainingWindowBytes >= sizeof(int))
+                nint available = Unsafe.ByteOffset(ref Cursor, ref _end);
+                if (unchecked((nuint)(available - sizeof(int))) <= int.MaxValue - sizeof(int))
                 {
                     int header = LuminPackReader.Read<int>(ref Current);
                     if (header > 1)
                     {
-                        // The checked Advance validates the complete record before the cursor moves; the payload is
-                        // then decoded from its captured position.
                         ref byte text = ref Unsafe.Add(ref Current, sizeof(int));
                         if ((header & 1) == 0)
                         {
-                            Advance(sizeof(int) + header);
+                            AdvanceInStringWindow(unchecked(sizeof(int) + header), (nuint)available);
                             return StringSerializer.ReadUtf16Payload(ref text, header, current);
                         }
 
                         int length = header >> 1;
-                        Advance(sizeof(int) + length);
+                        AdvanceInStringWindow(sizeof(int) + length, (nuint)available);
                         return StringSerializer.ReadLatin1Payload(ref text, length, current);
                     }
                 }
@@ -622,8 +621,8 @@ namespace LuminPack.Core
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && default(TOptions).StringRecording == LuminPackStringRecording.Length &&
                 current is null && Vector128.IsHardwareAccelerated)
             {
-                int available = RemainingWindowBytes;
-                if (available >= sizeof(int) * 2)
+                nint available = Unsafe.ByteOffset(ref Cursor, ref _end);
+                if (unchecked((nuint)(available - sizeof(int) * 2)) <= int.MaxValue - sizeof(int) * 2)
                 {
                     long header = LuminPackReader.Read<long>(ref Current);
                     int payload = (int)header;
@@ -632,7 +631,7 @@ namespace LuminPack.Core
                         string? ascii = StringSerializer.ReadShortAsciiString(ref Unsafe.Add(ref Current, sizeof(int) * 2), payload);
                         if (ascii is not null)
                         {
-                            Advance(sizeof(int) * 2 + payload);
+                            AdvanceValidated(sizeof(int) * 2 + payload);
                             return ascii;
                         }
                     }
@@ -646,6 +645,20 @@ namespace LuminPack.Core
             Advance(index - start);
             return result;
         }
+
+#if NET8_0_OR_GREATER
+        /// <summary>Consumes a length record after checking its full width against the captured input window.</summary>
+        /// <param name="byteCount">The complete record width, with a negative value indicating overflow.</param>
+        /// <param name="available">The previously measured readable window, at most <see cref="int.MaxValue"/>.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void AdvanceInStringWindow(int byteCount, nuint available)
+        {
+            if (unchecked((nuint)byteCount) > available)
+                LuminPackExceptionHelper.ThrowReaderSpanOutOfRange(
+                    Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref Cursor), byteCount);
+            AdvanceValidated(byteCount);
+        }
+#endif
 
         /// <summary>Validates a variable-length record before decoding and publishing its successful cursor.</summary>
         /// <typeparam name="TOptions">The stateless string profile.</typeparam>
