@@ -1257,8 +1257,17 @@ public static partial class LuminTreeStorage
     private static bool SortDistinct(long[] keys, int count)
     {
         int i = 1;
-        while (i < count && (int)(keys[i - 1] >> 32) < (int)(keys[i] >> 32))
-            i++;
+        if (i < count)
+        {
+            int previousHash = (int)(keys[0] >> 32);
+            do
+            {
+                int hash = (int)(keys[i] >> 32);
+                if (previousHash >= hash)
+                    break;
+                previousHash = hash;
+            } while (++i < count);
+        }
         if (i == count)
             return true;
         if (i < count && keys[i - 1] <= keys[i])
