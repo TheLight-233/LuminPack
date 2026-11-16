@@ -56,6 +56,18 @@ namespace LuminPack.Core
                     Span<char> text = stackalloc char[token.Length];
                     token.CopyTo(text);
                     CompleteValue();
+                    if (typeof(TOptions) == typeof(LuminPackUtf16LengthOptions) &&
+                        (typeof(T) == typeof(TimeOnly) || typeof(T) == typeof(TimeSpan)) &&
+                        TryParseCanonicalClock(text, out long ticks))
+                    {
+                        if (typeof(T) == typeof(TimeOnly))
+                        {
+                            var time = new TimeOnly(ticks);
+                            return Unsafe.As<TimeOnly, T>(ref time);
+                        }
+                        var duration = new TimeSpan(ticks);
+                        return Unsafe.As<TimeSpan, T>(ref duration);
+                    }
                     return ParseQuotedScalar<T>(text);
                 }
 
@@ -64,6 +76,51 @@ namespace LuminPack.Core
                 return ParseQuotedScalar<T>(fullText);
             }
             return ParseQuotedScalar<T>(Read<string, TOptions>());
+        }
+
+        /// <summary>Parses the shared invariant round-trip form of a clock or sub-day duration.</summary>
+        /// <param name="text">The complete, private UTF-16 token.</param>
+        /// <param name="ticks">The parsed sub-day ticks.</param>
+        /// <returns>Whether the entire token exactly matches the bounded round-trip form.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool TryParseCanonicalClock(scoped ReadOnlySpan<char> text, out long ticks)
+        {
+            ticks = 0;
+            if (text.Length != 16 || text[2] != ':' || text[5] != ':' || text[8] != '.' ||
+                !ReferenceEquals(CultureInfo.CurrentCulture, CultureInfo.InvariantCulture))
+                return false;
+
+            if (!TryParseClockPair(text[0], text[1], 23, out uint hours) ||
+                !TryParseClockPair(text[3], text[4], 59, out uint minutes) ||
+                !TryParseClockPair(text[6], text[7], 59, out uint seconds))
+                return false;
+
+            uint fraction = 0;
+            for (int index = 9; index < 16; index++)
+            {
+                uint digit = (uint)(text[index] - '0');
+                if (digit > 9)
+                    return false;
+                fraction = fraction * 10 + digit;
+            }
+
+            ticks = ((hours * 60 + minutes) * 60 + seconds) * TimeSpan.TicksPerSecond + fraction;
+            return true;
+        }
+
+        /// <summary>Decodes two ASCII clock digits with the supplied field limit.</summary>
+        /// <param name="first">The tens character.</param>
+        /// <param name="second">The units character.</param>
+        /// <param name="maximum">The highest valid value for this field.</param>
+        /// <param name="value">The parsed field.</param>
+        /// <returns>Whether both characters are digits and the field is in range.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool TryParseClockPair(char first, char second, uint maximum, out uint value)
+        {
+            uint high = (uint)(first - '0');
+            uint low = (uint)(second - '0');
+            value = high * 10 + low;
+            return high <= 9 && low <= 9 && value <= maximum;
         }
 
         /// <summary>Recognizes built-in profiles whose encoding and token rules have no user callbacks.</summary>
