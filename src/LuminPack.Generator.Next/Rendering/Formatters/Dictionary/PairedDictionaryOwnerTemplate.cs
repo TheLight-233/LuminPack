@@ -58,6 +58,9 @@ internal sealed partial class PairedDictionaryContext
 
     /// <summary>Gets whether the referenced Core exposes the dictionary behind an existing read-only dictionary.</summary>
     internal bool ReadOnlyDictionaryRefill => _set.Options?.ReadOnlyDictionaryRefill == true;
+
+    /// <summary>Gets whether the referenced Core can refill an existing concurrent dictionary in place.</summary>
+    internal bool ConcurrentDictionaryRefill => _set.Options?.ConcurrentDictionaryRefill == true;
     /// <summary>Whether both entry operations are raw unmanaged scalar stores.</summary>
     /// <summary>The Union root render model of the value, from the payload element or the closed contract, or null.</summary>
     internal PayloadRenderModel? UnionValue => _checkedUnion ?? (Payload is { UnionRoot: true } payload ? payload :

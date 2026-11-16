@@ -105,6 +105,60 @@ internal static class ConcurrentDictionaryOwnerFile
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
+        if (c.ConcurrentDictionaryRefill)
+        {
+            // Pairs are read over the existing ones in the dictionary's own order: unchanged keys and values keep their
+            // identity and nodes, and keys missing from the record are removed at the end.
+            w.Line("if (length == 0)");
+            w.Open();
+            w.Line("value.Clear();");
+            w.Line("goto operationComplete_RootRead;");
+            w.Close();
+            // Only objects read in place are worth staging once the order no longer matches.
+            bool reuseValues = c.ReferenceValue && c.Value != "string";
+            w.Line("var refill = global::LuminPack.Code.LuminPackCollectionAccess.BeginConcurrentDictionaryRefill(value, length, " +
+                (reuseValues ? "true" : "false") + ");");
+            // One loop keeps a single expansion of each member read; once the order no longer matches, the pairs are read
+            // as the plain refill reads them.
+            w.Line("bool ordered = refill.Ordered;");
+            w.Line("int refillRemaining = length;");
+            w.Line("do");
+            w.Open();
+            // Only a string key is read over the candidate; other reference keys must not be filled in place.
+            w.Line(c.Key + " k = default !;");
+            if (c.Key == "string")
+                w.Line("if (ordered) k = refill.NextKey();");
+            else
+                w.Line("if (ordered) refill.NextKey();");
+            c.ReadMember(c.Key, "k", fresh: c.Key != "string");
+            w.Line(c.Value + " v = default !;");
+            w.Line(c.Value + " previous = default !;");
+            w.Line("bool found = false;");
+            if (!reuseValues)
+            {
+                w.Line("if (ordered)");
+                w.Open();
+            }
+            w.Line("found = refill.Find(k!, out v);");
+            w.Line("previous = v;");
+            w.Line("ordered = found;");
+            if (!reuseValues)
+                w.Close();
+            c.ReadMember(c.Value, "v");
+            if (reuseValues)
+                w.Line("refill.Store(k!, v, found, previous);");
+            else
+            {
+                w.Line("if (found)");
+                w.Indented(() => w.Line("refill.Store(k!, v, true, previous);"));
+                w.Line("else");
+                w.Indented(() => w.Line("value.TryAdd(k!, v);"));
+            }
+            w.Close();
+            w.Line("while (--refillRemaining != 0);");
+            w.Line("refill.Complete();");
+            return;
+        }
         w.Line("value.Clear();");
         w.Line("if (length == 0)");
         w.Indented(() => w.Line("goto operationComplete_RootRead;"));

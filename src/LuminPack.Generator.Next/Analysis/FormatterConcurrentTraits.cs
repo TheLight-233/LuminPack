@@ -167,6 +167,26 @@ internal static class FormatterConcurrentTraits
                 SymbolEqualityComparer.Default.Equals(method.ReturnType.OriginalDefinition, dictionary));
     }
 
+    /// <summary>Checks the optional in-place concurrent dictionary refill.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <returns>Whether the referenced entry point and its state type have the expected public shape.</returns>
+    internal static bool HasConcurrentDictionaryRefill(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var state = compilation.GetTypeByMetadataName("LuminPack.Code.ConcurrentDictionaryRefill`2");
+        var map = compilation.GetTypeByMetadataName("System.Collections.Concurrent.ConcurrentDictionary`2");
+        return map is not null && state is { DeclaredAccessibility: Accessibility.Public, IsValueType: true } &&
+            owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
+            owner.GetMembers("BeginConcurrentDictionaryRefill").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 2 } && method.Parameters.Length == 3 &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type.OriginalDefinition, map) &&
+                method.Parameters[1].Type.SpecialType == SpecialType.System_Int32 &&
+                method.Parameters[2].Type.SpecialType == SpecialType.System_Boolean &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType.OriginalDefinition, state)) &&
+            new[] { "Ordered", "NextKey", "Find", "Store", "Complete" }.All(name =>
+                state.GetMembers(name).Any(member => member.DeclaredAccessibility == Accessibility.Public));
+    }
+
     /// <summary>Checks the optional in-place stack refill operations.</summary>
     /// <param name="compilation">The consumer's Core and framework references.</param>
     /// <returns>Whether both referenced helpers have the expected public signatures.</returns>

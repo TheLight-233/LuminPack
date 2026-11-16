@@ -90,6 +90,9 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <summary>Whether the referenced Core exposes the dictionary behind an existing read-only dictionary.</summary>
     internal readonly bool ReadOnlyDictionaryRefill;
 
+    /// <summary>Whether the referenced Core can refill an existing concurrent dictionary in place.</summary>
+    internal readonly bool ConcurrentDictionaryRefill;
+
     /// <summary>Captures the project facts.</summary>
     /// <param name="net8">Whether to enable net8 for this operation.</param>
     /// <param name="csharpVersion">The csharp version supplied to <c>GeneratorOptions</c>.</param>
@@ -115,14 +118,16 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <param name="stackRefill">Whether the referenced Core exposes the in-place stack refill.</param>
     /// <param name="readOnlyCollectionRefill">Whether the referenced Core exposes a read-only collection's backing array.</param>
     /// <param name="readOnlyDictionaryRefill">Whether the referenced Core exposes a read-only dictionary's backing dictionary.</param>
+    /// <param name="concurrentDictionaryRefill">Whether the referenced Core exposes the in-place concurrent dictionary refill.</param>
     internal GeneratorOptions(bool net8, int csharpVersion, bool @unsafe, bool unity, RegisterMode registerMode, int availableAliases,
         string assemblyName, bool interceptors, bool ilRewrite = false, bool pointerCursor = false, string[]? ambiguousNames = null,
         int formatterInterfaces = 0, bool knownFormatters = false, bool quotedScalarReader = false, bool spanCursor = false,
         bool generatedJsonPropertyWriter = false, bool generatedJsonInt32Reader = false, bool hashSetRefill = false,
         bool linkedListAppender = false, bool concurrentDictionaryBuilder = false,
         bool queueRefill = false, bool stackRefill = false, bool readOnlyCollectionRefill = false,
-        bool readOnlyDictionaryRefill = false)
+        bool readOnlyDictionaryRefill = false, bool concurrentDictionaryRefill = false)
     {
+        ConcurrentDictionaryRefill = concurrentDictionaryRefill;
         ReadOnlyDictionaryRefill = readOnlyDictionaryRefill;
         ReadOnlyCollectionRefill = readOnlyCollectionRefill;
         StackRefill = stackRefill;
@@ -160,6 +165,7 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
         ConcurrentDictionaryBuilder == other.ConcurrentDictionaryBuilder && QueueRefill == other.QueueRefill &&
         StackRefill == other.StackRefill && ReadOnlyCollectionRefill == other.ReadOnlyCollectionRefill &&
         ReadOnlyDictionaryRefill == other.ReadOnlyDictionaryRefill &&
+        ConcurrentDictionaryRefill == other.ConcurrentDictionaryRefill &&
         System.Linq.Enumerable.SequenceEqual(AmbiguousNames, other.AmbiguousNames);
 
     /// <inheritdoc/>
