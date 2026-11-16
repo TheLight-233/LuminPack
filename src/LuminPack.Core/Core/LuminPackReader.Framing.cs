@@ -443,12 +443,14 @@ namespace LuminPack.Core
         private void ReadVersionWidths(LuminPackVersionField[] fields, scoped Span<int> slots, scoped Span<int> widths, scoped Span<byte> present)
         {
             ReadVersionNames(fields, slots, present);
-            ValidateCollectionPayload(Position, widths.Length);
+            ref byte table = ref Current;
+            ValidateCurrentCollectionPayload(ref table, widths.Length);
             for (int i = 0; i < widths.Length; i++)
             {
-                byte width = Read<byte>();
+                byte width = Unsafe.Add(ref table, (nint)(uint)i);
                 widths[i] = width == 255 ? -1 : width;
             }
+            AdvanceValidated(widths.Length);
         }
 
         /// <summary>Matches a short record of the receiving schema: its header and the receiver's own table fingerprint.</summary>
@@ -514,10 +516,12 @@ namespace LuminPack.Core
             byte marker = Read<byte>();
             if (marker != 251)
                 LuminPackExceptionHelper.ThrowFormatException("Expected a named version-tolerant record.");
-            ValidateCollectionPayload(Position, 3);
-            byte revision = Read<byte>();
-            byte profile = Read<byte>();
-            int count = Read<byte>();
+            ref byte header = ref Current;
+            ValidateCurrentCollectionPayload(ref header, 3);
+            byte revision = header;
+            byte profile = Unsafe.Add(ref header, 1);
+            int count = Unsafe.Add(ref header, 2);
+            AdvanceValidated(3);
             if (revision != 1 && !(widthTables && revision is 2 or 3) || count > 249)
                 LuminPackExceptionHelper.ThrowFormatException("Unsupported version-tolerant record header.");
             if (profile != LuminPackWriter.BinaryProfile<TOptions>())
@@ -645,21 +649,21 @@ namespace LuminPack.Core
         public void ReadVersionLengths(scoped Span<int> lengths)
         {
             // Every length has at least one byte. Extended records revalidate the remaining table.
-            ValidateCollectionPayload(Position, lengths.Length);
+            ValidateCurrentCollectionPayload(ref Current, lengths.Length);
             long total = 0;
             for (int i = 0; i < lengths.Length; i++)
             {
-                byte first = Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(Position));
+                byte first = Current;
                 int length;
                 if (first <= 127)
                 {
-                    Advance(1);
+                    AdvanceValidated(1);
                     length = first;
                 }
                 else
                 {
                     length = ReadVersionExtendedLength();
-                    ValidateCollectionPayload(Position, lengths.Length - i - 1);
+                    ValidateCurrentCollectionPayload(ref Current, lengths.Length - i - 1);
                 }
 
                 lengths[i] = length;
@@ -727,8 +731,10 @@ namespace LuminPack.Core
             uint length = 0;
             for (int shift = 0;; shift += 7)
             {
-                ValidateCollectionPayload(Position, 1);
-                byte next = Read<byte>();
+                ref byte prefix = ref Current;
+                ValidateCurrentCollectionPayload(ref prefix, 1);
+                byte next = prefix;
+                AdvanceValidated(1);
                 if (shift == 28 && next > 7)
                     LuminPackExceptionHelper.ThrowFormatException("Invalid version-tolerant metadata length.");
                 length |= (uint)(next & 127) << shift;
@@ -736,9 +742,10 @@ namespace LuminPack.Core
                     break;
             }
 
-            ValidateCollectionPayload(Position, (int)length);
-            var result = _buffer.Slice(Position, (int)length);
-            Advance((int)length);
+            ref byte metadata = ref Current;
+            ValidateCurrentCollectionPayload(ref metadata, (int)length);
+            var result = MemoryMarshal.CreateReadOnlySpan(ref metadata, (int)length);
+            AdvanceValidated((int)length);
             return result;
         }
 
