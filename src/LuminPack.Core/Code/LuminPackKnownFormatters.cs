@@ -194,7 +194,7 @@ public static class LuminPackKnownFormatters
         {
             var text = reader.ReadStringUtf16<TOptions>();
             reader.CompleteValue();
-            return DateOnly.ParseExact(text, "O", CultureInfo.InvariantCulture);
+            return LuminPackJsonReader.ParseRoundTripDate(text);
         }
 
         var utf8 = reader.ReadStringUtf8<TOptions>();
@@ -204,7 +204,7 @@ public static class LuminPackKnownFormatters
             Span<char> text = stackalloc char[10];
             for (int index = 0; index < text.Length; index++)
                 text[index] = (char)utf8[index];
-            return DateOnly.ParseExact(text, "O", CultureInfo.InvariantCulture);
+            return LuminPackJsonReader.ParseRoundTripDate(text);
         }
         return DateOnly.ParseExact(Encoding.UTF8.GetString(utf8), "O", CultureInfo.InvariantCulture);
     }

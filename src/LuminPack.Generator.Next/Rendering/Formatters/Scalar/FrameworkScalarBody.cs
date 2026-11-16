@@ -289,7 +289,7 @@ internal static class FrameworkScalarBody
                 sb.AppendLine("            value = (global::System.Half)reader.ReadFloat();");
                 break;
             case "global::System.DateOnly":
-                AppendDateOnlyRead(sb);
+                AppendDateOnlyRead(sb, data.Supports("ParseRoundTripDate"));
                 break;
             case "global::System.Text.Rune":
                 sb.AppendLine("            value = new global::System.Text.Rune(reader.ReadInt());");
@@ -382,8 +382,10 @@ internal static class FrameworkScalarBody
 
     /// <summary>Parses a canonical date directly from token storage, retaining the platform parser and its fallback.</summary>
     /// <param name = "sb">The generated JSON statements.</param>
-    private static void AppendDateOnlyRead(StringBuilder sb)
+    /// <param name="sharedParser">Whether the referenced Core exposes the bounded date parser.</param>
+    private static void AppendDateOnlyRead(StringBuilder sb, bool sharedParser)
     {
+        const string parser = "global::LuminPack.Core.LuminPackJsonReader.ParseRoundTripDate";
         sb.AppendLine("            if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
         sb.AppendLine("            {");
         sb.AppendLine("                value = global::System.DateOnly.ParseExact(reader.ReadString(), \"O\", global::System.Globalization.CultureInfo.InvariantCulture);");
@@ -393,7 +395,8 @@ internal static class FrameworkScalarBody
         sb.AppendLine("            {");
         sb.AppendLine("                var text = reader.ReadStringUtf16();");
         sb.AppendLine("                reader.CompleteValue();");
-        sb.AppendLine("                value = global::System.DateOnly.ParseExact(text, \"O\", global::System.Globalization.CultureInfo.InvariantCulture);");
+        sb.AppendLine(sharedParser ? "                value = " + parser + "(text);" :
+            "                value = global::System.DateOnly.ParseExact(text, \"O\", global::System.Globalization.CultureInfo.InvariantCulture);");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
@@ -403,7 +406,8 @@ internal static class FrameworkScalarBody
         sb.AppendLine("                {");
         sb.AppendLine("                    global::System.Span<char> characters = stackalloc char[10];");
         sb.AppendLine("                    for (int i = 0; i < characters.Length; i++) characters[i] = (char)text[i];");
-        sb.AppendLine("                    value = global::System.DateOnly.ParseExact(characters, \"O\", global::System.Globalization.CultureInfo.InvariantCulture);");
+        sb.AppendLine(sharedParser ? "                    value = " + parser + "(characters);" :
+            "                    value = global::System.DateOnly.ParseExact(characters, \"O\", global::System.Globalization.CultureInfo.InvariantCulture);");
         sb.AppendLine("                }");
         sb.AppendLine("                else value = global::System.DateOnly.ParseExact(global::System.Text.Encoding.UTF8.GetString(text), \"O\", global::System.Globalization.CultureInfo.InvariantCulture);");
         sb.AppendLine("            }");

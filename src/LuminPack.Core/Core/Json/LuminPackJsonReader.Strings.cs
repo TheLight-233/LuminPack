@@ -123,6 +123,27 @@ namespace LuminPack.Core
             return high <= 9 && low <= 9 && value <= maximum;
         }
 
+        /// <summary>Parses the exact invariant round-trip form of a decoded date token.</summary>
+        /// <param name="text">The complete decoded token.</param>
+        /// <returns>The parsed date.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public static DateOnly ParseRoundTripDate(scoped ReadOnlySpan<char> text)
+        {
+            if (text.Length == 10 && text[4] == '-' && text[7] == '-' &&
+                TryParseClockPair(text[0], text[1], 99, out uint century) &&
+                TryParseClockPair(text[2], text[3], 99, out uint yearOfCentury) &&
+                TryParseClockPair(text[5], text[6], 12, out uint month) &&
+                TryParseClockPair(text[8], text[9], 31, out uint day))
+            {
+                int year = (int)(century * 100 + yearOfCentury);
+                if (year != 0 && month != 0 && day != 0 &&
+                    (day <= 28 || day <= DateTime.DaysInMonth(year, (int)month)))
+                    return new DateOnly(year, (int)month, (int)day);
+            }
+
+            return DateOnly.ParseExact(text, "O", CultureInfo.InvariantCulture);
+        }
+
         /// <summary>Recognizes built-in profiles whose encoding and token rules have no user callbacks.</summary>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <returns>Whether token reads use only built-in option getters.</returns>

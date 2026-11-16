@@ -29,6 +29,18 @@ internal static class FormatterBuiltinCapabilities
     internal static void Capture(Compilation compilation, ITypeSymbol type, List<string> result)
     {
         string display = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        if (display == "global::System.DateOnly")
+        {
+            var chars = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1")?.Construct(compilation.GetSpecialType(SpecialType.System_Char));
+            var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonReader");
+            if (chars is not null && reader?.GetMembers("ParseRoundTripDate").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, Arity: 0, DeclaredAccessibility: Accessibility.Public, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, chars) &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, type)) == true)
+                result.Add("ParseRoundTripDate");
+        }
+
         if (display == "global::System.TimeZoneInfo")
         {
             var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");

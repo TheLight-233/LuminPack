@@ -100,6 +100,33 @@ public partial class JsonFormattedScalarTest
         Assert.Equal(0, allocated);
     }
 
+    /// <summary>Checks the calendar limits, escaped date tokens and failed reads through both document encodings.</summary>
+    [Fact]
+    public void DateOnlyReadsKeepInvariantCalendarAndFailedTargets()
+    {
+        foreach (var (token, expected) in new[]
+        {
+            ("\"0001-01-01\"", DateOnly.MinValue),
+            ("\"1900-02-28\"", new DateOnly(1900, 2, 28)),
+            ("\"\\u0032000-02-29\"", new DateOnly(2000, 2, 29)),
+            ("\"9999-12-31\"", DateOnly.MaxValue)
+        })
+        {
+            Assert.Equal(expected, LuminPackSerializer.DeserializeJson<DateOnly, StrictUtf8>(Encoding.UTF8.GetBytes(token)));
+            Assert.Equal(expected, LuminPackSerializer.DeserializeJson<DateOnly, StrictUtf16>(Encoding.Unicode.GetBytes(token)));
+        }
+
+        foreach (string token in new[] { "\"0000-01-01\"", "\"1900-02-29\"", "\"2000-02-30\"", "\"2026-04-31\"", "\"2026-13-01\"", "\"2026/03/02\"" })
+        {
+            var original = new DateOnly(2000, 2, 29);
+            var target = original;
+            Assert.Throws<FormatException>(() => LuminPackSerializer.DeserializeJson<DateOnly, StrictUtf8>(Encoding.UTF8.GetBytes(token), ref target));
+            Assert.Equal(original, target);
+            Assert.Throws<FormatException>(() => LuminPackSerializer.DeserializeJson<DateOnly, StrictUtf16>(Encoding.Unicode.GetBytes(token), ref target));
+            Assert.Equal(original, target);
+        }
+    }
+
     /// <summary>Checks that strict JSON scalar reads avoid allocating a string for each quoted token.</summary>
     [Fact]
     public void StrictQuotedScalarReadsDoNotAllocateTokenStrings()
