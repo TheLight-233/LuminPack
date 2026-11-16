@@ -362,11 +362,19 @@ internal static class UnionEmitter
     private static void ReadSwitch(PayloadRenderModel model, CodeWriter w)
     {
         Reject(model, w);
-        w.Line("if (!reader." + (model.UnionWide ? "TryPeekWideUnionHeader" : "TryPeekUnionHeader") + "(out var tag))");
-        w.Open();
-        w.Line("value = default;");
-        w.Line("return;");
-        w.Close();
+        if (model.UnionWide)
+        {
+            w.Line("if (!reader.TryPeekWideUnionHeader(out var tag))");
+            w.Open();
+            w.Line("value = default;");
+            w.Line("return;");
+            w.Close();
+        }
+        else
+        {
+            // The narrow reader exposes the raw null byte to the switch's default arm.
+            w.Line("reader.TryPeekUnionHeader(out var tag);");
+        }
         w.Blank();
         w.Line("switch (tag)");
         w.Open();
@@ -434,6 +442,14 @@ internal static class UnionEmitter
         }
         w.Line("default:");
         w.Open();
+        if (reuse && !model.UnionWide)
+        {
+            w.Line("if (tag == " + w.A("LuminPackCode") + ".NullObject)");
+            w.Open();
+            w.Line(target + " = default;");
+            w.Line(exit);
+            w.Close();
+        }
         if (model.Registration)
         {
             w.Line("if (" + "global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(" + "tag" + ", out var registeredFormatter" +
