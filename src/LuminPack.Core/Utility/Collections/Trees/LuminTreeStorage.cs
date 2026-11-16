@@ -1107,13 +1107,20 @@ public static partial class LuminTreeStorage
     /// <param name="count">The number of items.</param>
     private static void LinkSortedDictionary<TKey, TValue>(SortedDictionary<TKey, TValue> dictionary, KeyValuePair<TKey, TValue>[] pairs, int count) where TKey : notnull
     {
-        dictionary.Add(pairs[0].Key, pairs[0].Value);
         object set = Field<object>(dictionary, SortedDictionaryLayout<TKey, TValue>.Set);
         var offsets = SortedSetLayout<KeyValuePair<TKey, TValue>>.Nodes;
         ref object? root = ref Field<object?>(set, SortedSetLayout<KeyValuePair<TKey, TValue>>.Root);
+        int versionIncrement = 2;
+        if (root is not null || pairs[0].Key is null)
+        {
+            // Keep the real insertion if a comparison populated the tree or Add must reject the key.
+            dictionary.Add(pairs[0].Key, pairs[0].Value);
+            versionIncrement = 1;
+        }
         root = BuildRedBlack(in offsets, pairs, count);
         Field<int>(set, SortedSetLayout<KeyValuePair<TKey, TValue>>.Count) = count;
-        Field<int>(set, SortedSetLayout<KeyValuePair<TKey, TValue>>.Version)++;
+        ref int version = ref Field<int>(set, SortedSetLayout<KeyValuePair<TKey, TValue>>.Version);
+        version = unchecked(version + versionIncrement);
     }
 
     private const byte Black = 0;
@@ -1714,10 +1721,20 @@ public static partial class LuminTreeStorage
                 pairs[i] = new(i * 2, i);
             if (SortedDictionaryLayout<int, int>.Set < 0 || !SortedSetLayout<KeyValuePair<int, int>>.Available)
                 return false;
+            object set = Field<object>(filled, SortedDictionaryLayout<int, int>.Set);
+            ref int version = ref Field<int>(set, SortedSetLayout<KeyValuePair<int, int>>.Version);
+            int initialVersion = version;
+            filled.Add(pairs[0].Key, pairs[0].Value);
+            if (version != initialVersion + 1)
+                return false;
+            filled.Clear();
+            int emptyVersion = version;
             LinkSortedDictionary(filled, pairs, pairs.Length);
+            if (version != emptyVersion + 2)
+                return false;
             var copy = new KeyValuePair<int, int>[9];
             int index = 0;
-            WalkRedBlack<KeyValuePair<int, int>>(Field<object?>(Field<object>(filled, SortedDictionaryLayout<int, int>.Set), SortedSetLayout<KeyValuePair<int, int>>.Root),
+            WalkRedBlack<KeyValuePair<int, int>>(Field<object?>(set, SortedSetLayout<KeyValuePair<int, int>>.Root),
                 in SortedSetLayout<KeyValuePair<int, int>>.Nodes, copy, ref index);
             return index == 9 && copy.SequenceEqual(pairs) && filled.Count == 9 && filled.SequenceEqual(pairs) && filled[16] == 8 &&
                 filled.Remove(8) && !filled.ContainsKey(8) && filled.TryAdd(9, 1) && filled.TryAdd(-1, 0) && filled.Keys.First() == -1 && filled.Count == 10;
