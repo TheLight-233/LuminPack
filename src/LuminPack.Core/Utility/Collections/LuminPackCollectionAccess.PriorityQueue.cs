@@ -96,8 +96,8 @@ public static partial class LuminPackCollectionAccess
             input = ref Unsafe.Add(ref input, (nint)(uint)pairBytes);
         } while (++index < count);
 
-        // Publish the exact prefix ordinary insertion would produce. A non-heap suffix still uses Enqueue.
-        reader.Advance(index * pairBytes);
+        // The complete input proof bounds this prefix of accepted pairs. A non-heap suffix still uses Enqueue.
+        reader.Cursor = ref input;
         LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.PriorityQueueSize) = index;
         ref int version = ref LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.PriorityQueueVersion);
         version = unchecked(version + index);
