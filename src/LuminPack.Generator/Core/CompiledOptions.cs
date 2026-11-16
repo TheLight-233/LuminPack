@@ -146,6 +146,8 @@ internal sealed class CompiledOptions
                     error = "StructLayout applies only to assembly and struct declarations.";
                 if (argument.Key is "WideTag" or "SingleImplementation" && symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Interface })
                     error = "Union contract switches apply only to class and interface declarations.";
+                if (argument.Key == "ReuseRectangularArraySlots" && symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class })
+                    error = "ReuseRectangularArraySlots applies only to the element class declaration.";
                 bool inputLimit = argument.Key is "MaxInputBytes" or "MaxDecompressedBytes" or "MaxAllocationBytes" or
                     "MaxCollectionLength" or "MaxStringLength" or "MaxObjectCount" or "MaxReadWork" or "MaxDepth";
                 if (inputLimit && Convert.ToInt64(argument.Value.Value, CultureInfo.InvariantCulture) < 0)
@@ -176,8 +178,8 @@ internal sealed class CompiledOptions
             if (attribute.AttributeClass?.ToDisplayString() != AttributeName)
                 continue;
             applied = true;
-            // Storage, Union and untrusted-input contracts do not select a serialization profile.
-            if (attribute.NamedArguments.Length == 0 || attribute.NamedArguments.Any(argument => argument.Key is not ("StructLayout" or "WideTag" or "SingleImplementation" or
+            // Storage, Union, reuse and untrusted-input contracts do not select a serialization profile.
+            if (attribute.NamedArguments.Length == 0 || attribute.NamedArguments.Any(argument => argument.Key is not ("StructLayout" or "WideTag" or "SingleImplementation" or "ReuseRectangularArraySlots" or
                     "UntrustedData" or "MaxInputBytes" or "MaxDecompressedBytes" or "MaxAllocationBytes" or "MaxCollectionLength" or "MaxStringLength" or
                     "MaxObjectCount" or "MaxDepth" or "MaxReadWork")))
                 declared = true;

@@ -34,6 +34,7 @@ public partial class Message
 | `StandardFormat` | `"G"` | 传给显式格式化与 `Custom` 核心方法的常量，不会改变内置数值、日期格式。 |
 | `WideTag` | `false` | 当前类或接口接受宽 Union 标签；不继承外层选项。 |
 | `SingleImplementation` | `false` | 当前类或接口保证所有程序集中只有一个实现；保留既有 Union 帧和虚方法派发。 |
+| `ReuseRectangularArraySlots` | `false` | 在 .NET 8 及更高版本上，Next 可以复用二进制二维数组中已有的对象。直接设置在普通对象的元素类上。参见[对象矩阵复用](reuse.cn.md#显式启用二进制对象矩阵复用)。 |
 | `StructLayout` | `Tagged` | 非托管结构体的存储方式，见下文。只能用于程序集和结构体。 |
 | `UntrustedData` 及各项限额 | 开启，限额不设上限 | 面向不可信输入的带检查读取；面对恶意输入时请声明限额，见[安全](security.cn.md)。 |
 

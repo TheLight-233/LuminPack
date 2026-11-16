@@ -331,7 +331,7 @@ public enum LuminPackRegisterMode : byte
 /// Unspecified properties inherit the enclosing declaration's options. Assembly options override the library defaults;
 /// type and member declarations override the corresponding enclosing scope. Binary string settings can vary by member.
 /// JSON encoding, depth and syntax policy describe a complete document and are selected at its root.
-/// WideTag and SingleImplementation are declaration-only class/interface contracts and do not inherit enclosing options.
+/// WideTag, SingleImplementation and ReuseRectangularArraySlots are declaration-only contracts and do not inherit enclosing options.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Struct |
     AttributeTargets.Interface | AttributeTargets.Field | AttributeTargets.Property, Inherited = false)]
@@ -344,6 +344,14 @@ public sealed class LuminPackOptionAttribute : System.Attribute
     /// <summary>Gets or sets the declaration's guarantee that the polymorphic root has one implementation everywhere.</summary>
     /// <remarks>Applies only to this class or interface. Retains the existing Union framing and virtual dispatch contract.</remarks>
     public bool SingleImplementation { get; set; }
+
+    /// <summary>Gets or sets whether Next can reuse existing slots when reading a binary rank-two array of this class.</summary>
+    /// <remarks>
+    /// Applies to supported ordinary object element declarations on .NET 8 or later. The destination must have the exact array type,
+    /// matching dimensions and zero lower bounds. Each slot must own an independent mutable object graph. A failed read can update
+    /// the existing array and its elements in place. The default is false.
+    /// </remarks>
+    public bool ReuseRectangularArraySlots { get; set; }
 
     /// <summary>Gets or sets the binary string encoding, or the JSON document encoding at its root.</summary>
     public LuminPackStringEncoding StringEncoding { get; set; } = LuminPackStringEncoding.UTF16;

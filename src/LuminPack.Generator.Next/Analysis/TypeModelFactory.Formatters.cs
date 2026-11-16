@@ -124,7 +124,19 @@ internal static partial class TypeModelFactory
             if (type is IArrayTypeSymbol array)
             {
                 FormatterModel? element = Formatter(array.ElementType, depth, path);
-                return element == null ? null : new FormatterModel(spelling, FormatterDefinitions.Array, new[] { element }, rank: array.Rank, reuseArraySlots: element.Definition == FormatterDefinitions.FrameworkScalar || element.Definition == FormatterDefinitions.Scalar && element.Underlying == null || array.Rank == 2 && element.Type == "string" && HasStringMatrixReader(_compilation));
+                if (element == null)
+                    return null;
+                bool reuseArraySlots = element.Definition == FormatterDefinitions.FrameworkScalar ||
+                    element.Definition == FormatterDefinitions.Scalar && element.Underlying == null;
+                if (array.Rank == 2)
+                {
+                    reuseArraySlots |= element.Type == "string" && HasStringMatrixReader(_compilation);
+                    reuseArraySlots |= Options.Net8 && element is
+                        { OrdinaryObject: true, Definition: FormatterDefinitions.PayloadReference,
+                            Payload: RecordModel { Versioned: false, Derived: false, Constructor: null, Callbacks: null, Rent: null, Rejection: null } } &&
+                        array.ElementType is INamedTypeSymbol declaration && OptionSwitch(declaration, "ReuseRectangularArraySlots");
+                }
+                return new FormatterModel(spelling, FormatterDefinitions.Array, new[] { element }, rank: array.Rank, reuseArraySlots: reuseArraySlots);
             }
 
             if (type is not INamedTypeSymbol named)

@@ -56,6 +56,8 @@ internal static partial class TypeModelFactory
                         error = "StructLayout applies only to assembly and struct declarations.";
                     if (argument.Key is "WideTag" or "SingleImplementation" && symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Interface })
                         error = "Union contract switches apply only to class and interface declarations.";
+                    if (argument.Key == "ReuseRectangularArraySlots" && symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class })
+                        error = "ReuseRectangularArraySlots applies only to the element class declaration.";
                     bool inputLimit = argument.Key is "MaxInputBytes" or "MaxDecompressedBytes" or "MaxAllocationBytes" or
                         "MaxCollectionLength" or "MaxStringLength" or "MaxObjectCount" or "MaxReadWork" or "MaxDepth";
                     if (inputLimit && Convert.ToInt64(argument.Value.Value, CultureInfo.InvariantCulture) < 0)

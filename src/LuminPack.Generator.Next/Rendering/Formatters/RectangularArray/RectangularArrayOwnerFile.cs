@@ -176,6 +176,24 @@ internal static class RectangularArrayOwnerFile
                 w.Line("return;");
                 w.Close();
             }
+            if (rank == 2 && reuseArraySlots && element is { OrdinaryObject: true })
+            {
+                w.Line("if (value is not null && value.GetType() == typeof(" + type + ") &&");
+                w.Line("    value.GetLength(0) == dimension0 && value.GetLength(1) == dimension1 &&");
+                w.Line("    (value.GetLowerBound(0) | value.GetLowerBound(1)) == 0)");
+                w.Open();
+                w.Line("if (length == 0) return;");
+                w.Line("ref var firstSlot = ref " + Unsafe + ".As<byte, " + item + ">(ref " + PackMarshal +
+                    ".DangerousGetArrayDataReference<" + item + ">(value));");
+                w.Line("for (int slotIndex = 0; slotIndex < length; slotIndex++)");
+                w.Open();
+                w.Line("ref var slot = ref " + Unsafe + ".Add(ref firstSlot, (nint)(uint)slotIndex);");
+                FormatterElementEmitter.Read(w, set, element, "slot");
+                w.Close();
+                w.Line("return;");
+                w.Close();
+                w.Blank();
+            }
             w.Line("value = " + array + ";");
             First(w, item);
             if (layout != null)

@@ -43,6 +43,22 @@ LuminPackSerializer.Deserialize(nextPayload, ref target);   // 仍然是同一�
 - 普通模式的 `null` 对象记录不会覆盖传入的根对象。专用模式和集合遵循各自的 null 规则。
 - 如果目标中的两个成员共享同一个实例，两次读取都会填充这个实例。需要还原传入数据的对象身份时使用 `CircleReference`。
 
+## 显式启用二进制对象矩阵复用
+
+在 .NET 8 及更高版本上使用 Next 生成器时，在二进制 `T[,]` 的元素类上设置 `ReuseRectangularArraySlots`，即可复用目标矩阵中已有的对象。
+
+```csharp
+[LuminPackable, LuminPackOption(ReuseRectangularArraySlots = true)]
+public sealed partial class Cell
+{
+    public List<int> Samples = new();
+}
+```
+
+用 `ref` 传入已有矩阵，或用 `ref` 传入持有该矩阵的对象。读取器先校验形状和元素数量，再按行更新各位置。目标的数组类型和两个维度长度必须完全匹配，两个下界必须为零。后续位置读取失败时，持有目标引用的调用方仍可看到已读完的前缀。每个目标位置必须拥有独立的可变对象，包括嵌套集合。多个位置可以共享字符串等不可变值。
+
+此选项适用于没有继承的序列化存储、选定构造函数、回调或池租用的普通对象元素类型。其他数组秩、全新目标以及形状或类型不匹配的目标沿用替换读取。此选项只对二进制读取生效。
+
 ## JSON 读取
 
 JSON 支持相同的 `ref` 用法：

@@ -43,6 +43,22 @@ When the objects, collection storage and strings already match, repeated reads r
 - An ordinary `null` object record leaves a supplied root untouched. Specialized modes and collections follow their own null rules.
 - If two members of your target share one instance, both reads fill that same instance. Use `CircleReference` when the incoming identities must be reconstructed.
 
+## Opt-in binary object matrix reuse
+
+With the Next generator on .NET 8 or later, set `ReuseRectangularArraySlots` on the element class of a binary `T[,]` to reuse its existing objects.
+
+```csharp
+[LuminPackable, LuminPackOption(ReuseRectangularArraySlots = true)]
+public sealed partial class Cell
+{
+    public List<int> Samples = new();
+}
+```
+
+Pass the existing matrix by `ref`, or keep it in an object passed by `ref`. The reader checks the shape and count before updating slots in row-major order. The destination must have the exact array type, the incoming dimensions and two zero lower bounds. Aliases can see the completed prefix if a later slot fails. Give each destination slot its own mutable objects, including nested collections. Multiple slots can share immutable values such as strings.
+
+The option applies to ordinary object element types with no inherited payload storage, selected constructor, callbacks or pool rent. The original replacement path handles other array ranks, new destinations and targets that fail the shape or type checks. This option applies only to binary reads.
+
 ## JSON reads
 
 JSON accepts the same `ref` usage:

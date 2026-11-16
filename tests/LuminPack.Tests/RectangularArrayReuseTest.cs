@@ -1,0 +1,149 @@
+#if LUMINPACK_NEXT_GENERATOR
+using System.Buffers.Binary;
+using LuminPack;
+using LuminPack.Attribute;
+using Xunit;
+
+namespace LuminPackUnitTest;
+
+/// <summary>Checks the declared binary rectangular array slot reuse contract.</summary>
+public sealed class RectangularArrayReuseTest
+{
+    /// <summary>Reuses matching slot graphs and supports null and new elements in row-major order.</summary>
+    [Fact]
+    public void MatchingShapeReusesIndependentSlots()
+    {
+        ReusableMatrixEntry?[,] source =
+        {
+            { new() { Id = 11, Items = [1, 2] }, null },
+            { new() { Id = 13 }, new() { Id = 14 } },
+        };
+        ReusableMatrixEntry?[,] alias = { { new() { Items = [9, 9] }, new() }, { null, new() } };
+        var first = alias[0, 0]!;
+        var items = first.Items;
+        var last = alias[1, 1];
+        var nested = new ReusableMatrixContainer { Entries = alias };
+        var bytes = LuminPackSerializer.Serialize(new ReusableMatrixContainer { Entries = source });
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref nested));
+        Assert.Same(alias, nested.Entries);
+        Assert.Same(first, nested.Entries[0, 0]);
+        Assert.Same(items, first.Items);
+        Assert.Equal(new[] { 1, 2 }, items);
+        Assert.Null(nested.Entries[0, 1]);
+        Assert.Equal(new int?[] { 11, null, 13, 14 }, nested.Entries.Cast<ReusableMatrixEntry?>().Select(entry => entry?.Id));
+        Assert.Same(last, nested.Entries[1, 1]);
+    }
+
+    /// <summary>Checks empty and null values, different dimensions, lower bounds and array covariance.</summary>
+    [Fact]
+    public void IncompatibleArraysKeepReplacement()
+    {
+        ReusableMatrixEntry[,] source = { { new() { Id = 11 }, new() { Id = 12 } } };
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        foreach (var alias in new[]
+        {
+            new ReusableMatrixEntry[2, 1],
+            (ReusableMatrixEntry[,])Array.CreateInstance(typeof(ReusableMatrixEntry), [1, 2], [0, -1]),
+            new CovariantMatrixEntry[1, 2],
+        })
+        {
+            var target = alias;
+            LuminPackSerializer.Deserialize(bytes, ref target);
+            Assert.NotSame(alias, target);
+            Assert.IsType<ReusableMatrixEntry[,]>(target);
+            Assert.Equal(11, target[0, 0].Id);
+        }
+
+        ReusableMatrixEntry[,]? empty = new ReusableMatrixEntry[0, 2];
+        var oldEmpty = empty;
+        LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(empty), ref empty);
+        Assert.Same(oldEmpty, empty);
+        LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize((ReusableMatrixEntry[,]?)null), ref empty);
+        Assert.Null(empty);
+    }
+
+    /// <summary>Checks that default declarations, higher ranks and JSON continue to replace existing arrays.</summary>
+    [Fact]
+    public void DefaultAndOtherFormatsKeepReplacement()
+    {
+        PlainMatrixEntry[,] plain = { { new() { Id = 11 } } };
+        PlainMatrixEntry[,] plainAlias = { { new() { Id = -1 } } };
+        var plainTarget = plainAlias;
+        LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(plain), ref plainTarget);
+        Assert.NotSame(plainAlias, plainTarget);
+        Assert.Equal(-1, plainAlias[0, 0].Id);
+
+        ReusableMatrixEntry[,,] cube = { { { new() { Id = 11 } } } };
+        ReusableMatrixEntry[,,] cubeAlias = { { { new() { Id = -1 } } } };
+        var cubeTarget = cubeAlias;
+        LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(cube), ref cubeTarget);
+        Assert.NotSame(cubeAlias, cubeTarget);
+        Assert.Equal(-1, cubeAlias[0, 0, 0].Id);
+
+        ReusableMatrixEntry[,] matrix = { { new() { Id = 11 } } };
+        ReusableMatrixEntry[,] jsonAlias = { { new() { Id = -1 } } };
+        var jsonTarget = jsonAlias;
+        LuminPackSerializer.DeserializeJson(LuminPackSerializer.SerializeJson(matrix), ref jsonTarget);
+        Assert.NotSame(jsonAlias, jsonTarget);
+        Assert.Equal(-1, jsonAlias[0, 0].Id);
+    }
+
+    /// <summary>Rejects invalid shapes before mutation and publishes completed slots on a truncated payload.</summary>
+    [Fact]
+    public void FailedReadsPreserveShapeChecksAndCompletedSlots()
+    {
+        var first = new ReusableMatrixEntry { Id = 11, Items = [7] };
+        ReusableMatrixEntry[,] source = { { first, new() { Id = 12 } } };
+        ReusableMatrixEntry[,] alias = { { new() { Id = -1 }, new() { Id = -2 } } };
+        var target = alias;
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        byte[] malformed = (byte[])bytes.Clone();
+        BinaryPrimitives.WriteInt32LittleEndian(malformed.AsSpan(9), 1);
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(malformed, ref target));
+        Assert.Same(alias, target);
+        Assert.Equal(-1, alias[0, 0].Id);
+        Assert.Equal(-2, alias[0, 1].Id);
+
+        var firstAlias = alias[0, 0];
+        var secondAlias = alias[0, 1];
+        const int matrixHeaderBytes = 1 + 3 * sizeof(int);
+        int throughFirst = matrixHeaderBytes + LuminPackSerializer.Serialize(first).Length;
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(bytes.AsSpan(0, throughFirst), ref target));
+        Assert.Same(alias, target);
+        Assert.Same(firstAlias, alias[0, 0]);
+        Assert.Same(secondAlias, alias[0, 1]);
+        Assert.Equal(11, firstAlias.Id);
+        Assert.Equal(-2, secondAlias.Id);
+    }
+}
+
+/// <summary>An ordinary element that opts in to independent slot reuse.</summary>
+[LuminPackable, LuminPackOption(ReuseRectangularArraySlots = true)]
+public partial class ReusableMatrixEntry
+{
+    /// <summary>The entry identifier.</summary>
+    public int Id;
+
+    /// <summary>The nested list belonging to this slot.</summary>
+    public List<int> Items = [];
+}
+
+/// <summary>Supplies a covariant runtime array that needs replacement.</summary>
+public sealed class CovariantMatrixEntry : ReusableMatrixEntry;
+
+/// <summary>A regular element with the default replacement contract.</summary>
+[LuminPackable]
+public partial class PlainMatrixEntry
+{
+    /// <summary>The entry identifier.</summary>
+    public int Id;
+}
+
+/// <summary>A payload containing an opted-in rectangular array.</summary>
+[LuminPackable]
+public partial class ReusableMatrixContainer
+{
+    /// <summary>The row-major entries.</summary>
+    public ReusableMatrixEntry?[,] Entries = new ReusableMatrixEntry?[0, 0];
+}
+#endif
