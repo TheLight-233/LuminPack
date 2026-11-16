@@ -84,19 +84,27 @@ public static partial class LuminPackCollectionAccess
             return false;
 
         var comparer = Comparer<TPriority>.Default;
-        int index = 0;
-        do
+        TPriority rootPriority = LuminPackReader.Read<TPriority>(ref Unsafe.Add(ref input, (nint)(uint)elementBytes));
+        first.Element = LuminPackReader.Read<TElement>(ref input);
+        first.Priority = rootPriority;
+        input = ref Unsafe.Add(ref input, (nint)(uint)pairBytes);
+
+        int childCount = count - 1;
+        int acceptedChildren = 0;
+        ref var slot = ref Unsafe.Add(ref first, 1);
+        for (; acceptedChildren < childCount; acceptedChildren++)
         {
             TPriority priority = LuminPackReader.Read<TPriority>(ref Unsafe.Add(ref input, (nint)(uint)elementBytes));
-            if (index != 0 && comparer.Compare(priority, Unsafe.Add(ref first, (nint)(uint)((index - 1) >> 2)).Priority) < 0)
+            if (comparer.Compare(priority, Unsafe.Add(ref first, (nint)((uint)acceptedChildren >> 2)).Priority) < 0)
                 break;
-            ref var slot = ref Unsafe.Add(ref first, (nint)(uint)index);
             slot.Element = LuminPackReader.Read<TElement>(ref input);
             slot.Priority = priority;
+            slot = ref Unsafe.Add(ref slot, 1);
             input = ref Unsafe.Add(ref input, (nint)(uint)pairBytes);
-        } while (++index < count);
+        }
 
         // The complete input proof bounds this prefix of accepted pairs. A non-heap suffix still uses Enqueue.
+        int index = acceptedChildren + 1;
         reader.Cursor = ref input;
         LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.PriorityQueueSize) = index;
         ref int version = ref LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.PriorityQueueVersion);
