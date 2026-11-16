@@ -33,12 +33,12 @@ public sealed class ReadOnlyStringMemoryReuseTest
     [Fact]
     public void SequenceKeepsThePreviousResultOnTruncation()
     {
-        string first = new string('日', 12);
-        string second = new string('ß', 13);
+        string first = new string('\u65E5', 12);
+        string second = new string('\u00DF', 13);
         string?[] backing = ["prefix", first, second, "suffix"];
         var target = new ReadOnlySequence<string?>(backing, 1, 2);
         var previous = target;
-        var source = new ReadOnlySequence<string?>(new string?[] { new string('日', 12), new string('ß', 13) });
+        var source = new ReadOnlySequence<string?>(new string?[] { new string('\u65E5', 12), new string('\u00DF', 13) });
         byte[] bytes = LuminPackSerializer.Serialize(source);
 
         Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(bytes.AsSpan(0, bytes.Length - 1), ref target));

@@ -49,6 +49,7 @@ public static partial class LuminPackCollectionAccess
         internal static readonly int OwnerThread, TailIndex, InitialCapacity;
         internal static readonly bool Available;
 
+        /// <summary>Probes the local queue layout and verifies its growth threshold.</summary>
         static ConcurrentBagSizing()
         {
             if (!RuntimeFeature.IsDynamicCodeCompiled || RuntimeInformation.ProcessArchitecture != Architecture.X64 ||

@@ -48,7 +48,7 @@ public static partial class LuminPackCollectionAccess
         public bool IsReadOnly => true;
 
         /// <inheritdoc/>
-        public T Current => (uint)_index < (uint)count ? items[_index] : throw new InvalidOperationException();
+        public T Current => (uint)_index < (uint)count ? items[_index] : LuminPackExceptionHelper.ThrowInvalidOperationException<T>();
 
         /// <inheritdoc/>
         object? IEnumerator.Current => Current;
@@ -86,13 +86,13 @@ public static partial class LuminPackCollectionAccess
         public bool Contains(T item) => Array.IndexOf(items, item, 0, count) >= 0;
 
         /// <inheritdoc/>
-        public void Add(T item) => throw new NotSupportedException();
+        public void Add(T item) => LuminPackExceptionHelper.ThrowNotSupportedException();
 
         /// <inheritdoc/>
-        public void Clear() => throw new NotSupportedException();
+        public void Clear() => LuminPackExceptionHelper.ThrowNotSupportedException();
 
         /// <inheritdoc/>
-        public bool Remove(T item) => throw new NotSupportedException();
+        public bool Remove(T item) => LuminPackExceptionHelper.ThrowNotSupportedException<bool>();
     }
 }
 #endif

@@ -122,6 +122,9 @@ public sealed class SortedSetBufferedJsonWriteTest
     {
         private bool _invoked;
 
+        /// <summary>Mutates the set on the first request for number formatting information.</summary>
+        /// <param name="formatType">The requested format provider type.</param>
+        /// <returns>The format provider returned by the base culture.</returns>
         public override object? GetFormat(Type? formatType)
         {
             if (!_invoked && formatType == typeof(NumberFormatInfo))

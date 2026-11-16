@@ -23,6 +23,8 @@ public sealed class DenseHashSetWriteTest
         }
     }
 
+    /// <summary>Verifies the count and element bytes in enumeration order across the set writers.</summary>
+    /// <param name="set">The set to serialize.</param>
     private static void CheckBinaryRecord(HashSet<int> set)
     {
         byte[] expected = new byte[sizeof(int) + set.Count * sizeof(int)];
