@@ -138,11 +138,9 @@ internal static class DictionaryInterfaceOwnerFile
             w.Line("if (count != 0)");
             w.Open();
             w.Line("int version = view._version;");
-            w.Line("ref var first = ref " + marshal + ".GetNotNullArrayReference(entries!);");
-            w.Line("int index = 0;");
-            w.Line("do");
+            w.Line("ref var entry = ref " + marshal + ".GetNotNullArrayReference(entries!);");
+            w.Line("for (int remaining = count; remaining != 0; entry = ref " + c.Memory + ".Add(ref entry, 1), remaining--)");
             w.Open();
-            w.Line("ref var entry = ref " + c.Memory + ".Add(ref first, (nint)(uint)index);");
             w.Line("var key = entry.Key;");
             if (denseCompound)
             {
@@ -166,7 +164,6 @@ internal static class DictionaryInterfaceOwnerFile
                 c.WriteMember(c.Value, "remainingValue");
             }
             w.Close();
-            w.Line("while (++index < count);");
             w.Line("if (view._version != version || view._count != count || view._freeCount != 0)");
             w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();"));
             w.Close();
