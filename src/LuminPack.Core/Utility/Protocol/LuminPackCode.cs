@@ -17,10 +17,5 @@ namespace LuminPack.Code
         public const byte WideTag = 250; // for Union, 250 is wide tag
         /// <summary>Stores the reference id.</summary>
         public const byte ReferenceId = 250; // for CircularReference, 250 is referenceId marker, next VarInt id reference.
-
-        /// <summary>Gets the null collection data.</summary>
-        internal static ReadOnlySpan<byte> NullCollectionData => new byte[] { 255, 255, 255, 255 }; // -1
-        /// <summary>Gets the zero collection data.</summary>
-        internal static ReadOnlySpan<byte> ZeroCollectionData => new byte[] { 0, 0, 0, 0 }; // 0
     }
 }

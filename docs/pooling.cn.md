@@ -14,7 +14,7 @@ Crossbeam 有界 MPMC 队列维护 FIFO 位置和每槽发布序号；分段队�
 
 | 缓存 | 线程本地保留 | 共享保留 |
 | --- | --- | --- |
-| `ObjectPool<T>` | 每个闭合 `T`、每个线程一份，同类型池实例共用该槽并核对池身份 | 每池 `maxSize`，默认 16 |
+| 内部 `ObjectPool<T>` | 每个闭合 `T`、每个线程一份，同类型池实例共用该槽并核对池身份 | 每池 `maxSize`，默认 16 |
 | `LuminBufferWriterPool` | 普通构建每线程一个 writer | 最多 32 个 writer |
 | 不可变集合 builder | 每个闭合 builder 类型、每线程一个已清理 builder | 每个闭合类型最多八个 |
 | Frozen 构造暂存 | 无 | 每个闭合类型最多四个容器，并受容量准入限制 |

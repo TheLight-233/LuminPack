@@ -1142,12 +1142,6 @@ public static partial class LuminPackMarshal
         /// <summary>Gets the has finalizer.</summary>
         public bool HasFinalizer => (this.Flags & 1048576U /*0x100000*/) > 0U;
 
-        /// <summary>Performs the are same type step for the current operation.</summary>
-        /// <param name="mt1">The mt1 used by this operation.</param>
-        /// <param name="mt2">The mt2 used by this operation.</param>
-        /// <returns>Whether the requested condition or operation succeeded.</returns>
-        internal static bool AreSameType(ref MethodTable mt1, ref MethodTable mt2) => Unsafe.AreSame(ref mt1, ref mt2);
-
         /// <summary>Gets the has default constructor.</summary>
         public bool HasDefaultConstructor
         {

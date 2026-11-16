@@ -14,7 +14,7 @@ internal static partial class SerializerImmutableListWriteRegression
             .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>()
             .Where(type => type.Identifier.ValueText is "SortedListStorage" or "PriorityQueueStorage")
             .Select(type => type.ToString().Replace("LuminFieldLayout.Field<", "ProbeTrap.Field<", StringComparison.Ordinal));
-        string source = "using System; using System.Collections.Generic; using LuminPack.Code; namespace CollectionProbe; public static class LuminPackCollectionAccess {\n" +
+        string source = "using System; using System.Collections.Generic; namespace CollectionProbe; public static class LuminPackCollectionAccess {\n" +
             string.Join("\n", probes) + "\n}\n" + """
             public static class ProbeTrap
             {
@@ -23,15 +23,19 @@ internal static partial class SerializerImmutableListWriteRegression
                 public static ref T Field<T>(ref byte storage, int offset) { Calls++; throw new Exception("Unexpected field access."); }
             }
             """;
-        var failures = new List<string>();
-        foreach (var test in new[]
+        var cases = new[]
         {
             (Family: "SortedListStorage", Offset: "SortedListKeys"),
             (Family: "SortedListStorage", Offset: "SortedListValues"),
             (Family: "SortedListStorage", Offset: "SortedListSize"),
             (Family: "PriorityQueueStorage", Offset: "PriorityQueueNodes"),
             (Family: "PriorityQueueStorage", Offset: "PriorityQueueSize")
-        })
+        };
+        // These probes verify the unavailable-offset guard before any storage access.
+        string offsets = string.Join("\n", cases.Select(test => $"internal static readonly int {test.Offset} = 0;"));
+        source += "\ninternal static class LuminCollectionLayouts {\n" + offsets + "\n}";
+        var failures = new List<string>();
+        foreach (var test in cases)
         {
             string projected = source.Replace("LuminCollectionLayouts." + test.Offset, "(-1)", StringComparison.Ordinal);
             var compilation = CSharpCompilation.Create("LayoutProbe" + Guid.NewGuid().ToString("N"),

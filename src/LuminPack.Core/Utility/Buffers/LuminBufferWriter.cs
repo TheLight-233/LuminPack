@@ -402,18 +402,6 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetCurrentIndexPtr(ref int index) => _liveIndex = AddressOf(ref index);
 
-    /// <summary>Begins an appended record without resetting its existing payload or reference state.</summary>
-    /// <param name="index">Receives the current absolute position and supplies the active writer's cursor storage.</param>
-    /// <returns>The full writable allocation, including the existing payload prefix.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal Span<byte> BeginWrite(out int index)
-    {
-        var span = BeginCursorWrite(out index);
-        _writtenCount = 0;
-        _liveIndex = AddressOf(ref index);
-        return span;
-    }
-
     /// <summary>Prepares an append operation whose cursor stays inside the binary writer.</summary>
     /// <param name="index">Receives the absolute start of the appended record.</param>
     /// <returns>The complete allocation after restoring fixed-record headroom.</returns>

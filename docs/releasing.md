@@ -42,7 +42,7 @@ Inventories are review aids, not a complete binary/source compatibility proof. S
 
 Release builds set `LuminPackReleaseBuild=true`, enabling the SDK's [PackageValidation](https://learn.microsoft.com/en-us/dotnet/fundamentals/apicompat/package-validation/overview) for Core. Ordinary builds retain their existing behavior. Cross-framework consistency checks run even when no published baseline is configured. `-BaselineVersion <published-version>` additionally enables the SDK baseline comparison against NuGet; mismatches fail packaging.
 
-`eng/CompatibilitySuppressions.xml` lists eight exact, established cross-framework differences: Standard-only Burst hooks, four cursor fields represented by spans on Standard and by references on modern targets, the .NET 10 BitArray storage view, and the instance/static ObjectPool policy constructor and constraint. Each exception identifies the diagnostic, API and left/right assets. These entries document existing conditional contracts, do not change them, and do not authorize new breaks or blanket suppression of baseline errors.
+`eng/CompatibilitySuppressions.xml` lists six exact, established cross-framework differences covering Standard-only Burst hooks, four cursor fields represented by spans on Standard and by references on modern targets, and the .NET 10 BitArray storage view. Each exception identifies the diagnostic, API and left/right assets. These entries document existing conditional contracts, do not change them, and do not authorize new breaks or blanket suppression of baseline errors.
 
 The Generator package carries analyzers rather than ordinary `lib` assets, so its package layout, dependency use and installed behavior are checked explicitly rather than claiming SDK runtime-asset validation for it.
 

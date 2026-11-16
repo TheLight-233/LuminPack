@@ -42,7 +42,7 @@ API 清单用于审查，不是完整的二进制/源码兼容证明。SDK Packa
 
 发布构建设置 `LuminPackReleaseBuild=true`，对 Core 启用 SDK [PackageValidation](https://learn.microsoft.com/en-us/dotnet/fundamentals/apicompat/package-validation/overview)，普通构建保持既有行为。即使没有配置已发布基线，也运行跨框架一致性检查。`-BaselineVersion <已发布版本>` 额外启用 SDK 对 NuGet 包的基线比较，不兼容会使打包失败。
 
-`eng/CompatibilitySuppressions.xml` 列出八项精确的既有跨框架差异：仅 Standard 存在的 Burst 钩子、在 Standard 上使用 Span、在新版目标上使用托管引用的四个游标字段、.NET 10 BitArray 存储视图，以及 ObjectPool 实例/静态策略对应的构造函数和约束。每项例外都限定诊断、API 和左右产物。它们记录既有条件契约，不改变机制，也不授权新破坏性变更或大范围屏蔽基线错误。
+`eng/CompatibilitySuppressions.xml` 列出六项精确的既有跨框架差异，涵盖仅 Standard 存在的 Burst 钩子、在 Standard 上使用 Span 且在新版目标上使用托管引用的四个游标字段，以及 .NET 10 BitArray 存储视图。每项例外都限定诊断、API 和左右产物。它们记录既有条件契约，不改变机制，也不授权新破坏性变更或大范围屏蔽基线错误。
 
 Generator 包包含分析器，而不是普通 `lib` 产物，因此显式验证其包布局、依赖使用和安装行为，不把它描述成已完成 SDK 运行时产物验证。
 

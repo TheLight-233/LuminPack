@@ -27,8 +27,8 @@
 
 | 目录 | 职责 |
 | --- | --- |
-| `Buffers` | 自有和分段输出、序列构造。 |
-| `Collections`、`Collections/Hashing`、`Collections/Trees` | 集合存储视图、哈希表、树辅助。 |
+| `Buffers` | 自有和分段输出、使用池化缓冲区的流输入。 |
+| `Collections`、`Collections/Trees` | 集合存储视图和树辅助。 |
 | `References` | 引用身份和 Union 映射。 |
 | `Memory`、`Memory/Views`、`Memory/Simd` | Marshal 操作、原始数组、非托管视图、复制内核。 |
 | `Layout`、`Layout/Simd` | 字段偏移、布局标签、转换与字节重排。 |

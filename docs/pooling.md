@@ -14,7 +14,7 @@ Crossbeam's bounded MPMC queue maintains FIFO positions and per-slot publication
 
 | Cache | Thread-local retention | Shared retention |
 | --- | --- | --- |
-| `ObjectPool<T>` | One item per closed `T` and thread, shared among pool instances with identity checks | `maxSize` per pool, default 16 |
+| Internal `ObjectPool<T>` | One item per closed `T` and thread, shared among pool instances with identity checks | `maxSize` per pool, default 16 |
 | `LuminBufferWriterPool` | One writer per thread in the ordinary build | At most 32 writers |
 | Immutable framework builders | One cleared builder per closed builder type and thread | At most eight builders per closed builder type |
 | Frozen construction storage | None | At most four containers per closed type, subject to capacity admission limits |

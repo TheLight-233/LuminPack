@@ -12,7 +12,7 @@ using LuminPack.Code;
 /// </summary>
 /// <typeparam name="TKey"></typeparam>
 /// <typeparam name="TValue"></typeparam>
-public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumerable<KeyValuePair<TKey, TValue>>
+internal sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumerable<KeyValuePair<TKey, TValue>>
     where TKey : notnull
 {
     private const int MAX_KICK_COUNT = 16;

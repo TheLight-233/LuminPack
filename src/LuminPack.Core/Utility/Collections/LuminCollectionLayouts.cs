@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using LuminPack.Attribute;
 using static LuminPack.Code.LuminFieldLayout;
@@ -17,8 +16,7 @@ namespace LuminPack.Code;
 /// <para>The offsets are <see langword="static readonly"/> fields of this non-generic class, so optimized code, including shared
 /// generic code, addresses each field with a constant displacement, as a field of a declared type does.</para>
 /// </remarks>
-[EditorBrowsable(EditorBrowsableState.Never)]
-public static class LuminCollectionLayouts
+internal static class LuminCollectionLayouts
 {
     // List<T>
     private static readonly int[] s_list = Family(typeof(List<int>), typeof(List<object>), CompiledList(), "_items", "_size", "_version");

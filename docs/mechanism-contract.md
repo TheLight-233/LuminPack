@@ -140,7 +140,7 @@ The history of individual approvals lives in Git. When this document, the code a
 - Review scalar, 128-bit, 256-bit, 512-bit and ARM64 execution for every SIMD change.
 - Guard every ISA-specific operation by its exact required features. Width preference is not hardware support.
 - Keep bounded tails, a scalar or portable fallback, zero-length behavior and identical bytes. Never read or write outside a complete validated range.
-- A fixed-width algorithm may keep its natural width only with a documented reason (for example the 16-byte F14 tag group).
+- A fixed-width algorithm may keep its natural width only with a documented reason.
 - Hardware unavailable locally requires CI execution. Compilation or synthetic masks are not hardware validation.
 
 ## 5. Performance evidence

@@ -41,7 +41,7 @@ UTF codecs return `OperationStatus` integers: Done 0, DestinationTooSmall 1, Nee
 
 Managed inputs, outputs and layout descriptions are pinned for the entire native invocation. ChaCha/XOR already receive caller-pinned, native or stack storage. Empty windows may have null pointers; never dereference them. Assume no alignment. Core retains framing, checked ranges, allocation/reuse, reference state, construction/callbacks and publication. Layout descriptors initialize lazily only when a layout slot exists; invalid geometry declines into existing code.
 
-Boundaries cover raw copies, UTF-16 copy/equality, UTF-8 encoding/decoding/reuse, compact Latin-1 records, short ASCII JSON, tagged/packed struct collections, LZ match comparison/expansion and cipher/XOR. Modern BMP/512-bit text and F14 vector helpers stay private to the native .NET path. The legacy F14 representation has no new tag-group algorithm.
+Boundaries cover raw copies, UTF-16 copy/equality, UTF-8 encoding/decoding/reuse, compact Latin-1 records, short ASCII JSON, tagged/packed struct collections, LZ match comparison/expansion and cipher/XOR. Modern BMP/512-bit text helpers stay private to the native .NET path.
 
 A future backend selects exact CPU features itself: nonnull pointers are not feature checks. Review scalar, 128/256/512-bit and ARM64 behavior, bounded tails, unaligned access, true overlap and lifetime on each runtime. Fixed-width algorithms need a block-based reason. Compilation and scalar ABI probes do not validate Burst code generation, IL2CPP or unavailable hardware. Follow [the SIMD rules](mechanism-contract.md#4-simd) before enabling a backend.
 

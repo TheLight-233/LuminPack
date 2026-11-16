@@ -27,8 +27,8 @@ Runtime entry points and cursor state live in `src/LuminPack.Core/Core`; the opt
 
 | Directory | Responsibility |
 | --- | --- |
-| `Buffers` | Owned and segmented output, sequence construction. |
-| `Collections`, `Collections/Hashing`, `Collections/Trees` | Collection storage views, hash maps, tree helpers. |
+| `Buffers` | Owned and segmented output, pooled stream input. |
+| `Collections`, `Collections/Trees` | Collection storage views and tree helpers. |
 | `References` | Reference identity and Union maps. |
 | `Memory`, `Memory/Views`, `Memory/Simd` | Marshal operations, raw arrays, unmanaged views, copy kernels. |
 | `Layout`, `Layout/Simd` | Field offsets, layout tags, conversion and byte shuffles. |

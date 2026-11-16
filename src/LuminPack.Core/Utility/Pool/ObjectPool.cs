@@ -11,7 +11,7 @@ namespace LuminPack.Utility
 #if NET8_0_OR_GREATER
     /// <summary>Creates instances and resets them before retention.</summary>
     /// <typeparam name="T">The pooled reference type.</typeparam>
-    public interface IPooledObjectPolicy<T> where T : class
+    internal interface IPooledObjectPolicy<T> where T : class
     {
         /// <summary>Creates an exclusively owned instance on a cache miss.</summary>
         /// <returns>A non-null instance.</returns>
@@ -24,7 +24,7 @@ namespace LuminPack.Utility
 #else
     /// <summary>Creates instances and resets them before retention.</summary>
     /// <typeparam name="T">The pooled reference type.</typeparam>
-    public interface IPooledObjectPolicy<T> where T : class
+    internal interface IPooledObjectPolicy<T> where T : class
     {
         /// <summary>Creates an exclusively owned instance on a cache miss.</summary>
         /// <returns>A non-null instance.</returns>
@@ -44,7 +44,7 @@ namespace LuminPack.Utility
     /// <typeparam name="T">The pooled reference type.</typeparam>
     /// <remarks>Retention order is unspecified. TLS retention lasts until reuse, explicit
     /// clearing on that thread, or thread termination; it does not provide automatic disposal.</remarks>
-    public sealed class ObjectPool<T>
+    internal sealed class ObjectPool<T>
 #if NET8_0_OR_GREATER
         where T : class, IPooledObjectPolicy<T>, IDisposable
 #else

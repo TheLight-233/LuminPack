@@ -4,7 +4,7 @@ namespace LuminPack.Code
 {
     /// <summary>Provides lumin raw array data functionality.</summary>
     [Preserve]
-    public sealed class LuminRawArrayData
+    internal sealed class LuminRawArrayData
     {
         /// <summary>Stores the length.</summary>
         public uint Length;

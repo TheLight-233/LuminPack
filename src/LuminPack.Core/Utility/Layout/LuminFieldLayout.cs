@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
@@ -17,8 +16,7 @@ namespace LuminPack.Code;
 /// <para>Stored as <see langword="static readonly"/> fields, the offsets are constants in optimized code, so an access is the
 /// same single addressed load or store as a field of a declared type.</para>
 /// </remarks>
-[EditorBrowsable(EditorBrowsableState.Never)]
-public static class LuminFieldLayout
+internal static class LuminFieldLayout
 {
     /// <summary>The result of a probe that could not locate a field.</summary>
     public const int Unavailable = -1;

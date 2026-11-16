@@ -352,16 +352,6 @@ namespace LuminPack.Core
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void CompleteValue() => CurrentTokenType = JsonTokenType.None;
-        /// <summary>Consumes one already validated token byte using the advancing cursor.</summary>
-        /// <returns>The current token byte.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private byte TakeByte()
-        {
-            byte value = Current;
-            Advance(1);
-            return value;
-        }
-
         /// <summary>Advances the current buffer position by the supplied number of bytes.</summary>
         /// <param name = "count">The number of entries involved in the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -664,20 +654,6 @@ namespace LuminPack.Core
         private static class HexDigits
         {
             internal static ReadOnlySpan<byte> Values => new byte[] { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 255, 255, 255, 255, 255, 255, 255, 10, 11, 12, 13, 14, 15, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 10, 11, 12, 13, 14, 15, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 };
-        }
-
-        /// <summary>Performs the hex value step for the current operation.</summary>
-        /// <param name = "value">The value consumed or produced by this operation.</param>
-        /// <returns>The result of the operation.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int HexValue(int value)
-        {
-            if ((uint)(value - '0') <= 9u)
-                return value - '0';
-            value |= 0x20;
-            if ((uint)(value - 'a') <= 5u)
-                return value - 'a' + 10;
-            return -1;
         }
 
         /// <summary>

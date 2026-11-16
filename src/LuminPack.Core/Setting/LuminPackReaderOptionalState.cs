@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using LuminPack.Code;
@@ -6,32 +5,6 @@ using LuminPack.Utility;
 
 namespace LuminPack.Option
 {
-    /// <summary>Provides lumin pack reader optional state pool functionality.</summary>
-    public static class LuminPackReaderOptionalStatePool
-    {
-        private static readonly ConcurrentQueue<LuminPackReaderOptionalState> _queue = new();
-
-        /// <summary>Obtains a reusable instance from the pool, creating one when needed.</summary>
-        /// <returns>The result of the operation.</returns>
-        public static LuminPackReaderOptionalState Rent()
-        {
-            if (!_queue.TryDequeue(out var state))
-            {
-                state = new LuminPackReaderOptionalState();
-            }
-
-            return state;
-        }
-
-        /// <summary>Returns an instance to the pool for reuse.</summary>
-        /// <param name="state">The reusable state associated with the operation.</param>
-        internal static void Return(LuminPackReaderOptionalState state)
-        {
-            state.Reset();
-            _queue.Enqueue(state);
-        }
-    }
-
     /// <summary>Provides lumin pack reader optional state functionality.</summary>
     public sealed class LuminPackReaderOptionalState : IDisposable
     {

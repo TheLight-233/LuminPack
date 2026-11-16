@@ -134,21 +134,6 @@ public class AuditSafetyRegressionTest
             Assert.True(System.Runtime.Intrinsics.Vector512.IsHardwareAccelerated);
         }
     }
-    /// <summary>Fixed F14 groups remain usable without x86 intrinsics or with all intrinsics disabled.</summary>
-    [Fact]
-    public void F14UsesPortableTagOperations()
-    {
-        using var map = new LuminF14Map<int, int>();
-        for (int i = 0; i < 200; i++) map.Add(i, i * 7);
-        for (int i = 0; i < 200; i++)
-        {
-            Assert.True(map.TryGetValue(i, out int value));
-            Assert.Equal(i * 7, value);
-        }
-        for (int i = 0; i < 200; i++) Assert.True(map.Remove(i));
-        Assert.Equal(0, map.Count);
-    }
-
     /// <summary>Positive recorded character counts require exact, strict UTF-8 decoding on every target.</summary>
     [Fact]
     public void Utf8LengthRecordsRejectMalformedBytesAndCounts()

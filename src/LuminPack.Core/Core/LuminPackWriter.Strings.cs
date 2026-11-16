@@ -32,17 +32,6 @@ namespace LuminPack.Core
             return StringRecordLength<LuminPackDefaultOptions>();
         }
 
-        /// <summary>
-        /// Writes the string length header.
-        /// </summary>
-        /// <param name = "index"></param>
-        /// <param name = "length"></param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void WriteStringRecordLengthHeader(int index, int length)
-        {
-            LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(index)), ref Unsafe.As<int, byte>(ref length), sizeof(int));
-        }
-
         /// <summary>Writes null utf8 length header to the current output.</summary>
         /// <param name = "index">The position at which the operation starts.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

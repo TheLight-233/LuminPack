@@ -161,24 +161,6 @@ namespace LuminPack.Code
             throw new NotSupportedException(message);
         }
 
-        /// <summary>Rejects mutation of an immutable collection with the standard parameterless exception message.</summary>
-        /// <exception cref="NotSupportedException">The collection cannot be modified.</exception>
-        [DoesNotReturn]
-        internal static void ThrowReadOnlyCollectionMutation()
-        {
-            throw new NotSupportedException();
-        }
-
-        /// <summary>Rejects a value-returning mutation of an immutable collection with the standard exception message.</summary>
-        /// <typeparam name="T">The return type required by the rejecting member.</typeparam>
-        /// <returns>This method never returns.</returns>
-        /// <exception cref="NotSupportedException">The collection cannot be modified.</exception>
-        [DoesNotReturn]
-        internal static T ThrowReadOnlyCollectionMutation<T>()
-        {
-            throw new NotSupportedException();
-        }
-
         /// <summary>Raises the exception for platform not supported exception.</summary>
         /// <param name="message">The message describing the failure.</param>
         [DoesNotReturn]

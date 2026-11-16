@@ -66,13 +66,6 @@ public static partial class StringSerializer
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static string CreateUtf16String(ref byte payload, int bytes) => CreateUtf16StringCore(ref payload, bytes);
 
-    /// <summary>Allocates and fills a string from a validated, nonempty, even-length UTF-16 payload at an inline record site.</summary>
-    /// <param name = "payload">The first payload byte.</param>
-    /// <param name = "bytes">The positive even payload length.</param>
-    /// <returns>A fresh string containing the exact code units.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static string CreateUtf16StringInline(ref byte payload, int bytes) => CreateUtf16StringCore(ref payload, bytes);
-
     /// <summary>Allocates and fills a string from a validated, nonempty, even-length UTF-16 payload inside an outlined caller.</summary>
     /// <param name = "payload">The first payload byte.</param>
     /// <param name = "bytes">The positive even payload length.</param>
