@@ -799,7 +799,7 @@ namespace LuminPack.Core
             {
                 while (count < bytes)
                 {
-                    ref byte current = ref Unsafe.Add(ref first, count);
+                    ref byte current = ref Unsafe.Add(ref first, (nint)(uint)count);
                     byte value = current;
                     if (!IsJsonWhitespace(value))
                         break;
@@ -815,7 +815,7 @@ namespace LuminPack.Core
             {
                 while (bytes - count >= 2)
                 {
-                    ref byte current = ref Unsafe.Add(ref first, count);
+                    ref byte current = ref Unsafe.Add(ref first, (nint)(uint)count);
                     char value = Unsafe.ReadUnaligned<char>(ref current);
                     if (!IsJsonWhitespace(value))
                         break;

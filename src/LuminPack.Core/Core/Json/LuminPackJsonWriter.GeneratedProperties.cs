@@ -41,7 +41,7 @@ namespace LuminPack.Core
             ref byte destination = ref Current;
             if ((long)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(Buffer), ref destination) < 0)
                 return false;
-            ref byte source = ref Unsafe.Add(ref MemoryMarshal.GetReference(head), skip);
+            ref byte source = ref Unsafe.Add(ref MemoryMarshal.GetReference(head), (nint)(uint)skip);
             LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)count);
             Advance(count);
             IsFirstElement = true;

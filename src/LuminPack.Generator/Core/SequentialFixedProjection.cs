@@ -55,7 +55,7 @@ internal sealed class SequentialFixedProjection : CSharpSyntaxRewriter
                     SimpleNameSyntax method = types.Count == call.ArgumentList.Arguments.Count - 1
                         ? SyntaxFactory.GenericName(selected.Name.Identifier, SyntaxFactory.TypeArgumentList(SyntaxFactory.SingletonSeparatedList(types[index - 1])))
                         : SyntaxFactory.IdentifierName(selected.Name.Identifier);
-                    var source = SyntaxFactory.Argument(SyntaxFactory.ParseExpression("global::System.Runtime.CompilerServices.Unsafe.Add(ref " + reference + ", " + length + ")"))
+                    var source = SyntaxFactory.Argument(SyntaxFactory.ParseExpression("global::System.Runtime.CompilerServices.Unsafe.Add(ref " + reference + ", (nint)(uint)" + length + ")"))
                         .WithRefKindKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword));
                     var scalar = call.WithExpression(selected.WithName(method)).WithArgumentList(SyntaxFactory.ArgumentList(
                         SyntaxFactory.SeparatedList(new[] { source, call.ArgumentList.Arguments[index] })));

@@ -413,7 +413,7 @@ public static class LuminPackInputPolicy
             return ((BinaryPrimitives.ReadUInt32LittleEndian(bytes) | BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(length - 4, 4))) & 0xFEFEFEFEu) == 0;
         int bits = 0;
         for (int index = 0; index < length; index++)
-            bits |= Unsafe.Add(ref first, index);
+            bits |= Unsafe.Add(ref first, (nint)(uint)index);
         return (bits & 0xFE) == 0;
     }
 
@@ -496,12 +496,12 @@ public static class LuminPackInputPolicy
             int last = length - 8;
             for (int index = 0; index < last; index += 8)
             {
-                ulong block = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, index));
-                Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, index), block);
+                ulong block = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, (nint)(uint)index));
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(uint)index), block);
                 any |= block;
             }
-            ulong final = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, last));
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, last), final);
+            ulong final = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, (nint)(uint)last));
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(uint)last), final);
             return ((any | final) & 0xFEFEFEFEFEFEFEFEUL) == 0;
         }
         if (length >= 4)
@@ -510,19 +510,19 @@ public static class LuminPackInputPolicy
             int last = length - 4;
             for (int index = 0; index < last; index += 4)
             {
-                uint block = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, index));
-                Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, index), block);
+                uint block = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)index));
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(uint)index), block);
                 any |= block;
             }
-            uint final = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, last));
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, last), final);
+            uint final = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)last));
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(uint)last), final);
             return ((any | final) & 0xFEFEFEFEu) == 0;
         }
         int bits = 0;
         for (int index = 0; index < length; index++)
         {
-            byte value = Unsafe.Add(ref source, index);
-            Unsafe.Add(ref destination, index) = value;
+            byte value = Unsafe.Add(ref source, (nint)(uint)index);
+            Unsafe.Add(ref destination, (nint)(uint)index) = value;
             bits |= value;
         }
         return (bits & 0xFE) == 0;

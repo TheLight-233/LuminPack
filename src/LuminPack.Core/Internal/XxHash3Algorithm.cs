@@ -489,7 +489,7 @@ internal static class XxHash3Algorithm
             {
                 for (int i = 0; i < stripesToProcess; i++)
                 {
-                    Accumulate512Inlined(accumulators, ref source, ref Unsafe.Add(ref secret, i * SecretConsumeRateBytes));
+                    Accumulate512Inlined(accumulators, ref source, ref Unsafe.Add(ref secret, (nint)(uint)(i * SecretConsumeRateBytes)));
                     source = ref Unsafe.Add(ref source, StripeLengthBytes);
                 }
 
@@ -548,8 +548,8 @@ internal static class XxHash3Algorithm
         {
             for (int i = 0; i < AccumulatorCount; i++)
             {
-                ulong sourceVal = ReadUInt64LE(ref Unsafe.Add(ref source, 8 * i));
-                ulong sourceKey = sourceVal ^ ReadUInt64LE(ref Unsafe.Add(ref secret, i * 8));
+                ulong sourceVal = ReadUInt64LE(ref Unsafe.Add(ref source, (nint)(uint)(8 * i)));
+                ulong sourceKey = sourceVal ^ ReadUInt64LE(ref Unsafe.Add(ref secret, (nint)(uint)(i * 8)));
 
                 accumulators[i ^ 1] += sourceVal; // swap adjacent lanes
                 accumulators[i] += Multiply32To64((uint)sourceKey, (uint)(sourceKey >> 32));

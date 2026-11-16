@@ -506,10 +506,10 @@ namespace LuminPack.Cryptography
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void LoadKeyStore(ref uint words, ref byte key, int offsetBytes)
         {
-            words = ReadUnaligned(ref Unsafe.Add(ref key, offsetBytes + 0));
-            Unsafe.Add(ref words, 1) = ReadUnaligned(ref Unsafe.Add(ref key, offsetBytes + 4));
-            Unsafe.Add(ref words, 2) = ReadUnaligned(ref Unsafe.Add(ref key, offsetBytes + 8));
-            Unsafe.Add(ref words, 3) = ReadUnaligned(ref Unsafe.Add(ref key, offsetBytes + 12));
+            words = ReadUnaligned(ref Unsafe.Add(ref key, (nint)(uint)(offsetBytes + 0)));
+            Unsafe.Add(ref words, 1) = ReadUnaligned(ref Unsafe.Add(ref key, (nint)(uint)(offsetBytes + 4)));
+            Unsafe.Add(ref words, 2) = ReadUnaligned(ref Unsafe.Add(ref key, (nint)(uint)(offsetBytes + 8)));
+            Unsafe.Add(ref words, 3) = ReadUnaligned(ref Unsafe.Add(ref key, (nint)(uint)(offsetBytes + 12)));
         }
 
         /// <summary>Reads unaligned from the current input.</summary>

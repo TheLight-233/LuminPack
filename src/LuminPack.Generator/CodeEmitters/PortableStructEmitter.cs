@@ -437,7 +437,7 @@ internal static class PortableStructEmitter
             sb.AppendLine("            {");
             sb.AppendLine("                for (int __portableItem = __portableStart; __portableItem < " + length + "; __portableItem++)");
             sb.AppendLine("                {");
-            AppendTransfer(sb, plan, "global::System.Runtime.CompilerServices.Unsafe.Add(ref __portableFirst, __portableItem)", type, "__portableWire", "                    ", write, typed);
+            AppendTransfer(sb, plan, "global::System.Runtime.CompilerServices.Unsafe.Add(ref __portableFirst, (nint)(uint)__portableItem)", type, "__portableWire", "                    ", write, typed);
             sb.AppendLine("                    __portableWire = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __portableWire, " + plan.WireSize + ");");
             sb.AppendLine("                }");
             sb.AppendLine("            }");

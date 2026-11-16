@@ -1148,7 +1148,7 @@ namespace LuminPack.Core
                 if (scanWithSwar && scan + 8 <= Buffer.Length)
                 {
                     ulong eight = Unsafe.ReadUnaligned<ulong>(
-                        ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), scan));
+                        ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)scan));
                     if (!NumberCharLookup.HasJsonSpecial(eight))
                     {
                         scan += 8;

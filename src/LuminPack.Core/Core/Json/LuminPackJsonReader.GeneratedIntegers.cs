@@ -108,7 +108,7 @@ public ref partial struct LuminPackJsonReader
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int GeneratedInt32CodeUnit(ref byte cursor, int offset, bool utf8)
     {
-        ref byte source = ref Unsafe.Add(ref cursor, offset);
+        ref byte source = ref Unsafe.Add(ref cursor, (nint)(uint)offset);
         return utf8 ? source : Unsafe.ReadUnaligned<ushort>(ref source);
     }
 

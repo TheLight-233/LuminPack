@@ -556,8 +556,8 @@ namespace LuminPack.Core
                 int recordBytes = sizeof(int) + length;
                 AdvanceInStringWindow(recordBytes, remaining);
                 remaining -= (uint)recordBytes;
-                Unsafe.Add(ref first, i++) = StringSerializer.CreateShortLatin1String(ref payload, length);
-                if (i == slots.Length || Unsafe.Add(ref first, i) is not null || remaining < sizeof(int))
+                Unsafe.Add(ref first, (nint)(uint)i++) = StringSerializer.CreateShortLatin1String(ref payload, length);
+                if (i == slots.Length || Unsafe.Add(ref first, (nint)(uint)i) is not null || remaining < sizeof(int))
                     break;
                 header = Read<int>(ref Current);
             } while (IsShortLatin1Header(header));

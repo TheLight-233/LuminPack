@@ -358,7 +358,7 @@ public static partial class DictionaryEmitter
         string core = "global::LuminPack.Core.LuminPack" + (operation == "Write" ? "Writer" : "Reader") + "." + operation;
         sb.AppendLine(indent + "ref byte entryCursor = ref " + state + ".GetCurrentSpanReference();");
         sb.AppendLine(indent + "int keyBytes = " + core + "(ref entryCursor, " + argument + key + ");");
-        sb.AppendLine(indent + core + "(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryCursor, keyBytes), " + argument + value + ");");
+        sb.AppendLine(indent + core + "(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryCursor, (nint)(uint)keyBytes), " + argument + value + ");");
         sb.AppendLine(indent + state + ".Advance(keyBytes + global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + valueType + ">());");
     }
 

@@ -109,15 +109,15 @@ internal static class Utf8Latin1Transcoder
             }
         while (charsRead < source.Length)
         {
-            uint value = Unsafe.Add(ref input, charsRead);
+            uint value = Unsafe.Add(ref input, (nint)(uint)charsRead);
             if (value > 255)
                 break;
             int length = value < 128 ? 1 : 2;
             if (length > destination.Length - bytesWritten)
                 break;
-            Unsafe.Add(ref target, bytesWritten++) = (byte)(value < 128 ? value : 0xC0 | value >> 6);
+            Unsafe.Add(ref target, (nint)(uint)bytesWritten++) = (byte)(value < 128 ? value : 0xC0 | value >> 6);
             if (length == 2)
-                Unsafe.Add(ref target, bytesWritten++) = (byte)(0x80 | value & 63);
+                Unsafe.Add(ref target, (nint)(uint)bytesWritten++) = (byte)(0x80 | value & 63);
             charsRead++;
         }
 #if !NET
@@ -134,8 +134,8 @@ internal static class Utf8Latin1Transcoder
     private static void StoreLane(ref byte destination, ref int offset, Vector128<byte> packed, byte mask)
     {
         int length = 8 + BitOperations.PopCount((uint)mask);
-        LuminPackWriter.Write(ref Unsafe.Add(ref destination, offset), packed.AsUInt64().GetElement(0));
-        LuminPackWriter.Write(ref Unsafe.Add(ref destination, offset + length - 8), packed.AsUInt64().GetElement(1));
+        LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)offset), packed.AsUInt64().GetElement(0));
+        LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(offset + length - 8)), packed.AsUInt64().GetElement(1));
         offset += length;
     }
 }

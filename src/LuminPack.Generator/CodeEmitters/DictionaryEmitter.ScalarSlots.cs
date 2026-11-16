@@ -93,12 +93,12 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                            ref var first = ref LuminPackMarshal.GetNotNullArrayReference(view._entries!);");
         sb.AppendLine("                            for (; matched < count; matched++)");
         sb.AppendLine("                            {");
-        sb.AppendLine("                                ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, matched);");
+        sb.AppendLine("                                ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, (nint)(uint)matched);");
         sb.AppendLine("                                ref byte cursor = ref reader.GetCurrentSpanReference();");
         sb.AppendLine($"                                int keyBytes = global::LuminPack.Core.LuminPackReader.Read(ref cursor, out {keyType} key);");
         sb.AppendLine($"                                if (!global::System.Collections.Generic.EqualityComparer<{keyType}>.Default.Equals(key, entry.Key)) break;");
         sb.AppendLine("                                reader.Advance(keyBytes);");
-        sb.AppendLine("                                int valueBytes = global::LuminPack.Core.LuminPackReader.Read(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref cursor, keyBytes), out entry.Value);");
+        sb.AppendLine("                                int valueBytes = global::LuminPack.Core.LuminPackReader.Read(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref cursor, (nint)(uint)keyBytes), out entry.Value);");
         sb.AppendLine("                                reader.Advance(valueBytes);");
         sb.AppendLine("                            }");
         sb.AppendLine("                        }");

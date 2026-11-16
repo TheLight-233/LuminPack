@@ -50,28 +50,28 @@ public static partial class StringSerializer
         int outputIndex = 0;
         while (inputIndex < source.Length)
         {
-            uint codeUnit = Unsafe.Add(ref inputStart, inputIndex++);
+            uint codeUnit = Unsafe.Add(ref inputStart, (nint)(uint)inputIndex++);
             if (codeUnit < 0x80)
             {
                 // The current code unit is already consumed; the byte thresholds include only the remaining units.
                 long availableBytes = (long)(source.Length - inputIndex) * sizeof(char);
                 if (BitConverter.IsLittleEndian && IntPtr.Size == 8 && availableBytes >= 6)
                 {
-                    ulong firstWord = Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, inputIndex - 1)).Value;
+                    ulong firstWord = Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, (nint)(uint)(inputIndex - 1))).Value;
                     if (availableBytes >= 14)
                     {
-                        ulong secondWord = Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, inputIndex + 3)).Value;
+                        ulong secondWord = Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, (nint)(uint)(inputIndex + 3))).Value;
                         if (availableBytes >= 30)
                         {
-                            ulong thirdWord = Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, inputIndex + 7)).Value, fourthWord = Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, inputIndex + 11)).Value;
+                            ulong thirdWord = Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, (nint)(uint)(inputIndex + 7))).Value, fourthWord = Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, (nint)(uint)(inputIndex + 11))).Value;
                             if (((firstWord | secondWord | thirdWord | fourthWord) & 0xff80ff80ff80ff80UL) == 0)
                             {
                                 firstWord = (firstWord | (firstWord >> 8)) & 0x0000ffff0000ffffUL;
                                 secondWord = (secondWord | (secondWord >> 8)) & 0x0000ffff0000ffffUL;
                                 thirdWord = (thirdWord | (thirdWord >> 8)) & 0x0000ffff0000ffffUL;
                                 fourthWord = (fourthWord | (fourthWord >> 8)) & 0x0000ffff0000ffffUL;
-                                Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, outputIndex)).Value = (uint)(firstWord | (firstWord >> 16)) | ((ulong)(uint)(secondWord | (secondWord >> 16)) << 32);
-                                Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, outputIndex + 8)).Value = (uint)(thirdWord | (thirdWord >> 16)) | ((ulong)(uint)(fourthWord | (fourthWord >> 16)) << 32);
+                                Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, (nint)(uint)outputIndex)).Value = (uint)(firstWord | (firstWord >> 16)) | ((ulong)(uint)(secondWord | (secondWord >> 16)) << 32);
+                                Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, (nint)(uint)(outputIndex + 8))).Value = (uint)(thirdWord | (thirdWord >> 16)) | ((ulong)(uint)(fourthWord | (fourthWord >> 16)) << 32);
                                 inputIndex += 15;
                                 outputIndex += 16;
                                 continue;
@@ -83,8 +83,8 @@ public static partial class StringSerializer
                                 firstWord = (firstWord | (firstWord >> 8)) & 0x0000ffff0000ffffUL;
                                 secondWord = (secondWord | (secondWord >> 8)) & 0x0000ffff0000ffffUL;
                                 thirdWord = (thirdWord | (thirdWord >> 8)) & 0x0000ffff0000ffffUL;
-                                Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, outputIndex)).Value = (uint)(firstWord | (firstWord >> 16)) | ((ulong)(uint)(secondWord | (secondWord >> 16)) << 32);
-                                Unsafe.As<byte, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, outputIndex + 8)).Value = (uint)(thirdWord | (thirdWord >> 16));
+                                Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, (nint)(uint)outputIndex)).Value = (uint)(firstWord | (firstWord >> 16)) | ((ulong)(uint)(secondWord | (secondWord >> 16)) << 32);
+                                Unsafe.As<byte, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, (nint)(uint)(outputIndex + 8))).Value = (uint)(thirdWord | (thirdWord >> 16));
                                 inputIndex += 11;
                                 outputIndex += 12;
                                 goto ScalarAsciiTail;
@@ -94,7 +94,7 @@ public static partial class StringSerializer
                             {
                                 firstWord = (firstWord | (firstWord >> 8)) & 0x0000ffff0000ffffUL;
                                 secondWord = (secondWord | (secondWord >> 8)) & 0x0000ffff0000ffffUL;
-                                Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, outputIndex)).Value = (uint)(firstWord | (firstWord >> 16)) | ((ulong)(uint)(secondWord | (secondWord >> 16)) << 32);
+                                Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, (nint)(uint)outputIndex)).Value = (uint)(firstWord | (firstWord >> 16)) | ((ulong)(uint)(secondWord | (secondWord >> 16)) << 32);
                                 inputIndex += 7;
                                 outputIndex += 8;
                                 goto ScalarAsciiTail;
@@ -103,13 +103,13 @@ public static partial class StringSerializer
                             if ((firstWord & 0xff80ff80ff80ff80UL) == 0)
                             {
                                 firstWord = (firstWord | (firstWord >> 8)) & 0x0000ffff0000ffffUL;
-                                Unsafe.As<byte, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, outputIndex)).Value = (uint)(firstWord | (firstWord >> 16));
+                                Unsafe.As<byte, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, (nint)(uint)outputIndex)).Value = (uint)(firstWord | (firstWord >> 16));
                                 inputIndex += 3;
                                 outputIndex += 4;
                                 goto ScalarAsciiTail;
                             }
 
-                            Unsafe.Add(ref outputStart, outputIndex++) = (byte)codeUnit;
+                            Unsafe.Add(ref outputStart, (nint)(uint)outputIndex++) = (byte)codeUnit;
                             goto ScalarAsciiTail;
                         }
 
@@ -117,7 +117,7 @@ public static partial class StringSerializer
                         {
                             firstWord = (firstWord | (firstWord >> 8)) & 0x0000ffff0000ffffUL;
                             secondWord = (secondWord | (secondWord >> 8)) & 0x0000ffff0000ffffUL;
-                            Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, outputIndex)).Value = (uint)(firstWord | (firstWord >> 16)) | ((ulong)(uint)(secondWord | (secondWord >> 16)) << 32);
+                            Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, (nint)(uint)outputIndex)).Value = (uint)(firstWord | (firstWord >> 16)) | ((ulong)(uint)(secondWord | (secondWord >> 16)) << 32);
                             inputIndex += 7;
                             outputIndex += 8;
                             continue;
@@ -127,37 +127,37 @@ public static partial class StringSerializer
                     if ((firstWord & 0xff80ff80ff80ff80UL) == 0)
                     {
                         firstWord = (firstWord | (firstWord >> 8)) & 0x0000ffff0000ffffUL;
-                        Unsafe.As<byte, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, outputIndex)).Value = (uint)(firstWord | (firstWord >> 16));
+                        Unsafe.As<byte, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, (nint)(uint)outputIndex)).Value = (uint)(firstWord | (firstWord >> 16));
                         inputIndex += 3;
                         outputIndex += 4;
                         continue;
                     }
                 }
 
-                Unsafe.Add(ref outputStart, outputIndex++) = (byte)codeUnit;
+                Unsafe.Add(ref outputStart, (nint)(uint)outputIndex++) = (byte)codeUnit;
                 ScalarAsciiTail:
-                    while (inputIndex < source.Length && Unsafe.Add(ref inputStart, inputIndex) < 0x80)
-                        Unsafe.Add(ref outputStart, outputIndex++) = (byte)Unsafe.Add(ref inputStart, inputIndex++);
+                    while (inputIndex < source.Length && Unsafe.Add(ref inputStart, (nint)(uint)inputIndex) < 0x80)
+                        Unsafe.Add(ref outputStart, (nint)(uint)outputIndex++) = (byte)Unsafe.Add(ref inputStart, (nint)(uint)inputIndex++);
                 continue;
             }
 
             if (codeUnit < 0x800)
             {
-                Unsafe.Add(ref outputStart, outputIndex) = (byte)(0xc0 | (codeUnit >> 6));
-                Unsafe.Add(ref outputStart, outputIndex + 1) = (byte)(0x80 | (codeUnit & 63));
+                Unsafe.Add(ref outputStart, (nint)(uint)outputIndex) = (byte)(0xc0 | (codeUnit >> 6));
+                Unsafe.Add(ref outputStart, (nint)(uint)(outputIndex + 1)) = (byte)(0x80 | (codeUnit & 63));
                 outputIndex += 2;
                 continue;
             }
 
             if (codeUnit >= 0xd800 && codeUnit <= 0xdfff)
             {
-                if (codeUnit <= 0xdbff && inputIndex < source.Length && (uint)(Unsafe.Add(ref inputStart, inputIndex) - 0xdc00) <= 0x3ff)
+                if (codeUnit <= 0xdbff && inputIndex < source.Length && (uint)(Unsafe.Add(ref inputStart, (nint)(uint)inputIndex) - 0xdc00) <= 0x3ff)
                 {
-                    uint scalar = 0x10000 + ((codeUnit - 0xd800) << 10) + (Unsafe.Add(ref inputStart, inputIndex++) - 0xdc00u);
-                    Unsafe.Add(ref outputStart, outputIndex) = (byte)(0xf0 | (scalar >> 18));
-                    Unsafe.Add(ref outputStart, outputIndex + 1) = (byte)(0x80 | ((scalar >> 12) & 63));
-                    Unsafe.Add(ref outputStart, outputIndex + 2) = (byte)(0x80 | ((scalar >> 6) & 63));
-                    Unsafe.Add(ref outputStart, outputIndex + 3) = (byte)(0x80 | (scalar & 63));
+                    uint scalar = 0x10000 + ((codeUnit - 0xd800) << 10) + (Unsafe.Add(ref inputStart, (nint)(uint)inputIndex++) - 0xdc00u);
+                    Unsafe.Add(ref outputStart, (nint)(uint)outputIndex) = (byte)(0xf0 | (scalar >> 18));
+                    Unsafe.Add(ref outputStart, (nint)(uint)(outputIndex + 1)) = (byte)(0x80 | ((scalar >> 12) & 63));
+                    Unsafe.Add(ref outputStart, (nint)(uint)(outputIndex + 2)) = (byte)(0x80 | ((scalar >> 6) & 63));
+                    Unsafe.Add(ref outputStart, (nint)(uint)(outputIndex + 3)) = (byte)(0x80 | (scalar & 63));
                     outputIndex += 4;
                     continue;
                 }
@@ -172,9 +172,9 @@ public static partial class StringSerializer
                 codeUnit = 0xfffd;
             }
 
-            Unsafe.Add(ref outputStart, outputIndex) = (byte)(0xe0 | (codeUnit >> 12));
-            Unsafe.Add(ref outputStart, outputIndex + 1) = (byte)(0x80 | ((codeUnit >> 6) & 63));
-            Unsafe.Add(ref outputStart, outputIndex + 2) = (byte)(0x80 | (codeUnit & 63));
+            Unsafe.Add(ref outputStart, (nint)(uint)outputIndex) = (byte)(0xe0 | (codeUnit >> 12));
+            Unsafe.Add(ref outputStart, (nint)(uint)(outputIndex + 1)) = (byte)(0x80 | ((codeUnit >> 6) & 63));
+            Unsafe.Add(ref outputStart, (nint)(uint)(outputIndex + 2)) = (byte)(0x80 | (codeUnit & 63));
             outputIndex += 3;
         }
 

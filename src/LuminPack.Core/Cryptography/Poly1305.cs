@@ -108,8 +108,8 @@ namespace LuminPack.Cryptography
             if (_leftoverLength > 0)
             {
                 ref byte buffer = ref _leftover.First;
-                Unsafe.Add(ref buffer, _leftoverLength++) = 1;
-                MemoryMarshal.CreateSpan(ref Unsafe.Add(ref buffer, _leftoverLength), 16 - _leftoverLength).Clear();
+                Unsafe.Add(ref buffer, (nint)(uint)_leftoverLength++) = 1;
+                MemoryMarshal.CreateSpan(ref Unsafe.Add(ref buffer, (nint)(uint)_leftoverLength), 16 - _leftoverLength).Clear();
                 Block(ref buffer, 0);
                 _leftoverLength = 0;
             }
@@ -195,10 +195,10 @@ namespace LuminPack.Cryptography
                     take = length;
 
                 for (int i = 0; i < take; i++)
-                    Unsafe.Add(ref _leftover.First, _leftoverLength + i) = Unsafe.Add(ref m, i);
+                    Unsafe.Add(ref _leftover.First, (nint)(uint)(_leftoverLength + i)) = Unsafe.Add(ref m, (nint)(uint)i);
                 _leftoverLength += take;
                 length -= take;
-                m = ref Unsafe.Add(ref m, take);
+                m = ref Unsafe.Add(ref m, (nint)(uint)take);
 
                 if (_leftoverLength == 16)
                 {
@@ -223,7 +223,7 @@ namespace LuminPack.Cryptography
             if (length > 0)
             {
                 for (int i = 0; i < length; i++)
-                    Unsafe.Add(ref _leftover.First, i) = Unsafe.Add(ref m, i);
+                    Unsafe.Add(ref _leftover.First, (nint)(uint)i) = Unsafe.Add(ref m, (nint)(uint)i);
                 _leftoverLength = length;
             }
         }

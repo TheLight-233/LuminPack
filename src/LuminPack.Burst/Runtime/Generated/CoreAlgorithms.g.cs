@@ -452,7 +452,7 @@ internal static int TrailingZeroBytes(ulong v)
 {
     return BitOperations.TrailingZeroCount(v) >> 3;
 }
-// Core source SHA256: Cryptography/LuminChaCha20Poly1305.cs A7A7E856869DEA7BFC218F099226FD8A256AEBEEC007EF78327ECB3C739F4290
+// Core source SHA256: Cryptography/LuminChaCha20Poly1305.cs 7081FE4185214A763DF9A07547ECCA70D46961F1916ACBF5799455196E079CC2
 /// <summary>
 /// XORs <paramref name = "length"/> bytes of keystream <paramref name = "key"/> into
 /// <paramref name = "src"/>, writing the result to <paramref name = "dst"/>. Uses the widest

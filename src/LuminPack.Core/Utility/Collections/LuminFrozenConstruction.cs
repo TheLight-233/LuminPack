@@ -88,7 +88,7 @@ public static class LuminFrozenConstruction
         do
         {
             set.Add(LuminPackReader.Read<T>(ref source));
-            source = ref Unsafe.Add(ref source, width);
+            source = ref Unsafe.Add(ref source, (nint)(uint)width);
         } while (--count != 0);
     }
 
@@ -118,8 +118,8 @@ public static class LuminFrozenConstruction
             do
             {
                 WriteScalar(ref destination, ref Unsafe.Add(ref firstKey, (nint)(uint)index));
-                WriteScalar(ref Unsafe.Add(ref destination, keyWidth), ref Unsafe.Add(ref firstValue, (nint)(uint)index));
-                destination = ref Unsafe.Add(ref destination, keyWidth + valueWidth);
+                WriteScalar(ref Unsafe.Add(ref destination, (nint)(uint)keyWidth), ref Unsafe.Add(ref firstValue, (nint)(uint)index));
+                destination = ref Unsafe.Add(ref destination, (nint)(uint)(keyWidth + valueWidth));
             } while (++index < keys.Length);
         }
         writer.Advance(bytes);

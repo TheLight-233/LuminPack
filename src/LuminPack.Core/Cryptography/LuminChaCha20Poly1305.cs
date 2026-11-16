@@ -90,7 +90,7 @@ namespace LuminPack.Cryptography
                 {
                     Unsafe.Add(ref state, 12) = counter;
                     ChaCha20.Block4(ref state, ref block);
-                    XorKeystream(ref Unsafe.Add(ref ciphertextStart, pos), ref Unsafe.Add(ref plaintextStart, pos), ref block, BlockSize * 4);
+                    XorKeystream(ref Unsafe.Add(ref ciphertextStart, (nint)(uint)pos), ref Unsafe.Add(ref plaintextStart, (nint)(uint)pos), ref block, BlockSize * 4);
                     counter += 4;
                     pos += BlockSize * 4;
                 }
@@ -102,7 +102,7 @@ namespace LuminPack.Cryptography
                 {
                     Unsafe.Add(ref state, 12) = counter;
                     ChaCha20.Block2(ref state, ref block);
-                    XorKeystream(ref Unsafe.Add(ref ciphertextStart, pos), ref Unsafe.Add(ref plaintextStart, pos), ref block, BlockSize * 2);
+                    XorKeystream(ref Unsafe.Add(ref ciphertextStart, (nint)(uint)pos), ref Unsafe.Add(ref plaintextStart, (nint)(uint)pos), ref block, BlockSize * 2);
                     counter += 2;
                     pos += BlockSize * 2;
                 }
@@ -117,7 +117,7 @@ namespace LuminPack.Cryptography
                 Unsafe.Add(ref state, 12) = counter++;
                 ChaCha20.Block(ref state, ref block);
 
-                XorKeystream(ref Unsafe.Add(ref ciphertextStart, pos), ref Unsafe.Add(ref plaintextStart, pos), ref block, take);
+                XorKeystream(ref Unsafe.Add(ref ciphertextStart, (nint)(uint)pos), ref Unsafe.Add(ref plaintextStart, (nint)(uint)pos), ref block, take);
 
                 pos += take;
             }
@@ -208,7 +208,7 @@ namespace LuminPack.Cryptography
                     {
                         Unsafe.Add(ref state, 12) = counter;
                         ChaCha20.Block4(ref state, ref block);
-                        XorKeystream(ref Unsafe.Add(ref plaintextStart, pos), ref Unsafe.Add(ref ciphertextStart, pos), ref block, BlockSize * 4);
+                        XorKeystream(ref Unsafe.Add(ref plaintextStart, (nint)(uint)pos), ref Unsafe.Add(ref ciphertextStart, (nint)(uint)pos), ref block, BlockSize * 4);
                         counter += 4;
                         pos += BlockSize * 4;
                     }
@@ -220,7 +220,7 @@ namespace LuminPack.Cryptography
                     {
                         Unsafe.Add(ref state, 12) = counter;
                         ChaCha20.Block2(ref state, ref block);
-                        XorKeystream(ref Unsafe.Add(ref plaintextStart, pos), ref Unsafe.Add(ref ciphertextStart, pos), ref block, BlockSize * 2);
+                        XorKeystream(ref Unsafe.Add(ref plaintextStart, (nint)(uint)pos), ref Unsafe.Add(ref ciphertextStart, (nint)(uint)pos), ref block, BlockSize * 2);
                         counter += 2;
                         pos += BlockSize * 2;
                     }
@@ -235,7 +235,7 @@ namespace LuminPack.Cryptography
                     Unsafe.Add(ref state, 12) = counter++;
                     ChaCha20.Block(ref state, ref block);
 
-                    XorKeystream(ref Unsafe.Add(ref plaintextStart, pos), ref Unsafe.Add(ref ciphertextStart, pos), ref block, take);
+                    XorKeystream(ref Unsafe.Add(ref plaintextStart, (nint)(uint)pos), ref Unsafe.Add(ref ciphertextStart, (nint)(uint)pos), ref block, take);
 
                     pos += take;
                 }

@@ -1094,8 +1094,8 @@ namespace LuminPack.Core
                 long chars = (long)(pair.Key?.Length ?? 0) + (pair.Value?.Length ?? 0);
                 if (2 * sizeof(int) + chars * sizeof(char) > (long)room - written)
                     break;
-                written += WriteReservedUtf16Record(ref Unsafe.Add(ref start, written), pair.Key);
-                written += WriteReservedUtf16Record(ref Unsafe.Add(ref start, written), pair.Value);
+                written += WriteReservedUtf16Record(ref Unsafe.Add(ref start, (nint)(uint)written), pair.Key);
+                written += WriteReservedUtf16Record(ref Unsafe.Add(ref start, (nint)(uint)written), pair.Value);
             } while (++i < count);
             AdvanceProven(written);
             return i;

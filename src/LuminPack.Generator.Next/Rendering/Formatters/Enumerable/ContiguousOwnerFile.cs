@@ -333,7 +333,7 @@ internal static class ContiguousOwnerFile
             {
                 // The exact slice or new array proves the destination; ReadLength has checked the complete byte width.
                 string destination = directRawSlice
-                    ? Unsafe + ".Add(ref " + Marshal + ".GetNotNullArrayReference(array!), start)"
+                    ? Unsafe + ".Add(ref " + Marshal + ".GetNotNullArrayReference(array!), (nint)(uint)start)"
                     : MemoryMarshal + ".GetReference(items)";
                 string arithmetic = directRawSlice ? "unchecked" : "checked";
                 w.Line("if (length != 0) reader.Read(ref " + Unsafe + ".As<" + element.Type + ", byte>(ref " + destination +

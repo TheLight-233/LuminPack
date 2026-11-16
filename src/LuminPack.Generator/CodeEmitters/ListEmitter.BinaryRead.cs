@@ -97,11 +97,11 @@ public static partial class ListEmitter
                 sb.AppendLine("            for (int i = 0; i < length; i++)");
                 sb.AppendLine("            {");
                 EmitterTypeTraits.AppendFreshElementRead(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData),
-                    elementType, "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)", "                ");
+                    elementType, "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, (nint)(uint)i)", "                ");
                 sb.AppendLine("            }");
             }
             else
-                sb.AppendLine("            for (int i = 0; i < length; i++) reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
+                sb.AppendLine("            for (int i = 0; i < length; i++) reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, (nint)(uint)i)!);");
         }
         else
         {

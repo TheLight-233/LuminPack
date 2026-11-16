@@ -407,7 +407,7 @@ namespace LuminPack.Core
             uint header = BinaryPrimitives.ReadUInt32LittleEndian(prefix);
             Unsafe.WriteUnaligned(ref target, (header & 0xFF00FFFFu) | (uint)BinaryProfile<TOptions>() << 16);
             CopyDisjoint(ref Unsafe.Add(ref target, 4), ref Unsafe.Add(ref MemoryMarshal.GetReference(prefix), 4), prefix.Length - 4);
-            return ref Unsafe.Add(ref target, prefix.Length);
+            return ref Unsafe.Add(ref target, (nint)(uint)prefix.Length);
         }
 
         /// <summary>Reserves the bytes of a generated constant prefix and returns their first byte.</summary>
@@ -461,11 +461,11 @@ namespace LuminPack.Core
             int index = 0;
             if (Unsafe.SizeOf<IntPtr>() == 8)
                 for (; index + sizeof(ulong) <= length; index += sizeof(ulong))
-                    Unsafe.WriteUnaligned(ref Unsafe.Add(ref target, index), Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, index)));
+                    Unsafe.WriteUnaligned(ref Unsafe.Add(ref target, (nint)(uint)index), Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, (nint)(uint)index)));
             for (; index + sizeof(uint) <= length; index += sizeof(uint))
-                Unsafe.WriteUnaligned(ref Unsafe.Add(ref target, index), Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, index)));
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref target, (nint)(uint)index), Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)index)));
             for (; index < length; index++)
-                Unsafe.Add(ref target, index) = Unsafe.Add(ref source, index);
+                Unsafe.Add(ref target, (nint)(uint)index) = Unsafe.Add(ref source, (nint)(uint)index);
         }
 
         /// <summary>Copies the complete cached name and type table at its dynamic framing boundary.</summary>

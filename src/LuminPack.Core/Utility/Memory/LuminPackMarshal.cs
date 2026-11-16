@@ -515,9 +515,9 @@ public static partial class LuminPackMarshal
                         do
                         {
                             LuminPackWriter.Write(ref at, in entryCursor.Value);
-                            LuminPackWriter.Write(ref Unsafe.Add(ref at, width), in Unsafe.Add(ref entryCursor, 1).Value);
+                            LuminPackWriter.Write(ref Unsafe.Add(ref at, (nint)(uint)width), in Unsafe.Add(ref entryCursor, 1).Value);
                             entryCursor = ref Unsafe.Add(ref entryCursor, 2);
-                            at = ref Unsafe.Add(ref at, 2 * width);
+                            at = ref Unsafe.Add(ref at, (nint)(uint)(2 * width));
                         } while (--pairs != 0);
                     }
                     if ((count & 1) != 0)
@@ -530,7 +530,7 @@ public static partial class LuminPackMarshal
                     {
                         LuminPackWriter.Write(ref at, in entryCursor.Value);
                         entryCursor = ref Unsafe.Add(ref entryCursor, 1);
-                        at = ref Unsafe.Add(ref at, width);
+                        at = ref Unsafe.Add(ref at, (nint)(uint)width);
                     } while (--left != 0);
                 }
             }
@@ -1667,7 +1667,7 @@ public static partial class LuminPackMarshal
             entry.Next = bucket - 1;
             bucket = ++index;
             entry = ref Unsafe.Add(ref entry, 1);
-            source = ref Unsafe.Add(ref source, width);
+            source = ref Unsafe.Add(ref source, (nint)(uint)width);
         } while (index < count);
         view._count = count;
     }

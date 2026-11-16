@@ -12,7 +12,7 @@ namespace LuminPack.Unity
         public static void Write(ref LuminPackWriter writer, in Keyframe value)
         {
             writer.EnsureAdditionalCapacity(32);
-            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(writer.Buffer), writer.Position);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(writer.Buffer), (nint)(uint)writer.Position);
             Unsafe.WriteUnaligned<float>(ref payload, value.time);
             Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 4), value.value);
             Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 8), value.inTangent);
@@ -28,7 +28,7 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref Keyframe value)
         {
             reader.EnsureReadable(reader.Position, 32);
-            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), (nint)(uint)reader.Position);
             Keyframe result = default;
             result.time = Unsafe.ReadUnaligned<float>(ref payload);
             result.value = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 4));
@@ -76,7 +76,7 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref GradientAlphaKey value)
         {
             reader.EnsureReadable(reader.Position, 8);
-            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), (nint)(uint)reader.Position);
             GradientAlphaKey result = default;
             result.alpha = Unsafe.ReadUnaligned<float>(ref payload);
             result.time = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 4));
@@ -96,7 +96,7 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref RangeInt value)
         {
             reader.EnsureReadable(reader.Position, 8);
-            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), (nint)(uint)reader.Position);
             RangeInt result = default;
             result.start = Unsafe.ReadUnaligned<int>(ref payload);
             result.length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref payload, 4));

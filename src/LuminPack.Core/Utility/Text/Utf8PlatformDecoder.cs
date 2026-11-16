@@ -81,13 +81,13 @@ internal static class Utf8PlatformDecoder
         int length = source.Length;
         if (source.Length >= 128 && BitConverter.IsLittleEndian && IntPtr.Size == 8)
         {
-            if ((uint)(Unsafe.Add(ref inputStart, inputIndex) - 0xc2) <= 0x1d)
+            if ((uint)(Unsafe.Add(ref inputStart, (nint)(uint)inputIndex) - 0xc2) <= 0x1d)
             {
                 int count = DecodeTwoBytePrefix(ref inputStart, length, ref outputStart);
                 inputIndex += count * 2;
                 outputIndex += count;
             }
-            else if ((uint)(Unsafe.Add(ref inputStart, inputIndex) - 0xe1) <= 11)
+            else if ((uint)(Unsafe.Add(ref inputStart, (nint)(uint)inputIndex) - 0xe1) <= 11)
             {
                 int count = DecodeThreeBytePrefix(ref inputStart, length, ref outputStart);
                 inputIndex += count * 3;
@@ -98,11 +98,11 @@ internal static class Utf8PlatformDecoder
         if (BitConverter.IsLittleEndian && IntPtr.Size == 8)
             while (length - inputIndex >= 8)
             {
-                ulong word = Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, inputIndex)).Value;
+                ulong word = Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, (nint)(uint)inputIndex)).Value;
                 if ((word & 0x8080808080808080UL) == 0)
                 {
-                    Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, outputIndex)).Value = SpreadAscii4((uint)word);
-                    Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, outputIndex + 4)).Value = SpreadAscii4((uint)(word >> 32));
+                    Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, (nint)(uint)outputIndex)).Value = SpreadAscii4((uint)word);
+                    Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, (nint)(uint)(outputIndex + 4))).Value = SpreadAscii4((uint)(word >> 32));
                     inputIndex += 8;
                     outputIndex += 8;
                     continue;
@@ -113,7 +113,7 @@ internal static class Utf8PlatformDecoder
                 {
                     if ((low & 0x80808080u) == 0)
                     {
-                        Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, outputIndex)).Value = SpreadAscii4(low);
+                        Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, (nint)(uint)outputIndex)).Value = SpreadAscii4(low);
                         inputIndex += 4;
                         outputIndex += 4;
                         continue;
@@ -121,13 +121,13 @@ internal static class Utf8PlatformDecoder
 
                     if ((low & 0x8080u) == 0)
                     {
-                        Unsafe.As<char, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, outputIndex)).Value = (low & 255) | ((low & 0xff00u) << 8);
+                        Unsafe.As<char, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, (nint)(uint)outputIndex)).Value = (low & 255) | ((low & 0xff00u) << 8);
                         inputIndex += 2;
                         outputIndex += 2;
                         continue;
                     }
 
-                    Unsafe.Add(ref outputStart, outputIndex++) = (char)(byte)low;
+                    Unsafe.Add(ref outputStart, (nint)(uint)outputIndex++) = (char)(byte)low;
                     inputIndex++;
                     continue;
                 }
@@ -137,7 +137,7 @@ internal static class Utf8PlatformDecoder
                     uint code = ((low & 31) << 6) | ((low >> 8) & 63);
                     if (code < 128)
                         goto InvalidWindow;
-                    Unsafe.Add(ref outputStart, outputIndex++) = (char)code;
+                    Unsafe.Add(ref outputStart, (nint)(uint)outputIndex++) = (char)code;
                     inputIndex += 2;
                     continue;
                 }
@@ -147,7 +147,7 @@ internal static class Utf8PlatformDecoder
                     uint code = ((low & 15) << 12) | ((low >> 2) & 0xfc0u) | ((low >> 16) & 63);
                     if (code < 0x800 || (code & 0xf800) == 0xd800)
                         goto InvalidWindow;
-                    Unsafe.Add(ref outputStart, outputIndex++) = (char)code;
+                    Unsafe.Add(ref outputStart, (nint)(uint)outputIndex++) = (char)code;
                     inputIndex += 3;
                     continue;
                 }
@@ -157,7 +157,7 @@ internal static class Utf8PlatformDecoder
                     uint code = (((low & 7) << 18) | ((low << 4) & 0x3f000u) | ((low >> 10) & 0xfc0u) | ((low >> 24) & 63)) - 0x10000;
                     if (code > 0xfffff)
                         goto InvalidWindow;
-                    Unsafe.As<char, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, outputIndex)).Value = (0xd800 + (code >> 10)) | ((0xdc00 + (code & 1023)) << 16);
+                    Unsafe.As<char, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, (nint)(uint)outputIndex)).Value = (0xd800 + (code >> 10)) | ((0xdc00 + (code & 1023)) << 16);
                     outputIndex += 2;
                     inputIndex += 4;
                     continue;
@@ -165,63 +165,63 @@ internal static class Utf8PlatformDecoder
 
                 InvalidWindow:
                     inputIndex += LegacyInvalidPrefixLength(low);
-                Unsafe.Add(ref outputStart, outputIndex++) = '\ufffd';
+                Unsafe.Add(ref outputStart, (nint)(uint)outputIndex++) = '\ufffd';
             }
 
         while (inputIndex < length)
         {
-            uint b = Unsafe.Add(ref inputStart, inputIndex++);
+            uint b = Unsafe.Add(ref inputStart, (nint)(uint)inputIndex++);
             if (b < 128)
             {
                 if (BitConverter.IsLittleEndian && IntPtr.Size == 8 && length - inputIndex >= 7)
                 {
-                    ulong word = Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, inputIndex - 1)).Value;
+                    ulong word = Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, (nint)(uint)(inputIndex - 1))).Value;
                     if ((word & 0x8080808080808080UL) == 0)
                     {
-                        Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, outputIndex)).Value = SpreadAscii4((uint)word);
-                        Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, outputIndex + 4)).Value = SpreadAscii4((uint)(word >> 32));
+                        Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, (nint)(uint)outputIndex)).Value = SpreadAscii4((uint)word);
+                        Unsafe.As<char, Utf8PackedWord64>(ref Unsafe.Add(ref outputStart, (nint)(uint)(outputIndex + 4))).Value = SpreadAscii4((uint)(word >> 32));
                         inputIndex += 7;
                         outputIndex += 8;
                         continue;
                     }
                 }
 
-                Unsafe.Add(ref outputStart, outputIndex++) = (char)b;
-                while (inputIndex < length && Unsafe.Add(ref inputStart, inputIndex) < 128)
-                    Unsafe.Add(ref outputStart, outputIndex++) = (char)Unsafe.Add(ref inputStart, inputIndex++);
+                Unsafe.Add(ref outputStart, (nint)(uint)outputIndex++) = (char)b;
+                while (inputIndex < length && Unsafe.Add(ref inputStart, (nint)(uint)inputIndex) < 128)
+                    Unsafe.Add(ref outputStart, (nint)(uint)outputIndex++) = (char)Unsafe.Add(ref inputStart, (nint)(uint)inputIndex++);
                 continue;
             }
 
-            if (b < 0xc2 || b > 0xf4 || inputIndex == length || (Unsafe.Add(ref inputStart, inputIndex) & 0xc0) != 0x80)
+            if (b < 0xc2 || b > 0xf4 || inputIndex == length || (Unsafe.Add(ref inputStart, (nint)(uint)inputIndex) & 0xc0) != 0x80)
                 goto Replacement;
-            uint second = Unsafe.Add(ref inputStart, inputIndex++);
+            uint second = Unsafe.Add(ref inputStart, (nint)(uint)inputIndex++);
             if (b < 0xe0)
             {
-                Unsafe.Add(ref outputStart, outputIndex++) = (char)(((b & 31) << 6) | (second & 63));
+                Unsafe.Add(ref outputStart, (nint)(uint)outputIndex++) = (char)(((b & 31) << 6) | (second & 63));
                 continue;
             }
 
             // The legacy decoder consumes the second continuation before rejecting restricted scalar ranges.
             if ((b == 0xe0 && second < 0xa0) || (b == 0xed && second >= 0xa0) || (b == 0xf0 && second < 0x90) || (b == 0xf4 && second > 0x8f))
                 goto Replacement;
-            if (inputIndex == length || (Unsafe.Add(ref inputStart, inputIndex) & 0xc0) != 0x80)
+            if (inputIndex == length || (Unsafe.Add(ref inputStart, (nint)(uint)inputIndex) & 0xc0) != 0x80)
                 goto Replacement;
-            uint third = Unsafe.Add(ref inputStart, inputIndex++);
+            uint third = Unsafe.Add(ref inputStart, (nint)(uint)inputIndex++);
             if (b < 0xf0)
             {
-                Unsafe.Add(ref outputStart, outputIndex++) = (char)(((b & 15) << 12) | ((second & 63) << 6) | (third & 63));
+                Unsafe.Add(ref outputStart, (nint)(uint)outputIndex++) = (char)(((b & 15) << 12) | ((second & 63) << 6) | (third & 63));
                 continue;
             }
 
-            if (inputIndex == length || (Unsafe.Add(ref inputStart, inputIndex) & 0xc0) != 0x80)
+            if (inputIndex == length || (Unsafe.Add(ref inputStart, (nint)(uint)inputIndex) & 0xc0) != 0x80)
                 goto Replacement;
-            uint scalar = (((b & 7) << 18) | ((second & 63) << 12) | ((third & 63) << 6) | (Unsafe.Add(ref inputStart, inputIndex++) & 63u)) - 0x10000;
-            Unsafe.Add(ref outputStart, outputIndex) = (char)(0xd800 + (scalar >> 10));
-            Unsafe.Add(ref outputStart, outputIndex + 1) = (char)(0xdc00 + (scalar & 1023));
+            uint scalar = (((b & 7) << 18) | ((second & 63) << 12) | ((third & 63) << 6) | (Unsafe.Add(ref inputStart, (nint)(uint)inputIndex++) & 63u)) - 0x10000;
+            Unsafe.Add(ref outputStart, (nint)(uint)outputIndex) = (char)(0xd800 + (scalar >> 10));
+            Unsafe.Add(ref outputStart, (nint)(uint)(outputIndex + 1)) = (char)(0xdc00 + (scalar & 1023));
             outputIndex += 2;
             continue;
             Replacement:
-                Unsafe.Add(ref outputStart, outputIndex++) = '\ufffd';
+                Unsafe.Add(ref outputStart, (nint)(uint)outputIndex++) = '\ufffd';
         }
 
         return outputIndex;
@@ -256,10 +256,10 @@ internal static class Utf8PlatformDecoder
         int outputIndex = 0;
         while (length - inputIndex >= 4)
         {
-            uint word = Unsafe.As<byte, Utf8PackedWord32>(ref Unsafe.Add(ref inputStart, inputIndex)).Value;
+            uint word = Unsafe.As<byte, Utf8PackedWord32>(ref Unsafe.Add(ref inputStart, (nint)(uint)inputIndex)).Value;
             if ((word & 0xc0e0c0e0u) != 0x80c080c0u || (word & 0x001e0000u) == 0 || (word & 0x1eu) == 0)
                 break;
-            Unsafe.As<char, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, outputIndex)).Value = ((word & 0x001f001fu) << 6) | ((word >> 8) & 0x003f003fu);
+            Unsafe.As<char, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, (nint)(uint)outputIndex)).Value = ((word & 0x001f001fu) << 6) | ((word >> 8) & 0x003f003fu);
             inputIndex += 4;
             outputIndex += 2;
         }
@@ -279,10 +279,10 @@ internal static class Utf8PlatformDecoder
         int outputIndex = 0;
         while (length - inputIndex >= 8)
         {
-            ulong word = Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, inputIndex)).Value;
+            ulong word = Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref inputStart, (nint)(uint)inputIndex)).Value;
             if ((word & 0x0000c0c0f0c0c0f0UL) != 0x00008080e08080e0UL || (uint)((byte)word - 0xe1) > 11 || (uint)((byte)(word >> 24) - 0xe1) > 11)
                 break;
-            Unsafe.As<char, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, outputIndex)).Value = ((uint)word & 15) << 12 | ((uint)(word >> 2) & 0xfc0u) | ((uint)(word >> 16) & 63u) | ((uint)(word << 4) & 0xf0000000u) | ((uint)(word >> 10) & 0x0fc00000u) | ((uint)(word >> 24) & 0x003f0000u);
+            Unsafe.As<char, Utf8PackedWord32>(ref Unsafe.Add(ref outputStart, (nint)(uint)outputIndex)).Value = ((uint)word & 15) << 12 | ((uint)(word >> 2) & 0xfc0u) | ((uint)(word >> 16) & 63u) | ((uint)(word << 4) & 0xf0000000u) | ((uint)(word >> 10) & 0x0fc00000u) | ((uint)(word >> 24) & 0x003f0000u);
             inputIndex += 6;
             outputIndex += 2;
         }

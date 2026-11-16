@@ -78,7 +78,7 @@ public static partial class LuminPackCollectionAccess
             for (int offset = size - 1; offset >= 0; offset--)
             {
                 ref T item = ref items[unchecked(head + offset) & mask];
-                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref destination, written), ref Unsafe.As<T, byte>(ref item), (uint)width);
+                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref destination, (nint)(uint)written), ref Unsafe.As<T, byte>(ref item), (uint)width);
                 written += width;
             }
         }

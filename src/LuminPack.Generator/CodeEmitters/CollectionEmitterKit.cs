@@ -341,11 +341,11 @@ internal static class CollectionEmitterKit
                 sb.AppendLine(indent + "    {");
                 sb.AppendLine(indent + "        " + elementType + " __item = default!;");
                 sb.AppendLine(indent + "        reader.ReadValue(ref __item);");
-                sb.AppendLine(indent + "        " + Unsafe + ".Add(ref __first, __i) = __item;");
+                sb.AppendLine(indent + "        " + Unsafe + ".Add(ref __first, (nint)(uint)__i) = __item;");
                 sb.AppendLine(indent + "    }");
             }
             else
-                sb.AppendLine(indent + "    for (int __i = 0; __i < length; __i++) reader.ReadValue(ref " + Unsafe + ".Add(ref __first, __i)!);");
+                sb.AppendLine(indent + "    for (int __i = 0; __i < length; __i++) reader.ReadValue(ref " + Unsafe + ".Add(ref __first, (nint)(uint)__i)!);");
         }
         sb.AppendLine(indent + "}");
     }

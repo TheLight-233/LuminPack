@@ -63,13 +63,13 @@ public static partial class LuminPackMarshal
             int index = 0;
             for (; index < length - 1; index += 4)
             {
-                uint original = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref input, index));
+                uint original = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref input, (nint)(uint)index));
                 if (!BitConverter.IsLittleEndian)
                     original = BinaryPrimitives.ReverseEndianness(original);
                 uint result = unchecked(0u - original);
                 if (!BitConverter.IsLittleEndian)
                     result = BinaryPrimitives.ReverseEndianness(result);
-                Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, index), result);
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, (nint)(uint)index), result);
                 if (original != 0)
                 {
                     carry = 0;
@@ -81,11 +81,11 @@ public static partial class LuminPackMarshal
             // before returning on x64 AVX paths, avoiding a vector transition at the subsequent BCL constructor call.
             if (IntPtr.Size == 8 && Vector.IsHardwareAccelerated && length - 1 - index >= Vector<byte>.Count)
             {
-                ComplementBigIntegerMagnitude(ref Unsafe.Add(ref input, index), ref Unsafe.Add(ref output, index), length - 1 - index);
+                ComplementBigIntegerMagnitude(ref Unsafe.Add(ref input, (nint)(uint)index), ref Unsafe.Add(ref output, (nint)(uint)index), length - 1 - index);
                 index = length - 1;
             }
             for (; index < length - 1; index += 4)
-                Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, index), ~Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref input, index)));
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, (nint)(uint)index), ~Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref input, (nint)(uint)index)));
             magnitude[index] = (byte)carry;
             return -new BigInteger(magnitude.Slice(0, length), isUnsigned: true);
         }
@@ -109,14 +109,14 @@ public static partial class LuminPackMarshal
             Vector<byte> low = Vector<byte>.Zero, high = Vector<byte>.Zero;
             for (; index <= source.Length - Vector<byte>.Count * 2; index += Vector<byte>.Count * 2)
             {
-                low |= Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref input, index));
-                high |= Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref input, index + Vector<byte>.Count));
+                low |= Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref input, (nint)(uint)index));
+                high |= Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref input, (nint)(uint)(index + Vector<byte>.Count)));
             }
             if (!Vector.EqualsAll(low | high, Vector<byte>.Zero))
                 return false;
         }
         for (; index < source.Length; index += 4)
-            if (Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref input, index)) != 0)
+            if (Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref input, (nint)(uint)index)) != 0)
                 return false;
         return true;
     }
@@ -133,11 +133,11 @@ public static partial class LuminPackMarshal
         {
             for (; index <= length - Vector<byte>.Count; index += Vector<byte>.Count)
             {
-                var bytes = Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref input, index));
-                Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, index), ~bytes);
+                var bytes = Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref input, (nint)(uint)index));
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, (nint)(uint)index), ~bytes);
             }
         }
         for (; index < length; index += 4)
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, index), ~Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref input, index)));
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, (nint)(uint)index), ~Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref input, (nint)(uint)index)));
     }
 }
