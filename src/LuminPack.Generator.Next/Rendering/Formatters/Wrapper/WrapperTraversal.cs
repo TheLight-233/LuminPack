@@ -245,15 +245,56 @@ internal static class WrapperTraversal
     /// <returns>Whether the input satisfies the write string storage check.</returns>
     private static bool WriteStringStorage(EnumerableOwnerContext c)
     {
-        if (!c.Text || !c.Supports("WriteWrappedStrings"))
+        if (!c.Text)
             return false;
-        c.W.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteWrappedStrings<TLuminProfile>(ref operationState, value))");
-        c.W.Line("    goto operationComplete_RootWrite;");
+        bool batch = c.Supports("WriteWrappedStrings");
+        bool exactStorage = c.Supports("WrapperJsonStorage");
+        if (!batch && !exactStorage)
+            return false;
+        if (batch)
+        {
+            c.W.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteWrappedStrings<TLuminProfile>(ref operationState, value))");
+            c.W.Line("    goto operationComplete_RootWrite;");
+        }
+        if (exactStorage)
+        {
+            WriteCountedStrings(c);
+            return true;
+        }
         var lines = new List<string>();
         InterfaceTraversal.Counted(lines, c.Scalar, "value");
         foreach (var line in lines)
             c.W.Line(line);
         return true;
+    }
+
+    /// <summary>Writes each string through its original formatter while enumerating recognized storage without boxing.</summary>
+    /// <param name="c">The wrapper owner context.</param>
+    private static void WriteCountedStrings(EnumerableOwnerContext c)
+    {
+        var w = c.W;
+        w.Line("int position = operationState.BeginCollection();");
+        w.Line("int count = 0;");
+        w.Line("var storage = global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<string>(value);");
+        w.Line("if (storage is string[] array)");
+        Loop("array");
+        w.Line("else if (storage is global::System.Collections.Generic.List<string> list)");
+        Loop("list");
+        w.Line("else");
+        Loop("value");
+        w.Line("operationState.EndCollection(position, count);");
+        w.Line("operationState.CheckBuffer();");
+
+        void Loop(string source)
+        {
+            w.Open();
+            w.Line("foreach (var item in " + source + ")");
+            w.Open();
+            w.Line("count++;");
+            w.Line("operationState.Write<TLuminProfile>(item);");
+            w.Close();
+            w.Close();
+        }
     }
 
     /// <summary>Emits insertion after the element formatter and checks the target's current subscribers.</summary>
