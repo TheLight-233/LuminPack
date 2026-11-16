@@ -325,10 +325,18 @@ internal static class ContiguousOwnerFile
             w.Close();
             if (layout != null)
                 FormatterStorageEmitter.Validate(w, layout, "length");
-            Prepare(w);
+            bool directRawSlice = raw && element.Type != "bool" &&
+                shape is ContiguousShape.Memory or ContiguousShape.ArraySegment;
+            Prepare(w, directRawSlice);
             if (raw)
             {
-                w.Line("if (length != 0) reader.Read(ref " + Unsafe + ".As<" + element.Type + ", byte>(ref " + MemoryMarshal + ".GetReference(items)), checked(length * " + Unsafe + ".SizeOf<" + element.Type + ">()));");
+                // The exact slice or new array proves the destination; ReadLength has checked the complete byte width.
+                string destination = directRawSlice
+                    ? Unsafe + ".Add(ref " + Marshal + ".GetNotNullArrayReference(array!), start)"
+                    : MemoryMarshal + ".GetReference(items)";
+                string arithmetic = directRawSlice ? "unchecked" : "checked";
+                w.Line("if (length != 0) reader.Read(ref " + Unsafe + ".As<" + element.Type + ", byte>(ref " + destination +
+                    "), " + arithmetic + "(length * " + Unsafe + ".SizeOf<" + element.Type + ">()));");
                 if (element.Type == "bool")
                     w.Line("global::LuminPack.Security.LuminPackInputPolicy.CheckBooleans(items);");
             }
@@ -344,7 +352,7 @@ internal static class ContiguousOwnerFile
             Publish(w);
         }
 
-        void Prepare(CodeWriter w)
+        void Prepare(CodeWriter w, bool directRawSlice = false)
         {
             switch (shape)
             {
@@ -363,14 +371,16 @@ internal static class ContiguousOwnerFile
                     w.Line("array = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
                     w.Line("start = 0;");
                     w.Close();
-                    w.Line("var items = new global::System.Span<" + element.Type + ">(array, start, length);");
+                    if (!directRawSlice)
+                        w.Line("var items = new global::System.Span<" + element.Type + ">(array, start, length);");
                     break;
                 case ContiguousShape.ArraySegment:
                     w.Line("var array = value.Array;");
                     w.Line("bool reused = array is not null && array.GetType() == typeof(" + ArrayType(element.Type) + ") && value.Count == length;");
                     w.Line("int start = reused ? value.Offset : 0;");
                     w.Line("if (!reused) array = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
-                    w.Line("var items = new global::System.Span<" + element.Type + ">(array, start, length);");
+                    if (!directRawSlice)
+                        w.Line("var items = new global::System.Span<" + element.Type + ">(array, start, length);");
                     break;
                 case ContiguousShape.ImmutableArray:
                     w.Line("var array = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
