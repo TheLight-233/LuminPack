@@ -27,6 +27,7 @@ LuminPackSerializer.Deserialize(nextPayload, ref target);   // 仍然是同一�
 | 序列接口（`IEnumerable<T>`、`ICollection<T>`、`IList<T>`、`IReadOnlyList<T>`、`IReadOnlyCollection<T>`） | 元素为字符串、标量或普通对象时，复用背后的精确 `List<T>` 或 `T[]`。 |
 | `IDictionary<K,V>`、`IReadOnlyDictionary<K,V>` | 复用背后的精确 `Dictionary<K,V>`。 |
 | `Memory<T>`、`ArraySegment<T>` | 长度相同时复用数组存储，保留 offset 和 count。 |
+| 二进制 `ReadOnlyMemory<string>` 和 `ReadOnlySequence<string>` | 在现代 .NET 上使用内置 UTF-16 长度配置时，如果原数组切片长度相同且首个字符串匹配，Next 可以复用内容相同的字符串引用。每个结果都有独立的后备数组。 |
 | 标量或字符串的 Immutable 集合 | 传入内容完全相同时保留。 |
 | 受支持原始标量的二进制 `FrozenSet<T>` | 在受支持的 .NET 10 和 11 运行时上，如果 Next 在当前线程验证过一个复用读取结果，且这次输入的元素字节和顺序与其完全相同，则可保留该集合。 |
 | 字符串 | 内容不变的字符串保留原引用，所有字符串配置都适用。 |

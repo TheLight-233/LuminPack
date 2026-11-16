@@ -27,6 +27,7 @@ What is kept:
 | Sequence interfaces (`IEnumerable<T>`, `ICollection<T>`, `IList<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>`) | Reuse an exact `List<T>` or `T[]` behind them, for string, scalar and ordinary object elements. |
 | `IDictionary<K,V>`, `IReadOnlyDictionary<K,V>` | Reuse an exact `Dictionary<K,V>` behind them. |
 | `Memory<T>`, `ArraySegment<T>` | Reuse array-backed storage of the same length, keeping offset and count. |
+| Binary `ReadOnlyMemory<string>` and `ReadOnlySequence<string>` | With a built-in UTF-16 length profile on modern .NET, Next can reuse matching string references from a same-length array slice when the first string matches. Each result has its own backing array. |
 | Immutable sets of scalars or strings | Kept when the incoming contents are identical. |
 | Binary `FrozenSet<T>` of supported raw scalars | Next can retain a set after verifying that a prior reuse read on the current thread produced the exact incoming item bytes and order. This optimization applies on supported .NET 10 and 11 runtimes. |
 | Strings | An unchanged string keeps its reference, in every string profile. |

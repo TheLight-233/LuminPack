@@ -344,13 +344,43 @@ internal static class ContiguousOwnerFile
             else if (layout != null)
                 FormatterStorageEmitter.Payload(w, layout, MemoryMarshal + ".GetReference(items)", "length", false);
             else if (element.Type == "string")
+            {
+                if (set.Options?.Net8 == true && shape is ContiguousShape.ReadOnlyMemory or ContiguousShape.ReadOnlySequence)
+                    ReadReadOnlyStringPrefix(w);
                 w.Line("reader.ReadStrings<TLuminProfile>(items);");
+            }
             else
             {
                 ReadSlots(w, json: false);
             }
 
             Publish(w);
+        }
+
+        void ReadReadOnlyStringPrefix(CodeWriter w)
+        {
+            // A checked first read cheaply rejects changing inputs before populating the remaining fresh slots.
+            const string options = "global::LuminPack.Option.";
+            const string profile = "typeof(TLuminProfile)";
+            w.Line("if (length != 0 && (" + profile + " == typeof(" + options + "LuminPackUtf16LengthOptions) ||");
+            w.Line("    " + profile + " == typeof(" + options + "LuminPackDefaultOptions) ||");
+            w.Line("    " + profile + " == typeof(" + options + "LuminPackFixedOptions<" + options + "LuminPackUtf16LengthOptions>) ||");
+            w.Line("    " + profile + " == typeof(" + options + "LuminPackFixedOptions<" + options + "LuminPackDefaultOptions>)) &&");
+            if (shape == ContiguousShape.ReadOnlyMemory)
+                w.Line("    !" + MemoryMarshal + ".TryGetMemoryManager<string, global::System.Buffers.MemoryManager<string>>(value, out _) && " +
+                    MemoryMarshal + ".TryGetArray(value, out var previous) &&");
+            else
+                w.Line("    global::System.Runtime.InteropServices.SequenceMarshal.TryGetArray(value, out var previous) &&");
+            w.Line("    previous.Count == length)");
+            w.Open();
+            w.Line("string? firstPrevious = previous.Array![previous.Offset];");
+            w.Line("string? firstValue = firstPrevious;");
+            w.Line("reader.Read<TLuminProfile>(ref firstValue);");
+            w.Line("items[0] = firstValue!;");
+            w.Line("items = items.Slice(1);");
+            w.Line("if (global::System.Object.ReferenceEquals(firstValue, firstPrevious) && length > 1)");
+            w.Indented(() => w.Line("new global::System.ReadOnlySpan<string>(previous.Array, previous.Offset + 1, length - 1).CopyTo(items);"));
+            w.Close();
         }
 
         void Prepare(CodeWriter w, bool directRawSlice = false)
