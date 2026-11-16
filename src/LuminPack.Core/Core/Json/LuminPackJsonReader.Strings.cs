@@ -1115,7 +1115,7 @@ namespace LuminPack.Core
             {
                 if (default(TOptions).ValidateJsonSyntax && !StringSerializer.IsValidUtf8(remaining.Slice(0, special)))
                     LuminPackExceptionHelper.ThrowFormatException("Invalid UTF-8 in JSON string");
-                Advance(special + 1);
+                AdvanceFromPosition(start, special + 1);
                 return Buffer.Slice(start, special);
             }
 
