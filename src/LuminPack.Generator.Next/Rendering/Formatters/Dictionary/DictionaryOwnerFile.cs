@@ -448,10 +448,10 @@ internal static class DictionaryOwnerFile
                     }
                     else
                     {
-                        w.Line("int index = 0;");
+                        w.Line("ref var entry = ref firstEntry;");
+                        w.Line("int remaining = length;");
                         w.Line("do");
                         w.Open();
-                        w.Line("ref var entry = ref " + memory + ".Add(ref firstEntry, (nint)(uint)index);");
                         if (pair)
                         {
                             ReadMember("operationState", key, "entry.Key");
@@ -467,8 +467,9 @@ internal static class DictionaryOwnerFile
                             w.Line("entry.Key = key;");
                             w.Line("entry.Value = itemValue;");
                         }
+                        w.Line("entry = ref " + memory + ".Add(ref entry, 1);");
                         w.Close();
-                        w.Line("while (++index < length);");
+                        w.Line("while (--remaining != 0);");
                     }
                     w.Blank();
                     w.Line("if (!global::LuminPack.Code.LuminPackMarshal.TryRebuildFreshDictionaryBuckets(dictionaryView, length))");
@@ -513,7 +514,8 @@ internal static class DictionaryOwnerFile
                     if (observeRawLookup)
                         w.Line("bool observeLookup = !global::System.Object.ReferenceEquals(destination.Comparer, global::System.Collections.Generic.EqualityComparer<" + key + ">.Default);");
                     w.Line("ref var firstPair = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items);");
-                    w.Line("int index = 0;");
+                    w.Line("ref var slot = ref firstPair;");
+                    w.Line("int remaining = count;");
                     w.Line("do");
                     w.Open();
                     if (key == "string")
@@ -533,17 +535,19 @@ internal static class DictionaryOwnerFile
                             (key == "string" || key == "object" || key.EndsWith("?", System.StringComparison.Ordinal) ? "key is not null && " : "") +
                             "destination.TryGetValue(key, out var existing) ? existing : default!;");
                     ReadMember("operationState", value, "item");
-                    w.Line(memory + ".Add(ref firstPair, (nint)(uint)index) = new " + entry + "(key, item);");
+                    w.Line("slot = new " + entry + "(key, item);");
+                    w.Line("slot = ref " + memory + ".Add(ref slot, 1);");
                     w.Close();
-                    w.Line("while (++index < count);");
+                    w.Line("while (--remaining != 0);");
                     w.Line("destination.Clear();");
-                    w.Line("index = 0;");
+                    w.Line("slot = ref firstPair;");
+                    w.Line("remaining = count;");
                     w.Line("do");
                     w.Open();
-                    w.Line("ref var pair = ref " + memory + ".Add(ref firstPair, (nint)(uint)index);");
-                    w.Line("destination.Add(pair.Key, pair.Value);");
+                    w.Line("destination.Add(slot.Key, slot.Value);");
+                    w.Line("slot = ref " + memory + ".Add(ref slot, 1);");
                     w.Close();
-                    w.Line("while (++index < count);");
+                    w.Line("while (--remaining != 0);");
                     w.Close();
                     w.Line("finally");
                     w.Open();
