@@ -167,12 +167,19 @@ namespace LuminPack.Core
             WriteStringContentUtf16<LuminPackDefaultOptions>(value);
         }
 
-        /// <summary>Writes an already-fitting common escape pair without changing cold growth or external output.</summary>
-        /// <param name="value">The original character.</param><returns>Whether the complete pair was written.</returns>
+        /// <summary>Gets the second character of a common UTF-16 escape pair.</summary>
+        /// <param name="value">The original character.</param>
+        /// <returns>The escaped code unit, or zero if it needs another representation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool TryWriteUtf16EscapePair(char value)
+        private static char GetUtf16EscapePairCode(char value) =>
+            value switch { '"' => '"', '\\' => '\\', '\n' => 'n', '\r' => 'r', '\t' => 't', _ => '\0' };
+
+        /// <summary>Writes an already-fitting common escape pair without changing cold growth or external output.</summary>
+        /// <param name="escaped">The second code unit of the escape pair.</param>
+        /// <returns>Whether the complete pair was written.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryWriteUtf16EscapePair(char escaped)
         {
-            char escaped = value switch { '"' => '"', '\\' => '\\', '\n' => 'n', '\r' => 'r', '\t' => 't', _ => '\0' };
             if (escaped == '\0' || Output is not null || !BitConverter.IsLittleEndian)
                 return false;
 #if NET8_0_OR_GREATER
@@ -1261,13 +1268,7 @@ namespace LuminPack.Core
             for (int i = 0; i < value.Length; i++)
             {
                 char c = value[i];
-                bool needsEscape = false;
-                if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\t' || c < 0x20)
-                {
-                    needsEscape = true;
-                }
-
-                if (needsEscape)
+                if (NeedsJsonEscape(c))
                 {
                     if (i > lastWritten)
                     {
@@ -1287,45 +1288,22 @@ namespace LuminPack.Core
                         }
                     }
 
-                    if (TryWriteUtf16EscapePair(c))
-                    {
-                        lastWritten = i + 1;
-                        continue;
-                    }
-
-                    if (c == '"')
+                    char escaped = GetUtf16EscapePairCode(c);
+                    if (!TryWriteUtf16EscapePair(escaped))
                     {
                         WriteByteRaw<TOptions>(Backslash);
-                        WriteUtf16CharDirect('"');
-                    }
-                    else if (c == '\\')
-                    {
-                        WriteByteRaw<TOptions>(Backslash);
-                        WriteUtf16CharDirect('\\');
-                    }
-                    else if (c == '\n')
-                    {
-                        WriteByteRaw<TOptions>(Backslash);
-                        WriteUtf16CharDirect('n');
-                    }
-                    else if (c == '\r')
-                    {
-                        WriteByteRaw<TOptions>(Backslash);
-                        WriteUtf16CharDirect('r');
-                    }
-                    else if (c == '\t')
-                    {
-                        WriteByteRaw<TOptions>(Backslash);
-                        WriteUtf16CharDirect('t');
-                    }
-                    else if (c < 0x20)
-                    {
-                        WriteByteRaw<TOptions>(Backslash);
-                        WriteUtf16CharDirect('u');
-                        WriteUtf16CharDirect(HexCharUtf16((c >> 12) & 0xF));
-                        WriteUtf16CharDirect(HexCharUtf16((c >> 8) & 0xF));
-                        WriteUtf16CharDirect(HexCharUtf16((c >> 4) & 0xF));
-                        WriteUtf16CharDirect(HexCharUtf16(c & 0xF));
+                        if (escaped != '\0')
+                        {
+                            WriteUtf16CharDirect(escaped);
+                        }
+                        else
+                        {
+                            WriteUtf16CharDirect('u');
+                            WriteUtf16CharDirect(HexCharUtf16((c >> 12) & 0xF));
+                            WriteUtf16CharDirect(HexCharUtf16((c >> 8) & 0xF));
+                            WriteUtf16CharDirect(HexCharUtf16((c >> 4) & 0xF));
+                            WriteUtf16CharDirect(HexCharUtf16(c & 0xF));
+                        }
                     }
 
                     lastWritten = i + 1;
@@ -1406,7 +1384,7 @@ namespace LuminPack.Core
                 }
 
                 int end = escapeIndex;
-                while (end < value.Length && NeedsJsonEscape(value[end]) && TryWriteUtf16EscapePair(value[end]))
+                while (end < value.Length && NeedsJsonEscape(value[end]) && TryWriteUtf16EscapePair(GetUtf16EscapePairCode(value[end])))
                     end++;
                 if (end < value.Length && NeedsJsonEscape(value[end]))
                 {
