@@ -16,13 +16,11 @@ namespace LuminPack.Option
         private readonly ReferenceSlot[] _small = new ReferenceSlot[SmallReferences];
         // Whether the operation outgrew the scan and every identity, including the first ones, is in the identity table.
         private bool _hashed;
-        /// <summary>Gets or sets the object to ref.</summary>
-        private LuminIdentityMap ObjectToRef { get; set; }
+        private LuminIdentityMap? _objectToRef;
 
         /// <summary>Initializes a new instance of <c>LuminPackWriterOptionalState</c>.</summary>
         public LuminPackWriterOptionalState()
         {
-            ObjectToRef = new LuminIdentityMap();
             _nextId = 0;
 
         }
@@ -31,7 +29,6 @@ namespace LuminPack.Option
         /// <param name="_">The  used by this operation.</param>
         private LuminPackWriterOptionalState(bool _)
         {
-            ObjectToRef = new LuminIdentityMap();
             _nextId = 0;
 
         }
@@ -103,7 +100,7 @@ namespace LuminPack.Option
         {
             if (_hashed)
             {
-                ObjectToRef.Clear();
+                _objectToRef!.Clear();
                 _hashed = false;
             }
             var small = _small;
@@ -143,7 +140,7 @@ namespace LuminPack.Option
                 }
                 HashSmallReferences();
             }
-            ref var id = ref ObjectToRef.GetValueRefOrAddDefault(value, out var exists);
+            ref var id = ref _objectToRef!.GetValueRefOrAddDefault(value, out var exists);
             if (exists)
                 return ~(int)id;
             if (_nextId > int.MaxValue)
@@ -156,9 +153,10 @@ namespace LuminPack.Option
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void HashSmallReferences()
         {
+            var map = _objectToRef ??= new LuminIdentityMap();
             var small = _small;
             for (int i = 0; i < small.Length; i++)
-                ObjectToRef.TryAdd(small[i].Value!, (uint)i);
+                map.TryAdd(small[i].Value!, (uint)i);
             _hashed = true;
         }
 

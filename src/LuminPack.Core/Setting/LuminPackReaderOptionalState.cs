@@ -10,7 +10,9 @@ namespace LuminPack.Option
     {
         internal static readonly LuminPackReaderOptionalState NullOption = new LuminPackReaderOptionalState(true);
 
-        private readonly LuminCircleReferenceMap<uint, object> refToObject;
+        private LuminCircleReferenceMap<uint, object>? refToObject;
+        // The overflow map is retained after reset, while this flag reflects whether it holds ids.
+        private bool _hasOverflow;
         private LuminIdentityMap? reusedObjectToRef;
         private bool reuseIndexInitialized;
         // Writers assign identifiers 0, 1, 2, ... in record order, so a read stores them in an array. The map holds only
@@ -31,16 +33,12 @@ namespace LuminPack.Option
         /// <summary>Initializes a new instance of <c>LuminPackReaderOptionalState</c>.</summary>
         public LuminPackReaderOptionalState()
         {
-            refToObject = new LuminCircleReferenceMap<uint, object>();
-
         }
 
         /// <summary>Initializes a new instance of <c>LuminPackReaderOptionalState</c>.</summary>
         /// <param name="_">The  used by this operation.</param>
         private LuminPackReaderOptionalState(bool _)
         {
-            refToObject = new LuminCircleReferenceMap<uint, object>();
-
         }
 
         /// <summary>Whether a generated convenience operation currently leases this state from its thread's cache.</summary>
@@ -104,7 +102,7 @@ namespace LuminPack.Option
                 _versionTables.Clear();
                 _versionTableUsed = 0;
             }
-            if (_sequentialCount == 0 && refToObject.Count == 0)
+            if (_sequentialCount == 0 && !_hasOverflow)
                 return;
             ResetReferences();
         }
@@ -150,8 +148,11 @@ namespace LuminPack.Option
             else
                 Array.Clear(sequential, 0, count);
             _sequentialCount = 0;
-            if (refToObject.Count != 0)
-                refToObject.Clear();
+            if (_hasOverflow)
+            {
+                refToObject!.Clear();
+                _hasOverflow = false;
+            }
             reusedObjectToRef?.Clear();
             reuseIndexInitialized = false;
         }
@@ -173,7 +174,7 @@ namespace LuminPack.Option
         [MethodImpl(MethodImplOptions.NoInlining)]
         private object GetMappedReference(uint id)
         {
-            if (refToObject.TryGetValue(id, out var value))
+            if (_hasOverflow && refToObject!.TryGetValue(id, out var value))
             {
                 return value;
             }
@@ -203,11 +204,11 @@ namespace LuminPack.Option
         {
             if (!reuseIndexInitialized)
             {
-                if (_sequentialCount <= 8 && refToObject.Count == 0)
+                if (_sequentialCount <= 8 && !_hasOverflow)
                 {
                     var sequential = _sequential;
-                    for (int i = 0; i < sequential.Length && i < _sequentialCount; i++)
-                        if (ReferenceEquals(sequential[i].Value, candidate))
+                    foreach (ref readonly var entry in sequential.AsSpan(0, Math.Min(sequential.Length, _sequentialCount)))
+                        if (ReferenceEquals(entry.Value, candidate))
                             return false;
                     Store(id, candidate);
                     return true;
@@ -228,7 +229,7 @@ namespace LuminPack.Option
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void Store(uint id, object value)
         {
-            if (id == (uint)_sequentialCount && id < (uint)_sequential.Length && refToObject.Count == 0)
+            if (id == (uint)_sequentialCount && id < (uint)_sequential.Length && !_hasOverflow)
             {
                 _sequential[id].Value = value;
                 _sequentialCount++;
@@ -243,15 +244,17 @@ namespace LuminPack.Option
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void StoreSlow(uint id, object value)
         {
-            if (id == (uint)_sequentialCount && refToObject.Count == 0 && id < int.MaxValue / 2)
+            if (id == (uint)_sequentialCount && !_hasOverflow && id < int.MaxValue / 2)
             {
                 Array.Resize(ref _sequential, Math.Max(16, _sequential.Length * 2));
                 _sequential[id].Value = value;
                 _sequentialCount++;
             }
-            else if (id < (uint)_sequentialCount || !refToObject.TryAdd(id, value))
+            else
             {
-                LuminPackExceptionHelper.ThrowMessage("Object is already added, id:" + id);
+                if (id < (uint)_sequentialCount || !(refToObject ??= new LuminCircleReferenceMap<uint, object>()).TryAdd(id, value))
+                    LuminPackExceptionHelper.ThrowMessage("Object is already added, id:" + id);
+                _hasOverflow = true;
             }
         }
 
@@ -262,8 +265,9 @@ namespace LuminPack.Option
             reusedObjectToRef ??= new LuminIdentityMap();
             for (int i = 0; i < _sequentialCount; i++)
                 reusedObjectToRef.TryAdd(_sequential[i].Value!, (uint)i);
-            foreach (var entry in refToObject)
-                reusedObjectToRef.TryAdd(entry.Value, entry.Key);
+            if (_hasOverflow)
+                foreach (var entry in refToObject!)
+                    reusedObjectToRef.TryAdd(entry.Value, entry.Key);
             reuseIndexInitialized = true;
         }
 
@@ -272,10 +276,10 @@ namespace LuminPack.Option
         /// <returns>Whether the instance has already been registered by identity.</returns>
         public bool IsObjectReferenceRegistered(object value)
         {
-            if (_sequentialCount == 0 && refToObject.Count == 0)
+            if (_sequentialCount == 0 && !_hasOverflow)
                 return false;
             // A few sequential references are scanned without building the identity index.
-            if (!reuseIndexInitialized && _sequentialCount <= 8 && refToObject.Count == 0)
+            if (!reuseIndexInitialized && _sequentialCount <= 8 && !_hasOverflow)
             {
                 var sequential = _sequential;
                 for (int i = 0; i < sequential.Length && i < _sequentialCount; i++)
