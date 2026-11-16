@@ -28,7 +28,6 @@ internal static class ImmutableStackOwnerFile
         string utf16 = w.A("LuminPackUtf16LengthOptions");
         string code = w.A("LuminPackCode");
         string memory = w.A("Unsafe");
-        string marshal = w.A("MemoryMarshal");
         string preserve = w.Preserve;
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
@@ -168,8 +167,7 @@ internal static class ImmutableStackOwnerFile
                     w.Close();
                     w.Line("int width = " + memory + ".SizeOf<" + scalar + ">();");
                     w.Line("int offset = checked(length * width);");
-                    w.Line("ref byte first = ref " + marshal + ".GetReference(operationState.Buffer);");
-                    w.Line("ref byte start = ref " + memory + ".Add(ref first, unchecked((nint)(uint)operationState.Position));");
+                    w.Line("ref byte start = ref operationState.PeekInput(0, out _);");
                     // Advance validates the complete fixed element window before the address-based reads.
                     w.Line("operationState.Advance(offset);");
                     w.Line("var stack = " + sequence + ".Empty;");
