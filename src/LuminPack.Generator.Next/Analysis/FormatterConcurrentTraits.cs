@@ -138,6 +138,22 @@ internal static class FormatterConcurrentTraits
                 SymbolEqualityComparer.Default.Equals(method.ReturnType, collection.OriginalDefinition.Construct(method.TypeParameters[0])));
     }
 
+    /// <summary>Checks the optional in-place stack refill operations.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <returns>Whether both referenced helpers have the expected public signatures.</returns>
+    internal static bool HasStackRefill(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var stack = compilation.GetTypeByMetadataName("System.Collections.Generic.Stack`1");
+        return stack is not null && owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
+            owner.GetMembers("PrepareStackRefill").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1 } && method.Parameters.Length == 2 &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, stack.Construct(method.TypeParameters[0])) &&
+                method.Parameters[1].Type.SpecialType == SpecialType.System_Int32 && method.ReturnType.Name == "Span") &&
+            owner.GetMembers("CompleteStackRefill").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } && method.Parameters.Length == 2);
+    }
+
     /// <summary>Checks the optional in-place queue refill operations.</summary>
     /// <param name="compilation">The consumer's Core and framework references.</param>
     /// <returns>Whether both referenced helpers have the expected public signatures.</returns>

@@ -76,7 +76,8 @@ internal static class GeneratorOptionsFactory
             hashSetRefill: FormatterConcurrentTraits.HasHashSetRefill(compilation),
             linkedListAppender: FormatterConcurrentTraits.HasLinkedListAppender(compilation),
             concurrentDictionaryBuilder: FormatterConcurrentTraits.HasConcurrentDictionaryBuilder(compilation),
-            queueRefill: FormatterConcurrentTraits.HasQueueRefill(compilation));
+            queueRefill: FormatterConcurrentTraits.HasQueueRefill(compilation),
+            stackRefill: FormatterConcurrentTraits.HasStackRefill(compilation));
     }
 
     /// <summary>Checks that the compiler feature enables the generated interception namespace.</summary>

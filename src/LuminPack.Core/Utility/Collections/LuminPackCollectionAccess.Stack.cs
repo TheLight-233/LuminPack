@@ -218,6 +218,46 @@ public static partial class LuminPackCollectionAccess
         } while (remaining != 0);
     }
 
+    /// <summary>Empties an exact framework stack for an in-place bottom-first refill and returns its slots seeded with the old items.</summary>
+    /// <typeparam name="T">The stack element type.</typeparam>
+    /// <param name="stack">The fresh or reused stack.</param>
+    /// <param name="count">The validated incoming element count.</param>
+    /// <returns>The first <paramref name="count"/> slots of the backing array, holding the previous items bottom first as
+    /// reuse seeds and default values after them; an empty span when the layout is unsupported.</returns>
+    /// <remarks>The array grows to <paramref name="count"/> when it is smaller, surplus old items are cleared and the stack is
+    /// published empty with a new version, so a failed read leaves it empty as <c>Clear</c> does.</remarks>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static Span<T> PrepareStackRefill<T>(Stack<T> stack, int count)
+    {
+        if (count <= 0 || !StackStorage.Available || stack.GetType() != typeof(Stack<T>))
+            return default;
+        ref int size = ref LuminFieldLayout.Field<int>(stack, LuminCollectionLayouts.StackSize);
+        ref T[] array = ref LuminFieldLayout.Field<T[]>(stack, LuminCollectionLayouts.StackArray);
+        int live = size;
+        var items = array;
+        if ((uint)live > (uint)items.Length)
+            return default;
+        if (items.Length < count)
+        {
+            var grown = new T[count];
+            Array.Copy(items, grown, live);
+            items = grown;
+            array = items;
+        }
+        else if (live > count)
+            Array.Clear(items, count, live - count);
+        size = 0;
+        LuminFieldLayout.Field<int>(stack, LuminCollectionLayouts.StackVersion)++;
+        return new Span<T>(items, 0, count);
+    }
+
+    /// <summary>Publishes the slots filled after <see cref="PrepareStackRefill{T}"/> as the stack contents, bottom first.</summary>
+    /// <typeparam name="T">The stack element type.</typeparam>
+    /// <param name="stack">The prepared stack.</param>
+    /// <param name="count">The number of filled slots.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static void CompleteStackRefill<T>(Stack<T> stack, int count) => PublishStackSize(stack, count);
+
     /// <summary>Publishes a complete empty-target fill with the version change of one push per item.</summary>
     /// <typeparam name="T">The stack element.</typeparam>
     /// <param name="stack">The validated target stack.</param>

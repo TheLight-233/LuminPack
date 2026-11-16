@@ -44,6 +44,33 @@ internal static class StackPayloadOwnerFile
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;
+        if (c.StackRefill)
+        {
+            // The record is bottom first like the backing array, so the previous items of a reused stack seed the same
+            // slots in place. Fresh stacks keep their original direct reads.
+            w.Line("if (value is not null && length != 0)");
+            w.Open();
+            w.Line("var slots = global::LuminPack.Code.LuminPackCollectionAccess.PrepareStackRefill(value, length);");
+            w.Line("if (slots.Length == length)");
+            w.Open();
+            if (c.Text)
+                w.Line("operationState.ReadStrings<TLuminProfile>(slots);");
+            else
+            {
+                w.Line("ref var firstSlot = ref " + c.Marshal + ".GetReference(slots);");
+                w.Line("int slotIndex = 0;");
+                w.Line("do");
+                w.Open();
+                w.Line("ref var slot = ref " + c.Memory + ".Add(ref firstSlot, (nint)(uint)slotIndex);");
+                c.ReadElement("slot");
+                w.Close();
+                w.Line("while (++slotIndex < length);");
+            }
+            w.Line("global::LuminPack.Code.LuminPackCollectionAccess.CompleteStackRefill(value, length);");
+            w.Line("goto operationComplete_RootRead;");
+            w.Close();
+            w.Close();
+        }
         w.Line("if (value is null)");
         w.Indented(() => w.Line("value = new " + c.Sequence + "(length);"));
         w.Line("else");

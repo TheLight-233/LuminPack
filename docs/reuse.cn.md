@@ -29,7 +29,7 @@ LuminPackSerializer.Deserialize(nextPayload, ref target);   // 仍然是同一�
 | `IDictionary<K,V>`、`IReadOnlyDictionary<K,V>` | 复用背后的精确 `Dictionary<K,V>`。 |
 | 二进制 `HashSet<T>`、`ISet<T>`、`IReadOnlySet<T>` | 使用 Next 时，精确类型且使用默认比较器的 `HashSet<T>` 会被清空后原位重新填充并保留其存储；只有传入元素数超过容量时才扩容。使用自定义比较器的集合和派生集合会被替换。 |
 | `ConcurrentQueue<T>` | 使用 Next 时，队列先通过框架出队操作清空再重新填充，从而复用最后一个段，而不是重新分配整条增长链。 |
-| 元素为字符串或对象的二进制 `Queue<T>` | 使用 Next 时，已有元素作为复用种子：未变化的字符串和已有对象原位读取，并复用后备数组。读取失败时队列为空。 |
+| 元素为字符串或对象的二进制 `Queue<T>` 和 `Stack<T>` | 使用 Next 时，已有元素作为复用种子：未变化的字符串和已有对象原位读取，并复用后备数组。读取失败时集合为空。 |
 | `Memory<T>`、`ArraySegment<T>` | 长度相同时复用数组存储，保留 offset 和 count。 |
 | 二进制 `ReadOnlyMemory<string>` 和 `ReadOnlySequence<string>` | 在现代 .NET 上使用内置 UTF-16 长度配置时，如果原数组切片长度相同且首个字符串匹配，Next 可以复用内容相同的字符串引用。每个结果都有独立的后备数组。 |
 | 标量或字符串的 Immutable 集合 | 传入内容完全相同时保留。 |

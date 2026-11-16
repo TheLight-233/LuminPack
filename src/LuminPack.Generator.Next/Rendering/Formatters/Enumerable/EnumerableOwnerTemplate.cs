@@ -52,6 +52,9 @@ internal sealed partial class EnumerableOwnerContext
 
     /// <summary>Gets whether the referenced Core can refill a queue's backing array in place.</summary>
     internal bool QueueRefill => _set.Options?.QueueRefill == true;
+
+    /// <summary>Gets whether the referenced Core can refill a stack's backing array in place.</summary>
+    internal bool StackRefill => _set.Options?.StackRefill == true;
     internal bool RawTreeElements => GenericFormatterReuse.Real(Scalar) != "bool" &&
         (Forwarded ? _element is { Raw: true, RawStorage: true, Layout: null } : !Text && Payload == null);
     private readonly FormatterModel? _element;
