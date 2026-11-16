@@ -1033,9 +1033,10 @@ internal static partial class BinaryEmitter
     /// <summary>Builds the statement lines that read a covered fixed case's Union payload.</summary>
     /// <param name="model">The case's covered model, whose members are all fixed.</param>
     /// <param name="w">The file writer that spells helper aliases.</param>
+    /// <param name="fresh">Whether the case is read into a new destination.</param>
     /// <returns>The body lines, opening with the instance local.</returns>
-    internal static List<string> UnionReadBody(PayloadRenderModel model, CodeWriter w)
-        => AddReadCallbacks(model, ReadBody(model, w, union: true));
+    internal static List<string> UnionReadBody(PayloadRenderModel model, CodeWriter w, bool fresh)
+        => AddReadCallbacks(model, ReadBody(model, w, union: true, freshUnion: fresh));
 
     /// <summary>Emits an existing payload read under the enclosing root's checked input policy.</summary>
     /// <param name="model">The payload with its enclosing policy and nested read redirects applied.</param>
@@ -2481,8 +2482,9 @@ internal static partial class BinaryEmitter
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
     /// <param name="union">Whether to enable union for this operation.</param>
+    /// <param name="freshUnion">Whether a Union case reads into a new destination.</param>
     /// <returns>The body.</returns>
-    private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union)
+    private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, bool freshUnion = false)
     {
         // A selected constructor builds the instance from temporary locals; a raw struct's arguments only reach its JSON
         // read, so the binary body keeps the struct paths.
@@ -2525,6 +2527,10 @@ internal static partial class BinaryEmitter
                             ? Policy() + ".ReadBoolean(ref reader);" : "reader.Read<" + member.Scalar + ">();"));
                     continue;
                 }
+                bool fixedUnionBlock = freshUnion && model.ManagedFixedUnionCase && !model.HasCallbacks && model.Rent == null;
+                for (int item = index; fixedUnionBlock && item <= last; item++)
+                    fixedUnionBlock = !members[item].Mirrored && !members[item].Property && !members[item].IsBoolean;
+                bool useFieldProof = !union || fixedUnionBlock;
                 int width = 0;
                 var offsets = new List<int>();
                 for (int item = index; item <= last; item++)
@@ -2538,7 +2544,7 @@ internal static partial class BinaryEmitter
                 // A runtime-sized advance is spelled as the unsigned native offset of the cursor projection.
                 string advance = int.TryParse(widthText, NumberStyles.None, CultureInfo.InvariantCulture, out _) ? widthText
                     : "unchecked((nint)(uint)((" + widthText + ")))";
-                if (!union)
+                if (useFieldProof)
                 {
                     body.Add("if (" + Proof(w, members, index, last, "instance", readOnly: false) + ")");
                     string block = Bytes(w, member, "instance", readOnly: false, plain: true);
@@ -2570,7 +2576,7 @@ internal static partial class BinaryEmitter
                         : w.A("LuminPackReader") + ".Read<" + field.Scalar + ">(ref " + At(w, cursor, offset, plain: true) + ");"));
                     offset = Add(offset, field.Width);
                 }
-                if (!union)
+                if (useFieldProof)
                     body.Add("}");
                 body.Add("");
                 index = last;

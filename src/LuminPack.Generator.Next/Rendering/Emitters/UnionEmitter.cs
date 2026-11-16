@@ -416,7 +416,7 @@ internal static class UnionEmitter
             w.Line(item.Type + " member" + Number(member) + " = " + (reuse
                 ? w.A("LuminPackMarshal") + ".AsExact<" + item.Type + ">(" + target + ")!;"
                 : "default !;"));
-            var body = FixedCaseRead(model, item, w);
+            var body = FixedCaseRead(model, item, w, fresh: !reuse);
             bool hasInstance = body.Count != 0 && body[0].StartsWith("var instance = ", StringComparison.Ordinal);
             int instance = counters.Instances;
             if (hasInstance)
@@ -541,7 +541,8 @@ internal static class UnionEmitter
         // The two switches share the peek and the existing-instance call, and each repeats the three registered-member calls.
         int calls = 8;
         foreach (var item in model.UnionCases)
-            calls += item.OwnEntry ? 2 : 2 * InvocationCounter.Count(FixedCaseRead(model, item, w)) + 1;
+            calls += item.OwnEntry ? 2 : InvocationCounter.Count(FixedCaseRead(model, item, w, fresh: true)) +
+                InvocationCounter.Count(FixedCaseRead(model, item, w, fresh: false)) + 1;
         return calls <= 16;
     }
 
@@ -549,13 +550,14 @@ internal static class UnionEmitter
     /// <param name="root">The Union root.</param>
     /// <param name="item">The expanded fixed case.</param>
     /// <param name="w">The source writer.</param>
+    /// <param name="fresh">Whether a new case object receives the input.</param>
     /// <returns>The case's checked statements.</returns>
-    private static List<string> FixedCaseRead(PayloadRenderModel root, UnionRenderCase item, CodeWriter w)
+    private static List<string> FixedCaseRead(PayloadRenderModel root, UnionRenderCase item, CodeWriter w, bool fresh)
     {
         PayloadRenderModel model = item.Model;
         if ((model.Trusted || root.Redirect != null) && root.Limits is { } limits)
             model = model.WithInput(limits, recursive: false, root.Redirect);
-        return BinaryEmitter.UnionReadBody(model, w);
+        return BinaryEmitter.UnionReadBody(model, w, fresh);
     }
 
     /// <summary>Whether the case needs its own copy under a different Union root policy.</summary>
