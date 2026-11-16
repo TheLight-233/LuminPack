@@ -1166,19 +1166,21 @@ namespace LuminPack.Core
             if ((uint)i >= (uint)count)
                 return 0;
             ref string? first = ref MemoryMarshal.GetReference(values);
-            uint used = 0;
+            uint remaining = room;
             do
             {
                 string? value = Unsafe.Add(ref first, (nint)(uint)i);
                 // A string holds at most 0x3FFFFFDF characters, so the raw bound fits uint.
                 uint bound = sizeof(int) + (value is null ? 0u : (uint)value.Length * sizeof(char));
-                if (bound > room - used)
+                if (bound > remaining)
                     break;
-                used += (uint)WriteUtf16Record(ref Unsafe.Add(ref current, (nint)used), value);
+                int written = WriteUtf16Record(ref current, value);
+                remaining -= (uint)written;
+                current = ref Unsafe.Add(ref current, (nint)(uint)written);
             } while (++i < count);
 
             index = i;
-            return (int)used;
+            return (int)(room - remaining);
         }
 
 #if NET8_0_OR_GREATER
@@ -1196,23 +1198,25 @@ namespace LuminPack.Core
             if ((uint)i >= (uint)count)
                 return 0;
             ref string? first = ref MemoryMarshal.GetReference(values);
-            uint used = 0;
+            uint remaining = room;
             do
             {
                 string? value = Unsafe.Add(ref first, (nint)(uint)i);
                 if (value is null || (uint)(value.Length - 17) > 15)
                 {
                     index = i;
-                    return (int)used + WriteGeneralUtf16Run(ref Unsafe.Add(ref current, (nint)used), room - used, values, ref index);
+                    return (int)(room - remaining) + WriteGeneralUtf16Run(ref current, remaining, values, ref index);
                 }
                 uint bound = sizeof(int) + (uint)value.Length * sizeof(char);
-                if (bound > room - used)
+                if (bound > remaining)
                     break;
-                used += (uint)WriteMediumUtf16RunRecord(ref Unsafe.Add(ref current, (nint)used), value);
+                int written = WriteMediumUtf16RunRecord(ref current, value);
+                remaining -= (uint)written;
+                current = ref Unsafe.Add(ref current, (nint)(uint)written);
             } while (++i < count);
 
             index = i;
-            return (int)used;
+            return (int)(room - remaining);
         }
 
         /// <summary>Writes one reserved 17-to-32-character record inside a consecutive string run.</summary>
