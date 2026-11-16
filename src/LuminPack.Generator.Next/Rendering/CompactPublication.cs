@@ -479,6 +479,9 @@ internal static partial class CompactPublication
                 int member = forward.Target.LastIndexOf('.');
                 string operationName = forward.Target.Substring(member + 1);
                 string alias = closedOwner.Replace("Formatter", string.Empty) + (operationName.Contains("Read") ? "Reader" : "Writer");
+                // Shared JSON roots may name different owners than the corresponding binary roots.
+                if (operationName.EndsWith("Json", StringComparison.Ordinal))
+                    alias += "Json";
                 aliases[alias] = forward.Target.Substring(0, member);
                 return new CallEdit(alias + "." + operationName, generics, arguments);
             }

@@ -33,6 +33,9 @@ internal static class FormatterOwnerFile
         /// <summary>The forwarding roots, or null.</summary>
         internal readonly List<string>? Forwarders;
 
+        /// <summary>The operations whose roots still use the closed formatter body.</summary>
+        internal GeneratedOperations ClosedOperations;
+
         /// <summary>The words of the forwarders that may name file-local aliases.</summary>
         internal HashSet<string> Aliases = new(StringComparer.Ordinal);
 
@@ -83,11 +86,9 @@ internal static class FormatterOwnerFile
             writer.Open();
             if (projection?.Forwarders is { } forwarders)
             {
-                Suppressed(true, () =>
-                {
-                    Emit(FormatterSection.Roots);
-                    support?.Invoke();
-                });
+                Emit(FormatterSection.Roots, projection.ClosedOperations);
+                Suppressed(true, () => Emit(FormatterSection.Roots, operations & ~projection.ClosedOperations));
+                Suppressed(projection.ClosedOperations == GeneratedOperations.None, () => support?.Invoke());
                 foreach (string alias in projection.Aliases)
                     if (PublicationLayout.IsAlias(alias))
                         writer.A(alias);
@@ -138,15 +139,16 @@ internal static class FormatterOwnerFile
             writer.Suppressed = prior;
         }
 
-        void Emit(FormatterSection section)
+        void Emit(FormatterSection section, GeneratedOperations selected = GeneratedOperations.All)
         {
-            if ((operations & GeneratedOperations.BinaryWrite) != 0)
+            selected &= operations;
+            if ((selected & GeneratedOperations.BinaryWrite) != 0)
                 binaryWrite(section);
-            if ((operations & GeneratedOperations.BinaryRead) != 0)
+            if ((selected & GeneratedOperations.BinaryRead) != 0)
                 binaryRead(section);
-            if ((operations & GeneratedOperations.JsonWrite) != 0)
+            if ((selected & GeneratedOperations.JsonWrite) != 0)
                 jsonWrite(section);
-            if ((operations & GeneratedOperations.JsonRead) != 0)
+            if ((selected & GeneratedOperations.JsonRead) != 0)
                 jsonRead(section);
         }
     }

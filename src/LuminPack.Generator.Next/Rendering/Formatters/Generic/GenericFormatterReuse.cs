@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using LuminPack.SourceGenerator.Next.Analysis;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
@@ -17,7 +18,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// their specialized closed owners.</para>
 /// <para>The shared owner is rendered by the family's own template with placeholder type names, so the algorithm is the closed
 /// algorithm. Two closed owners share it only when their placeholder renders are identical. The closed owner keeps its state
-/// extensions and becomes forwarders that publication resolves to an alias of the generic instantiation.</para>
+/// extensions and specialized roots. Publication resolves shared operations through an alias of the generic instantiation.</para>
 /// </remarks>
 internal static class GenericFormatterReuse
 {
@@ -167,7 +168,9 @@ internal static class GenericFormatterReuse
         internal FormatterModel Closed = null!;
         internal Category[] Categories = null!;
         internal string BaseName = null!;
+        // The requested operations are split between the shared owner and its specialized closed roots.
         internal GeneratedOperations Operations;
+        internal GeneratedOperations ClosedOperations;
         internal Func<GeneratedOperations, string> RenderClosed = null!;
         internal Func<SharedFormatterSet, string, string[], FormatterModel, GeneratedOperations, string> RenderGeneric = null!;
         internal string Text = string.Empty;
@@ -280,6 +283,12 @@ internal static class GenericFormatterReuse
             FormatterModel item = model.Arguments[0];
             // A closed owner of a forwarded element is published by its family's forwarding template.
             bool forwardedFact = fact is { ForwardedType: not null };
+            // A shared placeholder has no record body for the existing exact List reservation.
+            // Keep that write root concrete while sharing the other eligible operations.
+            GeneratedOperations closedOperations = (operations & GeneratedOperations.BinaryWrite) != 0 &&
+                FormatterCapabilities.SequenceInterface(shape.Definition) &&
+                FormatterElementEmitter.ReservableCollectionElement(_set, item) != null
+                ? GeneratedOperations.BinaryWrite : GeneratedOperations.None;
             // An array of arrays or of forwarded collections is published by the array forwarding template, and an array or list
             // of single-rank arrays also publishes compressed roots that compress each element.
             bool forwarding = shape == ArrayFamily && item.Definition is FormatterDefinitions.Array or "$forwarded";
@@ -292,8 +301,9 @@ internal static class GenericFormatterReuse
                 Family = shape,
                 Closed = model,
                 Compressed = compressed,
+                ClosedOperations = closedOperations,
                 Categories = new[] { category },
-                Operations = operations,
+                Operations = operations & ~closedOperations,
                 RenderClosed = renderClosed,
                 BaseName = shape.Name + "Of" + (model.Arguments[0].Layout != null ? "Layout" : Spell(category)),
                 // The closed publisher renders a raw element with the family's scalar template and any other element with its
@@ -363,7 +373,7 @@ internal static class GenericFormatterReuse
             }
             foreach (Plan plan in _plans)
             {
-                if (counts[(plan.BaseName, plan.Operations)] == 1)
+                if (plan.Operations == GeneratedOperations.None || counts[(plan.BaseName, plan.Operations)] == 1)
                 {
                     yield return Closed(plan);
                     continue;
@@ -449,7 +459,7 @@ internal static class GenericFormatterReuse
             }
 
             static KeyValuePair<string, string> Closed(Plan plan) => new("LuminPack.SharedFormatters/Closed_" +
-                ReadableTypeName.Of(GeneratedNames.PayloadKey(plan.Closed.Type)) + ".g.cs", plan.RenderClosed(plan.Operations));
+                ReadableTypeName.Of(GeneratedNames.PayloadKey(plan.Closed.Type)) + ".g.cs", plan.RenderClosed(plan.Operations | plan.ClosedOperations));
         }
 
         /// <summary>Renders the generic owner with placeholders, or returns null when the render still names a closed type.</summary>
@@ -654,7 +664,9 @@ internal static class GenericFormatterReuse
                     substitutions[plan.Family.Parameters[index]] = plan.Closed.Arguments[index].Type;
             var lines = new List<string>();
             var aliases = new HashSet<string>(StringComparer.Ordinal);
-            var forwarded = new HashSet<string>(StringComparer.Ordinal);
+            var availableRoots = new HashSet<string>(StringComparer.Ordinal);
+            if ((plan.ClosedOperations & GeneratedOperations.BinaryWrite) != 0)
+                availableRoots.Add("RootWrite");
             string root = "LuminRoots_" + plan.Name;
             string? array = plan.Family.Rank == 0 ? null : plan.Family.Spell(plan.Family.Parameters);
             foreach (GeneratedText.Method method in GeneratedText.ReadMethods(plan.Text))
@@ -682,7 +694,7 @@ internal static class GenericFormatterReuse
                         modifiers.StartsWith("out ", StringComparison.Ordinal) ? "out " + name : name;
                 }
                 string generics = method.Generics.Length == 0 ? string.Empty : "<" + string.Join(", ", method.Generics) + ">";
-                forwarded.Add(method.Name);
+                availableRoots.Add(method.Name);
                 lines.Add("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
                 foreach (string line in signature.Split('\n'))
                     lines.Add(line.Trim());
@@ -690,24 +702,24 @@ internal static class GenericFormatterReuse
                 lines.Add(string.Empty);
             }
             FormatterOwnerFile.Projection? projection = FormatterOwnerFile.Current;
-            FormatterOwnerFile.Current = new FormatterOwnerFile.Projection(null, lines) { Aliases = aliases };
+            FormatterOwnerFile.Current = new FormatterOwnerFile.Projection(null, lines) { Aliases = aliases, ClosedOperations = plan.ClosedOperations };
             string text;
             try
             {
-                text = plan.RenderClosed(plan.Operations);
+                text = plan.RenderClosed(plan.Operations | plan.ClosedOperations);
             }
             finally
             {
                 FormatterOwnerFile.Current = projection;
             }
-            // Entries and extensions that reach a closed root the shared owner lacks keep the closed owner.
+            // Keep the original owner if an entry reaches a root absent from both the closed and shared bodies.
             string closed = "LuminRoots_" + ReadableTypeName.Of(GeneratedNames.PayloadKey(plan.Closed.Type)) + ".";
             for (int index = text.IndexOf(closed, StringComparison.Ordinal); index >= 0; index = text.IndexOf(closed, index + 1, StringComparison.Ordinal))
             {
                 int start = index + closed.Length, end = start;
                 while (end < text.Length && (char.IsLetterOrDigit(text[end]) || text[end] == '_'))
                     end++;
-                if (!forwarded.Contains(text.Substring(start, end - start)))
+                if (!availableRoots.Contains(text.Substring(start, end - start)))
                     return null;
             }
             return text;

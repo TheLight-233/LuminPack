@@ -337,7 +337,7 @@ internal static class FormatterCapabilities
     /// <summary>Identifies the five sequence interfaces whose exact list and array lanes share traversal.</summary>
     /// <param name="definition">The open framework definition name.</param>
     /// <returns>Whether this is a sequence interface that can hold a list or array.</returns>
-    private static bool SequenceInterface(string definition) => definition is "System.Collections.Generic.IEnumerable" or
+    internal static bool SequenceInterface(string definition) => definition is "System.Collections.Generic.IEnumerable" or
         "System.Collections.Generic.ICollection" or "System.Collections.Generic.IReadOnlyCollection" or
         "System.Collections.Generic.IList" or "System.Collections.Generic.IReadOnlyList";
 
