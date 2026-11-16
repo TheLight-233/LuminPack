@@ -217,7 +217,13 @@ internal static class ConcurrentQueueOwnerFile
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
                     w.Blank();
-                    w.Line("value.Clear();");
+                    if (!ownerRead && set.FindFormatter(queue)?.Supports("ClearConcurrentQueue") == true)
+                    {
+                        w.Line("if (length is <= 32 or > 4096 || !global::LuminPack.Code.LuminPackCollectionAccess.TryClearConcurrentQueue(value, length))");
+                        w.Indented(() => w.Line("value.Clear();"));
+                    }
+                    else
+                        w.Line("value.Clear();");
                     w.Line("if (length == 0)");
                     w.Indented(() => w.Line("goto operationComplete_RootRead;"));
                     w.Line("int remaining = length;");

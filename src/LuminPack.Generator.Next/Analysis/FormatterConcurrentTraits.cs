@@ -138,6 +138,24 @@ internal static class FormatterConcurrentTraits
                 SymbolEqualityComparer.Default.Equals(method.ReturnType, collection.OriginalDefinition.Construct(method.TypeParameters[0])));
     }
 
+    /// <summary>Checks the optional exact concurrent queue reset in the referenced Core.</summary>
+    /// <param name="compilation">The actual consumer metadata.</param>
+    /// <param name="queue">The declared concurrent queue.</param>
+    /// <returns>Whether the bounded raw reader can attempt the queue reset.</returns>
+    internal static bool HasSizedConcurrentQueueClear(Compilation compilation, INamedTypeSymbol queue)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        return owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
+            owner.GetMembers("TryClearConcurrentQueue").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1,
+                    ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 2 &&
+                method.TypeParameters[0].HasUnmanagedTypeConstraint && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+                method.Parameters[0].RefKind == RefKind.None && method.Parameters[1].RefKind == RefKind.None &&
+                method.Parameters[1].Type.SpecialType == SpecialType.System_Int32 &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, queue.OriginalDefinition.Construct(method.TypeParameters[0])));
+    }
+
     /// <summary>Checks the callback-free framework contract and complete staged-publication helper.</summary>
     /// <param name = "compilation">The actual consumer metadata.</param>
     /// <param name = "element">The declared stack element.</param>

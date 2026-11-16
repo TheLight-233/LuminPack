@@ -256,6 +256,10 @@ internal static class FormatterCapabilities
                 result.Add(factory);
         }
 
+        if (definition == "System.Collections.Concurrent.ConcurrentQueue" && modern && !unity &&
+            FormatterConcurrentTraits.HasSizedConcurrentQueueClear(compilation, named))
+            result.Add("ClearConcurrentQueue");
+
         if (definition is "System.Collections.Concurrent.ConcurrentBag" or "System.Collections.Concurrent.ConcurrentStack" &&
             named.TypeArguments[0].SpecialType == SpecialType.System_String &&
             FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteCheckedStrings", named.TypeArguments[0]))
