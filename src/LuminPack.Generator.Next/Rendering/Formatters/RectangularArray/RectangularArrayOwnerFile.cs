@@ -131,10 +131,25 @@ internal static class RectangularArrayOwnerFile
                     Unsafe + ".Add(ref dimensions, " + offset + "));");
             }
             w.Line("if (!reader.TryReadCollectionHead(out var length" + (layout != null ? ", 0" : "") + ")) " + Error + ".ThrowInvalidCollection();");
-            w.Line("long expectedLength = " + string.Join(" || ", dimensions.Select(dimension => dimension + " == 0")) + " ? 0 : 1;");
-            foreach (string dimension in dimensions)
-                AccumulateDimension(w, dimension);
-            w.Line("if (expectedLength != length) " + Error + ".ThrowMultiDimensionalArrayLengthMismatch();");
+            if (rank == 2)
+            {
+                // Two nonnegative Int32 dimensions fit in an Int64 product, even when either dimension is zero.
+                foreach (string dimension in dimensions)
+                    w.Line("if (" + dimension + " < 0) " + Error + ".ThrowNegativeMultiDimensionalArrayDimension();");
+                w.Line("long expectedLength = (long)" + dimensions[0] + " * " + dimensions[1] + ";");
+                w.Line("if (expectedLength != length)");
+                w.Open();
+                w.Line("if (expectedLength > int.MaxValue) " + Error + ".ThrowMultiDimensionalArrayDimensionsTooLarge();");
+                w.Line(Error + ".ThrowMultiDimensionalArrayLengthMismatch();");
+                w.Close();
+            }
+            else
+            {
+                w.Line("long expectedLength = " + string.Join(" || ", dimensions.Select(dimension => dimension + " == 0")) + " ? 0 : 1;");
+                foreach (string dimension in dimensions)
+                    AccumulateDimension(w, dimension);
+                w.Line("if (expectedLength != length) " + Error + ".ThrowMultiDimensionalArrayLengthMismatch();");
+            }
             if (layout != null)
                 FormatterStorageEmitter.Validate(w, layout, "length");
             if (raw)
