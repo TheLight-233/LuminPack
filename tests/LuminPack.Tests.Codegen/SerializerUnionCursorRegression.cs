@@ -77,9 +77,7 @@ internal static class SerializerUnionCursorRegression
         VerifyCollectionDispatch(references);
         var modern = Compilation(references, "Full", allowUnsafe: true, modern: true);
         var modernDriver = Driver(modern: true).RunGeneratorsAndUpdateCompilation(modern, out var modernOutput, out _);
-        Require(!CursorSwitches(modernDriver).Any() &&
-            Generated(modernDriver).Contains("nextIndex = itemValue.LuminPackUnionSerializeCursor_", StringComparison.Ordinal),
-            "The modern seven-case dictionary must use its root's virtual cursor tier.");
+        VerifyCursorGuards(modernDriver, new[] { ("global::Fixed", 1) });
         Execute(modernOutput);
 
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
@@ -134,7 +132,7 @@ internal static class SerializerUnionCursorRegression
                     Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CheckBuffer" } } check &&
                 assignment.Left.ToString() == check.ArgumentList.Arguments[0].Expression.ToString()),
                 "The dictionary must check and reuse its actual unpublished cursor rather than the stale shared index.");
-            VerifyCursorPatterns(driver, new[] { ("global::Fixed", 1) });
+            VerifyCursorGuards(driver, new[] { ("global::Fixed", 1) });
             Require(cursorSlots.Any(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "UnusedRoot" }),
                 "Automatic generation must retain the formatter slots of a declared Union even without a local serializer call.");
             Execute(output);
@@ -156,7 +154,7 @@ internal static class SerializerUnionCursorRegression
                 new CSharpParseOptions(LanguageVersion.CSharp13), "Root.cs"));
             var retainedWide = driver.RunGeneratorsAndUpdateCompilation(widened, out var widenedOutput, out diagnostics);
             Require(Files(retainedWide).SequenceEqual(Files(Driver().RunGenerators(widened))), "A newly fixed case retained a stale cursor call.");
-            VerifyCursorPatterns(retainedWide, new[] { ("global::Fixed", 1), ("global::Private", 3) });
+            VerifyCursorGuards(retainedWide, new[] { ("global::Fixed", 1), ("global::Private", 3) });
             Execute(widenedOutput);
 
             // The dictionary guard depends on the root's declared string profile across retained compilations.
@@ -171,7 +169,7 @@ internal static class SerializerUnionCursorRegression
         var safe = Driver().RunGeneratorsAndUpdateCompilation(Compilation(references, "Minimal", false), out var safeOutput, out _);
         Require(!safe.GetRunResult().Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), "Unsafe-disabled cursor generation failed.");
         Execute(safeOutput);
-        Console.WriteLine("Passed fixed Union cursor signatures, internal XML policy, large fixed growth, case eligibility, modern virtual and portable pattern tiers, wide/generic fallback, automatic retention, unsafe-disabled output and retained/fresh volatility, widening and profile edits.");
+        Console.WriteLine("Passed fixed Union cursor signatures, internal XML policy, large fixed growth, exact case dispatch on both targets, wide/generic fallback, automatic retention, unsafe-disabled output and retained/fresh volatility, widening and profile edits.");
     }
 
     /// <summary>Compiles modern fixed Union collections and verifies ordered per-element wire and round trips.</summary>
@@ -235,36 +233,43 @@ internal static class SerializerUnionCursorRegression
         }
     }
 
-    /// <summary>Checks that a portable dictionary applies its root's case patterns and uses the fixed kernel only for eligible cases.</summary>
+    /// <summary>Checks that a dictionary applies its root's exact comparisons and uses the fixed kernel only for eligible cases.</summary>
     /// <param name="driver">The completed generation.</param>
     /// <param name="cases">The expected fixed cases and their tags, in tag order.</param>
-    private static void VerifyCursorPatterns(GeneratorDriver driver, (string Type, int Tag)[] cases)
+    private static void VerifyCursorGuards(GeneratorDriver driver, (string Type, int Tag)[] cases)
     {
-        var switches = CursorSwitches(driver).ToArray();
-        Require(switches.Length != 0, "The dictionary lost its root patterns or its cursor slot fallback.");
-        foreach (var dispatch in switches)
+        var chains = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+            .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<IfStatementSyntax>())
+            .Where(node => node.Parent is not ElseClauseSyntax &&
+                node.Condition.ToString().Contains(" == typeof(global::Fixed)", StringComparison.Ordinal) &&
+                node.Statement.ToString().Contains("nextIndex = ", StringComparison.Ordinal)).ToArray();
+        Require(chains.Length != 0, "The dictionary lost its exact case chain.");
+        foreach (var chain in chains)
         {
-            Require(dispatch.Sections.Count == 8, "The portable cursor switch must use all seven cases and the virtual fallback.");
-            var fixedArms = dispatch.Sections.Where(section => section.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal)).ToArray();
-            Require(fixedArms.Length == cases.Length, "A non-fixed case entered the fixed cursor kernel.");
+            var fixedArms = new List<IfStatementSyntax>();
+            int count = 0;
+            StatementSyntax? branch = chain;
+            while (branch is IfStatementSyntax arm)
+            {
+                count++;
+                if (arm.Statement.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal))
+                    fixedArms.Add(arm);
+                branch = arm.Else?.Statement;
+            }
+            Require(count == 7 && branch is BlockSyntax &&
+                branch.ToString().Contains("writer.CurrentIndex = nextIndex", StringComparison.Ordinal) &&
+                branch.ToString().Contains("LuminPackUnionWriteUnmatched_", StringComparison.Ordinal),
+                "The cursor chain must try all seven cases and publish the cursor before registration.");
+            Require(fixedArms.Count == cases.Length, "A non-fixed case entered the fixed cursor kernel.");
             for (int index = 0; index < cases.Length; index++)
             {
                 var (type, tag) = cases[index];
-                Require(fixedArms[index].Labels.Single() is CasePatternSwitchLabelSyntax { Pattern: DeclarationPatternSyntax pattern } &&
-                    pattern.Type.ToString() == type && fixedArms[index].ToString().Contains("(byte)" + tag, StringComparison.Ordinal),
-                    "The cursor switch lost or reordered " + type + ".");
+                Require(fixedArms[index].Condition is BinaryExpressionSyntax { Right: TypeOfExpressionSyntax typeOf } &&
+                    typeOf.Type.ToString() == type && fixedArms[index].Statement.ToString().Contains("(byte)" + tag, StringComparison.Ordinal),
+                    "The cursor chain lost or reordered " + type + ".");
             }
         }
     }
-
-    /// <summary>Handles cursor switches for <c>SerializerUnionCursorRegression</c>.</summary>
-    /// <param name="driver">The generator driver used for this run.</param>
-    /// <returns>The resulting <c>IEnumerable&lt;SwitchStatementSyntax&gt;</c>.</returns>
-    private static IEnumerable<SwitchStatementSyntax> CursorSwitches(GeneratorDriver driver)
-        => driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
-            .SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<SwitchStatementSyntax>())
-            .Where(node => node.Sections.Any(section => section.Labels.Any(label => label.IsKind(SyntaxKind.DefaultSwitchLabel)) &&
-                section.ToString().Contains("LuminPackUnionSerializeCursor_", StringComparison.Ordinal)));
 
     /// <summary>Concatenates every generated source for structural checks.</summary>
     /// <param name="driver">The completed generation.</param>

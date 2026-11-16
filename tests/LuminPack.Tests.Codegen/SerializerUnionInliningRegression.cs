@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 /// <summary>Checks direct known union cases against the retained virtual and generic formatter contract.</summary>
 internal static class SerializerUnionInliningRegression
 {
-    /// <summary>Verifies class/interface cases, wide tags, inherited fallback, closed generic precedence, and callback order.</summary>
+    /// <summary>Verifies class/interface cases, wide tags, unknown subtypes, closed generic precedence, and callback order.</summary>
     /// <param name="references">Runtime and platform references.</param>
     internal static void Run(MetadataReference[] references)
     {
@@ -44,7 +44,7 @@ internal static class SerializerUnionInliningRegression
                 public static int Check()
                 {
                     int cases = 0;
-                    foreach (Animal value in new Animal[] { null!, new Cat(), new Dog(), new Kitten(), new UnknownCat() })
+                    foreach (Animal value in new Animal[] { null!, new Cat(), new Dog(), new Kitten() })
                     {
                         Events.Clear();
                         var expected = LuminPackSerializer.Serialize(in value);
@@ -88,6 +88,18 @@ internal static class SerializerUnionInliningRegression
                         if (value is null ? restored is not null : restored is null) throw new Exception("Union null framing changed.");
                         cases++;
                     }
+                    Animal unknown = new UnknownCat { Name = "unknown" };
+                    try
+                    {
+                        LuminPackSerializer.Serialize(in unknown);
+                        throw new Exception("An unregistered binary subtype inherited the case writer.");
+                    }
+                    catch (Exception error) when (error.Message.Contains(nameof(UnknownCat))) { }
+                    Animal jsonUnknown = null!;
+                    LuminPackSerializer.DeserializeJson(LuminPackSerializer.SerializeJson<Animal, LuminPack.Option.LuminPackUtf16LengthOptions>(unknown), ref jsonUnknown);
+                    if (jsonUnknown is not Cat { Name: "unknown" })
+                        throw new Exception("JSON inherited case dispatch changed.");
+                    cases++;
                     foreach (IShape value in new IShape[] { null!, new Point { X = 19, Y = 23 }, new Circle() })
                     {
                         var expected = LuminPackSerializer.Serialize(in value);
@@ -144,8 +156,7 @@ internal static class SerializerUnionInliningRegression
                 bool perTypeFormatter = calls.Any(call => (model.GetSymbolInfo(call).Symbol as IMethodSymbol) is { } symbol &&
                     symbol.ContainingType.Name.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
 
-                // Convenience entries forward to the sole state implementation. The state implementation
-                // retains the hidden virtual Union boundary and never dispatches through a type map.
+                // Convenience entries forward to the sole state implementation, which calls the compiled Union boundary.
                 Require(!perTypeFormatter, "A union entry retained a formatter call: " + method);
                 var implementations = StateImplementations(method, output).ToArray();
                 Require(implementations.Length == 1, "A Union convenience entry must call exactly one state implementation: " + name);
@@ -170,7 +181,7 @@ internal static class SerializerUnionInliningRegression
                 {
                     Require(calls.Any(call => call.Expression is MemberAccessExpressionSyntax forward &&
                         forward.Name.Identifier.ValueText.StartsWith("LuminPackUnion", StringComparison.Ordinal)),
-                        "A concrete union write entry lost its single virtual union forwarding layer: " + name);
+                        "A concrete union write entry lost its compiled Union forwarding layer: " + name);
                 }
             }
         }
@@ -207,7 +218,7 @@ internal static class SerializerUnionInliningRegression
         Require(!editedOutput.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error),
             "A new closed Union specialization did not compile: " + string.Join(Environment.NewLine, editedOutput.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));
         Require(Files(retained.RunGenerators(input)) == Files(driver), "Removing a closed Union specialization did not restore fresh output.");
-        Console.WriteLine("Passed direct class/interface union cases, wide tags, inherited virtual fallback, closed/open generic priority, callback order, and generic wire parity.");
+        Console.WriteLine("Passed direct class/interface union cases, wide tags, unknown binary subtype rejection, inherited JSON dispatch, closed/open generic priority, callback order, and generic wire parity.");
     }
 
     /// <summary>Follows declaration and profile convenience forwards to the unique complete state body.</summary>

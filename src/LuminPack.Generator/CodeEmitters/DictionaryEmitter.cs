@@ -253,7 +253,8 @@ public static partial class DictionaryEmitter
                 sb.AppendLine($"                    nextIndex += global::System.Runtime.CompilerServices.Unsafe.SizeOf<{keyType}>();");
                 sb.AppendLine($"                    {valueType} itemValue = entry.Value;");
                 sb.AppendLine("                    if (itemValue is null) { writer.GetSpanReference(nextIndex) = 255; nextIndex++; }");
-                fieldData.UnionWriteDispatch.AppendCursorDispatch(sb, "                    ", fieldData.UnionCursorSuffix, fieldData.UnionCursorCases);
+                fieldData.UnionWriteDispatch.AppendCursorDispatch(sb, "                    ", fieldData.UnionCursorSuffix, fieldData.UnionCursorCases,
+                    valueType);
             }
             else
             {

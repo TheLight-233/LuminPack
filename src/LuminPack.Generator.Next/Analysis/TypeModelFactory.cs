@@ -1460,7 +1460,7 @@ internal static partial class TypeModelFactory
         {
             if (root is not { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } || !CanGeneratePartial(root))
                 return UnionDispatchTier.Virtual;
-            if (declared.Count == 0 || Options.Net8 && declared.Count > 4)
+            if (declared.Count == 0)
                 return UnionDispatchTier.Virtual;
             var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
             foreach (var item in declared.OrderBy(member => member.Tag))
@@ -1472,7 +1472,7 @@ internal static partial class TypeModelFactory
             if (Options.Net8 && Options.RegisterMode == RegisterMode.Disabled && declared.Count == 1 &&
                 declared[0].Type.IsSealed && ClosedUnion(root))
                 return UnionDispatchTier.ExactType;
-            return UnionDispatchTier.ExactPatterns;
+            return Options.Net8 && declared.Count > 4 ? UnionDispatchTier.BinaryExactTypes : UnionDispatchTier.ExactPatterns;
         }
 
         /// <summary>Lists the exact tier cases in tag order, or nothing for the virtual tier.</summary>

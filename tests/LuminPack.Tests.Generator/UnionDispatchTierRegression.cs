@@ -16,48 +16,48 @@ internal static class UnionDispatchTierRegression
             """;
         // Without registration, a closed root with one sealed case calls the case directly.
         string direct = Compiled(Generate(single, register: false), "Root");
-        Require(direct.Contains("Unsafe.As<global::Only>(value).LuminPackUnionSerialize_") && !direct.Contains("case global::Only"),
+        Require(direct.Contains("Unsafe.As<global::Only>(value).LuminPackUnionSerialize_") && !direct.Contains("typeof(global::Only)"),
             "A closed single-case root without registration must call its case directly.", direct);
         string legacySingle = Compiled(Generate(single, register: false, modern: false), "Root");
-        Require(legacySingle.Contains("case global::Only ") && legacySingle.Contains("default:") &&
-            !legacySingle.Contains("Unsafe.As<global::Only>"), "A portable single-case root must use its exact pattern.", legacySingle);
+        Require(HasExactGuard(legacySingle, "Only") && legacySingle.Contains("ThrowNotFoundInUnionType"),
+            "A portable single-case root must compare exact types and reject unknown cases.", legacySingle);
 
-        // Registration keeps the virtual fallback behind an exact guard.
+        // Registration handles unmatched cases directly.
         string guardedSingle = Compiled(Generate(single, register: true), "Root");
-        Require(guardedSingle.Contains("case global::Only ") && guardedSingle.Contains("value.LuminPackUnionSerialize_"),
-            "A registrable single-case root must guard its case before the virtual fallback.", guardedSingle);
+        Require(HasExactGuard(guardedSingle, "Only") && guardedSingle.Contains("LuminPackUnionWriteRegistered_") &&
+            !guardedSingle.Contains("value.LuminPackUnionSerialize_"),
+            "A registrable single-case root must look up unmatched cases without calling its virtual slot.", guardedSingle);
 
         // Another assembly can derive from a public root with a public constructor, so it keeps the guard.
         string open = Compiled(Generate(single.Replace("internal abstract", "public abstract").Replace("internal sealed", "public sealed"), register: false), "Root");
-        Require(open.Contains("case global::Only "), "An externally derivable root must keep the exact guard.", open);
+        Require(HasExactGuard(open, "Only"), "An externally derivable root must keep the exact guard.", open);
 
         // SingleImplementation closes a public root.
         string declared = Compiled(Generate(single.Replace("internal abstract", "[LuminPackOption(SingleImplementation = true)] public abstract")
             .Replace("internal sealed", "public sealed"), register: false), "Root");
-        Require(declared.Contains("Unsafe.As<global::Only>") && !declared.Contains("case global::Only"), "SingleImplementation must allow the direct call.", declared);
+        Require(declared.Contains("Unsafe.As<global::Only>") && !declared.Contains("typeof(global::Only)"), "SingleImplementation must allow the direct call.", declared);
 
         // A second, unpackable derived type in the compilation keeps the guard.
         string derived = Compiled(Generate(single + "\ninternal sealed class Other : Root { }", register: false), "Root");
-        Require(derived.Contains("case global::Only "), "Another derived source type must keep the exact guard.", derived);
+        Require(HasExactGuard(derived, "Only"), "Another derived source type must keep the exact guard.", derived);
         VerifyClosureEdit(single);
 
         string nonsealed = Compiled(Generate(single.Replace("sealed partial", "partial"), register: true), "Root");
-        Require(nonsealed.Contains("case global::Only caseValue when ((object)value).GetType() == typeof(global::Only):"),
-            "An assignable subtype must pass through the existing virtual fallback.", nonsealed);
+        Require(HasExactGuard(nonsealed, "Only") && nonsealed.Contains("LuminPackUnionWriteRegistered_") &&
+            !nonsealed.Contains("value.LuminPackUnionSerialize_"),
+            "An assignable subtype must use its own registration.", nonsealed);
 
         string cases(int count) => "using LuminPack.Attribute;\n[LuminPackable] public abstract partial class Many { public int Id; }\n" +
             string.Concat(Enumerable.Range(0, count).Select(index => $"[LuminPackable] public sealed partial class Case{index} : Many {{ public int Value; }}\n")) +
             "[LuminPackable] public partial class Holder { public System.Collections.Generic.List<Many> Items = new(); public Many[] ArrayItems; public System.Collections.Immutable.ImmutableArray<Many> ImmutableItems; }\n";
-        string four = Compiled(Generate(cases(4), register: true), "Many");
-        Require(Enumerable.Range(0, 4).All(index => four.Split('\n').Any(line =>
-            line.Contains($"case global::Case{index} ") && line.Contains("(ref writer); return;"))),
-            "Four cases must use one exact pattern and call per line.", four);
-        string five = Compiled(Generate(cases(5), register: true), "Many");
-        Require(!five.Contains("case global::Case") && five.Contains("value.LuminPackUnionSerialize_"),
-            "More than four cases on .NET 8+ must keep the single virtual call.", five);
-        string portableFive = Compiled(Generate(cases(5), register: true, modern: false), "Many");
-        Require(Enumerable.Range(0, 5).All(index => portableFive.Contains($"case global::Case{index} ")),
-            "All portable cases must use exact patterns.", portableFive);
+        foreach (bool modern in new[] { true, false })
+        foreach (int count in new[] { 4, 5 })
+        {
+            string dispatch = Compiled(Generate(cases(count), register: true, modern: modern), "Many");
+            Require(Enumerable.Range(0, count).All(index => HasExactGuard(dispatch, $"Case{index}")) &&
+                !dispatch.Contains("switch (value)") && !dispatch.Contains("value.LuminPackUnionSerialize_"),
+                "Every generated binary case must have an exact type branch.", dispatch);
+        }
 
         string collections = Generate(cases(5), register: true);
         Require(!collections.Contains("LuminPackUnionPartition") && !collections.Contains("LuminUnionPartitionMap"),
@@ -108,8 +108,8 @@ internal static class UnionDispatchTierRegression
         var after = before.ReplaceSyntaxTree(original, CSharpSyntaxTree.ParseText("internal sealed class Other : Root { }", options, "Other.cs"));
         string retained = GeneratedText(initial.RunGenerators(after));
         string fresh = GeneratedText(Driver(options).RunGenerators(after));
-        Require(retained == fresh && Compiled(retained, "Root").Contains("case global::Only "),
-            "Opening the root in another file must replace its retained direct calls with exact patterns.", Compiled(retained, "Root"));
+        Require(retained == fresh && HasExactGuard(Compiled(retained, "Root"), "Only"),
+            "Opening the root in another file must replace its retained direct calls with exact comparisons.", Compiled(retained, "Root"));
     }
 
     /// <summary>Handles disable registration for <c>UnionDispatchTierRegression</c>.</summary>
@@ -154,7 +154,8 @@ internal static class UnionDispatchTierRegression
         var methods = CSharpSyntaxTree.ParseText(generated).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
             .Where(method => method.Identifier.ValueText.StartsWith(marker, StringComparison.Ordinal) &&
                 (method.Identifier.ValueText.EndsWith("_Compiled", StringComparison.Ordinal) ||
-                 method.Identifier.ValueText.EndsWith("_Dispatch", StringComparison.Ordinal))).ToArray();
+                 method.Identifier.ValueText.EndsWith("_Dispatch", StringComparison.Ordinal)) ||
+                method.Identifier.ValueText.StartsWith("LuminPackUnionWriteUnmatched_global" + root + "_", StringComparison.Ordinal)).ToArray();
         if (methods.Length == 0) throw new InvalidOperationException("Missing the compiled write slot of " + root + ".");
         return string.Join("\n", methods.Select(method => method.ToFullString()));
     }
@@ -167,4 +168,10 @@ internal static class UnionDispatchTierRegression
     {
         if (!condition) throw new InvalidOperationException(message + Environment.NewLine + text);
     }
+
+    /// <summary>Checks for a runtime type equality guard for the specified case.</summary>
+    /// <param name="dispatch">The compiled binary write dispatch.</param>
+    /// <param name="type">The case's source type name.</param>
+    /// <returns>Whether the case has an exact type guard.</returns>
+    private static bool HasExactGuard(string dispatch, string type) => dispatch.Contains($" == typeof(global::{type})");
 }

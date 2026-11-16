@@ -67,26 +67,23 @@ public class FixedUnionCursorTest
         Assert.Equal(bytes, LuminPackSerializer.Serialize(copy));
     }
 
-    /// <summary>Preserves the original Union virtual slot, callbacks, nulls and growth in list writes.</summary>
+    /// <summary>Preserves the original case bytes, callbacks, nulls and growth in list writes.</summary>
     [Fact]
-    public void ListWritesRetainOriginalVirtualBoundaries()
+    public void ListWritesRetainCaseBoundaries()
     {
         var source = new List<CursorRoot?>
         {
             new FixedCase { Number = 11 },
-            new LegacyCase { Number = 22 },
-            new CursorOverrideCase { Number = 44 },
+            new FixedCase { Number = 22 },
+            new DerivedCase { Number = 44, Extra = 45 },
             new CallbackCase { Number = 33 },
             new VariableCase { Text = new string('a', 40_000) },
             null
         };
-        LegacyCase.Calls = CursorOverrideCase.Calls = CallbackCase.Calls = 0;
+        CallbackCase.Calls = 0;
         using var destination = new LuminBufferWriter(true);
         LuminPackSerializer.Serialize(in source, destination);
         byte[] actual = destination.GetSpan().ToArray();
-        Assert.Equal(1, LegacyCase.Calls);
-        Assert.Equal(9, LegacyCase.Position);
-        Assert.Equal(0, CursorOverrideCase.Calls);
         Assert.Equal(1, CallbackCase.Calls);
 
         using var reference = new LuminBufferWriter(true);
@@ -106,7 +103,8 @@ public class FixedUnionCursorTest
         var copy = global::LuminPackUnitTest.ConcreteReads.Read<List<CursorRoot?>>(actual, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(11, Assert.IsType<FixedCase>(copy[0]).Number);
         Assert.Equal(22, Assert.IsType<FixedCase>(copy[1]).Number);
-        Assert.Equal(44, Assert.IsType<FixedCase>(copy[2]).Number);
+        Assert.Equal(44, Assert.IsType<DerivedCase>(copy[2]).Number);
+        Assert.Equal(45, ((DerivedCase)copy[2]!).Extra);
         Assert.Equal(33, Assert.IsType<CallbackCase>(copy[3]).Number);
         Assert.Equal(new string('a', 40_000), Assert.IsType<VariableCase>(copy[4]).Text);
         Assert.Null(copy[5]);
@@ -193,9 +191,9 @@ public class FixedUnionCursorTest
         Assert.Null(copy[3]);
     }
 
-    /// <summary>Preserves old overrides, callbacks, nulls, buffer growth and sparse enumeration.</summary>
+    /// <summary>Preserves known case bytes, callbacks, nulls, buffer growth and sparse enumeration.</summary>
     [Fact]
-    public void CursorBridgePreservesOriginalVirtualBoundaries()
+    public void CursorBridgePreservesKnownCaseBoundaries()
     {
         var source = new Dictionary<int, CursorRoot?>
         {
@@ -203,7 +201,7 @@ public class FixedUnionCursorTest
             {
                 Number = 11
             },
-            [2] = new LegacyCase
+            [2] = new FixedCase
             {
                 Number = 22
             },
@@ -217,13 +215,11 @@ public class FixedUnionCursorTest
             },
             [5] = null
         };
-        LegacyCase.Calls = CallbackCase.Calls = 0;
+        CallbackCase.Calls = 0;
         using var actualDestination = new LuminBufferWriter(true);
         LuminPackSerializer.Serialize(in source, actualDestination);
         byte[] actual = actualDestination.GetSpan().ToArray();
         Assert.True(actualDestination.TotalLength > 32 * 1024);
-        Assert.Equal(1, LegacyCase.Calls);
-        Assert.Equal(17, LegacyCase.Position);
         Assert.Equal(1, CallbackCase.Calls);
         using var destination = new LuminBufferWriter(true);
         var writer = new LuminPackWriter(destination);
@@ -259,9 +255,9 @@ public class FixedUnionCursorTest
         Assert.Equal(22, Assert.IsType<FixedCase>(copy[2]).Number);
     }
 
-    /// <summary>Publishes the pending cursor on legacy failure and allows an explicit caller reset before retry.</summary>
+    /// <summary>Rejects unregistered overrides and releases the operation for an explicit retry.</summary>
     [Fact]
-    public void CursorFallbackRetainsExceptionCleanupAndReuse()
+    public void UnregisteredOverridesFailAndReleaseTheOperation()
     {
         var source = new Dictionary<int, CursorRoot?>
         {
@@ -275,18 +271,18 @@ public class FixedUnionCursorTest
             }
         };
         using var destination = new LuminBufferWriter(true);
-        try
-        {
-            LegacyCase.Throw = true;
-            var error = Assert.Throws<InvalidOperationException>(() => LuminPackSerializer.Serialize(in source, destination));
-            Assert.Equal("Controlled legacy-slot failure.", error.Message);
-            Assert.Equal(0, destination.CurrentIndex);
-        }
-        finally
-        {
-            LegacyCase.Throw = false;
-        }
+        LegacyCase.Calls = CursorOverrideCase.Calls = 0;
+        var error = Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Serialize(in source, destination));
+        Assert.Contains(typeof(LegacyCase).FullName!, error.Message, StringComparison.Ordinal);
+        Assert.Equal(0, destination.CurrentIndex);
+        Assert.Equal(0, LegacyCase.Calls);
+        var list = new List<CursorRoot?> { new CursorOverrideCase { Number = 44 } };
+        error = Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Serialize(in list, destination));
+        Assert.Contains(typeof(CursorOverrideCase).FullName!, error.Message, StringComparison.Ordinal);
+        Assert.Equal(0, destination.CurrentIndex);
+        Assert.Equal(0, CursorOverrideCase.Calls);
 
+        source[2] = new FixedCase { Number = 22 };
         destination.ResetForReuse();
         LuminPackSerializer.Serialize(in source, destination);
         var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CursorRoot?>>(destination.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
@@ -464,8 +460,7 @@ public partial class FixedCase : CursorRoot
 /// <summary>Simulates a previously compiled subtype overriding only the original slot.</summary>
 public sealed class LegacyCase : FixedCase
 {
-    public static int Calls, Position;
-    public static bool Throw;
+    public static int Calls;
     /// <summary>Observes published state before invoking the inherited original case body.</summary>
     /// <param name = "writer">The caller's current operation.</param>
 #if LUMINPACK_NEXT_GENERATOR
@@ -475,9 +470,6 @@ public sealed class LegacyCase : FixedCase
 #endif
     {
         Calls++;
-        Position = writer.Position;
-        if (Throw)
-            throw new InvalidOperationException("Controlled legacy-slot failure.");
 #if LUMINPACK_NEXT_GENERATOR
         base.Write_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56_Default(ref writer);
 #else

@@ -739,6 +739,9 @@ internal enum UnionDispatchTier
 
     /// <summary>The root dispatches on the exact case type.</summary>
     ExactType,
+
+    /// <summary>Known cases selected by exact type in binary writes.</summary>
+    BinaryExactTypes,
 }
 
 /// <summary>The read strategy of one Union case.</summary>

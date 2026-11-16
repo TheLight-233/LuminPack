@@ -16,7 +16,7 @@ internal enum UnionDispatchTier
     /// <summary>The original single virtual call.</summary>
     Virtual,
 
-    /// <summary>Exact type patterns for the generated cases with a virtual fallback.</summary>
+    /// <summary>Branches for the cases with statically generated slots.</summary>
     Pattern,
 
     /// <summary>A direct call of the only possible case's slot, without a type test.</summary>
@@ -28,7 +28,7 @@ internal enum UnionDispatchTier
 /// </summary>
 internal sealed class UnionDispatchTierPlan
 {
-    /// <summary>The largest case count that uses patterns on modern targets.</summary>
+    /// <summary>The largest case count that uses JSON patterns on modern targets.</summary>
     private const int MaximumModernPatternCases = 4;
 
     private static readonly UnionDispatchTierPlan VirtualPlan = new(UnionDispatchTier.Virtual, new List<(string, bool)>());
@@ -40,14 +40,17 @@ internal sealed class UnionDispatchTierPlan
 
     /// <summary>The fully qualified generated case types in tag order, and whether each is sealed.</summary>
     internal readonly List<(string Type, bool Sealed)> Cases;
+    private readonly bool _largeModernUnion;
 
     /// <summary>Captures an immutable decision.</summary>
     /// <param name="tier">The selected tier.</param>
     /// <param name="cases">The guarded or direct cases.</param>
-    private UnionDispatchTierPlan(UnionDispatchTier tier, List<(string Type, bool Sealed)> cases)
+    /// <param name="largeModernUnion">Whether JSON retains virtual-only dispatch for this root.</param>
+    private UnionDispatchTierPlan(UnionDispatchTier tier, List<(string Type, bool Sealed)> cases, bool largeModernUnion = false)
     {
         Tier = tier;
         Cases = cases;
+        _largeModernUnion = largeModernUnion;
     }
 
     /// <summary>Obtains the tier of a local class Union root.</summary>
@@ -71,8 +74,7 @@ internal sealed class UnionDispatchTierPlan
     {
         var metadata = CreateMetadata(compilation);
         var data = LuminPackSourceGenerator.GetSerializationMetadata(root, compilation, metadata);
-        if (!data.isUnion || !data.CanGenerateUnionDispatch || data.UnionMembers.Count == 0 ||
-            metadata.IsNet8 && data.UnionMembers.Count > MaximumModernPatternCases)
+        if (!data.isUnion || !data.CanGenerateUnionDispatch || data.UnionMembers.Count == 0)
             return VirtualPlan;
         var types = new List<INamedTypeSymbol>(data.UnionMembers.Count);
         var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
@@ -90,21 +92,39 @@ internal sealed class UnionDispatchTierPlan
         if (CanCallDirect(metadata) && types.Count == 1 && types[0].IsSealed && IsClosed(root, compilation) &&
             !GetClosure(compilation).MultipleDescendants.Contains(root))
             return new UnionDispatchTierPlan(UnionDispatchTier.Direct, cases);
-        return new UnionDispatchTierPlan(UnionDispatchTier.Pattern, cases);
+        return new UnionDispatchTierPlan(UnionDispatchTier.Pattern, cases, metadata.IsNet8 && cases.Count > MaximumModernPatternCases);
     }
+
+    /// <summary>Determines whether a format uses branches for the generated cases.</summary>
+    /// <param name="json">Whether the operation writes JSON.</param>
+    /// <returns>Whether to publish per-profile case selection.</returns>
+    internal bool UsesCaseBranches(bool json) => Tier == UnionDispatchTier.Pattern && (!json || !_largeModernUnion);
 
     /// <summary>Emits the selected dispatch of one compiled profile slot.</summary>
     /// <param name="slot">The profile slot name.</param>
+    /// <param name="json">Whether the operation writes JSON.</param>
+    /// <param name="binaryMiss">The existing registration or rejection action for an unmatched binary value.</param>
     /// <returns>A statement block that calls the slot and returns.</returns>
-    internal string Dispatch(string slot)
+    internal string Dispatch(string slot, bool json, string binaryMiss)
     {
         if (Tier == UnionDispatchTier.Direct)
             return "{ global::System.Runtime.CompilerServices.Unsafe.As<" + Cases[0].Type + ">(value)." + slot + "(ref writer); return; }";
         string fallback = "value." + slot + "(ref writer); return;";
-        if (Tier == UnionDispatchTier.Virtual)
+        if (!UsesCaseBranches(json))
             return "{ " + fallback + " }";
         var source = new StringBuilder().AppendLine("{");
-        AppendPatternSwitch(source, "    ", "value", (_, value) => value + "." + slot + "(ref writer); return;", fallback);
+        if (json)
+            AppendPatternSwitch(source, "    ", "value", (_, value) => value + "." + slot + "(ref writer); return;", fallback);
+        else
+        {
+            // Keep GetType next to typeof so the JIT can lower the comparison to method-table equality.
+            foreach (var (type, _) in Cases)
+            {
+                source.AppendLine($"    if (((object)value).GetType() == typeof({type}))");
+                source.AppendLine($"    {{ global::System.Runtime.CompilerServices.Unsafe.As<{type}>(value).{slot}(ref writer); return; }}");
+            }
+            source.Append("    ").AppendLine(binaryMiss);
+        }
         return source.Append('}').ToString();
     }
 
@@ -113,7 +133,9 @@ internal sealed class UnionDispatchTierPlan
     /// <param name="indent">The indentation of the case selection.</param>
     /// <param name="suffix">The root's original cursor slot suffix.</param>
     /// <param name="fixedCases">The exact cases eligible for the fixed cursor kernel, in tag order.</param>
-    internal void AppendCursorDispatch(StringBuilder source, string indent, string suffix, IReadOnlyList<(int Id, string Type)> fixedCases)
+    /// <param name="rootType">The exact Union root type.</param>
+    internal void AppendCursorDispatch(StringBuilder source, string indent, string suffix, IReadOnlyList<(int Id, string Type)> fixedCases,
+        string rootType)
     {
         string VirtualCall(string value) => $"nextIndex = {value}.LuminPackUnionSerializeCursor_{suffix}(ref writer, nextIndex);";
         if (Tier == UnionDispatchTier.Virtual)
@@ -136,8 +158,21 @@ internal sealed class UnionDispatchTierPlan
         {
             source.Append(indent).AppendLine("else");
             source.Append(indent).AppendLine("{");
-            AppendPatternSwitch(source, indent + "    ", "itemValue", (type, value) => CaseCall(type, value) + " break;",
-                VirtualCall("itemValue") + " break;");
+            string bodyIndent = indent + "    ";
+            for (int index = 0; index < Cases.Count; index++)
+            {
+                string type = Cases[index].Type;
+                source.Append(bodyIndent).Append(index == 0 ? "if" : "else if")
+                    .AppendLine($" (((object)itemValue).GetType() == typeof({type}))");
+                source.Append(bodyIndent).Append("    ")
+                    .AppendLine(CaseCall(type, $"global::System.Runtime.CompilerServices.Unsafe.As<{type}>(itemValue)"));
+            }
+            source.Append(bodyIndent).AppendLine("else");
+            source.Append(bodyIndent).AppendLine("{");
+            source.Append(bodyIndent).AppendLine("    writer.CurrentIndex = nextIndex;");
+            source.Append(bodyIndent).AppendLine($"    {rootType}.LuminPackUnionWriteUnmatched_{suffix}(itemValue, ref writer);");
+            source.Append(bodyIndent).AppendLine("    nextIndex = writer.GetCurrentSpanIndex();");
+            source.Append(bodyIndent).AppendLine("}");
             source.Append(indent).AppendLine("}");
         }
     }

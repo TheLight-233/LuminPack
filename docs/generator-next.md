@@ -28,7 +28,7 @@ A source generic method whose serializer call uses an open payload type runs its
 
 Ordinary records and their Union payloads share algorithms with stateless framing type arguments. `LuminPackObjectFraming` and `LuminPackPayloadFraming` live in Core. Their closed instantiations retain their own null/header handling, reservations, checked reads and publication boundaries. Wrappers that copy reader or writer state remain separate where failures must preserve the caller's cursor.
 
-Union writing propagates compiled options through one generic virtual method per format. Binary writes additionally retain one non-generic standard-profile slot so the common path avoids generic virtual dispatch overhead. Closed generic cases keep their cached dispatch slots. A Union reader uses one case switch for fresh and existing targets; each case determines whether the current instance has the exact required type.
+Union writing propagates compiled options through one generic virtual method per format. Binary writes additionally retain one non-generic standard-profile slot. For eligible local, non-generic abstract class roots, binary writers compare the exact runtime type before calling the generated case slot. An unrecognized runtime type uses the registered writer directly or raises an unknown-case error. Closed generic cases use their cached dispatch slots. A Union reader uses one case switch for fresh and existing targets. Each case determines whether the current instance has the exact required type.
 
 ## Owner structs and shared generic formatters
 

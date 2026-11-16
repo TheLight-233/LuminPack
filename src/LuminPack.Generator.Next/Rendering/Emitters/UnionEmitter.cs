@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
+using LuminPack.SourceGenerator.Next.Model;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
@@ -781,7 +782,22 @@ internal static class UnionEmitter
         void DispatchSlot(string method, bool generic)
         {
             string arguments = generic ? "<" + Profile + ">" : string.Empty;
-            if (model.UnionTier == 1)
+            var tier = (UnionDispatchTier)model.UnionTier;
+            if (!json && tier != UnionDispatchTier.Virtual)
+            {
+                // Keep GetType next to typeof so the JIT can lower the comparison to method-table equality.
+                foreach (string type in model.UnionTierCases)
+                {
+                    w.Line("if (((object)value).GetType() == typeof(" + type + "))");
+                    w.Open();
+                    w.Line("global::System.Runtime.CompilerServices.Unsafe.As<" + type + ">(value)." + method + arguments + "(ref writer);");
+                    w.Line("return;");
+                    w.Close();
+                }
+                w.Line("WriteRegistered_" + model.UnionSuffix + "(value, ref writer);");
+                return;
+            }
+            if (tier == UnionDispatchTier.ExactPatterns)
             {
                 w.Line("switch (value)");
                 w.Open();

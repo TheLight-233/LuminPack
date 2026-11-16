@@ -50,10 +50,11 @@ internal sealed partial class CompiledOperationProjection
         source.Append("public static void ").Append(method.Identifier.ValueText).Append("_Compiled<").Append(profileParameter).Append(">(ref ").Append(method.ParameterList.Parameters[0].Type).Append(" writer, ")
             .Append(rootName).Append(" value) where ").Append(profileParameter).AppendLine(" : struct, global::LuminPack.Option.ILuminPackOptions {");
         var tier = root != null ? UnionDispatchTierPlan.Get(root, _compilation) : null;
+        bool usesCaseBranches = tier?.UsesCaseBranches(json) == true;
         string SlotName(CompiledOptions profile) => method.Identifier.ValueText + (profile.Identity == declared.Identity ? "" : "_Options_" + profile.Identity);
-        string Dispatch(string name) => tier?.Tier == UnionDispatchTier.Pattern
+        string Dispatch(string name) => usesCaseBranches
             ? "{ " + name + "_Dispatch(ref writer, value); return; }"
-            : tier?.Dispatch(name) ?? "{ value." + name + "(ref writer); return; }";
+            : tier?.Dispatch(name, json, null) ?? "{ value." + name + "(ref writer); return; }";
         if (operation == "LuminPackUnionSerialize_" && HasCanonicalUnionProfiles(profiles))
             foreach (var profile in profiles)
             {
@@ -79,14 +80,27 @@ internal sealed partial class CompiledOperationProjection
         }
         source.AppendLine("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException(\"The compiled profile has an invalid string encoding or recording mode.\"); }");
         members.Add(SyntaxFactory.ParseMemberDeclaration(source.ToString()).NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
-        if (tier?.Tier == UnionDispatchTier.Pattern)
+        if (usesCaseBranches)
+        {
+            string unmatched = "LuminPackUnionWriteUnmatched_" + suffix;
+            if (!json)
+            {
+                string action = LuminPackGenerationTierResolver.RegisterModeFromAssembly(_compilation) == LuminPackRegisterMode.Disabled
+                    ? "global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(((object)value).GetType(), typeof(" + rootName + "));"
+                    : "LuminPackUnionWriteRegistered_" + suffix + "(value, ref writer);";
+                string miss = "internal static void " + unmatched + "(" + rootName + " value, ref " +
+                    method.ParameterList.Parameters[0].Type + " writer) { " + action + " }";
+                members.Add(SyntaxFactory.ParseMemberDeclaration(miss).NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
+            }
             foreach (var profile in profiles)
             {
                 string name = SlotName(profile);
                 string helper = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)] " +
-                    "private static void " + name + "_Dispatch(ref " + method.ParameterList.Parameters[0].Type + " writer, " + rootName + " value) " + tier.Dispatch(name);
+                    "private static void " + name + "_Dispatch(ref " + method.ParameterList.Parameters[0].Type + " writer, " + rootName + " value) " +
+                    tier.Dispatch(name, json, unmatched + "(value, ref writer);");
                 members.Add(SyntaxFactory.ParseMemberDeclaration(helper).NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
             }
+        }
     }
 
 

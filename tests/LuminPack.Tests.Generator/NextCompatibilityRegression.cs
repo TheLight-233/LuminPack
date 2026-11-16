@@ -65,7 +65,7 @@ internal static class NextCompatibilityRegression
                     throw new InvalidOperationException(name + ": " + string.Join(Environment.NewLine, emitted.Diagnostics));
                 byte[] image = pe.ToArray(), symbols = pdb.ToArray();
                 var rewritten = StaticCallAssembly.Rewrite(image, symbols, paths);
-                if (rewrite ? rewritten is not { Calls: 4, Pdb.Length: > 0 } : rewritten != null)
+                if (rewrite ? rewritten is not { Calls: 6, Pdb.Length: > 0 } : rewritten != null)
                     throw new InvalidOperationException(name + ": unexpected static rewrite.");
                 using var execution = new MemoryStream(rewritten?.Pe ?? image);
                 var assembly = context.LoadFromStream(execution);
@@ -120,6 +120,14 @@ internal static class NextCompatibilityRegression
             public string Text;
         }
 
+        [LuminPackable, LuminPackUnion(1, typeof(KnownCase))]
+        public abstract partial class UnionRoot { }
+
+        [LuminPackable]
+        public partial class KnownCase : UnionRoot { public int Number; }
+
+        public sealed class UnregisteredCase : KnownCase { }
+
         public static class Entry
         {
             public static void Main() => Exercise();
@@ -139,8 +147,23 @@ internal static class NextCompatibilityRegression
                         json.Wide != value.Wide || json.Optional != 23 || json.Text != value.Text)
                         return false;
                 }
-                return true;
+                byte[] unionBytes = WriteUnion(new KnownCase { Number = 41 });
+                if (unionBytes[0] != 1 ||
+                    LuminPackSerializer.Deserialize<UnionRoot, LuminPackUtf8VarIntOptions>(unionBytes) is not KnownCase { Number: 41 })
+                    return false;
+                try
+                {
+                    WriteUnion(new UnregisteredCase());
+                    return false;
+                }
+                catch (Exception error) when (error.Message.Contains(nameof(UnregisteredCase)))
+                {
+                    return true;
+                }
             }
+
+            private static byte[] WriteUnion(UnionRoot value)
+                => LuminPackSerializer.Serialize<UnionRoot, LuminPackUtf8VarIntOptions>(value);
         }
         """;
 }
