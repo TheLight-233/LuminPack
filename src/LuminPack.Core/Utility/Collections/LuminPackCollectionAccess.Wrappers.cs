@@ -105,13 +105,16 @@ public static partial class LuminPackCollectionAccess
         int captured = version, index = 0;
         while (index < count)
         {
-            var items = arrayField.AsSpan(0, count);
-            index += writer.WriteStringPrefix<TOptions>(items.Slice(index));
+            var remaining = new ReadOnlySpan<string?>(arrayField, index, count - index);
+            int written = writer.WriteStringPrefix<TOptions>(remaining);
+            index += written;
             if (version != captured)
                 LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
             if (index == count)
                 break;
-            writer.Write<TOptions>(items[index++]);
+            string? value = remaining[written];
+            index++;
+            writer.Write<TOptions>(value);
             if (version != captured)
                 LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
         }
