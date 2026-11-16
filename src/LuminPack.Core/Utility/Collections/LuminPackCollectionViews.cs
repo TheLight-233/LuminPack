@@ -865,12 +865,15 @@ public static partial class LuminPackCollectionAccess
     /// <param name="count">The number of items.</param>
     private static void Link<T>(LinkedList<T> list, T[] items, int count)
     {
-        var first = new LinkedListNode<T>(items[0]);
+        // Check the last source slot using the array's ordinary index exception.
+        _ = items[count > 0 ? count - 1 : 0];
+        ref T source = ref LuminPackMarshal.GetNotNullArrayReference(items);
+        var first = new LinkedListNode<T>(source);
         LuminFieldLayout.Field<object>(first, LuminCollectionLayouts.LinkedNodeList) = list;
         var previous = first;
         for (int i = 1; i < count; i++)
         {
-            var node = new LinkedListNode<T>(items[i]);
+            var node = new LinkedListNode<T>(Unsafe.Add(ref source, (nint)(uint)i));
             LuminFieldLayout.Field<object>(node, LuminCollectionLayouts.LinkedNodeList) = list;
             LuminFieldLayout.Field<object>(node, LuminCollectionLayouts.LinkedNodePrevious) = previous;
             LuminFieldLayout.Field<object>(previous, LuminCollectionLayouts.LinkedNodeNext) = node;
