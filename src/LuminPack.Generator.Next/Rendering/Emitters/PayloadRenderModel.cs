@@ -177,6 +177,9 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <summary>Whether a payload member of a reference type is preceded by a null object marker, whose read resets the member.</summary>
     internal readonly bool NullObjectGuard;
 
+    /// <summary>The object marker's member count when the checked object and payload readers share the same fixed body.</summary>
+    internal readonly int FixedPayloadMemberCount;
+
     /// <summary>Whether the member is a managed struct whose own read reuses the references the existing value holds, so a
     /// fresh enclosing struct starts it from the existing member, as the original expanded read reused them.</summary>
     internal readonly bool SeedExisting;
@@ -217,11 +220,12 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <param name="isVolatile">Whether to enable is volatile for this operation.</param>
     /// <param name="seedExisting">Whether to enable seed existing for this operation.</param>
     /// <param name="reservableArray">Whether to enable reservable array for this operation.</param>
+    /// <param name="fixedPayloadMemberCount">The checked marker's member count, or zero when the object reader is required.</param>
     internal RenderMember(string name, RenderMemberKind kind, string scalar, string typeName, int size, string formatter, ScalarKind fieldType,
         bool mirrored, string underlying = null, bool raw = false, bool builtin = false, PayloadRenderModel nested = null, bool formatterCall = false,
         bool property = false, RenderDictionary dictionary = null, RenderCollection collection = null, bool valueTypeParameter = false,
         bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false, string scopeProfile = null, SequenceFormatter sequence = null, bool isVolatile = false,
-        bool seedExisting = false, bool reservableArray = false)
+        bool seedExisting = false, bool reservableArray = false, int fixedPayloadMemberCount = 0)
     {
         SeedExisting = seedExisting;
         ReservableArray = reservableArray;
@@ -230,6 +234,7 @@ internal sealed class RenderMember : IEquatable<RenderMember>
         ScopeProfile = scopeProfile;
         ReferencePayload = referencePayload;
         NullObjectGuard = nullObjectGuard;
+        FixedPayloadMemberCount = fixedPayloadMemberCount;
         BareParameter = bareParameter;
         ValueTypeParameter = valueTypeParameter;
         Collection = collection;
@@ -283,7 +288,8 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <returns>The compiled member scope.</returns>
     internal RenderMember WithScope(string profile) => new RenderMember(Name, Kind, Scalar, TypeName, Size, Formatter, FieldType,
         Mirrored, Underlying, Raw, Builtin, Nested, FormatterCall, Property, Dictionary, Collection, ValueTypeParameter,
-        BareParameter, NullObjectGuard, ReferencePayload, profile, Sequence, Volatile, reservableArray: ReservableArray);
+        BareParameter, NullObjectGuard, ReferencePayload, profile, Sequence, Volatile, reservableArray: ReservableArray,
+        fixedPayloadMemberCount: FixedPayloadMemberCount);
 
     /// <summary>Whether fixed field access is volatile and excluded from adjacent-field copies.</summary>
     internal readonly bool Volatile;
@@ -310,7 +316,7 @@ internal sealed class RenderMember : IEquatable<RenderMember>
         Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin && FormatterCall == other.FormatterCall &&
         Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Collection, other.Collection) &&
         ValueTypeParameter == other.ValueTypeParameter && BareParameter == other.BareParameter &&
-        NullObjectGuard == other.NullObjectGuard && ReferencePayload == other.ReferencePayload &&
+        NullObjectGuard == other.NullObjectGuard && FixedPayloadMemberCount == other.FixedPayloadMemberCount && ReferencePayload == other.ReferencePayload &&
         Volatile == other.Volatile && ReservableArray == other.ReservableArray && ReferenceEquals(Sequence, other.Sequence) &&
         ScopeProfile == other.ScopeProfile && Equals(Nested, other.Nested);
 

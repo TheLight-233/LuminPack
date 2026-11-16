@@ -383,7 +383,9 @@ internal static class RenderModelFactory
                 string formatter = "global::LuminPack." + GeneratedNames.Owner(extension, payload.Type.GlobalName);
                 return new RenderMember(payload.Name, RenderMemberKind.Special, ReadableTypeName.Of(payload.Type.GlobalName),
                     payload.Type.GlobalName, 0, formatter,
-                    ScalarKind.Other, mirrored, property: property, referencePayload: true, nullObjectGuard: true);
+                    ScalarKind.Other, mirrored, property: property, referencePayload: true, nullObjectGuard: true,
+                    fixedPayloadMemberCount: !mirrored && !property && BinaryEmitter.HasEquivalentFixedPayloadRead(called)
+                        ? called.Members.Length : 0);
             }
             case CollectionMember collection:
                 return Collection(collection, extension, options);

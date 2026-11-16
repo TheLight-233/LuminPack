@@ -2436,7 +2436,7 @@ internal static partial class BinaryEmitter
         body.Add("}");
         body.Add("");
         foreach (var member in members)
-            AddMemberRead(body, model, member, w, "reader", Camel(member.Name) + "Temp");
+            AddMemberRead(body, model, member, w, "reader", Camel(member.Name) + "Temp", fresh: true);
         body.Add("// Construct the object and populate its members.");
         string arguments = string.Join(", ", model.ConstructorArguments.Select(name =>
             name == null ? "default" : Camel(name) + "Temp!"));

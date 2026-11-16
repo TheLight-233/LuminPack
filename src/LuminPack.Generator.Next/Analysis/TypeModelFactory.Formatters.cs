@@ -167,7 +167,8 @@ internal static partial class TypeModelFactory
                 return new FormatterModel(spelling, definition, arguments, raw, rawCollection, layout);
             }
 
-            bool ordinary = named.TypeKind == TypeKind.Class && GenerationMode(named) == "Object" && !HasAttribute(named, UnionAttribute);
+            bool ordinary = named.TypeKind == TypeKind.Class && GenerationMode(named) == "Object" &&
+                !HasAttribute(named, UnionAttribute) && !HasAttribute(named, "System.Runtime.CompilerServices.UnionAttribute");
             if (path.Active.Contains(named))
                 return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, ordinaryObject: ordinary);
             // A closed generic Union dispatches through its generic definition owner unless an exact external marker publishes
@@ -194,7 +195,8 @@ internal static partial class TypeModelFactory
                 ModelResult result = Analyze(named, depth + 1, path);
                 if (result.Model != null && result.IsComplete && CanPublish(result.Model))
                     return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, raw: rawCollection, rawCollection: rawCollection,
-                        layout: layout, payload: result.Model, ordinaryObject: ordinary, publishPayload: named.IsGenericType && (local || !ExplicitMarker(named)));
+                        layout: layout, payload: result.Model, ordinaryObject: ordinary && result.Model is not UnionModel,
+                        publishPayload: named.IsGenericType && (local || !ExplicitMarker(named)));
             }
 
             if (IsImplicitFormatterType(named))
