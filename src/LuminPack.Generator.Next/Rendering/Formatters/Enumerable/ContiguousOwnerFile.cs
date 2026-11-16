@@ -130,15 +130,16 @@ internal static class ContiguousOwnerFile
                     w.Line("int length = items.Length;");
                     w.Line("if (length != 0)");
                     w.Open();
-                    w.Line("ref var firstItem = ref " + MemoryMarshal + ".GetReference(items);");
-                    w.Line("int index = 0;");
+                    w.Line("ref var current = ref " + MemoryMarshal + ".GetReference(items);");
                     w.Line("do");
                     w.Open();
-                    w.Line("var item = " + Unsafe + ".Add(ref firstItem, (nint)(uint)index);");
+                    w.Line("var item = current;");
                     w.Line("count++;");
                     FormatterElementEmitter.Write(w, set, element, "item");
+                    w.Line("if (--length == 0) break;");
+                    w.Line("current = ref " + Unsafe + ".Add(ref current, 1);");
                     w.Close();
-                    w.Line("while (++index < length);");
+                    w.Line("while (true);");
                     w.Close();
                 }
                 w.Close();
@@ -174,14 +175,14 @@ internal static class ContiguousOwnerFile
                 w.Line("int length = items.Length;");
                 w.Line("if (length != 0)");
                 w.Open();
-                w.Line("ref var firstItem = ref " + MemoryMarshal + ".GetReference(items);");
-                w.Line("int index = 0;");
+                w.Line("ref var current = ref " + MemoryMarshal + ".GetReference(items);");
                 w.Line("do");
                 w.Open();
-                w.Line("ref readonly var item = ref " + Unsafe + ".Add(ref firstItem, (nint)(uint)index);");
-                FormatterElementEmitter.Write(w, set, element, "item");
+                FormatterElementEmitter.Write(w, set, element, "current");
+                w.Line("if (--length == 0) break;");
+                w.Line("current = ref " + Unsafe + ".Add(ref current, 1);");
                 w.Close();
-                w.Line("while (++index < length);");
+                w.Line("while (true);");
                 w.Close();
             }
 
