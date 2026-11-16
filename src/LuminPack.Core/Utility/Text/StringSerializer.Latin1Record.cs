@@ -205,8 +205,7 @@ public static partial class StringSerializer
                 ulong tail = LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)(length - 4))));
                 if (((head | tail) & 0xFF00FF00FF00FF00UL) == 0)
                 {
-                    LuminPackWriter.Write(ref destination, PackLatin1(head));
-                    LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(length - 4)), PackLatin1(tail));
+                    WritePackedLatin1(ref destination, (nuint)(uint)(length - 4), head, tail);
                     return Latin1Header(length);
                 }
             }
@@ -263,8 +262,7 @@ public static partial class StringSerializer
             return 0;
         if (length >= 4)
         {
-            LuminPackWriter.Write(ref destination, PackLatin1(head));
-            LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(length - 4)), PackLatin1(tail));
+            WritePackedLatin1(ref destination, (nuint)(uint)(length - 4), head, tail);
         }
         else
             LuminPackWriter.Write(ref destination, PackLatin1(head));
@@ -279,8 +277,8 @@ public static partial class StringSerializer
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static int WriteUtf16RecordPayloadSlow(ref byte destination, string value)
     {
-        ref char source = ref MemoryMarshal.GetReference(value.AsSpan());
         int length = value.Length;
+        ref char source = ref MemoryMarshal.GetReference(value.AsSpan());
 #if NET8_0_OR_GREATER
         if (Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && (uint)(length - 17) <= 47)
         {
@@ -346,8 +344,7 @@ public static partial class StringSerializer
                 ulong tail = LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)(length - 4))));
                 if (((head | tail) & 0xFF00FF00FF00FF00UL) != 0)
                     return false;
-                LuminPackWriter.Write(ref destination, PackLatin1(head));
-                LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(length - 4)), PackLatin1(tail));
+                WritePackedLatin1(ref destination, (nuint)(uint)(length - 4), head, tail);
                 return true;
             }
         }
@@ -390,6 +387,28 @@ public static partial class StringSerializer
         chars &= 0x0000FFFF0000FFFFUL;
         return (uint)(chars | (chars >> 16));
     }
+
+#if NET8_0_OR_GREATER
+    /// <summary>Stores two validated groups of four Latin-1 characters.</summary>
+    /// <param name="destination">The first byte of the bounded payload.</param>
+    /// <param name="back">The offset of its last four bytes.</param>
+    /// <param name="head">The first four code units with zero high bytes.</param>
+    /// <param name="tail">The last four code units with zero high bytes.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void WritePackedLatin1(ref byte destination, nuint back, ulong head, ulong tail)
+    {
+        if (Sse2.X64.IsSupported)
+        {
+            var input = Vector128.Create(head, tail).AsInt16();
+            ulong packed = Sse2.PackUnsignedSaturate(input, Vector128<short>.Zero).AsUInt64().ToScalar();
+            LuminPackWriter.Write(ref destination, (uint)packed);
+            LuminPackWriter.Write(ref Unsafe.Add(ref destination, back), (uint)(packed >> 32));
+            return;
+        }
+        LuminPackWriter.Write(ref destination, PackLatin1(head));
+        LuminPackWriter.Write(ref Unsafe.Add(ref destination, back), PackLatin1(tail));
+    }
+#endif
 
 #if NET8_0_OR_GREATER
     /// <summary>Narrows 17 to 64 characters with a leading and an overlapping trailing block and no loop.</summary>
