@@ -80,7 +80,14 @@ internal sealed partial class EnumerableOwnerContext
     /// <returns>Whether the object interface read was emitted.</returns>
     internal bool ReadObjectInterfaceItems(bool freshList = false)
     {
-        if (_element?.OrdinaryObject != true || !Supports("InterfaceTargetReuse"))
+        if (!Supports("InterfaceTargetReuse"))
+            return false;
+        // Shared sequence contracts retain the element kind on their container argument.
+        // The concrete strategy still owns clearing a null slot in the element read.
+        bool ordinaryObject = _element?.OrdinaryObject == true ||
+            _set.FindFormatter(Sequence)?.Arguments is { Length: 1 } arguments &&
+            arguments[0] is { Definition: "$strategy", OrdinaryObject: true };
+        if (!ordinaryObject)
             return false;
 
         string list = "global::System.Collections.Generic.List<" + Scalar + ">";

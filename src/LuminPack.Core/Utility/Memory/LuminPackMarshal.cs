@@ -149,7 +149,8 @@ public static partial class LuminPackMarshal
             SetListSize(list, length);
         else
             ResizeList(list, length);
-        return CollectionsMarshal.AsSpan(list).Slice(0, length);
+        // Both sizing paths establish this exact count; AsSpan still validates the backing array.
+        return CollectionsMarshal.AsSpan(list);
 #else
         if (list.Capacity < length)
             list.Capacity = length;

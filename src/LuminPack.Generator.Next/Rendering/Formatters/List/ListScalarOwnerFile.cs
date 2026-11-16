@@ -231,12 +231,28 @@ internal static class ListScalarOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("value ??= new " + collection + "(length);");
-                    w.Line("global::System.Span<" + scalar + "> payload = " + marshal + ".CreateSpan<" + scalar + ">(ref " + memory + ".As<byte, " + scalar + ">(ref reader.Cursor), 0);");
-                    w.Line("payload = " + formatter + ".GetListSpan(value, length);");
-                    w.Line("if (length != 0)");
-                    w.Line("    reader.Read(");
-                    w.Line("        ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(payload)),");
-                    w.Line("        unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
+                    if (scalar != "bool" && set.Options is { Net8: true, PointerCursor: false, SpanCursor: false })
+                    {
+                        // ReadLength proved the complete byte width; changing list size does not change reader state.
+                        w.Line("var payload = " + formatter + ".GetListSpan(value, length);");
+                        w.Line("if (length != 0)");
+                        w.Open();
+                        w.Line("uint payloadBytes = unchecked((uint)(length * " + memory + ".SizeOf<" + scalar + ">()));");
+                        w.Line("ref byte target = ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(payload));");
+                        w.Line("ref byte source = ref reader.Cursor;");
+                        w.Line("reader.Cursor = ref " + memory + ".Add(ref reader.Cursor, unchecked((nint)payloadBytes));");
+                        w.Line(formatter + ".CopyBlockUnaligned(ref target, ref source, payloadBytes);");
+                        w.Close();
+                    }
+                    else
+                    {
+                        w.Line("global::System.Span<" + scalar + "> payload = " + marshal + ".CreateSpan<" + scalar + ">(ref " + memory + ".As<byte, " + scalar + ">(ref reader.Cursor), 0);");
+                        w.Line("payload = " + formatter + ".GetListSpan(value, length);");
+                        w.Line("if (length != 0)");
+                        w.Line("    reader.Read(");
+                        w.Line("        ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(payload)),");
+                        w.Line("        unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
+                    }
                     w.Close();
                     w.Blank();
                     w.Line(preserve);
