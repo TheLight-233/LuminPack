@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Globalization;
+using System.Text;
 using LuminPack.Core;
 using LuminPack.Option;
 using Xunit;
@@ -70,6 +72,85 @@ public sealed unsafe class JsonIntegerUtf16WriteTest
             }
         }
         finally { CultureInfo.CurrentCulture = previous; }
+    }
+
+    /// <summary>Rejects a public cursor before the declared window without writing to the surrounding storage.</summary>
+    [Fact]
+    public void IntegerWritersRejectCursorBeforeWindow()
+    {
+        CheckIntegerCursor<LuminPackUtf8LengthOptions>();
+        CheckIntegerCursor<LuminPackUtf16LengthOptions>();
+    }
+
+    /// <summary>Checks exact integer output through buffer growth in both document encodings.</summary>
+    [Fact]
+    public void IntegerWritersKeepSegmentedOutput()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            CheckSegmentedIntegers<LuminPackUtf8LengthOptions>(Encoding.UTF8);
+            CheckSegmentedIntegers<LuminPackUtf16LengthOptions>(Encoding.Unicode);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    /// <summary>Verifies every scalar overload rejects a cursor before its reserved output.</summary>
+    /// <typeparam name="TOptions">The compiled document encoding.</typeparam>
+    private static void CheckIntegerCursor<TOptions>() where TOptions : struct, ILuminPackOptions
+    {
+        for (int operation = 0; operation < 8; operation++)
+        {
+            var bytes = new byte[96];
+            Array.Fill(bytes, (byte)0xcc);
+            Span<byte> window = bytes.AsSpan(16, 64);
+            var writer = new LuminPackJsonWriter(ref window, null!);
+            writer.Cursor = ref bytes[8];
+            Exception? failure = null;
+            try
+            {
+                switch (operation)
+                {
+                    case 0: writer.Write<TOptions>(byte.MaxValue); break;
+                    case 1: writer.Write<TOptions>(sbyte.MinValue); break;
+                    case 2: writer.Write<TOptions>(short.MinValue); break;
+                    case 3: writer.Write<TOptions>(ushort.MaxValue); break;
+                    case 4: writer.Write<TOptions>(int.MinValue); break;
+                    case 5: writer.Write<TOptions>(uint.MaxValue); break;
+                    case 6: writer.Write<TOptions>(long.MinValue); break;
+                    case 7: writer.Write<TOptions>(ulong.MaxValue); break;
+                }
+            }
+            catch (Exception error)
+            {
+                failure = error;
+            }
+            Assert.IsType<ArgumentOutOfRangeException>(failure);
+            Assert.All(bytes, static value => Assert.Equal((byte)0xcc, value));
+        }
+    }
+
+    /// <summary>Checks a complete integer array exceeds one output chunk and keeps its separators and values.</summary>
+    /// <typeparam name="TOptions">The compiled document encoding.</typeparam>
+    /// <param name="encoding">The corresponding byte decoder.</param>
+    private static void CheckSegmentedIntegers<TOptions>(Encoding encoding)
+        where TOptions : struct, ILuminPackOptions
+    {
+        const int Count = 400;
+        var output = new ArrayBufferWriter<byte>(1);
+        var writer = new LuminPackJsonWriter(output, null!, 1);
+        writer.WriteArrayStart<TOptions>();
+        for (int index = 0; index < Count; index++)
+            writer.Write<TOptions>(long.MinValue);
+        writer.WriteArrayEnd<TOptions>();
+        writer.FlushToBufferWriter();
+        string number = long.MinValue.ToString(CultureInfo.InvariantCulture);
+        string expected = "[" + string.Join(',', Enumerable.Repeat(number, Count)) + "]";
+        Assert.Equal(expected, encoding.GetString(output.WrittenSpan));
     }
 
     /// <summary>Records the observable writer boundary state for direct or scalar output.</summary>

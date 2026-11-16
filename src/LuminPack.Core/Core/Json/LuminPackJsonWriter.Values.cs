@@ -1193,6 +1193,35 @@ namespace LuminPack.Core
             WriteIntegerValue<TOptions>(value);
         }
 
+        /// <summary>Reserves the integer output and checks that the public cursor is inside the current window.</summary>
+        /// <param name="byteCount">The formatter's fixed capacity requirement.</param>
+        /// <param name="keepTailOnMiss">Whether the original checked path takes the entire remaining window.</param>
+        /// <returns>The validated destination at the current write position.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private Span<byte> ReserveIntegerDestination(int byteCount, bool keepTailOnMiss = false)
+        {
+            Span<byte> buffer = Buffer;
+            ref byte cursor = ref Current;
+            if ((uint)byteCount > (uint)buffer.Length ||
+                unchecked((ulong)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(buffer), ref cursor)) > (uint)(buffer.Length - byteCount))
+                cursor = ref ReserveIntegerDestinationSlow(byteCount, keepTailOnMiss);
+            return MemoryMarshal.CreateSpan(ref cursor, byteCount);
+        }
+
+        /// <summary>Uses existing growth and checked slicing when a cursor does not fit the current window.</summary>
+        /// <param name="byteCount">The formatter's fixed capacity requirement.</param>
+        /// <param name="keepTailOnMiss">Whether the formatter previously took the entire remaining window.</param>
+        /// <returns>The start of the validated destination in the current or refreshed window.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private ref byte ReserveIntegerDestinationSlow(int byteCount, bool keepTailOnMiss)
+        {
+            EnsureCapacity(byteCount);
+            Span<byte> destination = keepTailOnMiss
+                ? Buffer.Slice(Position).Slice(0, byteCount)
+                : Buffer.Slice(Position, byteCount);
+            return ref MemoryMarshal.GetReference(destination);
+        }
+
         /// <summary>Writes the complete int JSON value for scalar and fused collection callers.</summary>
         /// <param name = "value">The integer to format.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
@@ -1203,13 +1232,11 @@ namespace LuminPack.Core
             WriteCommaIfNeeded<TOptions>();
             if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
-                EnsureCapacity(11);
-                Advance(LuminPackJsonNumberFormatter.WriteInt32(MemoryMarshal.CreateSpan(ref Current, 11), value));
+                Advance(LuminPackJsonNumberFormatter.WriteInt32(ReserveIntegerDestination(11, keepTailOnMiss: true), value));
             }
             else
             {
-                EnsureCapacity(22);
-                var charSpan = MemoryMarshal.CreateSpan(ref Unsafe.As<byte, char>(ref Current), 11);
+                var charSpan = MemoryMarshal.Cast<byte, char>(ReserveIntegerDestination(22));
                 value.TryFormat(charSpan, out int written);
                 Advance(written << 1);
             }
@@ -1225,13 +1252,11 @@ namespace LuminPack.Core
             WriteCommaIfNeeded<TOptions>();
             if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
-                EnsureCapacity(10);
-                Advance(LuminPackJsonNumberFormatter.WriteUInt32(MemoryMarshal.CreateSpan(ref Current, 10), value));
+                Advance(LuminPackJsonNumberFormatter.WriteUInt32(ReserveIntegerDestination(10, keepTailOnMiss: true), value));
             }
             else
             {
-                EnsureCapacity(20);
-                var charSpan = MemoryMarshal.CreateSpan(ref Unsafe.As<byte, char>(ref Current), 10);
+                var charSpan = MemoryMarshal.Cast<byte, char>(ReserveIntegerDestination(20));
                 value.TryFormat(charSpan, out int written);
                 Advance(written << 1);
             }
@@ -1247,13 +1272,12 @@ namespace LuminPack.Core
             WriteCommaIfNeeded<TOptions>();
             if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
-                EnsureCapacity(4); // packed store intentionally writes 4 bytes
-                Advance(LuminPackJsonNumberFormatter.WriteByte(MemoryMarshal.CreateSpan(ref Current, 4), value));
+                // The packed formatter writes four bytes, even for shorter numbers.
+                Advance(LuminPackJsonNumberFormatter.WriteByte(ReserveIntegerDestination(4, keepTailOnMiss: true), value));
             }
             else
             {
-                EnsureCapacity(6);
-                var charSpan = MemoryMarshal.CreateSpan(ref Unsafe.As<byte, char>(ref Current), 3);
+                var charSpan = MemoryMarshal.Cast<byte, char>(ReserveIntegerDestination(6));
                 value.TryFormat(charSpan, out int written);
                 Advance(written << 1);
             }
@@ -1269,13 +1293,12 @@ namespace LuminPack.Core
             WriteCommaIfNeeded<TOptions>();
             if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
-                EnsureCapacity(5); // sign + packed 4-byte store
-                Advance(LuminPackJsonNumberFormatter.WriteSByte(MemoryMarshal.CreateSpan(ref Current, 5), value));
+                // Reserve the sign and the complete four-byte packed store.
+                Advance(LuminPackJsonNumberFormatter.WriteSByte(ReserveIntegerDestination(5, keepTailOnMiss: true), value));
             }
             else
             {
-                EnsureCapacity(8);
-                var charSpan = MemoryMarshal.CreateSpan(ref Unsafe.As<byte, char>(ref Current), 4);
+                var charSpan = MemoryMarshal.Cast<byte, char>(ReserveIntegerDestination(8));
                 value.TryFormat(charSpan, out int written);
                 Advance(written << 1);
             }
@@ -1296,8 +1319,7 @@ namespace LuminPack.Core
             }
             else
             {
-                EnsureCapacity(12);
-                var charSpan = MemoryMarshal.CreateSpan(ref Unsafe.As<byte, char>(ref Current), 6);
+                var charSpan = MemoryMarshal.Cast<byte, char>(ReserveIntegerDestination(12));
                 value.TryFormat(charSpan, out int written);
                 Advance(written << 1);
             }
@@ -1313,13 +1335,11 @@ namespace LuminPack.Core
             WriteCommaIfNeeded<TOptions>();
             if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
-                EnsureCapacity(5);
-                Advance(LuminPackJsonNumberFormatter.WriteUShort(MemoryMarshal.CreateSpan(ref Current, 5), value));
+                Advance(LuminPackJsonNumberFormatter.WriteUShort(ReserveIntegerDestination(5, keepTailOnMiss: true), value));
             }
             else
             {
-                EnsureCapacity(10);
-                var charSpan = MemoryMarshal.CreateSpan(ref Unsafe.As<byte, char>(ref Current), 5);
+                var charSpan = MemoryMarshal.Cast<byte, char>(ReserveIntegerDestination(10));
                 value.TryFormat(charSpan, out int written);
                 Advance(written << 1);
             }
@@ -1345,13 +1365,11 @@ namespace LuminPack.Core
             WriteCommaIfNeeded<TOptions>();
             if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
-                EnsureCapacity(20);
-                Advance(LuminPackJsonNumberFormatter.WriteLong(MemoryMarshal.CreateSpan(ref Current, 20), value));
+                Advance(LuminPackJsonNumberFormatter.WriteLong(ReserveIntegerDestination(20), value));
             }
             else
             {
-                EnsureCapacity(40);
-                var charSpan = MemoryMarshal.CreateSpan(ref Unsafe.As<byte, char>(ref Current), 20);
+                var charSpan = MemoryMarshal.Cast<byte, char>(ReserveIntegerDestination(40));
                 value.TryFormat(charSpan, out int written);
                 Advance(written << 1);
             }
@@ -1367,13 +1385,11 @@ namespace LuminPack.Core
             WriteCommaIfNeeded<TOptions>();
             if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
-                EnsureCapacity(20);
-                Advance(LuminPackJsonNumberFormatter.WriteULong(MemoryMarshal.CreateSpan(ref Current, 20), value));
+                Advance(LuminPackJsonNumberFormatter.WriteULong(ReserveIntegerDestination(20), value));
             }
             else
             {
-                EnsureCapacity(40);
-                var charSpan = MemoryMarshal.CreateSpan(ref Unsafe.As<byte, char>(ref Current), 20);
+                var charSpan = MemoryMarshal.Cast<byte, char>(ReserveIntegerDestination(40));
                 value.TryFormat(charSpan, out int written);
                 Advance(written << 1);
             }
