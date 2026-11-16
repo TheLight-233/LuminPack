@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using LuminPack;
 using LuminPack.Core;
+using LuminPack.Option;
 using LuminPack.Utility;
 using Xunit;
 
@@ -31,6 +32,52 @@ public sealed class SortedSetBufferedJsonWriteTest
         finally
         {
             CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    /// <summary>Checks the narrower reservation includes a complete final formatter window.</summary>
+    [Fact]
+    public void CompactInt32GateKeepsTheFinalElementReservation()
+    {
+        var values = new SortedSet<int> { 0, 9, 99999 };
+        CultureInfo previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            // The UTF-16 scalar helper needs eleven character slots plus its optional comma.
+            const int scalarReservation = 12 * sizeof(char);
+            foreach (bool continuation in new[] { false, true })
+            {
+                string prefix = continuation ? "[7" : "[";
+                string precedingElements = continuation ? ",0,9" : "0,9";
+                int required = precedingElements.Length * sizeof(char) + scalarReservation;
+                Assert.True(required < values.Count * scalarReservation);
+
+                Assert.Equal((false, prefix), WriteWithinWindow(values, continuation, required - 1));
+                Assert.Equal((true, prefix + precedingElements + ",99999"),
+                    WriteWithinWindow(values, continuation, required));
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+
+        static (bool Written, string Prefix) WriteWithinWindow(SortedSet<int> input, bool continuation, int available)
+        {
+            using var owner = new LuminBufferWriter(true);
+            var writer = new LuminPackJsonWriter(owner);
+            int capacity = writer.Buffer.Length;
+            int start = capacity - available - (continuation ? 2 : 1) * sizeof(char);
+            writer.Position = start;
+            writer.WriteArrayStart<LuminPackUtf16LengthOptions>();
+            if (continuation)
+                writer.Write<LuminPackUtf16LengthOptions>(7);
+
+            Assert.Equal(available, capacity - writer.Position);
+            bool written = LuminTreeStorage.TryWriteIntegerSortedSetJson<LuminPackUtf16LengthOptions, int>(ref writer, input);
+            Assert.Equal(capacity, writer.Buffer.Length);
+            return (written, Encoding.Unicode.GetString(writer.GetSpan().Slice(start)));
         }
     }
 

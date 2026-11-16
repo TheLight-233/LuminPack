@@ -67,6 +67,8 @@ public static partial class LuminTreeStorage
             !SortedSetLayout<T>.Available || set.GetType() != typeof(SortedSet<T>))
             return false;
 
+        ref int version = ref Field<int>(set, SortedSetLayout<T>.Version);
+        int captured = version;
         if (encoding == LuminPackStringEncoding.UTF16)
         {
             // A custom culture or an owner growth can call consumer code during an integer write.
@@ -76,17 +78,76 @@ public static partial class LuminTreeStorage
 #else
             nint position = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(buffer), ref MemoryMarshal.GetReference(writer.Cursor));
 #endif
+            var culture = CultureInfo.CurrentCulture;
+            if (culture.GetType() != typeof(CultureInfo) || (nuint)position > (nuint)buffer.Length)
+                return false;
+
             int width = typeof(T) == typeof(int) ? 24 : 42;
-            if (CultureInfo.CurrentCulture.GetType() != typeof(CultureInfo) ||
-                (nuint)position > (nuint)buffer.Length || set.Count > (buffer.Length - (int)position) / width)
+            int count = set.Count;
+            int available = buffer.Length - (int)position;
+            if (count > available / width &&
+                (typeof(T) != typeof(int) || !ReferenceEquals(culture, CultureInfo.InvariantCulture) ||
+                 !CanWriteCompactInt32SortedSet(Unsafe.As<SortedSet<int>>(set), count, available, writer.IsFirstElement) ||
+                 version != captured))
                 return false;
         }
 
-        ref int version = ref Field<int>(set, SortedSetLayout<T>.Version);
-        int captured = version;
         WriteIntegerTree<TOptions, T>(ref writer, Field<object?>(set, SortedSetLayout<T>.Root),
             in SortedSetLayout<T>.Nodes, ref version, captured);
         return true;
+    }
+
+    /// <summary>Proves the full existing integer write window from a few ordered, nonnegative keys.</summary>
+    /// <param name="set">The exact, layout-probed framework set.</param>
+    /// <param name="count">The number of values in the set.</param>
+    /// <param name="available">The remaining logical bytes after the array opener.</param>
+    /// <param name="firstElement">Whether the first write omits its separator.</param>
+    /// <returns>Whether all element writes keep their original unconditionally fitting path.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static bool CanWriteCompactInt32SortedSet(SortedSet<int> set, int count, int available, bool firstElement)
+    {
+        if (count < 3 || available < 24 || !ReferenceEquals(set.Comparer, Comparer<int>.Default))
+            return false;
+
+        object? minimum = Field<object?>(set, SortedSetLayout<int>.Root);
+        if (minimum is null)
+            return false;
+
+        ref readonly NodeOffsets offsets = ref SortedSetLayout<int>.Nodes;
+        object? second = null;
+        while (Field<object?>(minimum, offsets.Left) is { } left)
+        {
+            second = minimum;
+            minimum = left;
+        }
+
+        int first = Field<int>(minimum, offsets.Key);
+        if (first < 0)
+            return false;
+
+        Span<char> buffer = stackalloc char[10];
+        set.Max.TryFormat(buffer, out int widest);
+        first.TryFormat(buffer, out int firstWidth);
+        // The last element still needs the full writer reservation. Its preceding
+        // elements use at most the maximum digit width, with the first width known.
+        long required = 24L + (long)(count - 1) * ((widest + 1) * sizeof(char)) -
+            (widest - firstWidth + (firstElement ? 1 : 0)) * sizeof(char);
+        if (required <= available)
+            return true;
+        if (firstWidth == widest)
+            return false;
+
+        if (Field<object?>(minimum, offsets.Right) is { } right)
+        {
+            second = right;
+            while (Field<object?>(second, offsets.Left) is { } child)
+                second = child;
+        }
+        if (second is null)
+            return false;
+
+        Field<int>(second, offsets.Key).TryFormat(buffer, out int secondWidth);
+        return required - (widest - secondWidth) * sizeof(char) <= available;
     }
 
     /// <summary>Writes integer tree.</summary>
