@@ -1042,7 +1042,9 @@ namespace LuminPack.Core
                 return false;
             if (first == 0u)
             {
-                if (NumberDigitOrNonDigit<TOptions>(i + step) <= 9u || !IsValueDelimiterAt<TOptions>(i + step))
+                // For fixed profiles the delimiter check already rejects a following digit.
+                if ((!LuminPackMarshal.ConstantStringProfile<TOptions>() && NumberDigitOrNonDigit<TOptions>(i + step) <= 9u) ||
+                    !IsValueDelimiterAt<TOptions>(i + step))
                     return false;
                 Position = i + step;
                 return true;
