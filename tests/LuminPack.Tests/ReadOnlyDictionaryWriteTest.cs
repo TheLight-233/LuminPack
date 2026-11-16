@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Collections.ObjectModel;
 using LuminPack;
+using LuminPack.Attribute;
 using LuminPack.Core;
 using LuminPack.Option;
 using LuminPack.Utility;
@@ -82,6 +83,77 @@ public sealed class ReadOnlyDictionaryWriteTest
         }
     }
 
+    /// <summary>Writes sparse object pairs in the same order through bounded keys and the original fallback.</summary>
+    [Fact]
+    public void BinaryObjectPairsKeepWireAcrossWriterWindows()
+    {
+        var backing = new Dictionary<string, ReadOnlyDictionaryWritePayload>
+        {
+            ["before"] = new() { Id = 1, Name = "left", Values = [1, 2, 3] },
+            ["removed"] = new() { Id = 2 },
+            [new string('a', 71)] = new() { Id = 3 }
+        };
+        backing.Remove("removed");
+        var source = new ReadOnlyDictionary<string, ReadOnlyDictionaryWritePayload>(backing);
+        var fallback = new ReadOnlyDictionary<string, ReadOnlyDictionaryWritePayload>(new SortedDictionary<string, ReadOnlyDictionaryWritePayload>(backing,
+            Comparer<string>.Create((left, right) => StringComparer.Ordinal.Compare(right, left))));
+        byte[] expected = LuminPackSerializer.Serialize(fallback);
+        Assert.Equal(expected, LuminPackSerializer.Serialize(source));
+
+        foreach (int capacity in new[] { expected.Length, expected.Length + 128 })
+        {
+            var bytes = new byte[capacity + 2];
+            Array.Fill(bytes, (byte)0xa3);
+            Span<byte> window = bytes.AsSpan(1, capacity);
+            var writer = new LuminPackWriter(ref window);
+            LuminPackSerializer.Serialize<ReadOnlyDictionary<string, ReadOnlyDictionaryWritePayload>, LuminPackUtf16LengthOptions>(ref writer, source);
+            Assert.Equal(expected.Length, writer.Position);
+            Assert.Equal(expected, window[..writer.Position].ToArray());
+            Assert.Equal((byte)0xa3, bytes[0]);
+            Assert.Equal((byte)0xa3, bytes[^1]);
+        }
+    }
+
+    /// <summary>A key callback can replace dictionary entries and mutate the captured object's fields.</summary>
+    [Fact]
+    public void CustomStringProfileKeepsTheCapturedObjectPair()
+    {
+        var current = new ReadOnlyDictionaryWritePayload { Id = 1, Name = "before", Values = [2, 3, 5] };
+        var next = new ReadOnlyDictionaryWritePayload { Id = 2, Name = "next", Values = [7] };
+        var replacement = new ReadOnlyDictionaryWritePayload { Id = 3, Name = "replacement", Values = [11] };
+        var backing = new Dictionary<string, ReadOnlyDictionaryWritePayload>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["first"] = current,
+            ["second"] = next
+        };
+        var wrapper = new ReadOnlyDictionary<string, ReadOnlyDictionaryWritePayload>(backing);
+        var expected = new ReadOnlyDictionary<string, ReadOnlyDictionaryWritePayload>(new Dictionary<string, ReadOnlyDictionaryWritePayload>
+        {
+            ["first"] = new() { Id = 1, Name = "written after key", Values = [2, 3, 5, 13] },
+            ["second"] = replacement
+        });
+
+        MutatingStringProfile.OnEncoding = () =>
+        {
+            backing["first"] = replacement;
+            backing["second"] = replacement;
+            current.Name = "written after key";
+            current.Values.Add(13);
+        };
+        try
+        {
+            using var output = new LuminBufferWriter(true);
+            LuminPackSerializer.Serialize<ReadOnlyDictionary<string, ReadOnlyDictionaryWritePayload>, MutatingStringProfile>(wrapper, output);
+            Assert.Null(MutatingStringProfile.OnEncoding);
+            Assert.Same(replacement, backing["first"]);
+            Assert.Equal(LuminPackSerializer.Serialize(expected), output.GetSpan().ToArray());
+        }
+        finally
+        {
+            MutatingStringProfile.OnEncoding = null;
+        }
+    }
+
     /// <summary>Writes the wrapper to the requested guarded window.</summary>
     /// <param name="source">The wrapper to write.</param>
     /// <param name="destination">The storage including leading and trailing canaries.</param>
@@ -122,4 +194,16 @@ public sealed class ReadOnlyDictionaryWriteTest
         /// <inheritdoc/>
         public bool ValidateJsonSyntax => false;
     }
+}
+
+/// <summary>Provides one ordinary object value with a mutable nested raw list.</summary>
+[LuminPackable]
+public sealed partial class ReadOnlyDictionaryWritePayload
+{
+    /// <summary>Gets the value identity stored in the binary record.</summary>
+    public int Id;
+    /// <summary>Gets or sets the value name written after the dictionary key.</summary>
+    public string Name = "";
+    /// <summary>Gets the values observed by the nested list writer.</summary>
+    public List<int> Values = [];
 }

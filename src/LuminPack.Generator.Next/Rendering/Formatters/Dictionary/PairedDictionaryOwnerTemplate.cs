@@ -276,6 +276,7 @@ internal sealed partial class PairedDictionaryContext
     /// <param name="unwrapReferenceDictionary">Whether a typed wrapper backing can enumerate the same pairs.</param>
     internal void CountedWrite(bool allowMixedPairs = false, bool unwrapReferenceDictionary = false)
     {
+        unwrapReferenceDictionary &= Value == "string" || _contract?.Arguments[1].OrdinaryObject == true;
         bool mixed = allowMixedPairs && ParallelDictionaryWrite.SupportsMixed(this) && Key != "bool" && Value != "bool";
         bool outlineKey = allowMixedPairs && Key == "string" && Value == "string";
         W.Line("int countPosition = operationState.BeginCollection();");
@@ -306,12 +307,38 @@ internal sealed partial class PairedDictionaryContext
             W.Close();
         }
 
+        if (unwrapReferenceDictionary && Value != "string")
+        {
+            W.Line(W.MethodImpl("NoInlining"));
+            W.Line("static void WriteKeyThenCheck(scoped ref global::LuminPack.Core.LuminPackWriter operationState, string key)");
+            W.Open();
+            WriteMember(Key, "key");
+            W.Line("operationState.CheckBuffer();");
+            W.Close();
+        }
+
         void Entries(string source, bool combineText = false)
         {
             W.Line("foreach (var item in " + source + ")");
             W.Open();
             W.Line("count++;");
             W.Line(Key + " key = item." + KeyMember + ";");
+            if (combineText && Value != "string")
+            {
+                W.Line("if (writeUtf16Pairs && (long)operationState.RecordRoom() >= sizeof(int) + sizeof(char) * (long)(key?.Length ?? 0))");
+                W.Open();
+                W.Line("ref byte record = ref operationState.Cursor;");
+                W.Line("operationState.CompleteRun(global::LuminPack.Core.LuminPackWriter.WriteReservedUtf16Record(ref record, key));");
+                W.Close();
+                W.Line("else");
+                W.Open();
+                W.Line("WriteKeyThenCheck(ref operationState, key);");
+                W.Close();
+                W.Line(Value + " itemValue = item." + ValueMember + ";");
+                WriteMember(Value, "itemValue", checkBuffer: false);
+                W.Close();
+                return;
+            }
             if (combineText)
             {
                 const string writer = "global::LuminPack.Core.LuminPackWriter";
