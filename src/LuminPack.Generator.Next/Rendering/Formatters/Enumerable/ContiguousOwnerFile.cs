@@ -619,7 +619,11 @@ internal static class ContiguousOwnerFile
                     w.Line(FormatterElementEmitter.Owner(set, element) + ".Read<TLuminProfile>(ref reader, ref " + slot + ");");
             }
             else
-                FormatterElementEmitter.Read(w, set, element, slot);
+            {
+                // These backing arrays are fresh, so ordinary object slots already hold the null seed.
+                bool fresh = shape is ContiguousShape.ReadOnlyMemory or ContiguousShape.ReadOnlySequence or ContiguousShape.ImmutableArray;
+                FormatterElementEmitter.Read(w, set, element, slot, fresh: fresh);
+            }
             w.Close();
             w.Line("while (++index < length);");
             w.Close();
