@@ -141,6 +141,10 @@ internal static class FormatterCapabilities
                     named.TypeArguments.All(argument => argument.SpecialType == SpecialType.System_String) &&
                     FormatterImmutableTraits.HasBinaryStringPairPrefix(compilation))
                     result.Add("BinaryStringPairPrefix");
+                if (definition == "System.Collections.Immutable.ImmutableSortedDictionary" && modern && !unity &&
+                    named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsReferenceType &&
+                    FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
+                    result.Add("ImmutableSortedTreeBinaryBoundedKey");
                 if (named.Arity == 1)
                 {
                     ContiguousCapabilities(compilation, named.TypeArguments[0], result);

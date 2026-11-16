@@ -53,6 +53,32 @@ internal static class ParallelDictionaryWrite
         w.Close();
     }
 
+    /// <summary>Writes a captured string key directly when its complete raw bound and the growth threshold fit.</summary>
+    /// <param name="c">The paired writer context.</param>
+    internal static void WriteBoundedKey(PairedDictionaryContext c)
+    {
+        var w = c.W;
+        w.Line("if (utf16Length && operationState.RecordRoom() >= " + Writer + ".Utf16RecordBound(key))");
+        w.Open();
+        w.Line("ref byte record = ref operationState.Cursor;");
+        w.Line("operationState.CompleteRun(" + Writer + ".WriteReservedUtf16Record(ref record, key));");
+        w.Close();
+        w.Line("else");
+        w.Indented(() => w.Line("WriteKeySlow(ref operationState, key);"));
+    }
+
+    /// <summary>Outlines the original checked key write for other profiles or short windows.</summary>
+    /// <param name="c">The paired writer context.</param>
+    internal static void WriteBoundedKeyFallback(PairedDictionaryContext c)
+    {
+        var w = c.W;
+        w.Line(w.MethodImpl("NoInlining"));
+        w.Line("static void WriteKeySlow(scoped ref " + Writer + " operationState, string key)");
+        w.Open();
+        c.WriteMember(c.Key, "key");
+        w.Close();
+    }
+
     /// <summary>Writes a nonempty range, preserving the key-before-value load on writer growth.</summary>
     /// <param name="c">The case or formatter context in scope.</param>
     /// <param name="count">The number of items to process.</param>
@@ -80,15 +106,7 @@ internal static class ParallelDictionaryWrite
         {
             w.Line(c.Key + " key = " + keySlot + ";");
             if (boundedKey)
-            {
-                w.Line("if (utf16Length && operationState.RecordRoom() >= " + Writer + ".Utf16RecordBound(key))");
-                w.Open();
-                w.Line("ref byte record = ref operationState.Cursor;");
-                w.Line("operationState.CompleteRun(" + Writer + ".WriteReservedUtf16Record(ref record, key));");
-                w.Close();
-                w.Line("else");
-                w.Indented(() => w.Line("WriteKeySlow(ref operationState, key);"));
-            }
+                WriteBoundedKey(c);
             else
                 c.WriteMember(c.Key, "key");
             w.Line(c.Value + " itemValue = " + valueSlot + ";");
@@ -97,13 +115,7 @@ internal static class ParallelDictionaryWrite
         w.Close();
         w.Line("while (++index < " + count + ");");
         if (boundedKey)
-        {
-            w.Line(w.MethodImpl("NoInlining"));
-            w.Line("static void WriteKeySlow(scoped ref " + Writer + " operationState, string key)");
-            w.Open();
-            c.WriteMember(c.Key, "key");
-            w.Close();
-        }
+            WriteBoundedKeyFallback(c);
         if (!mixed)
             return;
         w.Line(w.MethodImpl("NoInlining"));

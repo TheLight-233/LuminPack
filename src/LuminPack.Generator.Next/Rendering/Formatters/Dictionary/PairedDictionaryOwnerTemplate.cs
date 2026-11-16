@@ -508,7 +508,8 @@ internal sealed partial class PairedDictionaryContext
             "ref var pair = ref " + Memory + ".Add(ref firstPair, (nint)(uint)index);");
         bool mixed = ParallelDictionaryWrite.SupportsMixed(this);
         bool stringPairs = UsesRawOrStringEntries && Key == "string" && Value == "string" && Supports("BinaryStringPairPrefix");
-        if (mixed || stringPairs)
+        bool boundedKey = Key == "string" && OrdinaryObjectValue && Supports("ImmutableSortedTreeBinaryBoundedKey");
+        if (mixed || stringPairs || boundedKey)
             W.Line("bool utf16Length = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ";");
         W.Line("int index = 0;");
         W.Line("do");
@@ -526,7 +527,10 @@ internal sealed partial class PairedDictionaryContext
             W.Close();
         }
         W.Line(Key + " key = pair.Key;");
-        WriteMember(Key, "key");
+        if (boundedKey)
+            ParallelDictionaryWrite.WriteBoundedKey(this);
+        else
+            WriteMember(Key, "key");
         W.Line(Value + " itemValue = pair.Value;");
         WriteMember(Value, "itemValue");
         W.Close();
@@ -541,6 +545,8 @@ internal sealed partial class PairedDictionaryContext
         W.Close();
         W.Close();
         W.Line("operationState.CheckBuffer();");
+        if (boundedKey)
+            ParallelDictionaryWrite.WriteBoundedKeyFallback(this);
     }
 
     /// <summary>Writes a bounded raw run and opens the original checked fallback block when supported.</summary>
