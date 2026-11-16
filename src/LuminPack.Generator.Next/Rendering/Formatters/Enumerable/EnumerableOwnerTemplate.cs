@@ -252,16 +252,12 @@ internal sealed partial class EnumerableOwnerContext
         W.Open();
         W.Line("ref var slot = ref " + Memory + ".Add(ref first, (nint)(uint)blockIndex);");
         W.Open();
-        W.Line("if (operationState.PeekIsNullObject())");
-        W.Indented(() => W.Line("slot = default!;"));
-        W.Open();
         W.Line("ref " + Scalar + " payloadItem = ref slot!;");
         var body = new List<string>();
         BinaryEmitter.AddSequenceElementRead(body, Payload, "payloadItem", null, W, _readNames, ref _readCursors, ref _readStrings,
-            ref _readEnds);
+            ref _readEnds, clearOnNull: true);
         foreach (string line in body)
             W.Line(line);
-        W.Close();
         W.Close();
         W.Close();
         W.Line("while (++blockIndex < length);");

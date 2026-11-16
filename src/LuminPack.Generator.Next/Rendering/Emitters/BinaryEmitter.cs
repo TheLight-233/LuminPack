@@ -1575,8 +1575,9 @@ internal static partial class BinaryEmitter
     /// <param name="cursors">The cursor local counter shared by the whole method.</param>
     /// <param name="strings">The mirrored string local counter shared by the whole method.</param>
     /// <param name="ends">The exit label counter shared by the whole method.</param>
+    /// <param name="clearOnNull">Whether the local aliases a reused slot that a null marker must clear.</param>
     internal static void AddSequenceElementRead(List<string> body, PayloadRenderModel element, string local, string reference,
-        CodeWriter w, Dictionary<string, int> names, ref int cursors, ref int strings, ref int ends)
+        CodeWriter w, Dictionary<string, int> names, ref int cursors, ref int strings, ref int ends, bool clearOnNull = false)
     {
         string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
         ends++;
@@ -1586,7 +1587,14 @@ internal static partial class BinaryEmitter
             body.Add(reference);
         body.Add("if (" + w.A("LuminPackInputPolicy") + ".ReadNullMarker(ref reader, " +
             element.Members.Length.ToString(CultureInfo.InvariantCulture) + "))");
+        if (clearOnNull)
+        {
+            body.Add("{");
+            body.Add("\t" + local + " = default;");
+        }
         body.Add("\tgoto " + exit + ";");
+        if (clearOnNull)
+            body.Add("}");
         body.Add("var " + instance + " = " + local + " ??= " + NewInstance(element) + ";");
         AddStreamRead(body, element, instance, 0, prove: true, markerSeen: true, w, names, ref cursors, ref strings, ref ends);
         body.Add(exit + ":");
