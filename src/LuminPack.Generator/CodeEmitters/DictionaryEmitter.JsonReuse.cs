@@ -11,8 +11,9 @@ public static partial class DictionaryEmitter
     /// <param name="target">The dictionary local.</param>
     /// <param name="store">The original dictionary insertion statement.</param>
     /// <param name="sortedList">The exact sorted-list type when the runtime can traverse its validated storage.</param>
+    /// <param name="exactSnapshot">The exact runtime type and its existing value traversal, if available.</param>
     private static void AppendExistingJsonDictionary(StringBuilder sb, string keyType, string valueType, string target, string store,
-        string sortedList = null)
+        string sortedList = null, (string Type, string Source)? exactSnapshot = null)
     {
         string pair = "global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">";
         sb.AppendLine("            if (" + target + " is not null)");
@@ -51,7 +52,16 @@ public static partial class DictionaryEmitter
                 indent += "    ";
             }
             sb.AppendLine(indent + "int oldIndex = 0;");
-            sb.AppendLine(indent + "foreach (var entry in " + target + ") entries[oldIndex++] = entry;");
+            string publicSnapshot = "foreach (var entry in " + target + ") entries[oldIndex++] = entry;";
+            if (exactSnapshot is { } snapshot)
+            {
+                sb.AppendLine(indent + "if (" + target + ".GetType() == typeof(" + snapshot.Type + "))");
+                sb.AppendLine(indent + "    foreach (var entry in " + snapshot.Source + ") entries[oldIndex++] = entry;");
+                sb.AppendLine(indent + "else");
+                sb.AppendLine(indent + "    " + publicSnapshot);
+            }
+            else
+                sb.AppendLine(indent + publicSnapshot);
             if (sortedList != null)
                 sb.AppendLine("                    }");
         }

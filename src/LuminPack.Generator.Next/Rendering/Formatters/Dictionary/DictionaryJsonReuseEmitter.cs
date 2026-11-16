@@ -13,8 +13,9 @@ internal static class DictionaryJsonReuseEmitter
     /// <param name = "store">The store used by this operation.</param>
     /// <param name = "jsonReader">The json reader used by this operation.</param>
     /// <param name="sortedList">The exact sorted-list type when the runtime can traverse its validated storage.</param>
+    /// <param name="exactSnapshot">The exact runtime type and its existing value traversal, if available.</param>
     internal static void Emit(CodeWriter w, string key, string value, string keyOwner, string valueOwner, string store, string jsonReader,
-        string? sortedList = null)
+        string? sortedList = null, (string Type, string Source)? exactSnapshot = null)
     {
         string pair = "global::System.Collections.Generic.KeyValuePair<" + key + ", " + value + ">";
         w.Line("if (value is not null)");
@@ -53,7 +54,15 @@ internal static class DictionaryJsonReuseEmitter
                 w.Open();
             }
             w.Line("int oldIndex = 0;");
-            w.Line("foreach (var entry in value) entries[oldIndex++] = entry;");
+            if (exactSnapshot is { } snapshot)
+            {
+                w.Line("if (value.GetType() == typeof(" + snapshot.Type + "))");
+                w.Indented(() => w.Line("foreach (var entry in " + snapshot.Source + ") entries[oldIndex++] = entry;"));
+                w.Line("else");
+                w.Indented(() => w.Line("foreach (var entry in value) entries[oldIndex++] = entry;"));
+            }
+            else
+                w.Line("foreach (var entry in value) entries[oldIndex++] = entry;");
             if (sortedList != null)
                 w.Close();
         }
