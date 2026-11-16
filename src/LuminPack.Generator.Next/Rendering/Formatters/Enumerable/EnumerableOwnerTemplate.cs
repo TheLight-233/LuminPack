@@ -279,6 +279,16 @@ internal sealed partial class EnumerableOwnerContext
             ReadContiguous(span);
             return;
         }
+        if (foreign && Text)
+        {
+            W.Line("ref var blockSlot = ref " + Marshal + ".GetReference(" + span + ");");
+            W.Line("for (int blockRemaining = " + span + ".Length; blockRemaining != 0; blockRemaining--)");
+            W.Open();
+            W.Line("blockSlot = operationState.Read<TLuminProfile>((string?)null);");
+            W.Line("blockSlot = ref " + Memory + ".Add(ref blockSlot, 1);");
+            W.Close();
+            return;
+        }
         if (Payload != null || Forwarded || Text)
         {
             W.Line("if (length != 0)");
@@ -288,9 +298,7 @@ internal sealed partial class EnumerableOwnerContext
             W.Line("do");
             W.Open();
             W.Line("ref var blockSlot = ref " + Memory + ".Add(ref firstBlockItem, (nint)(uint)blockIndex);");
-            if (foreign && Text)
-                W.Line("blockSlot = operationState.Read<TLuminProfile>((string?)null);");
-            else if (foreign)
+            if (foreign)
             {
                 W.Line(Scalar + " blockItem = default!;");
                 ReadElement("blockItem", fresh: true);
