@@ -146,14 +146,24 @@ internal static class ReaderBoundaryValidationTest
     /// <summary>Verifies truncated wide union tag is rejected.</summary>
     private static void TruncatedWideUnionTagIsRejected()
     {
-        AssertThrows(() => ReadWideTag(new byte[] { LuminPackCode.WideTag }), "A wide-union marker without its ushort payload was accepted.");
-        // <summary>Reads wide tag from the current input.</summary>
-        // <param name="bytes">The bytes used by this operation.</param>
-        static void ReadWideTag(byte[] bytes)
+        for (int length = 1; length <= 3; length++)
         {
-            ReadOnlySpan<byte> span = bytes;
+            byte[] bytes = { 42, LuminPackCode.WideTag, 1 };
+            ReadOnlySpan<byte> span = bytes.AsSpan(0, length);
             var reader = new LuminPackReader(ref span);
-            reader.TryPeekWideUnionHeader(out _);
+            reader.Position = 1;
+            ushort tag = 42;
+            int requiredEnd = length == 1 ? 2 : 4;
+            try
+            {
+                reader.TryPeekWideUnionHeader(out tag);
+            }
+            catch (Exception exception) when (exception.Message == $"Span out of range with {requiredEnd}.")
+            {
+                Assert(reader.Position == 1 && tag == 42, "A truncated Union header changed the cursor or output tag.");
+                continue;
+            }
+            throw new InvalidOperationException("A truncated wide Union header was accepted.");
         }
     }
 

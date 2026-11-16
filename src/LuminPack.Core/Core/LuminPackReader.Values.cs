@@ -216,10 +216,23 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPeekUnionHeader(out ushort tag)
         {
-            EnsureReadable(Position, 1);
-            tag = Current;
-            Advance(1);
+            ref byte marker = ref Current;
+            EnsureReadableUnionMarker(ref marker);
+            tag = marker;
+            AdvanceValidated(1);
             return tag is not LuminPackCode.NullObject;
+        }
+
+        /// <summary>Validates a Union marker before accessing it and returns its window-relative offset.</summary>
+        /// <param name="marker">The current marker address.</param>
+        /// <returns>The validated offset of the marker.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private readonly int EnsureReadableUnionMarker(scoped ref byte marker)
+        {
+            nint offset = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref marker);
+            if (unchecked((nuint)offset) >= (uint)_buffer.Length)
+                LuminPackExceptionHelper.ThrowSpanOutOfRange((long)unchecked((int)offset) + 1);
+            return (int)offset;
         }
 
         /// <summary>Attempts to peek wide union header and reports whether it succeeded.</summary>
@@ -228,29 +241,27 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPeekWideUnionHeader(out ushort tag)
         {
-            EnsureReadable(Position, 1);
-#if NET8_0_OR_GREATER
-            ref var firstTag = ref Current;
-#else
-            ref var firstTag = ref MemoryMarshal.GetReference(Cursor);
-#endif
+            ref byte marker = ref Current;
+            int position = EnsureReadableUnionMarker(ref marker);
+            byte firstTag = marker;
             if (firstTag < LuminPackCode.WideTag)
             {
                 tag = firstTag;
-                Advance(1);
+                AdvanceValidated(1);
                 return true;
             }
             else if (firstTag == LuminPackCode.WideTag)
             {
-                EnsureReadable(Position, 3);
-                tag = LuminPackReader.Read<ushort>(ref Unsafe.Add(ref firstTag, 1));
-                Advance(3);
+                if (_buffer.Length - position < 3)
+                    LuminPackExceptionHelper.ThrowSpanOutOfRange((long)position + 3);
+                tag = LuminPackReader.Read<ushort>(ref Unsafe.Add(ref marker, 1));
+                AdvanceValidated(3);
                 return true;
             }
             else
             {
                 tag = 0;
-                Advance(1);
+                AdvanceValidated(1);
                 return false;
             }
         }
