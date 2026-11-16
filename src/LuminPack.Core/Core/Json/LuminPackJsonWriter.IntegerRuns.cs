@@ -62,7 +62,7 @@ public ref partial struct LuminPackJsonWriter
         int digits = typeof(T) == typeof(int) ? 11 : 20;
         int maximum = (digits + 1) * scale;
         if (room < maximum || (!utf8 && CultureInfo.CurrentCulture.GetType() != typeof(CultureInfo)) ||
-            IntegerRunOverlaps(items, ref start, room))
+            IntegerRunOverlaps(ref first, items.Length, ref start, room))
             return 0;
         int written = 0;
         int separator = IsFirstElement ? 0 : scale;
@@ -118,8 +118,9 @@ public ref partial struct LuminPackJsonWriter
             int written = 0;
             // A derived culture can call user code during formatting. Overlap also needs the scalar load order.
             if (room >= maximum && (utf8 || CultureInfo.CurrentCulture.GetType() == typeof(CultureInfo)) &&
-                !IntegerRunOverlaps(items.Slice(index), ref start, room))
+                !IntegerRunOverlaps(ref Unsafe.Add(ref first, (nint)(uint)index), items.Length - index, ref start, room))
             {
+                long lastOffset = room - maximum;
                 do
                 {
                     T item = Unsafe.Add(ref first, (nint)(uint)index++);
@@ -129,7 +130,7 @@ public ref partial struct LuminPackJsonWriter
                     else
                         Unsafe.WriteUnaligned(ref output, ',');
                     written += scale + WriteBoundedInteger(ref Unsafe.Add(ref output, (nint)(uint)scale), item, digits, utf8);
-                } while (index < items.Length && room - written >= maximum);
+                } while (index < items.Length && written <= lastOffset);
                 Advance(written);
             }
             if (index == items.Length)
@@ -167,16 +168,17 @@ public ref partial struct LuminPackJsonWriter
 
     /// <summary>Checks whether writing the current window can change a remaining input value.</summary>
     /// <typeparam name="T">The integer storage type.</typeparam>
-    /// <param name="items">The remaining values.</param>
+    /// <param name="first">The first remaining value in the validated input span.</param>
+    /// <param name="count">The number of remaining values.</param>
     /// <param name="start">The writable cursor.</param>
     /// <param name="room">The remaining writable byte count.</param>
     /// <returns>Whether the input and output ranges intersect.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IntegerRunOverlaps<T>(ReadOnlySpan<T> items, ref byte start, long room) where T : unmanaged
+    private static bool IntegerRunOverlaps<T>(ref T first, int count, ref byte start, long room) where T : unmanaged
     {
-        ref byte input = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(items));
+        ref byte input = ref Unsafe.As<T, byte>(ref first);
         long offset = (long)Unsafe.ByteOffset(ref start, ref input);
-        return offset < room && offset > -(long)items.Length * Unsafe.SizeOf<T>();
+        return offset < room && offset > -(long)count * Unsafe.SizeOf<T>();
     }
 
     /// <summary>Writes a scalar at a window or callback boundary in the original traversal order.</summary>
