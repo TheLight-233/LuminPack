@@ -76,7 +76,8 @@ internal static class FormatterCapabilities
             FormatterRuntimeTraits.HasStableReadOnlyDictionaryRead(compilation, named))
             result.Add("StableReadOnlyDictionaryRead");
         if (definition == "System.Collections.ObjectModel.ReadOnlyDictionary" && modern && !unity &&
-            named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsReferenceType &&
+            named.TypeArguments[0].SpecialType == SpecialType.System_String &&
+            (named.TypeArguments[1].IsReferenceType || named.TypeArguments[1].IsUnmanagedType) &&
             FormatterRuntimeTraits.HasReadOnlyStringDictionaryStorage(compilation, named) &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
             result.Add("ReadOnlyStringDictionaryStorage");

@@ -154,6 +154,99 @@ public sealed class ReadOnlyDictionaryWriteTest
         }
     }
 
+    /// <summary>Writes sparse mixed pairs through both complete and short fixed windows.</summary>
+    [Fact]
+    public void BinaryMixedPairsKeepWireAcrossWriterWindows()
+    {
+        var backing = new Dictionary<string, int>
+        {
+            ["before"] = 17,
+            ["removed"] = 11,
+            [new string('z', 71)] = int.MinValue,
+            ["\u4e2d"] = -4
+        };
+        backing.Remove("removed");
+        var source = new ReadOnlyDictionary<string, int>(backing);
+        var fallback = new ReadOnlyDictionary<string, int>(new SortedDictionary<string, int>(backing, StringComparer.Ordinal));
+        byte[] expected = LuminPackSerializer.Serialize(fallback);
+        Assert.Equal(expected, LuminPackSerializer.Serialize(source));
+
+        foreach (int capacity in new[] { expected.Length, expected.Length + 128 })
+        {
+            var bytes = new byte[capacity + 2];
+            Array.Fill(bytes, (byte)0xa3);
+            Assert.Equal(expected.Length, WriteMixedToFixedBuffer(source, bytes, capacity));
+            Assert.Equal(expected, bytes.AsSpan(1, expected.Length).ToArray());
+            Assert.Equal((byte)0xa3, bytes[0]);
+            Assert.Equal((byte)0xa3, bytes[^1]);
+        }
+
+        var shortBuffer = new byte[expected.Length + 1];
+        Array.Fill(shortBuffer, (byte)0xa3);
+        Assert.ThrowsAny<Exception>(() => WriteMixedToFixedBuffer(source, shortBuffer, expected.Length - 1));
+        Assert.Equal((byte)0xa3, shortBuffer[0]);
+        Assert.Equal((byte)0xa3, shortBuffer[^1]);
+    }
+
+    /// <summary>Preserves a complete wide unmanaged value immediately after its string key.</summary>
+    [Fact]
+    public void BinaryMixedPairsKeepWideValues()
+    {
+        var backing = new Dictionary<string, long>
+        {
+            ["a"] = 0x102030405060708L,
+            [new string('z', 71)] = long.MinValue,
+            ["\u4e2d"] = long.MaxValue
+        };
+        var source = new ReadOnlyDictionary<string, long>(backing);
+        var fallback = new ReadOnlyDictionary<string, long>(new SortedDictionary<string, long>(backing, StringComparer.Ordinal));
+        byte[] expected = LuminPackSerializer.Serialize(fallback);
+        Assert.Equal(expected, LuminPackSerializer.Serialize(source));
+
+        using var output = new LuminBufferWriter(true);
+        LuminPackSerializer.Serialize(source, output);
+        Assert.Equal(expected, output.GetSpan().ToArray());
+    }
+
+    /// <summary>A custom key profile observes the captured integer and subsequent dictionary mutations.</summary>
+    [Fact]
+    public void CustomStringProfileKeepsTheCapturedMixedPair()
+    {
+        var backing = new Dictionary<string, int> { ["first"] = 17, ["second"] = 31 };
+        var source = new ReadOnlyDictionary<string, int>(backing);
+        var expected = new ReadOnlyDictionary<string, int>(new Dictionary<string, int> { ["first"] = 17, ["second"] = 42 });
+        MutatingStringProfile.OnEncoding = () =>
+        {
+            backing["first"] = 18;
+            backing["second"] = 42;
+        };
+        try
+        {
+            using var output = new LuminBufferWriter(true);
+            LuminPackSerializer.Serialize<ReadOnlyDictionary<string, int>, MutatingStringProfile>(source, output);
+            Assert.Null(MutatingStringProfile.OnEncoding);
+            Assert.Equal(18, backing["first"]);
+            Assert.Equal(LuminPackSerializer.Serialize(expected), output.GetSpan().ToArray());
+        }
+        finally
+        {
+            MutatingStringProfile.OnEncoding = null;
+        }
+    }
+
+    /// <summary>Writes an exact mixed wrapper through its closed fixed-window entry.</summary>
+    /// <param name="source">The wrapped dictionary.</param>
+    /// <param name="destination">The destination with leading and trailing canaries.</param>
+    /// <param name="capacity">The length of the writer's window.</param>
+    /// <returns>The writer position after success.</returns>
+    private static int WriteMixedToFixedBuffer(ReadOnlyDictionary<string, int> source, byte[] destination, int capacity)
+    {
+        Span<byte> window = destination.AsSpan(1, capacity);
+        var writer = new LuminPackWriter(ref window);
+        LuminPackSerializer.Serialize<ReadOnlyDictionary<string, int>, LuminPackUtf16LengthOptions>(ref writer, source);
+        return writer.Position;
+    }
+
     /// <summary>Writes the wrapper to the requested guarded window.</summary>
     /// <param name="source">The wrapper to write.</param>
     /// <param name="destination">The storage including leading and trailing canaries.</param>

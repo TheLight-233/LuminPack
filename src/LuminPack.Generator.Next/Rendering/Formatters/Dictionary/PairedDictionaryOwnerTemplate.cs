@@ -276,25 +276,29 @@ internal sealed partial class PairedDictionaryContext
     /// <param name="unwrapReferenceDictionary">Whether a typed wrapper backing can enumerate the same pairs.</param>
     internal void CountedWrite(bool allowMixedPairs = false, bool unwrapReferenceDictionary = false)
     {
-        unwrapReferenceDictionary &= Value == "string" || _contract?.Arguments[1].OrdinaryObject == true;
         bool mixed = allowMixedPairs && ParallelDictionaryWrite.SupportsMixed(this) && Key != "bool" && Value != "bool";
+        bool unwrapMixedDictionary = unwrapReferenceDictionary && mixed && Key == "string";
+        unwrapReferenceDictionary &= Value == "string" || _contract?.Arguments[1].OrdinaryObject == true;
+        bool useTypedBacking = unwrapReferenceDictionary || unwrapMixedDictionary;
         bool outlineKey = allowMixedPairs && Key == "string" && Value == "string";
         W.Line("int countPosition = operationState.BeginCollection();");
         W.Line("int count = 0;");
         if (mixed)
             W.Line("bool utf16Length = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + " && value.GetType() == typeof(" + Dictionary + ");");
-        if (unwrapReferenceDictionary)
+        if (useTypedBacking)
         {
-            W.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.GetReadOnlyStringDictionaryStorage(value) is { Count: > 0 } stored)");
+            string profileGuard = unwrapMixedDictionary ? "utf16Length && " : "";
+            W.Line("if (" + profileGuard + "global::LuminPack.Code.LuminPackCollectionAccess.GetReadOnlyStringDictionaryStorage(value) is { Count: > 0 } stored)");
             W.Open();
-            W.Line("bool writeUtf16Pairs = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ";");
+            if (unwrapReferenceDictionary)
+                W.Line("bool writeUtf16Pairs = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ";");
             Entries("stored", combineText: true);
             W.Close();
             W.Line("else");
             W.Open();
         }
         Entries(Source);
-        if (unwrapReferenceDictionary)
+        if (useTypedBacking)
             W.Close();
         W.Line("operationState.EndCollection(countPosition, count);");
         W.Line("operationState.CheckBuffer();");
@@ -304,6 +308,16 @@ internal sealed partial class PairedDictionaryContext
             W.Line("static void WriteKey(scoped ref global::LuminPack.Core.LuminPackWriter operationState, string key)");
             W.Open();
             WriteMember(Key, "key");
+            W.Close();
+        }
+
+        if (unwrapMixedDictionary)
+        {
+            W.Line(W.MethodImpl("NoInlining"));
+            W.Line("static void WriteMixedPairSlow(scoped ref global::LuminPack.Core.LuminPackWriter operationState, string key, " + Value + " itemValue)");
+            W.Open();
+            WriteMember(Key, "key");
+            WriteMember(Value, "itemValue");
             W.Close();
         }
 
@@ -323,6 +337,13 @@ internal sealed partial class PairedDictionaryContext
             W.Open();
             W.Line("count++;");
             W.Line(Key + " key = item." + KeyMember + ";");
+            if (combineText && unwrapMixedDictionary)
+            {
+                ParallelDictionaryWrite.WriteMixedIfFits(this, "key", "item." + ValueMember, byRef: false);
+                W.Line("WriteMixedPairSlow(ref operationState, key, item." + ValueMember + ");");
+                W.Close();
+                return;
+            }
             if (combineText && Value != "string")
             {
                 W.Line("if (writeUtf16Pairs && (long)operationState.RecordRoom() >= sizeof(int) + sizeof(char) * (long)(key?.Length ?? 0))");
