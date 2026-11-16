@@ -936,7 +936,8 @@ internal static class PairedDictionaryOwnerTemplate
                         w.Indented(() => w.Line("value = null;"));
                     }
                     if (fact.Family.JsonReuseStore != null)
-                        DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, fact.Family.JsonReuseStore, jsonReader);
+                        DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, fact.Family.JsonReuseStore, jsonReader,
+                            context.Supports("SortedListTraversal") ? dictionary : null);
                     else if (dictionary.StartsWith("global::System.Collections.Generic.IDictionary<", StringComparison.Ordinal) ||
                         dictionary.StartsWith("global::System.Collections.Generic.IReadOnlyDictionary<", StringComparison.Ordinal))
                     {

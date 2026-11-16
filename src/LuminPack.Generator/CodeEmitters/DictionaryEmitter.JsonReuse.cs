@@ -10,7 +10,9 @@ public static partial class DictionaryEmitter
     /// <param name="valueType">The closed value spelling.</param>
     /// <param name="target">The dictionary local.</param>
     /// <param name="store">The original dictionary insertion statement.</param>
-    private static void AppendExistingJsonDictionary(StringBuilder sb, string keyType, string valueType, string target, string store)
+    /// <param name="sortedList">The exact sorted-list type when the runtime can traverse its validated storage.</param>
+    private static void AppendExistingJsonDictionary(StringBuilder sb, string keyType, string valueType, string target, string store,
+        string sortedList = null)
     {
         string pair = "global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">";
         sb.AppendLine("            if (" + target + " is not null)");
@@ -30,8 +32,28 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                {");
         if (keyType is "string" or "global::System.String")
         {
-            sb.AppendLine("                    int oldIndex = 0;");
-            sb.AppendLine("                    foreach (var entry in " + target + ") entries[oldIndex++] = entry;");
+            const string access = "global::LuminPack.Code.LuminPackCollectionAccess.";
+            string indent = "                    ";
+            if (sortedList != null)
+            {
+                sb.AppendLine(indent + "if (" + target + ".GetType() == typeof(" + sortedList + ") && " + access +
+                    "TryGetSortedListTraversal(" + target + ", out var oldKeys, out var oldValues, out int oldVersion))");
+                sb.AppendLine(indent + "{");
+                sb.AppendLine(indent + "    for (int oldIndex = 0; oldIndex < oldKeys.Length; oldIndex++)");
+                sb.AppendLine(indent + "    {");
+                sb.AppendLine(indent + "        " + access + "CheckSortedListTraversalVersion(" + target + ", oldVersion);");
+                sb.AppendLine(indent + "        entries[oldIndex] = new " + pair + "(oldKeys[oldIndex], oldValues[oldIndex]);");
+                sb.AppendLine(indent + "    }");
+                sb.AppendLine(indent + "    " + access + "CheckSortedListTraversalVersion(" + target + ", oldVersion);");
+                sb.AppendLine(indent + "}");
+                sb.AppendLine(indent + "else");
+                sb.AppendLine(indent + "{");
+                indent += "    ";
+            }
+            sb.AppendLine(indent + "int oldIndex = 0;");
+            sb.AppendLine(indent + "foreach (var entry in " + target + ") entries[oldIndex++] = entry;");
+            if (sortedList != null)
+                sb.AppendLine("                    }");
         }
         sb.AppendLine("                    while (reader.Read())");
         sb.AppendLine("                    {");

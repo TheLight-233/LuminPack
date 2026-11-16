@@ -12,7 +12,9 @@ internal static class DictionaryJsonReuseEmitter
     /// <param name = "valueOwner">The value owner used by this operation.</param>
     /// <param name = "store">The store used by this operation.</param>
     /// <param name = "jsonReader">The json reader used by this operation.</param>
-    internal static void Emit(CodeWriter w, string key, string value, string keyOwner, string valueOwner, string store, string jsonReader)
+    /// <param name="sortedList">The exact sorted-list type when the runtime can traverse its validated storage.</param>
+    internal static void Emit(CodeWriter w, string key, string value, string keyOwner, string valueOwner, string store, string jsonReader,
+        string? sortedList = null)
     {
         string pair = "global::System.Collections.Generic.KeyValuePair<" + key + ", " + value + ">";
         w.Line("if (value is not null)");
@@ -34,8 +36,26 @@ internal static class DictionaryJsonReuseEmitter
         const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
         if (key == "string")
         {
+            if (sortedList != null)
+            {
+                const string access = "global::LuminPack.Code.LuminPackCollectionAccess.";
+                w.Line("if (value.GetType() == typeof(" + sortedList + ") && " + access +
+                    "TryGetSortedListTraversal(value, out var oldKeys, out var oldValues, out int oldVersion))");
+                w.Open();
+                w.Line("for (int oldIndex = 0; oldIndex < oldKeys.Length; oldIndex++)");
+                w.Open();
+                w.Line(access + "CheckSortedListTraversalVersion(value, oldVersion);");
+                w.Line("entries[oldIndex] = new " + pair + "(oldKeys[oldIndex], oldValues[oldIndex]);");
+                w.Close();
+                w.Line(access + "CheckSortedListTraversalVersion(value, oldVersion);");
+                w.Close();
+                w.Line("else");
+                w.Open();
+            }
             w.Line("int oldIndex = 0;");
             w.Line("foreach (var entry in value) entries[oldIndex++] = entry;");
+            if (sortedList != null)
+                w.Close();
         }
 
         w.Line("while (reader.Read<TLuminProfile>())");

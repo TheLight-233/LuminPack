@@ -126,7 +126,9 @@ public static partial class DictionaryEmitter
         }
         else
         {
-            AppendExistingJsonDictionary(sb, keyType, valueType, "value", baseType == "global::System.Collections.Concurrent.ConcurrentDictionary" ? "value.TryAdd(key, itemValue);" : "value.Add(key, itemValue);");
+            AppendExistingJsonDictionary(sb, keyType, valueType, "value",
+                baseType == "global::System.Collections.Concurrent.ConcurrentDictionary" ? "value.TryAdd(key, itemValue);" : "value.Add(key, itemValue);",
+                fieldData.CanTraverseSortedList ? type : null);
             sb.AppendLine("            if (value is null)");
             sb.AppendLine("                value = new " + type + "();");
             sb.AppendLine("            else");
