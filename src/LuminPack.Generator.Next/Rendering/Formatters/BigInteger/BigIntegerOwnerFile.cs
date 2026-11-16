@@ -45,8 +45,13 @@ internal static class BigIntegerOwnerFile
         w.Line("return;");
         w.Close();
         w.Blank();
+        // The one-byte minimum passed to TryReadCollectionHead already bounds the entire byte payload.
+        w.Line("#if NET8_0_OR_GREATER");
+        w.Line("var payload = global::System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref reader.Cursor, length);");
+        w.Line("#else");
         w.Line("reader.EnsureCollectionPayload(reader.Position, length);");
         w.Line("var payload = reader.Buffer.Slice(reader.Position, length);");
+        w.Line("#endif");
         w.Line(set.FindFormatter("global::System.Numerics.BigInteger")?.Supports("CanReadBinaryBigInteger") == true ?
             "global::LuminPack.Code.LuminPackMarshal.ReadBigInteger(payload, out value);" :
             "value = new global::System.Numerics.BigInteger(payload);");
