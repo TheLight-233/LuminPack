@@ -120,13 +120,17 @@ internal static class CoreTextProjection
         var methods = Read(root, file, Modern).DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
         bool hasSpanClassifier = methods.Any(m => m.Identifier.ValueText == "IsLatin1" &&
             m.ParameterList.Parameters.FirstOrDefault()?.Type is GenericNameSyntax { Identifier.ValueText: "ReadOnlySpan" });
-        foreach (var method in methods.Where(m => m.Identifier.ValueText is "IsLatin1" or "IsLatin1Range" or "IsLatin1Long" or "TryNarrowLatin1" or "TryNarrowLatin1Long" or "PackLatin1" or "WidenLatin1" or "WidenShortLatin1" or "WidenFourLatin1" or "WidenLatin1Long" or "MatchesLatin1" or "MatchesLatin1Long"))
+        foreach (var method in methods.Where(m => m.Identifier.ValueText is "IsLatin1" or "IsLatin1Range" or "IsLatin1Long" or "TryNarrowLatin1" or "TryNarrowLatin1Long" or "PackLatin1" or "WritePackedLatin1" or "WidenLatin1" or "WidenShortLatin1" or "WidenFourLatin1" or "WidenLatin1Long" or "MatchesLatin1" or "MatchesLatin1Long"))
         {
             // Mapping the string forwarder to a span would duplicate the canonical span overload.
             if (hasSpanClassifier && method.Identifier.ValueText == "IsLatin1" &&
                 method.ParameterList.Parameters.FirstOrDefault()?.Type is PredefinedTypeSyntax type && type.Keyword.IsKind(SyntaxKind.StringKeyword))
                 continue;
             var projected = method.WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.InternalKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword), SyntaxFactory.Token(SyntaxKind.UnsafeKeyword)));
+            // Project the two portable stores for the bounded lane, as Burst did before their extraction.
+            if (method.Identifier.ValueText == "WritePackedLatin1" && projected.Body is { } body &&
+                body.Statements.FirstOrDefault() is IfStatementSyntax { Condition: { } condition } branch && condition.ToString() == "Sse2.X64.IsSupported")
+                projected = projected.WithBody(body.WithStatements(body.Statements.Remove(branch)));
             output.AppendLine(Rewrite(projected).Replace("string value", "ReadOnlySpan<char> value", StringComparison.Ordinal).Replace("value.AsSpan()", "value", StringComparison.Ordinal));
         }
         output.AppendLine("}");

@@ -13,7 +13,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreTextAlgorithms
     {
-// Core source SHA256: Utility/Text/StringSerializer.cs D7AACC13223E10F6A4471469DB52065458389E1312D8A4BCFCDCF057AD797CD7
+// Core source SHA256: Utility/Text/StringSerializer.cs 2F2B2123A98C71C5C75A887F50F6574E835714295BC61827171B336F33B5B4FF
 /// <summary>Performs the prefer custom simd step for the current operation.</summary>
 /// <param name = "source">The input data to process.</param>
 /// <param name = "destinationLength">The destination length used by this operation.</param>
@@ -2414,7 +2414,7 @@ internal static unsafe void Copy256(ref byte input, ref byte output, ref nint bl
     }
 }
 }
-// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 02C92E15E540B99C7BF20F37B0B21F8EEFEF0FA9FCAE3E1A1DA2A889B6BEC967
+// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 65AF7055E53F24337250266BDB03F32D3ECE2AD2C39E2156681491E65F45B96F
 internal static unsafe class CoreLatin1Records
 {
 /// <summary>Checks a character span using the same bounded Latin-1 kernels as string records.</summary>
@@ -2537,8 +2537,7 @@ internal static unsafe bool TryNarrowLatin1(ref char source, ref byte destinatio
             ulong tail = KernelMemory.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)(length - 4))));
             if (((head | tail) & 0xFF00FF00FF00FF00UL) != 0)
                 return false;
-            KernelMemory.WriteUnaligned(ref destination, PackLatin1(head));
-            KernelMemory.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(uint)(length - 4)), PackLatin1(tail));
+            WritePackedLatin1(ref destination, (nuint)(uint)(length - 4), head, tail);
             return true;
         }
     }
@@ -2576,6 +2575,17 @@ internal static unsafe uint PackLatin1(ulong chars)
     chars |= chars >> 8;
     chars &= 0x0000FFFF0000FFFFUL;
     return (uint)(chars | (chars >> 16));
+}
+/// <summary>Stores two validated groups of four Latin-1 characters.</summary>
+/// <param name = "destination">The first byte of the bounded payload.</param>
+/// <param name = "back">The offset of its last four bytes.</param>
+/// <param name = "head">The first four code units with zero high bytes.</param>
+/// <param name = "tail">The last four code units with zero high bytes.</param>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe void WritePackedLatin1(ref byte destination, nuint back, ulong head, ulong tail)
+{
+    KernelMemory.WriteUnaligned(ref destination, PackLatin1(head));
+    KernelMemory.WriteUnaligned(ref Unsafe.Add(ref destination, back), PackLatin1(tail));
 }
 /// <summary>Narrows more than sixteen characters with whole vectors and an overlapping final block.</summary>
 /// <param name = "source">The first character.</param>
