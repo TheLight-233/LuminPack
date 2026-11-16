@@ -122,13 +122,26 @@ namespace LuminPack.Core
             if (minimumElementSize != 0 && count >= 0)
             {
                 // Keep the existing overflow limit and range diagnostic for a forged count.
-                long required = (long)count * minimumElementSize;
-                int width = required > int.MaxValue ? int.MaxValue : (int)required;
+                int width = CollectionPayloadWidth(count, minimumElementSize);
                 if ((uint)width > (uint)room)
                     ThrowPayloadOutOfRange(_buffer.Length - room, width);
             }
             AdvanceValidated(sizeof(int));
             return count;
+        }
+
+        /// <summary>Computes the minimum payload width using the existing overflow limit.</summary>
+        /// <param name="count">The nonnegative collection count.</param>
+        /// <param name="minimumElementSize">The minimum encoded width per element.</param>
+        /// <returns>The minimum payload width capped at the largest possible reader window.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int CollectionPayloadWidth(int count, int minimumElementSize)
+        {
+            if (minimumElementSize == 1)
+                return count;
+
+            long required = (long)count * minimumElementSize;
+            return required > int.MaxValue ? int.MaxValue : (int)required;
         }
 
         /// <summary>Validates the current source window and returns the unread width after the requested bytes.</summary>
@@ -190,8 +203,7 @@ namespace LuminPack.Core
                 LuminPackExceptionHelper.ThrowInvalidCollectionLength(length);
             if (length > 0 && minimumElementSize != 0)
             {
-                long required = (long)length * minimumElementSize;
-                ValidateCollectionPayload(position + sizeof(int), required > int.MaxValue ? int.MaxValue : (int)required);
+                ValidateCollectionPayload(position + sizeof(int), CollectionPayloadWidth(length, minimumElementSize));
             }
             return length != LuminPackCode.NullCollection;
         }
