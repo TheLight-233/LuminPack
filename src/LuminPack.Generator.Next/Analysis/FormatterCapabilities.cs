@@ -70,6 +70,11 @@ internal static class FormatterCapabilities
             if (FormatterRuntimeTraits.HasObservableAppend(compilation))
                 result.Add("AppendObservable");
         }
+        if (definition == "System.Collections.ObjectModel.ReadOnlyDictionary" && modern && !unity &&
+            named.TypeArguments[0].SpecialType == SpecialType.System_String &&
+            named.TypeArguments[1].SpecialType is SpecialType.System_Int32 or SpecialType.System_String &&
+            FormatterRuntimeTraits.HasStableReadOnlyDictionaryRead(compilation, named))
+            result.Add("StableReadOnlyDictionaryRead");
         if (definition == "System.Collections.Generic.PriorityQueue" && FormatterOrderedCollectionTraits.HasPriorityTraversal(compilation, named))
         {
             result.Add("PriorityQueueTraversal");

@@ -62,6 +62,32 @@ internal static class FormatterRuntimeTraits
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, sequence.Construct(method.TypeParameters[0])));
     }
 
+    /// <summary>Checks the optional stable-key reader for the exact framework wrapper.</summary>
+    /// <param name="compilation">The referenced Core and framework metadata.</param>
+    /// <param name="wrapper">The selected framework wrapper.</param>
+    /// <returns>Whether the exact public reader is available.</returns>
+    internal static bool HasStableReadOnlyDictionaryRead(Compilation compilation, INamedTypeSymbol wrapper)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader");
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        var key = compilation.GetSpecialType(SpecialType.System_String);
+        return access is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } && reader != null && options != null &&
+            access.GetMembers("TryReadStableReadOnlyDictionary").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 2,
+                    ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 2 &&
+                method.Parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, reader) &&
+                method.Parameters[1].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type,
+                    wrapper.OriginalDefinition.Construct(key, method.TypeParameters[0])) &&
+                !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasReferenceTypeConstraint &&
+                !method.TypeParameters[0].HasConstructorConstraint && !method.TypeParameters[0].HasNotNullConstraint &&
+                method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+                method.TypeParameters[1].HasValueTypeConstraint && !method.TypeParameters[1].HasUnmanagedTypeConstraint &&
+                method.TypeParameters[1].ConstraintTypes.Length == 1 &&
+                SymbolEqualityComparer.Default.Equals(method.TypeParameters[1].ConstraintTypes[0], options));
+    }
+
     /// <summary>Checks the binary writer that accepts an enumerable string wrapper.</summary>
     /// <param name="compilation">The referenced runtime and framework metadata.</param>
     /// <returns>Whether the exact profile-aware operation is available.</returns>

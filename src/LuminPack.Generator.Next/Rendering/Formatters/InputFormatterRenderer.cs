@@ -18,6 +18,12 @@ internal static class InputFormatterRenderer
         foreach (FormatterModel owner in set.GeneralOwners ?? Array.Empty<FormatterModel>())
             if (owner.Definition != FormatterDefinitions.PayloadReference && Matches(owner.Type, target))
             {
+                if (owner.Definition == "System.Collections.ObjectModel.ReadOnlyDictionary" &&
+                    owner.Supports("StableReadOnlyDictionaryRead") && FormatterRegistry.FindDictionary(owner.Type) is { } wrapper)
+                {
+                    var fact = new DictionaryOwnerFact(wrapper, owner.Type, owner.Arguments[0].Type, owner.Arguments[1].Type);
+                    return ReadOnlyDictionaryOwnerFile.RenderInputRead(set, fact);
+                }
                 if (set.Options.Net8 && owner.Definition == "System.Collections.Generic.List" &&
                     CheckedUnion(owner.Arguments[0]) is { } listItem)
                     return ContiguousOwnerFile.Render(set, owner, GeneratedOperations.BinaryRead, ContiguousShape.List, listItem);
@@ -34,12 +40,17 @@ internal static class InputFormatterRenderer
             if (fact.Element != null && fact.Family.Payload != null && Matches(fact.DeclaredType, target))
                 return fact.Family.Payload(set, fact.WithInput(redirect), GeneratedOperations.BinaryRead);
         foreach (DictionaryOwnerFact fact in set.DictionaryOwners ?? Array.Empty<DictionaryOwnerFact>())
-            if (fact.Element != null && Matches(fact.DeclaredType, target))
+            if (Matches(fact.DeclaredType, target))
             {
-                var element = fact.Element.WithInput(redirect.Limits, fact.Element.Recursive, redirect);
-                var checkedFact = new DictionaryOwnerFact(fact.Family, fact.DeclaredType, fact.Key, fact.Value, element,
-                    fact.ForwardedValue, fact.Contract);
-                return (fact.Family.Payload ?? fact.Family.Entries)(set, checkedFact, GeneratedOperations.BinaryRead);
+                if (set.FindFormatter(fact.DeclaredType)?.Supports("StableReadOnlyDictionaryRead") == true)
+                    return ReadOnlyDictionaryOwnerFile.RenderInputRead(set, fact);
+                if (fact.Element != null)
+                {
+                    var element = fact.Element.WithInput(redirect.Limits, fact.Element.Recursive, redirect);
+                    var checkedFact = new DictionaryOwnerFact(fact.Family, fact.DeclaredType, fact.Key, fact.Value, element,
+                        fact.ForwardedValue, fact.Contract);
+                    return (fact.Family.Payload ?? fact.Family.Entries)(set, checkedFact, GeneratedOperations.BinaryRead);
+                }
             }
         return null;
 

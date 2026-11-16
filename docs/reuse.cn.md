@@ -22,6 +22,7 @@ LuminPackSerializer.Deserialize(nextPayload, ref target);   // 仍然是同一�
 | 二进制 `string[,]` | 默认 UTF-16 长度配置（`LuminPackUtf16LengthOptions`）在两个维度长度分别相等、两个下界均为零时复用矩阵，其他配置和形状会分配新矩阵。持有旧引用的调用方能按行看到更新。若记录被截断或字符串超过限额，只有此前成功解码的位置已更新。 |
 | `List<T>` | 保留容量和已有元素；需要时扩容，缩短时清理被移除的引用。 |
 | `Dictionary<K,V>` | 保留比较器，按传入的键复用值；读取成功后，被移除的键消失。 |
+| 二进制 `ReadOnlyDictionary<string, int>` 和 `ReadOnlyDictionary<string, string>` | 在受支持的 64 位 CoreCLR 布局上，Next 可以更新直接包装精确类型且使用默认比较器的字典。此路径使用内置 UTF-16 长度配置，输入包含 1 至 4096 个键，且键与后备字典的枚举顺序一致。字典读取成功后，持有包装器或后备字典的其他引用都能看到更新。传入 null 目标即可读取独立字典。 |
 | `SortedList<K,V>` | 同一位置的键可无回调比较且匹配时，复用符合条件的值。字符串键按序数比较。 |
 | 序列接口（`IEnumerable<T>`、`ICollection<T>`、`IList<T>`、`IReadOnlyList<T>`、`IReadOnlyCollection<T>`） | 元素为字符串、标量或普通对象时，复用背后的精确 `List<T>` 或 `T[]`。 |
 | `IDictionary<K,V>`、`IReadOnlyDictionary<K,V>` | 复用背后的精确 `Dictionary<K,V>`。 |
