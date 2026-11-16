@@ -125,7 +125,8 @@ internal static class DictionarySlotReuseEmitter
             w.Line("cursor = ref " + add + "(ref cursor, pairWidth);");
             w.Close();
             w.Line("while (++matched < count);");
-            w.Line("reader.Advance(matched * pairWidth);");
+            // The complete payload proof also covers the matched prefix.
+            w.Line("reader.Cursor = ref cursor;");
             w.Close();
             w.Close();
             w.Close();
