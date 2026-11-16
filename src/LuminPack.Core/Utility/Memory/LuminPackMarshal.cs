@@ -535,16 +535,33 @@ public static partial class LuminPackMarshal
             }
             else
             {
-                int written = 0;
-                for (int i = 0; i < used && written < count; i++)
-                {
-                    ref var current = ref Unsafe.Add(ref entry, (nint)i);
-                    if (IsHashTableEntryActive(current.HashCode, current.Next))
-                        LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)written++ * Unsafe.SizeOf<T>()), in current.Value);
-                }
+                WriteSparseHashSetEntries(ref destination, ref entry, used, count);
             }
         }
         writer.AdvanceSafe(sizeof(int) + bytes);
+    }
+
+    /// <summary>Writes live entries from the used prefix into the reserved element region.</summary>
+    /// <typeparam name="T">The raw element type.</typeparam>
+    /// <param name="destination">The first payload byte.</param>
+    /// <param name="entry">The first entry in the captured storage.</param>
+    /// <param name="used">The number of entries to inspect, including holes.</param>
+    /// <param name="count">The number of elements reserved for output.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void WriteSparseHashSetEntries<T>(scoped ref byte destination, scoped ref HashSetView<T>.Entry entry, int used, int count)
+        where T : unmanaged
+    {
+        while (used > 0 && count > 0)
+        {
+            if (IsHashTableEntryActive(entry.HashCode, entry.Next))
+            {
+                LuminPackWriter.Write(ref destination, in entry.Value);
+                destination = ref Unsafe.Add(ref destination, Unsafe.SizeOf<T>());
+                count--;
+            }
+            entry = ref Unsafe.Add(ref entry, 1);
+            used--;
+        }
     }
 
     /// <summary>Copies the raw key and value storage of a dense dictionary's first <paramref name="count"/> entries into the reserved record.</summary>
@@ -2040,13 +2057,7 @@ public static partial class LuminPackMarshal
             }
             else
             {
-                int written = 0;
-                for (int i = 0; i < used && written < count; i++)
-                {
-                    ref var current = ref Unsafe.Add(ref entry, (nint)(uint)i);
-                    if (IsHashTableEntryActive(current.HashCode, current.Next))
-                        LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)written++ * Unsafe.SizeOf<T>()), in current.Value);
-                }
+                WriteSparseHashSetEntries(ref destination, ref entry, used, count);
             }
         }
         writer.AdvanceSafe(sizeof(int) + bytes);
