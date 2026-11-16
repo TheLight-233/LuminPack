@@ -59,9 +59,11 @@ internal static class QueueOwnerFile
     {
         var w = c.W;
         string scalar = c.Scalar;
+        // Counted elements of a reused queue are read in place over its previous items, published once at the end.
+        bool refill = c.Counted && c.QueueRefill;
         w.Line("if (value is null)");
         w.Indented(() => w.Line("value = new " + c.Sequence + "(length);"));
-        w.Line("else");
+        w.Line(refill ? "else if (length == 0)" : "else");
         w.Open();
         w.Line("value.Clear();");
         w.Line("#if NET8_0_OR_GREATER");
@@ -93,6 +95,24 @@ internal static class QueueOwnerFile
         w.Line("if (storedSize != length || storedHead < 0 || storedTail < 0)");
         w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidRange(storedSize, length);"));
         w.Blank();
+        if (refill)
+        {
+            w.Line("var slots = global::LuminPack.Code.LuminPackCollectionAccess.PrepareQueueRefill(value, length);");
+            w.Line("if (slots.Length == length)");
+            w.Open();
+            w.Line("ref var firstSlot = ref " + c.Marshal + ".GetReference(slots);");
+            w.Line("int index = 0;");
+            w.Line("do");
+            w.Open();
+            w.Line("ref var slot = ref " + c.Memory + ".Add(ref firstSlot, (nint)(uint)index);");
+            c.ReadElement("slot");
+            w.Close();
+            w.Line("while (++index < length);");
+            w.Line("global::LuminPack.Code.LuminPackCollectionAccess.CompleteQueueRefill(value, length);");
+            w.Line("goto operationComplete_RootRead;");
+            w.Close();
+            w.Line("value.Clear();");
+        }
         if (c.Counted)
         {
             // A string or packable element is read and enqueued one at a time.

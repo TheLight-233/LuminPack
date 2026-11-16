@@ -29,6 +29,7 @@ What is kept:
 | `IDictionary<K,V>`, `IReadOnlyDictionary<K,V>` | Reuse an exact `Dictionary<K,V>` behind them. |
 | Binary `HashSet<T>`, `ISet<T>`, `IReadOnlySet<T>` | With Next, an exact `HashSet<T>` with the default comparer is cleared and refilled in place, keeping its storage; it grows only when the incoming count exceeds its capacity. Sets with a custom comparer and derived sets are replaced. |
 | `ConcurrentQueue<T>` | With Next, the queue is emptied with framework dequeues and refilled, so its last segment is reused instead of a new growth chain. |
+| Binary `Queue<T>` of strings or objects | With Next, the existing items become seeds: unchanged strings and existing objects are read in place and the backing array is reused. A failed read leaves the queue empty. |
 | `Memory<T>`, `ArraySegment<T>` | Reuse array-backed storage of the same length, keeping offset and count. |
 | Binary `ReadOnlyMemory<string>` and `ReadOnlySequence<string>` | With a built-in UTF-16 length profile on modern .NET, Next can reuse matching string references from a same-length array slice when the first string matches. Each result has its own backing array. |
 | Immutable sets of scalars or strings | Kept when the incoming contents are identical. |

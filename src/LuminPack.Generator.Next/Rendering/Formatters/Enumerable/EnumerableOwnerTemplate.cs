@@ -49,6 +49,9 @@ internal sealed partial class EnumerableOwnerContext
 
     /// <summary>Gets whether the referenced Core can link linked-list nodes while elements are decoded.</summary>
     internal bool LinkedListAppender => _set.Options?.LinkedListAppender == true;
+
+    /// <summary>Gets whether the referenced Core can refill a queue's backing array in place.</summary>
+    internal bool QueueRefill => _set.Options?.QueueRefill == true;
     internal bool RawTreeElements => GenericFormatterReuse.Real(Scalar) != "bool" &&
         (Forwarded ? _element is { Raw: true, RawStorage: true, Layout: null } : !Text && Payload == null);
     private readonly FormatterModel? _element;

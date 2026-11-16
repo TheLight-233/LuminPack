@@ -127,6 +127,75 @@ public static partial class LuminPackCollectionAccess
         return true;
     }
 
+    /// <summary>Empties an exact framework queue for an in-place refill and returns its first slots seeded with the old items.</summary>
+    /// <typeparam name="T">The queue element type.</typeparam>
+    /// <param name="queue">The fresh or reused queue.</param>
+    /// <param name="count">The validated incoming element count.</param>
+    /// <returns>The first <paramref name="count"/> slots of the backing array, holding the previous items in queue order as
+    /// reuse seeds and default values after them; an empty span when the layout is unsupported and the caller must enqueue.</returns>
+    /// <remarks>The previous items are moved to the front of the ring, surplus slots are cleared, the array grows to
+    /// <paramref name="count"/> when it is smaller, and the queue is published empty with a new version. Until
+    /// <see cref="CompleteQueueRefill{T}"/> runs the queue stays empty, so a failed read leaves it empty as <c>Clear</c> does.</remarks>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static Span<T> PrepareQueueRefill<T>(Queue<T> queue, int count)
+    {
+        if (count <= 0 || !QueueStorage.Available || (LuminCollectionLayouts.QueueTail | LuminCollectionLayouts.QueueSize) < 0 ||
+            queue.GetType() != typeof(Queue<T>))
+            return default;
+        ref int size = ref LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.QueueSize);
+        ref int head = ref LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.QueueHead);
+        ref int tail = ref LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.QueueTail);
+        ref T[] array = ref LuminFieldLayout.Field<T[]>(queue, LuminCollectionLayouts.QueueArray);
+        int live = size;
+        var items = array;
+        if ((uint)live > (uint)items.Length || live != 0 && (uint)head >= (uint)items.Length)
+            return default;
+        if (live != 0 && head != 0)
+        {
+            if (head + live <= items.Length)
+            {
+                Array.Copy(items, head, items, 0, live);
+                Array.Clear(items, Math.Max(live, head), head + live - Math.Max(live, head));
+            }
+            else
+            {
+                // A wrapped ring: rotate the whole array left by the head in place. The free slots between the tail and the
+                // head hold default values, so the live items end up first and in queue order.
+                items.AsSpan(0, head).Reverse();
+                items.AsSpan(head).Reverse();
+                items.AsSpan().Reverse();
+            }
+        }
+        if (items.Length < count)
+        {
+            var grown = new T[count];
+            Array.Copy(items, grown, live);
+            items = grown;
+        }
+        else if (live > count)
+            Array.Clear(items, count, live - count);
+        array = items;
+        head = 0;
+        tail = 0;
+        size = 0;
+        LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.QueueVersion)++;
+        return new Span<T>(items, 0, count);
+    }
+
+    /// <summary>Publishes the slots filled after <see cref="PrepareQueueRefill{T}"/> as the queue contents.</summary>
+    /// <typeparam name="T">The queue element type.</typeparam>
+    /// <param name="queue">The prepared queue.</param>
+    /// <param name="count">The number of filled slots.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static void CompleteQueueRefill<T>(Queue<T> queue, int count)
+    {
+        var items = LuminFieldLayout.Field<T[]>(queue, LuminCollectionLayouts.QueueArray);
+        LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.QueueHead) = 0;
+        LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.QueueTail) = count == items.Length ? 0 : count;
+        LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.QueueSize) = count;
+        LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.QueueVersion)++;
+    }
+
     /// <summary>Retrieves the checked active range of an exact framework queue.</summary>
     /// <typeparam name="T">The queue element type.</typeparam>
     /// <param name="queue">The source queue.</param>

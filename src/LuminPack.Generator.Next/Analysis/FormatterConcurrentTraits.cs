@@ -138,6 +138,22 @@ internal static class FormatterConcurrentTraits
                 SymbolEqualityComparer.Default.Equals(method.ReturnType, collection.OriginalDefinition.Construct(method.TypeParameters[0])));
     }
 
+    /// <summary>Checks the optional in-place queue refill operations.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <returns>Whether both referenced helpers have the expected public signatures.</returns>
+    internal static bool HasQueueRefill(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var queue = compilation.GetTypeByMetadataName("System.Collections.Generic.Queue`1");
+        return queue is not null && owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
+            owner.GetMembers("PrepareQueueRefill").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1 } && method.Parameters.Length == 2 &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, queue.Construct(method.TypeParameters[0])) &&
+                method.Parameters[1].Type.SpecialType == SpecialType.System_Int32 && method.ReturnType.Name == "Span") &&
+            owner.GetMembers("CompleteQueueRefill").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } && method.Parameters.Length == 2);
+    }
+
     /// <summary>Checks the optional pair-by-pair concurrent dictionary builder.</summary>
     /// <param name="compilation">The consumer's Core and framework references.</param>
     /// <returns>Whether the referenced helper has the expected public signature.</returns>
