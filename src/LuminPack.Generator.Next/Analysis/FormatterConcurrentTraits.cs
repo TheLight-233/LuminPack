@@ -117,6 +117,26 @@ internal static class FormatterConcurrentTraits
             SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, second)) == true;
     }
 
+    /// <summary>Checks the complete signature of the counted blocking collection factory.</summary>
+    /// <param name="compilation">The actual consumer metadata.</param>
+    /// <param name="collection">The closed blocking collection.</param>
+    /// <returns>Whether the referenced Core can construct the collection from a rented array prefix.</returns>
+    internal static bool HasBlockingCollectionFactory(Compilation compilation, INamedTypeSymbol collection)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        return owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
+            owner.GetMembers("CreateBlockingCollection").OfType<IMethodSymbol>().Any(method =>
+                method.IsStatic && method.DeclaredAccessibility == Accessibility.Public && method.Arity == 1 &&
+                !method.ReturnsByRef && !method.ReturnsByRefReadonly && method.Parameters.Length == 2 &&
+                method.TypeParameters[0].ConstraintTypes.IsEmpty && !method.TypeParameters[0].HasReferenceTypeConstraint &&
+                !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+                !method.TypeParameters[0].HasConstructorConstraint && !method.TypeParameters[0].HasNotNullConstraint &&
+                method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type is IArrayTypeSymbol { IsSZArray: true } items &&
+                SymbolEqualityComparer.Default.Equals(items.ElementType, method.TypeParameters[0]) &&
+                method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32 &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, collection.OriginalDefinition.Construct(method.TypeParameters[0])));
+    }
+
     /// <summary>Checks the callback-free framework contract and complete staged-publication helper.</summary>
     /// <param name = "compilation">The actual consumer metadata.</param>
     /// <param name = "element">The declared stack element.</param>

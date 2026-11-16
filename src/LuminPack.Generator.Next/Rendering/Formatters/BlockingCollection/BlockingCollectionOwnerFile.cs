@@ -96,12 +96,17 @@ internal static class BlockingCollectionOwnerFile
                 w.Line("while (++index < length);");
                 w.Close();
             }
-            // Without the interface casts, the conditional can convert both array branches to ArraySegment<T>.
-            string source = "global::System.Collections.Generic.IEnumerable<" + item + ">";
-            w.Line(source + " source = length == items.Length");
-            w.Line("    ? (" + source + ")items : length == 0 ? (" + source + ")global::System.Array.Empty<" + item + ">()");
-            w.Line("    : new global::System.ArraySegment<" + item + ">(items, 0, length);");
-            w.Line("value = new " + type + "(new global::System.Collections.Concurrent.ConcurrentQueue<" + item + ">(source));");
+            if (set.FindFormatter(type)?.Supports("CreateBlockingCollection") == true)
+                w.Line("value = global::LuminPack.Code.LuminPackCollectionAccess.CreateBlockingCollection(items, length);");
+            else
+            {
+                // Without the interface casts, the conditional can convert both array branches to ArraySegment<T>.
+                string source = "global::System.Collections.Generic.IEnumerable<" + item + ">";
+                w.Line(source + " source = length == items.Length");
+                w.Line("    ? (" + source + ")items : length == 0 ? (" + source + ")global::System.Array.Empty<" + item + ">()");
+                w.Line("    : new global::System.ArraySegment<" + item + ">(items, 0, length);");
+                w.Line("value = new " + type + "(new global::System.Collections.Concurrent.ConcurrentQueue<" + item + ">(source));");
+            }
             w.Close();
             w.Line("finally");
             w.Open();

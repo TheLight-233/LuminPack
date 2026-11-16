@@ -249,6 +249,10 @@ internal static class FormatterCapabilities
                 result.Add("BagRawWrite");
         }
 
+        if (definition == "System.Collections.Concurrent.BlockingCollection" && modern && !unity &&
+            FormatterConcurrentTraits.HasBlockingCollectionFactory(compilation, named))
+            result.Add("CreateBlockingCollection");
+
         if (definition is "System.Collections.Concurrent.ConcurrentBag" or "System.Collections.Concurrent.ConcurrentStack" &&
             named.TypeArguments[0].SpecialType == SpecialType.System_String &&
             FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteCheckedStrings", named.TypeArguments[0]))
