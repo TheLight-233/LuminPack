@@ -34,6 +34,8 @@ internal static class GroupingOwnerFile
         string ownedGrouping = "global::LuminPack.Utility.LuminPackGrouping<" + key + ", " + element + ">";
         string ownedLookup = "global::LuminPack.Utility.LuminPackLookup<" + key + ", " + element + ">";
         if (definition == GenericIdentity.Grouping)
+        {
+            bool canReadJsonStringChoice = set.FindFormatter(declared)?.Supports("CanReadJsonStringChoice") == true;
             return SpecialOwnerFile.Render(set, operations, shortName, declared, true,
                 (w, c) =>
                 {
@@ -97,19 +99,35 @@ internal static class GroupingOwnerFile
                     w.Open();
                     w.Line("if (reader.CurrentTokenType == " + c.JsonReader + ".JsonTokenType.ObjectEnd)");
                     w.Line("    break;");
+                    w.Line("int propertyChoice;");
+                    if (canReadJsonStringChoice)
+                    {
+                        w.Line("if (reader.CurrentTokenType == " + c.JsonReader + ".JsonTokenType.String)");
+                        w.Open();
+                        w.Line("propertyChoice = reader.ReadStringChoice<" + c.Profile + ">(new byte[] { 75, 101, 121 }, " +
+                            "global::System.MemoryExtensions.AsSpan(\"Key\"), new byte[] { 69, 108, 101, 109, 101, 110, 116, 115 }, " +
+                            "global::System.MemoryExtensions.AsSpan(\"Elements\"));");
+                        w.Close();
+                        w.Line("else");
+                        w.Open();
+                    }
                     w.Line("string? propertyName = null;");
                     w.Line("reader.Read<" + c.Profile + ">(ref propertyName);");
+                    w.Line("propertyChoice = propertyName == \"Key\" ? 1 : propertyName == \"Elements\" ? 2 : 0;");
+                    if (canReadJsonStringChoice)
+                        w.Close();
                     w.Line("reader.CompleteValue();");
                     w.Line("reader.Read<" + c.Profile + ">();");
-                    w.Line("if (propertyName == \"Key\")");
+                    w.Line("if (propertyChoice == 1)");
                     w.Indented(() => w.Line(keyOwner + ".Read<" + c.Profile + ">(ref reader, ref key);"));
-                    w.Line("else if (propertyName == \"Elements\")");
+                    w.Line("else if (propertyChoice == 2)");
                     w.Indented(() => w.Line(sequence + ".Read<" + c.Profile + ">(ref reader, ref elements);"));
                     w.Line("else");
                     w.Indented(() => w.Line("reader.Skip<" + c.Profile + ">();"));
                     w.Close();
                     w.Line("value = new " + ownedGrouping + "(key" + (key == "string" ? "!" : "") + ", elements!);");
                 });
+        }
 
         return LookupOwner(set, operations, shortName, declared, grouping, groupingOwner, ownedLookup, key, element);
     }

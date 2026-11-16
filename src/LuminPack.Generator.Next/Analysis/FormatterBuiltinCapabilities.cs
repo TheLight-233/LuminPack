@@ -73,7 +73,9 @@ internal static class FormatterBuiltinCapabilities
                 result.Add("CanCopyStringBuilder");
         }
 
-        if ((display is "global::System.Numerics.Complex" or "global::System.Numerics.Plane") && HasJsonStringChoice(compilation))
+        if ((display is "global::System.Numerics.Complex" or "global::System.Numerics.Plane" ||
+            type is INamedTypeSymbol { MetadataName: "IGrouping`2" } grouping && grouping.ContainingNamespace.ToDisplayString() == "System.Linq") &&
+            HasJsonStringChoice(compilation))
             result.Add("CanReadJsonStringChoice");
 
         if (display == "global::System.Collections.BitArray")
