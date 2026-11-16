@@ -47,7 +47,7 @@ internal static partial class SortedListOwnerFile
         w.Line("ref var firstValue = ref " + ArrayReference + "(storedValues);");
         bool fused = c.BeginRawRun(c.Memory + ".Add(ref firstKey, (nint)(uint)index)",
             c.Memory + ".Add(ref firstValue, (nint)(uint)index)");
-        ParallelDictionaryWrite.Emit(c, "count");
+        ParallelDictionaryWrite.Emit(c, "count", allowBoundedKey: true);
         if (fused)
             w.Close();
         w.Close();

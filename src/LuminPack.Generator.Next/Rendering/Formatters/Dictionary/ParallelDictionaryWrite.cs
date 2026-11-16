@@ -57,13 +57,16 @@ internal static class ParallelDictionaryWrite
     /// <param name="c">The case or formatter context in scope.</param>
     /// <param name="count">The number of items to process.</param>
     /// <param name="allowMixed">Whether to enable allow mixed for this operation.</param>
-    internal static void Emit(PairedDictionaryContext c, string count, bool allowMixed = true)
+    /// <param name="allowBoundedKey">Whether the storage-backed traversal can reserve an ordinary object pair's string key.</param>
+    internal static void Emit(PairedDictionaryContext c, string count, bool allowMixed = true, bool allowBoundedKey = false)
     {
         var w = c.W;
         string keySlot = c.Memory + ".Add(ref firstKey, (nint)(uint)index)";
         string valueSlot = c.Memory + ".Add(ref firstValue, (nint)(uint)index)";
         bool mixed = allowMixed && SupportsMixed(c);
-        if (mixed)
+        bool boundedKey = allowBoundedKey && c.Key == "string" && c.OrdinaryObjectValue &&
+            c.Supports("SortedListBinaryBoundedKey");
+        if (mixed || boundedKey)
             w.Line("bool utf16Length = " + FixedUtf16LengthProfile + ";");
         w.Line("int index = 0;");
         w.Line("do");
@@ -76,12 +79,31 @@ internal static class ParallelDictionaryWrite
         else
         {
             w.Line(c.Key + " key = " + keySlot + ";");
-            c.WriteMember(c.Key, "key");
+            if (boundedKey)
+            {
+                w.Line("if (utf16Length && operationState.RecordRoom() >= " + Writer + ".Utf16RecordBound(key))");
+                w.Open();
+                w.Line("ref byte record = ref operationState.Cursor;");
+                w.Line("operationState.CompleteRun(" + Writer + ".WriteReservedUtf16Record(ref record, key));");
+                w.Close();
+                w.Line("else");
+                w.Indented(() => w.Line("WriteKeySlow(ref operationState, key);"));
+            }
+            else
+                c.WriteMember(c.Key, "key");
             w.Line(c.Value + " itemValue = " + valueSlot + ";");
             c.WriteMember(c.Value, "itemValue");
         }
         w.Close();
         w.Line("while (++index < " + count + ");");
+        if (boundedKey)
+        {
+            w.Line(w.MethodImpl("NoInlining"));
+            w.Line("static void WriteKeySlow(scoped ref " + Writer + " operationState, string key)");
+            w.Open();
+            c.WriteMember(c.Key, "key");
+            w.Close();
+        }
         if (!mixed)
             return;
         w.Line(w.MethodImpl("NoInlining"));

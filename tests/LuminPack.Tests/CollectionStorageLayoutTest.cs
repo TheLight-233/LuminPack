@@ -383,6 +383,37 @@ public class CollectionStorageLayoutTest
         Assert.Throws<ArgumentException>(() => LuminPackSerializer.Deserialize(new ImmutableSortedDictionaryDuplicateSource().Bytes.AsSpan(), ref duplicate));
     }
 
+    /// <summary>Checks the string-key object wire through bounded and per-member sorted-list writes.</summary>
+    [Fact]
+    public void SortedListObjectWritesKeepWireAcrossWriterWindows()
+    {
+        var source = new SortedList<string, SortedListWritePayload>(StringComparer.Ordinal)
+        {
+            ["first"] = new() { Id = 17, Text = "left" },
+            [new string('\u00e9', 71)] = new() { Id = -6, Text = "wide key" },
+            ["\u4e2d"] = new() { Id = 53, Text = "\u6587" }
+        };
+        byte[] expected = LuminPackSerializer.Serialize(new Dictionary<string, SortedListWritePayload>(source, StringComparer.Ordinal));
+        Assert.Equal(expected, LuminPackSerializer.Serialize(source));
+
+        using var output = new LuminBufferWriter(true);
+        LuminPackSerializer.Serialize(source, output);
+        Assert.Equal(expected, output.GetSpan().ToArray());
+
+        foreach (int capacity in new[] { expected.Length, expected.Length + 128 })
+        {
+            var bytes = new byte[capacity + 2];
+            bytes.AsSpan().Fill(0xa3);
+            Span<byte> window = bytes.AsSpan(1, capacity);
+            var writer = new global::LuminPack.Core.LuminPackWriter(ref window);
+            LuminPackSerializer.Serialize<SortedList<string, SortedListWritePayload>, LuminPackUtf16LengthOptions>(ref writer, source);
+            Assert.Equal(expected.Length, writer.Position);
+            Assert.Equal(expected, window[..writer.Position].ToArray());
+            Assert.Equal((byte)0xa3, bytes[0]);
+            Assert.Equal((byte)0xa3, bytes[^1]);
+        }
+    }
+
     /// <summary>Checks priority queues written from their heap array and rebuilt by one heapify, and the read-only wrappers.</summary>
     [Fact]
     public void HeapsAndReadOnlyWrappersRoundTrip()
@@ -574,4 +605,15 @@ public partial struct CollidingKey : IEquatable<CollidingKey>
     public override readonly bool Equals(object? obj) => obj is CollidingKey other && Equals(other);
     /// <inheritdoc />
     public override readonly int GetHashCode() => Value / 2;
+}
+
+/// <summary>An ordinary positional object for sorted-list entry writes.</summary>
+[LuminPackable]
+public sealed partial class SortedListWritePayload
+{
+    /// <summary>The fixed entry field.</summary>
+    public int Id;
+
+    /// <summary>The entry's text.</summary>
+    public string Text = "";
 }

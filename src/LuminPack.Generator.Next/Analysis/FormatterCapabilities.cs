@@ -310,6 +310,10 @@ internal static class FormatterCapabilities
             "System.Collections.Generic.SortedList" or "System.Collections.Generic.SortedDictionary" &&
             FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation))
             result.Add("BinaryRawPairs");
+        if (definition == "System.Collections.Generic.SortedList" && modern && !unity &&
+            named.TypeArguments[0].SpecialType == SpecialType.System_String &&
+            FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
+            result.Add("SortedListBinaryBoundedKey");
         if (definition == "System.Collections.Concurrent.ConcurrentDictionary" && modern && !unity &&
             named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
