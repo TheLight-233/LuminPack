@@ -72,7 +72,8 @@ internal static class GeneratorOptionsFactory
             FormatterBuiltinCapabilities.HasQuotedScalarReader(compilation),
             cursor is INamedTypeSymbol { Name: "Span", Arity: 1 },
             generatedJsonPropertyWriter: net8 && !unity && GeneratedJsonProperty.Available(compilation),
-            generatedJsonInt32Reader: net8 && !unity && GeneratedJsonInt32Runs.Available(compilation));
+            generatedJsonInt32Reader: net8 && !unity && GeneratedJsonInt32Runs.Available(compilation),
+            hashSetRefill: FormatterConcurrentTraits.HasHashSetRefill(compilation));
     }
 
     /// <summary>Checks that the compiler feature enables the generated interception namespace.</summary>

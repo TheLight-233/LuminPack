@@ -69,6 +69,9 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <summary>Whether the referenced Core exposes the generated integer-run reader.</summary>
     internal readonly bool GeneratedJsonInt32Reader;
 
+    /// <summary>Whether the referenced Core can prepare a reused hash set for a direct refill.</summary>
+    internal readonly bool HashSetRefill;
+
     /// <summary>Captures the project facts.</summary>
     /// <param name="net8">Whether to enable net8 for this operation.</param>
     /// <param name="csharpVersion">The csharp version supplied to <c>GeneratorOptions</c>.</param>
@@ -87,11 +90,13 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <param name="spanCursor">Whether to enable span cursor for this operation.</param>
     /// <param name="generatedJsonPropertyWriter">Whether the referenced Core exposes the generated property-head writer.</param>
     /// <param name="generatedJsonInt32Reader">Whether the referenced Core exposes the generated integer-run reader.</param>
+    /// <param name="hashSetRefill">Whether the referenced Core exposes the reused hash-set refill preparation.</param>
     internal GeneratorOptions(bool net8, int csharpVersion, bool @unsafe, bool unity, RegisterMode registerMode, int availableAliases,
         string assemblyName, bool interceptors, bool ilRewrite = false, bool pointerCursor = false, string[]? ambiguousNames = null,
         int formatterInterfaces = 0, bool knownFormatters = false, bool quotedScalarReader = false, bool spanCursor = false,
-        bool generatedJsonPropertyWriter = false, bool generatedJsonInt32Reader = false)
+        bool generatedJsonPropertyWriter = false, bool generatedJsonInt32Reader = false, bool hashSetRefill = false)
     {
+        HashSetRefill = hashSetRefill;
         GeneratedJsonPropertyWriter = generatedJsonPropertyWriter;
         GeneratedJsonInt32Reader = generatedJsonInt32Reader;
         QuotedScalarReader = quotedScalarReader;
@@ -118,6 +123,7 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
         Interceptors == other.Interceptors && IlRewrite == other.IlRewrite && PointerCursor == other.PointerCursor && SpanCursor == other.SpanCursor && FormatterInterfaces == other.FormatterInterfaces &&
         KnownFormatters == other.KnownFormatters && QuotedScalarReader == other.QuotedScalarReader &&
         GeneratedJsonPropertyWriter == other.GeneratedJsonPropertyWriter && GeneratedJsonInt32Reader == other.GeneratedJsonInt32Reader &&
+        HashSetRefill == other.HashSetRefill &&
         System.Linq.Enumerable.SequenceEqual(AmbiguousNames, other.AmbiguousNames);
 
     /// <inheritdoc/>

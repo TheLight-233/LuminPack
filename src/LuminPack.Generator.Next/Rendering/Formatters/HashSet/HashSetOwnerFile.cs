@@ -64,7 +64,9 @@ internal static class HashSetOwnerFile
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
-        w.Line("value = new " + c.Sequence + "(length);");
+        w.Line(c.HashSetRefill
+            ? "value = global::LuminPack.Code.LuminPackCollectionAccess.PrepareHashSetForRefill(value, length);"
+            : "value = new " + c.Sequence + "(length);");
         w.Blank();
         if (!c.Counted && c.Supports("ReadRawHashSet"))
         {

@@ -27,6 +27,8 @@ What is kept:
 | Binary `SortedList<string, int>` and `SortedList<string, long>` | Next can retain matching string key references in an exact default-comparer list with the same count, from 1 to 4,096 entries, under built-in string profiles on supported runtime layouts. Reuse still clears the list and publishes each complete pair as it reads it. |
 | Sequence interfaces (`IEnumerable<T>`, `ICollection<T>`, `IList<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>`) | Reuse an exact `List<T>` or `T[]` behind them, for string, scalar and ordinary object elements. |
 | `IDictionary<K,V>`, `IReadOnlyDictionary<K,V>` | Reuse an exact `Dictionary<K,V>` behind them. |
+| Binary `HashSet<T>`, `ISet<T>`, `IReadOnlySet<T>` | With Next, an exact `HashSet<T>` with the default comparer is cleared and refilled in place, keeping its storage; it grows only when the incoming count exceeds its capacity. Sets with a custom comparer and derived sets are replaced. |
+| `ConcurrentQueue<T>` | With Next, the queue is emptied with framework dequeues and refilled, so its last segment is reused instead of a new growth chain. |
 | `Memory<T>`, `ArraySegment<T>` | Reuse array-backed storage of the same length, keeping offset and count. |
 | Binary `ReadOnlyMemory<string>` and `ReadOnlySequence<string>` | With a built-in UTF-16 length profile on modern .NET, Next can reuse matching string references from a same-length array slice when the first string matches. Each result has its own backing array. |
 | Immutable sets of scalars or strings | Kept when the incoming contents are identical. |

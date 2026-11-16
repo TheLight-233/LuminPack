@@ -43,6 +43,9 @@ internal sealed partial class EnumerableOwnerContext
     /// <param name="capability">The capability supplied to <c>Supports</c>.</param>
     /// <returns>Whether the input satisfies the supports check.</returns>
     internal bool Supports(string capability) => _set.FindFormatter(Sequence)?.Supports(capability) == true;
+
+    /// <summary>Gets whether the referenced Core can prepare a reused hash set for a direct refill.</summary>
+    internal bool HashSetRefill => _set.Options?.HashSetRefill == true;
     internal bool RawTreeElements => GenericFormatterReuse.Real(Scalar) != "bool" &&
         (Forwarded ? _element is { Raw: true, RawStorage: true, Layout: null } : !Text && Payload == null);
     private readonly FormatterModel? _element;

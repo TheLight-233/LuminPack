@@ -27,6 +27,8 @@ LuminPackSerializer.Deserialize(nextPayload, ref target);   // 仍然是同一�
 | 二进制 `SortedList<string, int>` 和 `SortedList<string, long>` | 在受支持的运行时布局和内置字符串配置下，如果使用默认比较器的列表类型精确、条目数与输入相同且在 1 至 4096 之间，Next 可以保留内容匹配的字符串键引用。复用仍会先清空列表，再逐个发布读取完成的键值对。 |
 | 序列接口（`IEnumerable<T>`、`ICollection<T>`、`IList<T>`、`IReadOnlyList<T>`、`IReadOnlyCollection<T>`） | 元素为字符串、标量或普通对象时，复用背后的精确 `List<T>` 或 `T[]`。 |
 | `IDictionary<K,V>`、`IReadOnlyDictionary<K,V>` | 复用背后的精确 `Dictionary<K,V>`。 |
+| 二进制 `HashSet<T>`、`ISet<T>`、`IReadOnlySet<T>` | 使用 Next 时，精确类型且使用默认比较器的 `HashSet<T>` 会被清空后原位重新填充并保留其存储；只有传入元素数超过容量时才扩容。使用自定义比较器的集合和派生集合会被替换。 |
+| `ConcurrentQueue<T>` | 使用 Next 时，队列先通过框架出队操作清空再重新填充，从而复用最后一个段，而不是重新分配整条增长链。 |
 | `Memory<T>`、`ArraySegment<T>` | 长度相同时复用数组存储，保留 offset 和 count。 |
 | 二进制 `ReadOnlyMemory<string>` 和 `ReadOnlySequence<string>` | 在现代 .NET 上使用内置 UTF-16 长度配置时，如果原数组切片长度相同且首个字符串匹配，Next 可以复用内容相同的字符串引用。每个结果都有独立的后备数组。 |
 | 标量或字符串的 Immutable 集合 | 传入内容完全相同时保留。 |

@@ -138,6 +138,25 @@ internal static class FormatterConcurrentTraits
                 SymbolEqualityComparer.Default.Equals(method.ReturnType, collection.OriginalDefinition.Construct(method.TypeParameters[0])));
     }
 
+    /// <summary>Checks the optional reused hash-set refill preparation.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <returns>Whether the referenced helper has the expected public signature.</returns>
+    internal static bool HasHashSetRefill(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var set = compilation.GetTypeByMetadataName("System.Collections.Generic.HashSet`1");
+        return set is not null && owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
+            owner.GetMembers("PrepareHashSetForRefill").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1 } &&
+                method.Parameters.Length == 2 && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+                method.TypeParameters[0].ConstraintTypes.IsEmpty && !method.TypeParameters[0].HasValueTypeConstraint &&
+                !method.TypeParameters[0].HasReferenceTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+                !method.TypeParameters[0].HasNotNullConstraint && !method.TypeParameters[0].HasConstructorConstraint &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, set.Construct(method.TypeParameters[0])) &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type.OriginalDefinition, set) &&
+                method.Parameters[1].Type.SpecialType == SpecialType.System_Int32);
+    }
+
     /// <summary>Checks the optional reused-queue drain operation.</summary>
     /// <param name="compilation">The consumer's Core and framework references.</param>
     /// <param name="queue">The exact closed framework queue.</param>

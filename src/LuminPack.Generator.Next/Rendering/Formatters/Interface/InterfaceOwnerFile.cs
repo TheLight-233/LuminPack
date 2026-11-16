@@ -252,7 +252,9 @@ internal static class InterfaceOwnerFile
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
-        w.Line("var hashSet = new " + set + "(length);");
+        w.Line(c.HashSetRefill
+            ? "var hashSet = global::LuminPack.Code.LuminPackCollectionAccess.PrepareHashSetForRefill(value as " + set + ", length);"
+            : "var hashSet = new " + set + "(length);");
         if (!c.Counted && c.Supports("ReadRawHashSet"))
         {
             // Keep the inline rebuild for short records where the shared transfer's setup costs more.
