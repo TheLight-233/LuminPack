@@ -126,6 +126,40 @@ public class DictionaryBucketRangeTest
         BitConverter.TryWriteBytes(payload.AsSpan(16), 13);
         Assert.Throws<ArgumentException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, int>>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
+
+    /// <summary>Checks that rejecting a bucket rebuild replays distinct colliding pairs in an existing empty dictionary.</summary>
+    [Fact]
+    public void EmptyScalarRefillReplaysCollidingKeys()
+    {
+        const int count = 120;
+        var target = new Dictionary<int, int>(count);
+        var original = target;
+        int capacity = target.EnsureCapacity(count);
+        var source = Enumerable.Range(0, count).ToDictionary(index => index * capacity, index => index + 1);
+        byte[] payload = LuminPackSerializer.Serialize(source);
+
+        Assert.Equal(payload.Length, LuminPackSerializer.Deserialize(payload.AsSpan(), ref target));
+        Assert.Same(original, target);
+        Assert.Equal(source.ToArray(), target.ToArray());
+        foreach (var pair in source)
+            Assert.Equal(pair.Value, target[pair.Key]);
+    }
+
+    /// <summary>Checks that duplicate-key replay publishes only the successfully added prefix in the original destination.</summary>
+    [Fact]
+    public void EmptyScalarRefillKeepsPrefixBeforeDuplicate()
+    {
+        var target = new Dictionary<int, int>(2);
+        var original = target;
+        byte[] payload = LuminPackSerializer.Serialize(new Dictionary<int, int> { [1] = 11, [2] = 13 });
+        payload.AsSpan(sizeof(int), sizeof(int)).CopyTo(payload.AsSpan(3 * sizeof(int)));
+
+        Assert.Throws<ArgumentException>(() => LuminPackSerializer.Deserialize(payload.AsSpan(), ref target));
+        Assert.Same(original, target);
+        Assert.Single(target);
+        Assert.Equal(11, target[1]);
+    }
+
     /// <summary>Preserves immutable keys, enumeration version effects and staged failure publication for scalar refills.</summary>
     [Fact]
     public void StringScalarRefillsRetainKeysAndCheckedFailurePublication()

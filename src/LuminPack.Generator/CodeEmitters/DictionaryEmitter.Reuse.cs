@@ -72,6 +72,10 @@ public static partial class DictionaryEmitter
     /// pairs, the same enumeration order and the retained capacity. Duplicate keys still fail through <c>Add</c>.</remarks>
     private static void AppendRawDictionaryRefill(StringBuilder sb, string keyType, string valueType)
     {
+        string pair = $"global::System.Collections.Generic.KeyValuePair<{keyType}, {valueType}>";
+        string dictionary = $"global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>";
+        string pool = $"global::System.Buffers.ArrayPool<{pair}>.Shared";
+        string storage = $"global::LuminPack.Code.LuminPackMarshal.DictionaryView<{keyType}, {valueType}>.Entry";
         sb.AppendLine("            if (value is { Count: 0 } && global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8 &&");
         sb.AppendLine($"                global::System.Object.ReferenceEquals(value.Comparer, global::System.Collections.Generic.EqualityComparer<{keyType}>.Default))");
         sb.AppendLine("            {");
@@ -84,19 +88,32 @@ public static partial class DictionaryEmitter
         AppendRawPair(sb, "entry.Key", "entry.Value", valueType, "                    ", write: false);
         sb.AppendLine("                }");
         sb.AppendLine("                if (!LuminPackMarshal.TryRebuildFreshDictionaryBuckets(refillView, length))");
-        sb.AppendLine("                {");
-        sb.AppendLine($"                    var pairs = new global::System.Collections.Generic.KeyValuePair<{keyType}, {valueType}>[length];");
-        sb.AppendLine("                    for (int i = 0; i < length; i++)");
-        sb.AppendLine("                    {");
-        sb.AppendLine("                        ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref refillRef, (nint)(uint)i);");
-        sb.AppendLine($"                        pairs[i] = new global::System.Collections.Generic.KeyValuePair<{keyType}, {valueType}>(entry.Key, entry.Value);");
-        sb.AppendLine("                    }");
-        sb.AppendLine("                    value.Clear();");
-        sb.AppendLine("                    foreach (var pair in pairs) value.Add(pair.Key, pair.Value);");
-        sb.AppendLine("                }");
+        sb.AppendLine("                    ReplayRejectedRefill(value, ref refillRef, length);");
         sb.AppendLine("                else");
         sb.AppendLine("                    refillView._version = unchecked(refillVersion + length + 1);");
         sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        sb.AppendLine($"            static void ReplayRejectedRefill({dictionary} destination, ref {storage} firstEntry, int count)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                var pairs = {pool}.Rent(count);");
+        sb.AppendLine("                try");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    for (int i = 0; i < count; i++)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref firstEntry, (nint)(uint)i);");
+        sb.AppendLine($"                        pairs[i] = new {pair}(entry.Key, entry.Value);");
+        sb.AppendLine("                    }");
+        sb.AppendLine("                    destination.Clear();");
+        // A rejected rebuild leaves provisional buckets even when Clear sees zero published entries.
+        sb.AppendLine("                    var buckets = LuminPackMarshal.GetDictionaryView(destination)._buckets;");
+        sb.AppendLine("                    global::System.Array.Clear(buckets, 0, buckets.Length);");
+        sb.AppendLine("                    for (int i = 0; i < count; i++) destination.Add(pairs[i].Key, pairs[i].Value);");
+        sb.AppendLine("                }");
+        sb.AppendLine("                finally");
+        sb.AppendLine("                {");
+        sb.AppendLine($"                    {pool}.Return(pairs, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{pair}>());");
+        sb.AppendLine("                }");
         sb.AppendLine("            }");
     }
 

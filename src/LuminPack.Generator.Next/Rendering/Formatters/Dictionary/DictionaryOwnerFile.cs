@@ -390,20 +390,7 @@ internal static class DictionaryOwnerFile
                         w.Close();
                         w.Line("while (++refillIndex < length);");
                         w.Line("if (!global::LuminPack.Code.LuminPackMarshal.TryRebuildFreshDictionaryBuckets(refillView, length))");
-                        w.Open();
-                        w.Line("var pairs = new " + entry + "[length];");
-                        w.Line("ref var firstPair = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pairs);");
-                        w.Line("refillIndex = 0;");
-                        w.Line("do");
-                        w.Open();
-                        w.Line("ref var refillEntry = ref " + memory + ".Add(ref refillRef, (nint)(uint)refillIndex);");
-                        w.Line(memory + ".Add(ref firstPair, (nint)(uint)refillIndex) = new " + entry + "(refillEntry.Key, refillEntry.Value);");
-                        w.Close();
-                        w.Line("while (++refillIndex < length);");
-                        w.Line("value.Clear();");
-                        w.Line("foreach (var item in pairs)");
-                        w.Indented(() => w.Line("value.Add(item.Key, item.Value);"));
-                        w.Close();
+                        w.Indented(() => w.Line("ReplayRejectedRefill(value, ref refillRef, length);"));
                         w.Line("else");
                         w.Indented(() => w.Line("refillView._version = unchecked(refillVersion + length + 1);"));
                         w.Line("goto operationComplete_RootRead;");
@@ -504,6 +491,9 @@ internal static class DictionaryOwnerFile
                     w.Close();
                     w.Blank();
 
+                    if (pair)
+                        EmitRejectedRefill();
+
                     // An existing dictionary is replaced through a staged read, so a failed read leaves its entries unchanged.
                     w.Line(preserve);
                     w.Line(w.MethodImpl("NoInlining"));
@@ -578,6 +568,38 @@ internal static class DictionaryOwnerFile
                     w.Blank();
                     break;
             }
+        }
+
+        /// <summary>Emits the cold refill replay through the original dictionary's public insertion path.</summary>
+        void EmitRejectedRefill()
+        {
+            const string marshal = "global::LuminPack.Code.LuminPackMarshal";
+            string pool = "global::System.Buffers.ArrayPool<" + entry + ">.Shared";
+            string storage = marshal + ".DictionaryView<" + key + ", " + value + ">.Entry";
+            w.Line(w.MethodImpl("NoInlining"));
+            w.Line("private static void ReplayRejectedRefill(" + dictionary + " destination, ref " + storage + " firstEntry, int count)");
+            w.Open();
+            w.Line("var pairs = " + pool + ".Rent(count);");
+            w.Line("try");
+            w.Open();
+            w.Line("for (int index = 0; index < count; index++)");
+            w.Open();
+            w.Line("ref var item = ref " + memory + ".Add(ref firstEntry, (nint)(uint)index);");
+            w.Line("pairs[index] = new " + entry + "(item.Key, item.Value);");
+            w.Close();
+            w.Line("destination.Clear();");
+            // A rejected rebuild leaves provisional buckets even when Clear sees zero published entries.
+            w.Line("var buckets = " + marshal + ".GetDictionaryView(destination)._buckets;");
+            w.Line("global::System.Array.Clear(buckets, 0, buckets.Length);");
+            w.Line("for (int index = 0; index < count; index++)");
+            w.Indented(() => w.Line("destination.Add(pairs[index].Key, pairs[index].Value);"));
+            w.Close();
+            w.Line("finally");
+            w.Open();
+            w.Line(pool + ".Return(pairs, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + entry + ">());");
+            w.Close();
+            w.Close();
+            w.Blank();
         }
 
         void EmitJsonWrite(FormatterSection section)
