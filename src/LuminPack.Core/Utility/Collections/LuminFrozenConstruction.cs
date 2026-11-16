@@ -16,8 +16,8 @@ namespace LuminPack.Utility;
 public static class LuminFrozenConstruction
 {
     private const int MaximumRetainedCapacity = 4096;
-    private const int LastRawSetPrimeBelowLimit = 4049;
-    private const int MaximumRetainedRawSetCapacity = 4861;
+    private const int LastTablePrimeBelowLimit = 4049;
+    private const int RoundedRetainedCapacity = 4861;
 
     /// <summary>Rents an exclusive empty dictionary using the default comparer.</summary>
     /// <typeparam name="TKey">The key type.</typeparam>
@@ -44,7 +44,8 @@ public static class LuminFrozenConstruction
     {
         int count = value.Count, capacity = value.EnsureCapacity(0);
         value.Clear();
-        if (capacity <= MaximumRetainedCapacity && capacity <= Math.Max(128, count * 4) && ReferenceEquals(value.Comparer, EqualityComparer<TKey>.Default))
+        if (capacity <= RetainedTableCapacity(count) && capacity <= Math.Max(128, count * 4) &&
+            ReferenceEquals(value.Comparer, EqualityComparer<TKey>.Default))
             Cache<Dictionary<TKey, TValue>>.Items.TryStore(value);
     }
 
@@ -75,9 +76,14 @@ public static class LuminFrozenConstruction
     /// <param name="requestedCount">The validated count before insertion.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static void ReturnRawSet<T>(HashSet<T> value, int requestedCount) where T : unmanaged =>
-        ReturnSet(value, requestedCount is > LastRawSetPrimeBelowLimit and <= MaximumRetainedCapacity
-            ? MaximumRetainedRawSetCapacity
-            : MaximumRetainedCapacity);
+        ReturnSet(value, RetainedTableCapacity(requestedCount));
+
+    /// <summary>Includes the table the framework rounds up for counts still within the retention limit.</summary>
+    /// <param name="count">The eligible completed or validated requested count.</param>
+    /// <returns>The maximum permitted capacity in the existing cache.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int RetainedTableCapacity(int count) => count is > LastTablePrimeBelowLimit and <= MaximumRetainedCapacity
+        ? RoundedRetainedCapacity : MaximumRetainedCapacity;
 
     /// <summary>Clears and releases a bounded private builder.</summary>
     /// <typeparam name="T">The element type.</typeparam>
