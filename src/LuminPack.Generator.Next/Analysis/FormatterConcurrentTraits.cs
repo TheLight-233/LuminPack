@@ -187,6 +187,21 @@ internal static class FormatterConcurrentTraits
                 state.GetMembers(name).Any(member => member.DeclaredAccessibility == Accessibility.Public));
     }
 
+    /// <summary>Checks the optional seeding of a concurrent stack read buffer with the existing items.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <returns>Whether the referenced helper has the expected public signature.</returns>
+    internal static bool HasConcurrentStackSeed(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var stack = compilation.GetTypeByMetadataName("System.Collections.Concurrent.ConcurrentStack`1");
+        return stack is not null && owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
+            owner.GetMembers("SeedConcurrentStack").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } &&
+                method.Parameters.Length == 3 &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type.OriginalDefinition, stack) &&
+                method.Parameters[1].Type is IArrayTypeSymbol && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32);
+    }
+
     /// <summary>Checks the optional in-place stack refill operations.</summary>
     /// <param name="compilation">The consumer's Core and framework references.</param>
     /// <returns>Whether both referenced helpers have the expected public signatures.</returns>

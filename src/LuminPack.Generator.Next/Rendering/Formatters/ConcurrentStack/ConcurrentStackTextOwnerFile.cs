@@ -68,17 +68,41 @@ internal static class ConcurrentStackTextOwnerFile
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;
+        string push = c.Supports("PushConcurrentStackRange")
+            ? "global::LuminPack.Code.LuminPackCollectionAccess.PushConcurrentStackRange(value, pooled, length);"
+            : "value.PushRange(pooled, 0, length);";
         w.Line("if (value is null)");
         w.Indented(() => w.Line("value = new " + c.Sequence + "();"));
+        // Strings stay on the plain read: seeding saved their allocations but cost more time than it saved.
+        if (c.ConcurrentStackSeed && !c.Text)
+        {
+            // The existing items seed the leased block bottom first, so existing objects are read in place before the stack
+            // is cleared and the block is pushed back.
+            w.Line("else if (length != 0)");
+            w.Open();
+            w.Line("var seeded = global::System.Buffers.ArrayPool<" + c.Scalar + ">.Shared.Rent(length);");
+            w.Line("try");
+            w.Open();
+            w.Line("global::LuminPack.Code.LuminPackCollectionAccess.SeedConcurrentStack(value, seeded, length);");
+            w.Line("value.Clear();");
+            w.Line("var seededItems = new global::System.Span<" + c.Scalar + ">(seeded, 0, length);");
+            c.ReadBlock("seededItems");
+            w.Line(push.Replace("pooled", "seeded"));
+            w.Close();
+            w.Line("finally");
+            w.Open();
+            w.Line("global::System.Buffers.ArrayPool<" + c.Scalar + ">.Shared.Return(seeded, true);");
+            w.Close();
+            w.Line("goto operationComplete_RootRead;");
+            w.Close();
+        }
         w.Line("else");
         w.Indented(() => w.Line("value.Clear();"));
         w.Blank();
         w.Line("if (length == 0)");
         w.Indented(() => w.Line("goto operationComplete_RootRead;"));
         w.Blank();
-        c.PooledRead(() => w.Line(c.Supports("PushConcurrentStackRange")
-            ? "global::LuminPack.Code.LuminPackCollectionAccess.PushConcurrentStackRange(value, pooled, length);"
-            : "value.PushRange(pooled, 0, length);"));
+        c.PooledRead(() => w.Line(push));
     }
 
     /// <summary>Handles before for <c>ConcurrentStackTextOwnerFile</c>.</summary>

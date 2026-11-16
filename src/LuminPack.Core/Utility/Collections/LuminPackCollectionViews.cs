@@ -925,6 +925,35 @@ public static partial class LuminPackCollectionAccess
     /// <remarks>Replaces a separate <c>Count</c>, which walks the complete stack, followed by a second traversal.</remarks>
     public static T[] RentSnapshot<T>(global::System.Collections.Concurrent.ConcurrentStack<T> stack, out int count)
     {
+        return RentSnapshotCore(stack, out count);
+    }
+
+    /// <summary>Copies the current items of a stack bottom first into the leading slots of a read buffer.</summary>
+    /// <typeparam name="T">The element type.</typeparam>
+    /// <param name="stack">The existing stack.</param>
+    /// <param name="destination">The read buffer, which holds at least <paramref name="length"/> slots.</param>
+    /// <param name="length">The validated record length.</param>
+    /// <remarks>A record stores the stack bottom first, so the existing items line up with the incoming ones from the bottom
+    /// and can be read in place; slots beyond the existing items are cleared.</remarks>
+    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+    public static void SeedConcurrentStack<T>(global::System.Collections.Concurrent.ConcurrentStack<T> stack, T[] destination, int length)
+    {
+        T[] snapshot = RentSnapshotCore(stack, out int count);
+        int seeded = count < length ? count : length;
+        for (int i = 0; i < seeded; i++)
+            destination[i] = snapshot[count - 1 - i];
+        if (seeded < length)
+            global::System.Array.Clear(destination, seeded, length - seeded);
+        global::System.Buffers.ArrayPool<T>.Shared.Return(snapshot, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+    }
+
+    /// <summary>Leases a top-first snapshot of a stack.</summary>
+    /// <typeparam name="T">The element type.</typeparam>
+    /// <param name="stack">The stack.</param>
+    /// <param name="count">The number of items copied.</param>
+    /// <returns>The leased array.</returns>
+    private static T[] RentSnapshotCore<T>(global::System.Collections.Concurrent.ConcurrentStack<T> stack, out int count)
+    {
         T[] items = global::System.Buffers.ArrayPool<T>.Shared.Rent(16);
         int written = 0;
         foreach (T item in EnumerateConcurrentStack(stack))

@@ -58,6 +58,9 @@ internal sealed partial class EnumerableOwnerContext
 
     /// <summary>Gets whether the referenced Core exposes the array behind an existing read-only collection.</summary>
     internal bool ReadOnlyCollectionRefill => _set.Options?.ReadOnlyCollectionRefill == true;
+
+    /// <summary>Gets whether the referenced Core can seed a concurrent stack read buffer with the existing items.</summary>
+    internal bool ConcurrentStackSeed => _set.Options?.ConcurrentStackSeed == true;
     internal bool RawTreeElements => GenericFormatterReuse.Real(Scalar) != "bool" &&
         (Forwarded ? _element is { Raw: true, RawStorage: true, Layout: null } : !Text && Payload == null);
     private readonly FormatterModel? _element;

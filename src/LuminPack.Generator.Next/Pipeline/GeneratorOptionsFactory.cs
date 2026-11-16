@@ -80,7 +80,8 @@ internal static class GeneratorOptionsFactory
             stackRefill: FormatterConcurrentTraits.HasStackRefill(compilation),
             readOnlyCollectionRefill: FormatterConcurrentTraits.HasReadOnlyCollectionRefill(compilation),
             readOnlyDictionaryRefill: FormatterConcurrentTraits.HasReadOnlyDictionaryRefill(compilation),
-            concurrentDictionaryRefill: FormatterConcurrentTraits.HasConcurrentDictionaryRefill(compilation));
+            concurrentDictionaryRefill: FormatterConcurrentTraits.HasConcurrentDictionaryRefill(compilation),
+            concurrentStackSeed: FormatterConcurrentTraits.HasConcurrentStackSeed(compilation));
     }
 
     /// <summary>Checks that the compiler feature enables the generated interception namespace.</summary>
