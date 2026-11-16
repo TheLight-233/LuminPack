@@ -73,7 +73,8 @@ internal static class GeneratorOptionsFactory
             cursor is INamedTypeSymbol { Name: "Span", Arity: 1 },
             generatedJsonPropertyWriter: net8 && !unity && GeneratedJsonProperty.Available(compilation),
             generatedJsonInt32Reader: net8 && !unity && GeneratedJsonInt32Runs.Available(compilation),
-            hashSetRefill: FormatterConcurrentTraits.HasHashSetRefill(compilation));
+            hashSetRefill: FormatterConcurrentTraits.HasHashSetRefill(compilation),
+            linkedListAppender: FormatterConcurrentTraits.HasLinkedListAppender(compilation));
     }
 
     /// <summary>Checks that the compiler feature enables the generated interception namespace.</summary>

@@ -95,6 +95,25 @@ internal static class LinkedListOwnerFile
         w.Line("if (length == 0)");
         w.Indented(() => w.Line("goto operationComplete_RootRead;"));
         w.Blank();
+        if (c.LinkedListAppender && (c.Scalar == "string" || c.Payload != null))
+        {
+            // Decode and link in one pass; the list publishes its nodes once, after the last element.
+            w.Line("var appender = global::LuminPack.Code.LuminPackCollectionAccess.BeginLinkedList(value);");
+            w.Line("if (appender.Direct)");
+            w.Open();
+            w.Line("int remaining = length;");
+            w.Line("do");
+            w.Open();
+            w.Line(c.Scalar + " current = default!;");
+            c.ReadElement("current", fresh: true);
+            w.Line("appender.Append(current);");
+            w.Close();
+            w.Line("while (--remaining != 0);");
+            w.Line("appender.Publish(length);");
+            w.Line("goto operationComplete_RootRead;");
+            w.Close();
+            w.Blank();
+        }
         c.PooledRead(() =>
         {
             w.Blank();

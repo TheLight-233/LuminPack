@@ -138,6 +138,26 @@ internal static class FormatterConcurrentTraits
                 SymbolEqualityComparer.Default.Equals(method.ReturnType, collection.OriginalDefinition.Construct(method.TypeParameters[0])));
     }
 
+    /// <summary>Checks the optional direct linked-list appender.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <returns>Whether the referenced helper has the expected public signature.</returns>
+    internal static bool HasLinkedListAppender(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var list = compilation.GetTypeByMetadataName("System.Collections.Generic.LinkedList`1");
+        var appender = compilation.GetTypeByMetadataName("LuminPack.Code.LinkedListAppender`1");
+        return list is not null && appender is { DeclaredAccessibility: Accessibility.Public } &&
+            appender.GetMembers("Append").OfType<IMethodSymbol>().Any(method => method.Parameters.Length == 1) &&
+            appender.GetMembers("Publish").OfType<IMethodSymbol>().Any(method => method.Parameters.Length == 1) &&
+            appender.GetMembers("Direct").OfType<IPropertySymbol>().Any() &&
+            owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
+            owner.GetMembers("BeginLinkedList").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1 } &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, list.Construct(method.TypeParameters[0])) &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, appender.Construct(method.TypeParameters[0])));
+    }
+
     /// <summary>Checks the optional reused hash-set refill preparation.</summary>
     /// <param name="compilation">The consumer's Core and framework references.</param>
     /// <returns>Whether the referenced helper has the expected public signature.</returns>
