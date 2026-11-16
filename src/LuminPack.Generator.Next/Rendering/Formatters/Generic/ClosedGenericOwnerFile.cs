@@ -7,6 +7,30 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// <summary>Renders generic framework contracts using the static formatter of each argument.</summary>
 internal static class ClosedGenericOwnerFile
 {
+    /// <summary>Identifies compounds that reuse the existing string component when reading binary.</summary>
+    /// <param name="definition">The open formatter identity.</param>
+    /// <returns>Whether string components can be reused.</returns>
+    internal static bool ReusesStringComponents(string definition) =>
+        definition is GenericIdentity.KeyValuePair or GenericIdentity.Tuple or GenericIdentity.ValueTuple;
+
+    /// <summary>Renders the common outlined string reader once per consuming assembly.</summary>
+    /// <param name="set">The shared formatter publication facts.</param>
+    /// <returns>The source for the reusable string operation.</returns>
+    internal static string RenderStringReader(SharedFormatterSet set)
+    {
+        using var w = new CodeWriter(set.AvailableAliases);
+        w.Line("namespace LuminPack");
+        w.Open();
+        w.Line("public static partial class LuminPackSerializer");
+        w.Open();
+        w.Line(w.MethodImpl("NoInlining"));
+        w.Line("internal static string ReadCompoundString<TLuminProfile>(ref " + w.A("LuminPackReader") + " reader, string value)");
+        w.Line("    where TLuminProfile : struct, " + w.A("ILuminPackOptions") + " => reader.Read<TLuminProfile>(value)!;");
+        w.Close();
+        w.Close();
+        return w.Complete(json: false);
+    }
+
     /// <summary>Renders all requested operations of a closed pair, nullable, lazy value or tuple.</summary>
     /// <param name = "set">The shared formatter publication facts.</param>
     /// <param name = "model">The normalized formatter or storage contract.</param>
@@ -152,29 +176,20 @@ internal static class ClosedGenericOwnerFile
 
             // As the original compound read, a string component starts from the existing component and keeps it when the text is
             // equal; the string operation keeps its own inlining budget.
-            bool pair = model.Definition == GenericIdentity.KeyValuePair;
-            bool compound = false;
+            bool reuseText = ReusesStringComponents(model.Definition);
             for (int i = 0; i < model.Arguments.Length; i++)
             {
                 FormatterModel argument = model.Arguments[i];
-                bool text = argument.Type == "string" && (tuple || pair);
+                bool text = reuseText && argument.Type == "string";
                 string seed = text ? (reference ? "value is null ? default! : value." + names[i] : "value." + names[i]) : "default!";
                 w.Line(argument.Type + " item" + i + " = " + seed + ";");
                 if (text)
-                {
-                    w.Line("item" + i + " = ReadCompoundString(ref reader, item" + i + ");");
-                    compound = true;
-                }
+                    w.Line("item" + i + " = ReadCompoundString<TLuminProfile>(ref reader, item" + i + ");");
                 else
                     FormatterElementEmitter.Read(w, set, argument, "item" + i);
             }
 
             Assign(w);
-            if (compound)
-            {
-                w.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
-                w.Line("static string ReadCompoundString(ref global::LuminPack.Core.LuminPackReader stringReader, string text) => stringReader.Read<TLuminProfile>(text)!;");
-            }
         }
 
         void JsonWrite(CodeWriter w, SpecialOwnerContext c)

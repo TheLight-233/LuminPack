@@ -106,10 +106,14 @@ internal static class SharedFormatterPublisher
             yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/Sequence_" +
                 ReadableTypeName.Of(key) + ".g.cs", render(set, fact, selected));
         }
+        bool compoundStringReaderNeeded = false;
         foreach (FormatterModel model in set.GeneralOwners ?? Array.Empty<FormatterModel>())
         {
             if ((selected = operations.For(GeneratedNames.PayloadKey(model.Type))) == GeneratedOperations.None)
                 continue;
+            if (!compoundStringReaderNeeded && (selected & GeneratedOperations.BinaryRead) != 0 &&
+                ClosedGenericOwnerFile.ReusesStringComponents(model.Definition) && Array.Exists(model.Arguments, argument => argument.Type == "string"))
+                compoundStringReaderNeeded = true;
             if (model.Definition == FormatterDefinitions.PayloadReference)
             {
                 if (model.Payload != null && model.PublishPayload)
@@ -135,6 +139,8 @@ internal static class SharedFormatterPublisher
             yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/Default_" + ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type)) + ".g.cs",
                 DefaultFormatterOwnerFile.Render(set, model, selected));
         }
+        if (compoundStringReaderNeeded)
+            yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/CompoundStringRead.g.cs", ClosedGenericOwnerFile.RenderStringReader(set));
         foreach (var source in shared.Render())
             yield return source;
     }
