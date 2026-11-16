@@ -249,9 +249,12 @@ internal static class FormatterCapabilities
                 result.Add("BagRawWrite");
         }
 
-        if (definition == "System.Collections.Concurrent.BlockingCollection" && modern && !unity &&
-            FormatterConcurrentTraits.HasBlockingCollectionFactory(compilation, named))
-            result.Add("CreateBlockingCollection");
+        if (definition is "System.Collections.Concurrent.BlockingCollection" or "System.Collections.Concurrent.ConcurrentQueue" && modern && !unity)
+        {
+            string factory = "Create" + named.Name;
+            if (FormatterConcurrentTraits.HasCountedQueueFactory(compilation, named, factory))
+                result.Add(factory);
+        }
 
         if (definition is "System.Collections.Concurrent.ConcurrentBag" or "System.Collections.Concurrent.ConcurrentStack" &&
             named.TypeArguments[0].SpecialType == SpecialType.System_String &&

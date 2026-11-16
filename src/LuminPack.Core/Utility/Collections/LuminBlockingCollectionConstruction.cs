@@ -15,12 +15,22 @@ public static partial class LuminPackCollectionAccess
     /// <returns>The collection containing the decoded elements in input order.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static BlockingCollection<T> CreateBlockingCollection<T>(T[] items, int count)
+    public static BlockingCollection<T> CreateBlockingCollection<T>(T[] items, int count) =>
+        new BlockingCollection<T>(CreateConcurrentQueue(items, count));
+
+    /// <summary>Copies the populated prefix of an array into a new concurrent queue.</summary>
+    /// <typeparam name="T">The element type.</typeparam>
+    /// <param name="items">The rented array holding the decoded elements.</param>
+    /// <param name="count">The number of decoded elements.</param>
+    /// <returns>The queue containing the decoded elements in input order.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static ConcurrentQueue<T> CreateConcurrentQueue<T>(T[] items, int count)
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentOutOfRangeException.ThrowIfGreaterThan((uint)count, (uint)items.Length, nameof(count));
         IEnumerable<T> source = count == items.Length ? items : count == 0 ? Array.Empty<T>() : new QueueCopySource<T>(items, count);
-        return new BlockingCollection<T>(new ConcurrentQueue<T>(source));
+        return new ConcurrentQueue<T>(source);
     }
 
     /// <summary>Provides the prefix count and its first enumerator to the queue's synchronous copying constructor.</summary>

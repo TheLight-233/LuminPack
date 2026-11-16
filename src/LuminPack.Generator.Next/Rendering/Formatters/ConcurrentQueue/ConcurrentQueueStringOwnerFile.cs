@@ -191,17 +191,7 @@ internal static class ConcurrentQueueStringOwnerFile
                     w.Line("while (++i < length);");
                     w.Close();
                     w.Blank();
-                    w.Line("value = new " + queue + "(length == pooled.Length");
-                    w.Indented(() =>
-                    {
-                        w.Line("? (global::System.Collections.Generic.IEnumerable<" + itemType + ">)pooled");
-                        w.Line(": length == 0");
-                        w.Indented(() =>
-                        {
-                            w.Line("? (global::System.Collections.Generic.IEnumerable<" + itemType + ">)global::System.Array.Empty<" + itemType + ">()");
-                            w.Line(": new global::System.ArraySegment<" + itemType + ">(pooled, 0, length));");
-                        });
-                    });
+                    ConcurrentQueueOwnerFile.WriteFreshConstruction(w, set, queue, itemType);
                     w.Close();
                     w.Line("finally");
                     w.Open();

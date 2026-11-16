@@ -9,6 +9,32 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// its raw storage.</remarks>
 internal static class ConcurrentQueueOwnerFile
 {
+    /// <summary>Emits queue construction from an already decoded rented array prefix.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="set">The referenced Core capabilities for this owner.</param>
+    /// <param name="queue">The closed concurrent queue type name.</param>
+    /// <param name="item">The element type name.</param>
+    internal static void WriteFreshConstruction(CodeWriter w, SharedFormatterSet set, string queue, string item)
+    {
+        if (set.FindFormatter(queue)?.Supports("CreateConcurrentQueue") == true)
+        {
+            w.Line("value = global::LuminPack.Code.LuminPackCollectionAccess.CreateConcurrentQueue(pooled, length);");
+            return;
+        }
+
+        w.Line("value = new " + queue + "(length == pooled.Length");
+        w.Indented(() =>
+        {
+            w.Line("? (global::System.Collections.Generic.IEnumerable<" + item + ">)pooled");
+            w.Line(": length == 0");
+            w.Indented(() =>
+            {
+                w.Line("? (global::System.Collections.Generic.IEnumerable<" + item + ">)global::System.Array.Empty<" + item + ">()");
+                w.Line(": new global::System.ArraySegment<" + item + ">(pooled, 0, length));");
+            });
+        });
+    }
+
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
     /// <param name="fact">The closed sequence owner.</param>
@@ -181,17 +207,7 @@ internal static class ConcurrentQueueOwnerFile
                         });
                     });
                     w.Blank();
-                    w.Line("value = new " + queue + "(length == pooled.Length");
-                    w.Indented(() =>
-                    {
-                        w.Line("? (global::System.Collections.Generic.IEnumerable<" + scalar + ">)pooled");
-                        w.Line(": length == 0");
-                        w.Indented(() =>
-                        {
-                            w.Line("? (global::System.Collections.Generic.IEnumerable<" + scalar + ">)global::System.Array.Empty<" + scalar + ">()");
-                            w.Line(": new global::System.ArraySegment<" + scalar + ">(pooled, 0, length));");
-                        });
-                    });
+                    WriteFreshConstruction(w, set, queue, scalar);
                     w.Close();
                     w.Line("finally");
                     w.Open();

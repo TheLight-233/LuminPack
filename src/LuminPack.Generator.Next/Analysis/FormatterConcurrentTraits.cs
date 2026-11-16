@@ -117,15 +117,16 @@ internal static class FormatterConcurrentTraits
             SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, second)) == true;
     }
 
-    /// <summary>Checks the complete signature of the counted blocking collection factory.</summary>
+    /// <summary>Checks the complete signature of a counted queue copy factory.</summary>
     /// <param name="compilation">The actual consumer metadata.</param>
-    /// <param name="collection">The closed blocking collection.</param>
+    /// <param name="collection">The closed concurrent queue or blocking collection.</param>
+    /// <param name="name">The factory method name.</param>
     /// <returns>Whether the referenced Core can construct the collection from a rented array prefix.</returns>
-    internal static bool HasBlockingCollectionFactory(Compilation compilation, INamedTypeSymbol collection)
+    internal static bool HasCountedQueueFactory(Compilation compilation, INamedTypeSymbol collection, string name)
     {
         var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
         return owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
-            owner.GetMembers("CreateBlockingCollection").OfType<IMethodSymbol>().Any(method =>
+            owner.GetMembers(name).OfType<IMethodSymbol>().Any(method =>
                 method.IsStatic && method.DeclaredAccessibility == Accessibility.Public && method.Arity == 1 &&
                 !method.ReturnsByRef && !method.ReturnsByRefReadonly && method.Parameters.Length == 2 &&
                 method.TypeParameters[0].ConstraintTypes.IsEmpty && !method.TypeParameters[0].HasReferenceTypeConstraint &&
