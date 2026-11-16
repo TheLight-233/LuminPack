@@ -247,6 +247,10 @@ internal static class FormatterCapabilities
             if (FormatterRuntimeTraits.CanAppendSortedListOrdered(named.TypeArguments[0], compilation))
                 result.Add("AppendSortedList");
             ITypeSymbol key = named.TypeArguments[0];
+            if (modern && !unity && key.SpecialType == SpecialType.System_String &&
+                named.TypeArguments[1].SpecialType is SpecialType.System_Int32 or SpecialType.System_Int64 &&
+                FormatterRuntimeTraits.HasSeededSortedListKeys(compilation, named))
+                result.Add("SeededSortedListKeys");
             if (key.SpecialType == SpecialType.System_String || key.TypeKind == TypeKind.Enum || key.IsUnmanagedType && (key.SpecialType != SpecialType.None || Rendering.Formatters.FrameworkScalarBody.Contains(key.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))))
                 result.Add("MatchSortedListKey");
         }

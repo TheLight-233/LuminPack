@@ -24,6 +24,7 @@ What is kept:
 | `Dictionary<K,V>` | Keeps its comparer and reuses values by matching incoming keys; removed keys disappear after a successful read. |
 | Binary `ReadOnlyDictionary<string, int>` and `ReadOnlyDictionary<string, string>` | Next can update the values of an exact wrapper over an exact default-comparer dictionary on supported 64-bit CoreCLR layouts. This applies to 1 to 4,096 keys that match in enumeration order with the built-in UTF-16 length profile. Aliases to the wrapper and backing dictionary see the values after the dictionary read succeeds. Pass a null target to read a separate dictionary. |
 | `SortedList<K,V>` | Reuses eligible values at the same position when callback-free keys match. String keys use ordinal equality. |
+| Binary `SortedList<string, int>` and `SortedList<string, long>` | Next can retain matching string key references in an exact default-comparer list with the same count, from 1 to 4,096 entries, under built-in string profiles on supported runtime layouts. Reuse still clears the list and publishes each complete pair as it reads it. |
 | Sequence interfaces (`IEnumerable<T>`, `ICollection<T>`, `IList<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>`) | Reuse an exact `List<T>` or `T[]` behind them, for string, scalar and ordinary object elements. |
 | `IDictionary<K,V>`, `IReadOnlyDictionary<K,V>` | Reuse an exact `Dictionary<K,V>` behind them. |
 | `Memory<T>`, `ArraySegment<T>` | Reuse array-backed storage of the same length, keeping offset and count. |

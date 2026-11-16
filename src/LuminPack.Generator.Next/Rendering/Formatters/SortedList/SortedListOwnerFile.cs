@@ -10,8 +10,10 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static partial class SortedListOwnerFile
 {
     private const string ArrayReference = "global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference";
-    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(Write, Read, "value.Add(key!, itemValue);",
-        outlineJson: true, capturesJsonPairs: true);
+    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(Write, c => Read(c, seedKeys: true),
+        "value.Add(key!, itemValue);", outlineJson: true, capturesJsonPairs: true);
+    private static readonly PairedDictionarySpec InputSpec = new PairedDictionarySpec(Write, c => Read(c, seedKeys: false),
+        "value.Add(key!, itemValue);", outlineJson: true, capturesJsonPairs: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -20,6 +22,13 @@ internal static partial class SortedListOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations) =>
         PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec);
+
+    /// <summary>Renders the original parser for the enclosed input policy projection.</summary>
+    /// <param name="set">The shared publication facts.</param>
+    /// <param name="fact">The closed sorted list owner.</param>
+    /// <returns>The stock binary source for a checked copy.</returns>
+    internal static string RenderInputRead(SharedFormatterSet set, DictionaryOwnerFact fact) =>
+        PairedDictionaryOwnerTemplate.Render(set, fact, GeneratedOperations.BinaryRead, InputSpec);
 
     /// <summary>Handles write for <c>SortedListOwnerFile</c>.</summary>
     /// <param name="c">The case or formatter context in scope.</param>
@@ -75,10 +84,17 @@ internal static partial class SortedListOwnerFile
 
     /// <summary>Handles read for <c>SortedListOwnerFile</c>.</summary>
     /// <param name="c">The case or formatter context in scope.</param>
-    private static void Read(PairedDictionaryContext c)
+    /// <param name="seedKeys">Whether the ordinary reader can use the owning scalar helper.</param>
+    private static void Read(PairedDictionaryContext c, bool seedKeys)
     {
         var w = c.W;
         string list = c.Dictionary;
+        if (seedKeys && !c.ReferenceValue && c.Supports("SeededSortedListKeys"))
+        {
+            w.Line("if (value is not null && global::LuminPack.Code.LuminPackCollectionAccess.TryReadSeededSortedListKeys<" +
+                c.Value + ", TLuminProfile>(ref operationState, value, length))");
+            w.Indented(() => w.Line("goto operationComplete_RootRead;"));
+        }
         if (c.ReferenceValue && c.Supports("MatchSortedListKey"))
             MatchingPairs(c);
         w.Line("if (value is null && length > 1)");

@@ -24,6 +24,12 @@ internal static class InputFormatterRenderer
                     var fact = new DictionaryOwnerFact(wrapper, owner.Type, owner.Arguments[0].Type, owner.Arguments[1].Type);
                     return ReadOnlyDictionaryOwnerFile.RenderInputRead(set, fact);
                 }
+                if (owner.Definition == "System.Collections.Generic.SortedList" && owner.Supports("SeededSortedListKeys") &&
+                    FormatterRegistry.FindDictionary(owner.Type) is { } sortedList)
+                {
+                    var fact = new DictionaryOwnerFact(sortedList, owner.Type, owner.Arguments[0].Type, owner.Arguments[1].Type);
+                    return SortedListOwnerFile.RenderInputRead(set, fact);
+                }
                 if (set.Options.Net8 && owner.Definition == "System.Collections.Generic.List" &&
                     CheckedUnion(owner.Arguments[0]) is { } listItem)
                     return ContiguousOwnerFile.Render(set, owner, GeneratedOperations.BinaryRead, ContiguousShape.List, listItem);
@@ -44,6 +50,8 @@ internal static class InputFormatterRenderer
             {
                 if (set.FindFormatter(fact.DeclaredType)?.Supports("StableReadOnlyDictionaryRead") == true)
                     return ReadOnlyDictionaryOwnerFile.RenderInputRead(set, fact);
+                if (set.FindFormatter(fact.DeclaredType)?.Supports("SeededSortedListKeys") == true)
+                    return SortedListOwnerFile.RenderInputRead(set, fact);
                 if (fact.Element != null)
                 {
                     var element = fact.Element.WithInput(redirect.Limits, fact.Element.Recursive, redirect);

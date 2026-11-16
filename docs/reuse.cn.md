@@ -24,6 +24,7 @@ LuminPackSerializer.Deserialize(nextPayload, ref target);   // 仍然是同一�
 | `Dictionary<K,V>` | 保留比较器，按传入的键复用值；读取成功后，被移除的键消失。 |
 | 二进制 `ReadOnlyDictionary<string, int>` 和 `ReadOnlyDictionary<string, string>` | 在受支持的 64 位 CoreCLR 布局上，Next 可以更新直接包装精确类型且使用默认比较器的字典。此路径使用内置 UTF-16 长度配置，输入包含 1 至 4096 个键，且键与后备字典的枚举顺序一致。字典读取成功后，持有包装器或后备字典的其他引用都能看到更新。传入 null 目标即可读取独立字典。 |
 | `SortedList<K,V>` | 同一位置的键可无回调比较且匹配时，复用符合条件的值。字符串键按序数比较。 |
+| 二进制 `SortedList<string, int>` 和 `SortedList<string, long>` | 在受支持的运行时布局和内置字符串配置下，如果使用默认比较器的列表类型精确、条目数与输入相同且在 1 至 4096 之间，Next 可以保留内容匹配的字符串键引用。复用仍会先清空列表，再逐个发布读取完成的键值对。 |
 | 序列接口（`IEnumerable<T>`、`ICollection<T>`、`IList<T>`、`IReadOnlyList<T>`、`IReadOnlyCollection<T>`） | 元素为字符串、标量或普通对象时，复用背后的精确 `List<T>` 或 `T[]`。 |
 | `IDictionary<K,V>`、`IReadOnlyDictionary<K,V>` | 复用背后的精确 `Dictionary<K,V>`。 |
 | `Memory<T>`、`ArraySegment<T>` | 长度相同时复用数组存储，保留 offset 和 count。 |
