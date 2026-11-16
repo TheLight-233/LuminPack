@@ -620,11 +620,12 @@ namespace LuminPack.Core
         {
             if (index < 0 || source.Length - index < 4)
                 LuminPackExceptionHelper.ThrowFormatException("Incomplete Unicode escape sequence");
+            ref byte digit = ref Unsafe.Add(ref MemoryMarshal.GetReference(source), (nint)(uint)index);
             ref byte table = ref MemoryMarshal.GetReference(HexDigits.Values);
-            int a = Unsafe.Add(ref table, (nint)(uint)source[index]);
-            int b = Unsafe.Add(ref table, (nint)(uint)source[index + 1]);
-            int c = Unsafe.Add(ref table, (nint)(uint)source[index + 2]);
-            int d = Unsafe.Add(ref table, (nint)(uint)source[index + 3]);
+            int a = Unsafe.Add(ref table, (nint)(uint)digit);
+            int b = Unsafe.Add(ref table, (nint)(uint)Unsafe.Add(ref digit, 1));
+            int c = Unsafe.Add(ref table, (nint)(uint)Unsafe.Add(ref digit, 2));
+            int d = Unsafe.Add(ref table, (nint)(uint)Unsafe.Add(ref digit, 3));
             if (((a | b | c | d) & 0xF0) != 0)
                 LuminPackExceptionHelper.ThrowFormatException("Invalid Unicode escape sequence");
             return (a << 12) | (b << 8) | (c << 4) | d;
@@ -639,7 +640,8 @@ namespace LuminPack.Core
         {
             if (index < 0 || source.Length - index < 4)
                 LuminPackExceptionHelper.ThrowFormatException("Incomplete Unicode escape sequence");
-            uint a = source[index], b = source[index + 1], c = source[index + 2], d = source[index + 3];
+            ref char digit = ref Unsafe.Add(ref MemoryMarshal.GetReference(source), (nint)(uint)index);
+            uint a = digit, b = Unsafe.Add(ref digit, 1), c = Unsafe.Add(ref digit, 2), d = Unsafe.Add(ref digit, 3);
             if ((a | b | c | d) > 255)
                 LuminPackExceptionHelper.ThrowFormatException("Invalid Unicode escape sequence");
             ref byte table = ref MemoryMarshal.GetReference(HexDigits.Values);
