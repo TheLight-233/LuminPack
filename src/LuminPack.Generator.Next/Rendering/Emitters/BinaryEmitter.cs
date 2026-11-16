@@ -22,10 +22,16 @@ internal static partial class BinaryEmitter
     internal static string RejectUnsupported(string reason) => "global::LuminPack.Security.LuminPackInputPolicy.RejectUnsupported(" +
         Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(reason, true) + ");";
 
+    /// <summary>Determines whether the generated binary write root takes a profile type parameter.</summary>
+    /// <param name="model">The payload being written.</param>
+    /// <returns>True when the write root is generic over the operation profile.</returns>
     private static bool HasWriteProfile(PayloadRenderModel model) =>
         !(model.DeclaredProfile != null && model.MemberWrite) &&
         (model.Version != null || model.ProfilePayload || model.InlineArray);
 
+    /// <summary>Determines whether the generated binary read root takes a profile type parameter.</summary>
+    /// <param name="model">The payload being read.</param>
+    /// <returns>True when the read root is generic over the operation profile.</returns>
     private static bool HasReadProfile(PayloadRenderModel model) =>
         !(model.DeclaredProfile != null && model.MemberWrite) &&
         (model.Version != null || model.ProfilePayload || model.InlineArray || model.InlineList ||
@@ -1231,11 +1237,16 @@ internal static partial class BinaryEmitter
         body.Add("}");
     }
 
+    /// <summary>Qualifies calls to the payload's binary root methods.</summary>
+    /// <param name="w">The source writer that resolves the serializer alias.</param>
+    /// <param name="model">The payload that owns the root container.</param>
+    /// <returns>The root container name followed by a member-access dot.</returns>
     private static string BinaryRoot(CodeWriter w, PayloadRenderModel model) =>
         w.A("LuminPackSerializer") + ".LuminRoots_" + model.Readable + ".";
 
-    // A standalone root with the same stream or fixed stores preserves the member's capacity checks and
-    // failure prefix. A reserving root may acquire a different output window.
+    /// <summary>Checks whether a nested member can call its standalone binary write root.</summary>
+    /// <param name="child">The nested payload to write.</param>
+    /// <returns>True when the root's stream or fixed stores preserve the member's capacity checks and written prefix on failure.</returns>
     private static bool CanCallStreamMemberWriter(PayloadRenderModel child) =>
         child.TypeParameters.Length == 0 && child.Bounded == null && !child.Recursive &&
         child.Rejection == null && !child.HasDictionary && RenderModelFactory.Covered(child) &&
@@ -2899,11 +2910,20 @@ internal static partial class BinaryEmitter
         }
     }
 
-    // This branch already used the child's exact object read, including the child's checked marker.
+    /// <summary>Checks whether the trusted parent's read can call the child's checked object root directly.</summary>
+    /// <param name="parent">The containing record.</param>
+    /// <param name="member">The nested member whose root validates its own object marker.</param>
+    /// <returns>True when the checked object root can replace the inlined read.</returns>
     private static bool CanCallCheckedChildRead(PayloadRenderModel parent, RenderMember member) =>
         parent.Redirect == null && member.Nested.Limits?.Bounded != true && !member.Nested.Recursive &&
         member.Nested.Rejection == null && member.Nested.TypeParameters.Length == 0;
 
+    /// <summary>Checks whether the nested read can reuse the child's concrete object or payload root.</summary>
+    /// <param name="parent">The containing record.</param>
+    /// <param name="member">The nested member to read.</param>
+    /// <param name="prove">Whether the object read uses field-address proofs for fixed runs.</param>
+    /// <param name="markerSeen">Whether a lone leading byte can be read without the member-count marker check.</param>
+    /// <returns>True when the root can preserve the inline read's framing, validation, and member assignment.</returns>
     private static bool CanCallInlineMemberRead(PayloadRenderModel parent, RenderMember member, bool prove, bool markerSeen)
     {
         var child = member.Nested;
