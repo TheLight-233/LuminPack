@@ -59,10 +59,20 @@ namespace LuminPack.Core
         {
             while (!value.IsEmpty)
             {
-                if (Position == Buffer.Length)
+                int position = Position;
+                if (position == Buffer.Length)
+                {
                     EnsureCapacity(Math.Min(4096, value.Length));
-                int count = Math.Min(value.Length, Buffer.Length - Position);
-                value.Slice(0, count).CopyTo(Buffer.Slice(Position));
+                    position = Position;
+                }
+                Span<byte> destination = Buffer.Slice(position);
+                if (value.TryCopyTo(destination))
+                {
+                    Advance(value.Length);
+                    return;
+                }
+                int count = destination.Length;
+                value.Slice(0, count).CopyTo(destination);
                 Advance(count);
                 value = value.Slice(count);
             }
