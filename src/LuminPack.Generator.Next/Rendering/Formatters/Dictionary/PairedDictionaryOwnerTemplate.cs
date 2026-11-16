@@ -276,6 +276,7 @@ internal sealed partial class PairedDictionaryContext
     internal void CountedWrite(bool allowMixedPairs = false)
     {
         bool mixed = allowMixedPairs && ParallelDictionaryWrite.SupportsMixed(this) && Key != "bool" && Value != "bool";
+        bool outlineKey = allowMixedPairs && Key == "string" && Value == "string";
         W.Line("int countPosition = operationState.BeginCollection();");
         W.Line("int count = 0;");
         if (mixed)
@@ -286,12 +287,23 @@ internal sealed partial class PairedDictionaryContext
         W.Line(Key + " key = item." + KeyMember + ";");
         if (mixed)
             ParallelDictionaryWrite.WriteMixedIfFits(this, "key", "item." + ValueMember, byRef: false);
-        WriteMember(Key, "key");
+        if (outlineKey)
+            W.Line("WriteKey(ref operationState, key);");
+        else
+            WriteMember(Key, "key");
         W.Line(Value + " itemValue = item." + ValueMember + ";");
         WriteMember(Value, "itemValue");
         W.Close();
         W.Line("operationState.EndCollection(countPosition, count);");
         W.Line("operationState.CheckBuffer();");
+        if (outlineKey)
+        {
+            W.Line(W.MethodImpl("NoInlining"));
+            W.Line("static void WriteKey(scoped ref global::LuminPack.Core.LuminPackWriter operationState, string key)");
+            W.Open();
+            WriteMember(Key, "key");
+            W.Close();
+        }
     }
 
     /// <summary>Emits the original dense write of a nonnull concrete dictionary: its entries are walked in storage order and any
