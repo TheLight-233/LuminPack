@@ -6,6 +6,7 @@ using LuminPack.Internal;
 #if NET8_0_OR_GREATER
 using System.Buffers;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using System.Text;
 #endif
 
@@ -644,6 +645,20 @@ public static partial class StringSerializer
         if (length <= 32)
         {
             nuint back = (nuint)(uint)(length - 16);
+            if (Avx2.IsSupported)
+            {
+                // The leading and trailing 16-byte loads both remain within the validated payload.
+                var first = Avx2.ConvertToVector256Int16(Vector128.LoadUnsafe(ref source)).AsUInt16();
+                var last = Avx2.ConvertToVector256Int16(Vector128.LoadUnsafe(ref source, back)).AsUInt16();
+                if (compare)
+                    return ((first ^ Vector256.LoadUnsafe(ref chars)) |
+                        (last ^ Vector256.LoadUnsafe(ref chars, back))) == Vector256<ushort>.Zero;
+
+                first.StoreUnsafe(ref chars);
+                last.StoreUnsafe(ref chars, back);
+                return true;
+            }
+
             var (a, b) = Vector128.Widen(Vector128.LoadUnsafe(ref source));
             var (c, d) = Vector128.Widen(Vector128.LoadUnsafe(ref source, back));
             if (compare)
