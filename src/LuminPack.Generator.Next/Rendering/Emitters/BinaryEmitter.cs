@@ -2570,7 +2570,8 @@ internal static partial class BinaryEmitter
                             ? Policy() + ".ReadBoolean(ref reader);" : "reader.Read<" + member.Scalar + ">();"));
                     continue;
                 }
-                bool fixedUnionBlock = freshUnion && model.ManagedFixedUnionCase && !model.HasCallbacks && model.Rent == null;
+                // The checked block validates the complete run before copying, so a reused case gains no partial write.
+                bool fixedUnionBlock = model.ManagedFixedUnionCase && !model.HasCallbacks && model.Rent == null;
                 for (int item = index; fixedUnionBlock && item <= last; item++)
                     fixedUnionBlock = !members[item].Mirrored && !members[item].Property && !members[item].IsBoolean;
                 bool useFieldProof = !union || fixedUnionBlock;

@@ -435,7 +435,10 @@ internal static class UnionEmitter
             foreach (string line in body)
                 w.Line(line);
             w.Blank();
-            w.Line(target + " = member" + Number(member) + ";");
+            // A reused exact case is already in the slot; skip the reference store and its write barrier.
+            w.Line(reuse
+                ? "if (!global::System.Object.ReferenceEquals(" + target + ", member" + Number(member) + ")) " + target + " = member" + Number(member) + ";"
+                : target + " = member" + Number(member) + ";");
             w.Line(exit);
             w.Close();
             w.Blank();
