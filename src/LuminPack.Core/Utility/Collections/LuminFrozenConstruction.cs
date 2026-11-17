@@ -53,6 +53,36 @@ public static partial class LuminFrozenConstruction
             Cache<Dictionary<TKey, TValue>>.Items.TryStore(value);
     }
 
+    /// <summary>Adds a complete raw pair payload in wire order to the existing frozen dictionary builder.</summary>
+    /// <typeparam name="TKey">The raw key storage.</typeparam>
+    /// <typeparam name="TValue">The raw value storage.</typeparam>
+    /// <param name="reader">The state after the positive collection count.</param>
+    /// <param name="builder">The exclusively owned construction dictionary.</param>
+    /// <param name="count">The declared number of pairs.</param>
+    /// <returns>Whether the complete window was available and the pairs were added.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static bool TryAddRawDictionaryPairs<TKey, TValue>(scoped ref LuminPackReader reader,
+        Dictionary<TKey, TValue> builder, int count) where TKey : unmanaged where TValue : unmanaged
+    {
+        if (count < 16)
+            return false;
+
+        int keyWidth = Unsafe.SizeOf<TKey>();
+        int pairWidth = keyWidth + Unsafe.SizeOf<TValue>();
+        ref byte source = ref reader.CurrentReference;
+        if (!reader.TryAdvanceFixedPayload(count, pairWidth))
+            return false;
+
+        do
+        {
+            TKey key = LuminPackReader.Read<TKey>(ref source);
+            TValue item = LuminPackReader.Read<TValue>(ref Unsafe.Add(ref source, keyWidth));
+            builder.Add(key, item);
+            source = ref Unsafe.Add(ref source, pairWidth);
+        } while (--count != 0);
+        return true;
+    }
+
     /// <summary>Rents an exclusive empty set using the default comparer.</summary>
     /// <typeparam name="T">The element type.</typeparam>
     /// <param name="capacity">The already validated initial count, or zero for one-pass JSON.</param>

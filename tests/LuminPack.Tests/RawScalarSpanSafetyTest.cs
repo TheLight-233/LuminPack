@@ -15,6 +15,58 @@ using Xunit;
 /// <summary>Protects bounded scalar facades independently of unchecked address-only storage kernels.</summary>
 public sealed class RawScalarSpanSafetyTest
 {
+    /// <summary>Checks that ordered concurrent reuse observes a key through the existing comparer before loading its value.</summary>
+    [Fact]
+    public void ConcurrentRawRefillKeepsComparerBeforeValueRead()
+    {
+        var input = new ConcurrentDictionary<uint, uint>(Enumerable.Range(0, 41)
+            .Select(i => new KeyValuePair<uint, uint>((uint)i * 11, (uint)i + 200)));
+        var comparer = new ObservingUIntComparer();
+        ConcurrentDictionary<uint, uint>? target = new(input, comparer);
+        byte[] bytes = LuminPackSerializer.Serialize(target);
+        uint firstKey = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(sizeof(int)));
+        comparer.ObserveEquality = (left, right) =>
+        {
+            if (left == firstKey && right == firstKey)
+                BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(2 * sizeof(int)), 168_430_090);
+        };
+
+        var existing = target;
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref target));
+        Assert.Same(existing, target);
+        Assert.Equal(168_430_090u, target![firstKey]);
+    }
+
+    /// <summary>Checks that a failed raw frozen read preserves its old result and rejects the first repeated key.</summary>
+    [Fact]
+    public void FrozenRawReadRejectsDuplicatesWithoutPublishing()
+    {
+        var original = Enumerable.Range(0, 41).ToFrozenDictionary(i => (uint)i * 11, i => (long)i * 37);
+        FrozenDictionary<uint, long>? target = original;
+        byte[] bytes = LuminPackSerializer.Serialize(original);
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(bytes.AsSpan(0, bytes.Length - 1), ref target));
+        Assert.Same(original, target);
+        bytes.AsSpan(sizeof(int), sizeof(uint)).CopyTo(bytes.AsSpan(sizeof(int) + sizeof(uint) + sizeof(long)));
+        Assert.Throws<ArgumentException>(() => LuminPackSerializer.Deserialize(bytes, ref target));
+        Assert.Same(original, target);
+    }
+
+    /// <summary>Invokes the test observer from the dictionary's ordinary equality operation.</summary>
+    private sealed class ObservingUIntComparer : IEqualityComparer<uint>
+    {
+        internal Action<uint, uint>? ObserveEquality;
+
+        /// <inheritdoc />
+        public bool Equals(uint left, uint right)
+        {
+            ObserveEquality?.Invoke(left, right);
+            return left == right;
+        }
+
+        /// <inheritdoc />
+        public int GetHashCode(uint value) => unchecked((int)value);
+    }
+
     /// <summary>Checks counted writes from the same concurrent dictionary after removals and reinsertions.</summary>
     [Fact]
     public void ConcurrentRawPairsKeepCapturedOrder()

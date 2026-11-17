@@ -382,6 +382,10 @@ internal static class FormatterCapabilities
             FormatterConcurrentTraits.HasRawCollectionWriter(compilation,
                 "WriteConcurrentRawPairs", "System.Collections.Concurrent.ConcurrentDictionary`2", SpecialType.System_Int32))
             result.Add("ConcurrentRawPairs");
+        if (definition is "System.Collections.Concurrent.ConcurrentDictionary" or "System.Collections.Frozen.FrozenDictionary" &&
+            modern && !unity && named.TypeArguments.All(argument => argument.IsUnmanagedType && argument.SpecialType != SpecialType.System_Boolean) &&
+            FormatterConcurrentTraits.HasRawDictionaryReader(compilation, concurrent: definition == "System.Collections.Concurrent.ConcurrentDictionary"))
+            result.Add("ReadBoundedRawDictionary");
         if ((definition is "System.Collections.Generic.Dictionary" or "System.Collections.Generic.IDictionary" or
              "System.Collections.Generic.IReadOnlyDictionary" or "System.Collections.Generic.SortedList" or
              "System.Collections.Generic.SortedDictionary" or "System.Collections.Immutable.ImmutableDictionary" or

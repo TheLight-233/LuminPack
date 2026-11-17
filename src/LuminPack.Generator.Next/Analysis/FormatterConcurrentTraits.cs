@@ -6,6 +6,32 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Selects compatible value traversals without changing concurrent capture contracts.</summary>
 internal static class FormatterConcurrentTraits
 {
+    /// <summary>Recognizes the optional bounded raw reader of a rented or concurrent dictionary.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <param name="concurrent">Whether the helper owns the existing concurrent fresh or reuse operation.</param>
+    /// <returns>Whether the referenced method accepts the reader, exact dictionary shape and count.</returns>
+    internal static bool HasRawDictionaryReader(Compilation compilation, bool concurrent)
+    {
+        var owner = compilation.GetTypeByMetadataName(concurrent
+            ? "LuminPack.Code.LuminPackCollectionAccess" : "LuminPack.Utility.LuminFrozenConstruction");
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader");
+        var dictionary = compilation.GetTypeByMetadataName(concurrent
+            ? "System.Collections.Concurrent.ConcurrentDictionary`2" : "System.Collections.Generic.Dictionary`2");
+        if (owner is not { IsStatic: true, DeclaredAccessibility: Accessibility.Public } || reader is null || dictionary is null)
+            return false;
+
+        string name = concurrent ? "TryReadConcurrentRawPairs" : "TryAddRawDictionaryPairs";
+        return owner.GetMembers(name).OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 2, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+            method.ReturnType.SpecialType == SpecialType.System_Boolean &&
+            method.TypeParameters.All(parameter => parameter.HasUnmanagedTypeConstraint && parameter.ConstraintTypes.IsEmpty) &&
+            method.Parameters.Length == 3 &&
+            method.Parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, reader) &&
+            method.Parameters[1].RefKind == (concurrent ? RefKind.Ref : RefKind.None) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, dictionary.Construct(method.TypeParameters[0], method.TypeParameters[1])) &&
+            method.Parameters[2] is { RefKind: RefKind.None, Type.SpecialType: SpecialType.System_Int32 });
+    }
+
     /// <summary>Checks the binary writer operations for a bounded UTF-16 key and raw value.</summary>
     /// <param name="compilation">The consuming compilation and its runtime references.</param>
     /// <returns>Whether all fixed record operations required by the generated loop are available.</returns>

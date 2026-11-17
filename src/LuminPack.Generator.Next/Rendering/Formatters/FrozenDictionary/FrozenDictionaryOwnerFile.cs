@@ -66,6 +66,13 @@ internal static class FrozenDictionaryOwnerFile
             w.Line("try");
             w.Open();
         }
+        // A duplicate key can throw before the stashed reader is published.
+        bool bounded = c.UsesRawOrStringEntries && c.RawPairReadStorage && c.Supports("ReadBoundedRawDictionary");
+        if (bounded)
+        {
+            w.Line("if (!global::LuminPack.Utility.LuminFrozenConstruction.TryAddRawDictionaryPairs(ref operationState, dict, length))");
+            w.Open();
+        }
         w.Line("int remaining = length;");
         w.Line("do");
         w.Open();
@@ -76,6 +83,8 @@ internal static class FrozenDictionaryOwnerFile
         w.Line("dict.Add(k!, v);");
         w.Close();
         w.Line("while (--remaining != 0);");
+        if (bounded)
+            w.Close();
         w.Line("value = global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(dict);");
         if (rented)
         {
