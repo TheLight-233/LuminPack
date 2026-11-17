@@ -7,6 +7,24 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Identifies optional ordered collection kernels exposed by the referenced Core.</summary>
 internal static class FormatterOrderedCollectionTraits
 {
+    /// <summary>Matches the checked entry view exposed by the consumer's Core.</summary>
+    /// <param name="compilation">The consumer compilation.</param>
+    /// <returns>Whether the consumer provides checked hash-set traversal.</returns>
+    internal static bool HasHashSetTraversal(Compilation compilation)
+    {
+        var marshal = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackMarshal");
+        var set = compilation.GetTypeByMetadataName("System.Collections.Generic.HashSet`1");
+        var view = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackMarshal+HashSetView`1");
+        return set != null && view != null && marshal?.GetMembers("TryGetHashSetTraversal").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, Parameters.Length: 2,
+                ReturnsByRef: false, ReturnsByRefReadonly: false, ReturnType.SpecialType: SpecialType.System_Boolean } &&
+            method.Parameters[0].RefKind == RefKind.None && method.Parameters[1].RefKind == RefKind.Out &&
+            !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasReferenceTypeConstraint &&
+            !method.TypeParameters[0].HasConstructorConstraint && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, set.Construct(method.TypeParameters[0])) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, view.Construct(method.TypeParameters[0]))) == true;
+    }
+
     /// <summary>Checks the default-priority fast fill for a compatible fixed pair.</summary>
     /// <param name="compilation">The actual consumer references.</param>
     /// <param name="collection">The closed framework queue.</param>
@@ -123,6 +141,16 @@ internal static class FormatterOrderedCollectionTraits
             result.Add("OrderedIntegerJson");
         if (!isStack)
         {
+            if (element.IsReferenceType && element.SpecialType != SpecialType.System_String &&
+                compilation.GetTypeByMetadataName("System.ReadOnlySpan`1") is { } segment &&
+                access.GetMembers("TryGetQueueSegments").OfType<IMethodSymbol>().Any(method => QueueMethod(method, 5) &&
+                    method.ReturnType.SpecialType == SpecialType.System_Boolean &&
+                    method.Parameters[2].RefKind == RefKind.Out && method.Parameters[3].RefKind == RefKind.Out &&
+                    SymbolEqualityComparer.Default.Equals(method.Parameters[2].Type, segment.Construct(method.TypeParameters[0])) &&
+                    SymbolEqualityComparer.Default.Equals(method.Parameters[3].Type, method.Parameters[2].Type) &&
+                    method.Parameters[4].RefKind == RefKind.Out && method.Parameters[4].Type.SpecialType == SpecialType.System_Int32) &&
+                access.GetMembers("CheckQueueTraversalVersion").OfType<IMethodSymbol>().Any(method => QueueMethod(method, 2) && method.ReturnsVoid))
+                result.Add("QueueSegments");
             if (element.SpecialType == SpecialType.System_String &&
                 HasKernel("TryWriteStringQueueStorage", "LuminPackWriter", 1, true, true, SpecialType.System_Boolean))
                 result.Add("WriteStringQueueStorage");
@@ -156,6 +184,14 @@ internal static class FormatterOrderedCollectionTraits
             if (HasKernel("TryReadStackStorage", "LuminPackReader", 1, true, false))
                 result.Add("ReadStackStorage");
         }
+
+        bool QueueMethod(IMethodSymbol method, int parameters) =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+            !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasReferenceTypeConstraint &&
+            !method.TypeParameters[0].HasConstructorConstraint && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+            method.Parameters.Length == parameters && method.Parameters[0].RefKind == RefKind.None &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, collection.OriginalDefinition.Construct(method.TypeParameters[0])) &&
+            method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32;
 
         bool HasStackSpanKernel(string name, RefKind spanKind, SpecialType resultType) =>
             span != null && access.GetMembers(name).OfType<IMethodSymbol>().Any(method =>

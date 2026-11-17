@@ -2073,6 +2073,20 @@ public static partial class LuminPackMarshal
         private T _data;
     }
 
+    /// <summary>Opens modern hash entries whose live slots use the framework free-list encoding.</summary>
+    /// <typeparam name="T">The set element type.</typeparam>
+    /// <param name="set">The non-null source set.</param>
+    /// <param name="view">The entry range and live version of the set.</param>
+    /// <returns>Whether this exact type has all the fields required for checked traversal.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static bool TryGetHashSetTraversal<T>(HashSet<T> set, out HashSetView<T> view)
+    {
+        view = new HashSetView<T>(set);
+        return set.GetType() == typeof(HashSet<T>) && HashSetView<T>.Recognized &&
+            (LuminCollectionLayouts.HashSetCount | LuminCollectionLayouts.HashSetFreeCount | LuminCollectionLayouts.HashSetVersion) >= 0 &&
+            view._entries is { } entries && (uint)view._count <= (uint)entries.Length;
+    }
+
     /// <summary>Writes the original raw hash-set record with grouped small dense stores where 64-bit access permits.</summary>
     /// <typeparam name="T">The raw element storage.</typeparam>
     /// <param name="writer">The complete output state.</param>

@@ -33,6 +33,28 @@ internal static class PriorityQueueOwnerFile
             WriteMixed(c);
             return;
         }
+        else if (!c.UsesRawOrStringEntries && c.Supports("PriorityQueueTraversal"))
+        {
+            const string access = "global::LuminPack.Code.LuminPackCollectionAccess";
+            var w = c.W;
+            w.Line("if (value.GetType() == typeof(" + c.Dictionary + ") && " + access +
+                ".TryGetPriorityQueueTraversal(value, out var nodes, out int version))");
+            w.Open();
+            w.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
+            w.Line("operationState.WriteCollectionHeader(nodes.Length);");
+            w.Line(access + ".CheckPriorityQueueTraversalVersion(value, version);");
+            w.Line("foreach (var pair in nodes)");
+            w.Open();
+            w.Line("var key = pair.Element;");
+            c.WriteMember(c.Key, "key");
+            w.Line("var itemValue = pair.Priority;");
+            c.WriteMember(c.Value, "itemValue");
+            w.Line(access + ".CheckPriorityQueueTraversalVersion(value, version);");
+            w.Close();
+            w.Line("operationState.CheckBuffer();");
+            w.Line("goto operationComplete_RootWrite;");
+            w.Close();
+        }
         c.CountedWrite();
     }
 

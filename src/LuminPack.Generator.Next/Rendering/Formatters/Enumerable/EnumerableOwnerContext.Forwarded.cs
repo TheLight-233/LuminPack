@@ -217,6 +217,30 @@ internal sealed partial class EnumerableOwnerContext
     /// <param name = "local">The local used by this operation.</param>
     internal void WrapperWrite(string local)
     {
+        if (_set.FindFormatter(Sequence)?.Definition == "System.Collections.ObjectModel.ReadOnlyCollection" &&
+            !_element!.RawCollection && _element.Layout == null && Supports("WrapperJsonStorage"))
+        {
+            W.Line("var storage = global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + Scalar + ">(" + local + ");");
+            W.Line("global::System.ReadOnlySpan<" + Scalar + "> items;");
+            W.Line("if (storage is global::System.Collections.Generic.List<" + Scalar + "> list)");
+            W.Indented(() => W.Line("items = " + PackMarshal + ".GetListSpan(list);"));
+            W.Line("else if (storage is " + ContiguousOwnerFile.ArrayType(Scalar) + " array)");
+            W.Indented(() => W.Line("items = array;"));
+            W.Line("else");
+            W.Open();
+            W.Line("WriteEnumerable(ref operationState, " + local + ");");
+            W.Line("goto operationComplete_RootWrite;");
+            W.Close();
+            WriteSpan("items");
+            W.Blank();
+            W.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+            W.Line("static void WriteEnumerable(ref global::LuminPack.Core.LuminPackWriter operationState, " + Sequence + " source)");
+            W.Open();
+            CountedWrite("source");
+            W.Close();
+            return;
+        }
+
         W.Line("int wrapperDepth = 0;");
         W.Line("var wrapperList = global::LuminPack.Code.LuminPackCollectionAccess.GetUnderlyingIList(" + local + ", ref wrapperDepth);");
         W.Line("if (wrapperList != null)");
@@ -335,19 +359,47 @@ internal sealed partial class EnumerableOwnerContext
     private void ForwardedQueueWrite(string local)
     {
         W.Line("int queueSize = " + local + ".Count;");
-        W.Line("int countPosition = operationState.BeginCollection();");
+        bool segments = Supports("QueueSegments");
+        if (segments)
+        {
+            W.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
+            W.Line("operationState.WriteCollectionHeader(queueSize);");
+        }
+        else
+            W.Line("int countPosition = operationState.BeginCollection();");
         W.Line("if (queueSize != 0)");
         W.Open();
         W.Line("operationState.EnsureAdditionalCapacity(sizeof(int) * 3);");
         W.Line("operationState.Write(0);");
         W.Line("operationState.Write(0);");
         W.Line("operationState.Write(queueSize);");
+        if (segments)
+        {
+            const string access = "global::LuminPack.Code.LuminPackCollectionAccess";
+            W.Line("if (" + access + ".TryGetQueueSegments(" + local + ", queueSize, out var first, out var second, out int version))");
+            W.Open();
+            W.Line("var segment = first;");
+            W.Line("do");
+            W.Open();
+            W.Line("foreach (var item in segment)");
+            W.Open();
+            WriteElement("item");
+            W.Line(access + ".CheckQueueTraversalVersion(" + local + ", version);");
+            W.Close();
+            W.Line("segment = second;");
+            W.Line("second = default;");
+            W.Close();
+            W.Line("while (!segment.IsEmpty);");
+            W.Close();
+            W.Line("else");
+        }
         W.Line("foreach (var item in " + local + ")");
         W.Open();
         WriteElement("item");
         W.Close();
         W.Close();
-        W.Line("operationState.EndCollection(countPosition, queueSize);");
+        if (!segments)
+            W.Line("operationState.EndCollection(countPosition, queueSize);");
         W.Line("operationState.CheckBuffer();");
     }
 

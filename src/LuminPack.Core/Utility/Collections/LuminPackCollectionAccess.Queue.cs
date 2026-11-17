@@ -196,6 +196,41 @@ public static partial class LuminPackCollectionAccess
         LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.QueueVersion)++;
     }
 
+    /// <summary>Captures the two live segments of a recognized queue in dequeue order.</summary>
+    /// <typeparam name="T">The queue element type.</typeparam>
+    /// <param name="queue">The source queue.</param>
+    /// <param name="count">The count recorded in the queue header.</param>
+    /// <param name="first">The segment starting at the queue head.</param>
+    /// <param name="second">The segment after the ring wraps.</param>
+    /// <param name="version">The version to check after each element formatter returns.</param>
+    /// <returns>Whether the exact queue and its active range were recognized.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static bool TryGetQueueSegments<T>(Queue<T> queue, int count, out ReadOnlySpan<T> first,
+        out ReadOnlySpan<T> second, out int version)
+    {
+        first = second = default;
+        version = 0;
+        if (!TryGetQueueArray(queue, count, out var items, out int head))
+            return false;
+        version = LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.QueueVersion);
+        int length = Math.Min(count, items.Length - head);
+        first = items.AsSpan(head, length);
+        second = items.AsSpan(0, count - length);
+        return true;
+    }
+
+    /// <summary>Checks the mutation counter before continuing a captured queue traversal.</summary>
+    /// <typeparam name="T">The queue element type.</typeparam>
+    /// <param name="queue">The queue whose segments were captured.</param>
+    /// <param name="version">Its captured mutation counter.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void CheckQueueTraversalVersion<T>(Queue<T> queue, int version)
+    {
+        if (LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.QueueVersion) != version)
+            LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
+    }
+
     /// <summary>Retrieves the checked active range of an exact framework queue.</summary>
     /// <typeparam name="T">The queue element type.</typeparam>
     /// <param name="queue">The source queue.</param>

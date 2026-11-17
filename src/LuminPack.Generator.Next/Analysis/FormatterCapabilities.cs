@@ -27,6 +27,10 @@ internal static class FormatterCapabilities
         if (type is not INamedTypeSymbol { IsGenericType: true } named)
             return result.ToArray();
         string definition = named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.Name;
+        if (definition == "System.Collections.Generic.HashSet" &&
+            named.TypeArguments[0].IsReferenceType && named.TypeArguments[0].SpecialType != SpecialType.System_String &&
+            FormatterOrderedCollectionTraits.HasHashSetTraversal(compilation))
+            result.Add("HashSetTraversal");
         if (definition is "System.Collections.Generic.Queue" or "System.Collections.Generic.Stack")
             FormatterOrderedCollectionTraits.Capture(compilation, named, definition == "System.Collections.Generic.Stack", result);
         if (definition == "System.Collections.Generic.Queue" && FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))

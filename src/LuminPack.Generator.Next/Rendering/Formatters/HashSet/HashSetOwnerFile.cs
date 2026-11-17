@@ -44,10 +44,43 @@ internal static class HashSetOwnerFile
                     " && global::LuminPack.Code.LuminPackMarshal.TryWriteStringSet<TLuminProfile>(ref operationState, value))");
                 c.W.Indented(() => c.W.Line("goto operationComplete_RootWrite;"));
             }
+            if (c.Forwarded && c.Supports("HashSetTraversal"))
+                WriteEntries(c);
             c.CountedWrite("value");
             return;
         }
         WriteRaw(c, "operationState", "value");
+    }
+
+    /// <summary>Writes checked live entries, retaining the enumerator's behavior across callbacks.</summary>
+    /// <param name="c">The element formatter and output context.</param>
+    private static void WriteEntries(EnumerableOwnerContext c)
+    {
+        var w = c.W;
+        w.Line("if (global::LuminPack.Code.LuminPackMarshal.TryGetHashSetTraversal(value, out var view))");
+        w.Open();
+        w.Line("int version = view._version;");
+        w.Line("int expected = value.Count;");
+        w.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
+        w.Line("int position = operationState.Position;");
+        w.Line("operationState.WriteCollectionHeader(expected);");
+        w.Line("int written = 0;");
+        w.Line("for (int index = 0; ; index++)");
+        w.Open();
+        w.Line("if (version != view._version)");
+        w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();"));
+        w.Line("if (index >= view._count) break;");
+        w.Line("ref var entry = ref view._entries[index];");
+        w.Line("if (entry.Next < -1) continue;");
+        w.Line("var item = entry.Value;");
+        c.WriteElement("item");
+        w.Line("written++;");
+        w.Close();
+        // Remove and Clear can succeed without invalidating a modern HashSet enumerator.
+        w.Line("if (written != expected) operationState.EndCollection(position, written);");
+        w.Line("operationState.CheckBuffer();");
+        w.Line("goto operationComplete_RootWrite;");
+        w.Close();
     }
 
     /// <summary>Writes raw.</summary>

@@ -41,6 +41,52 @@ public class DictionaryEntryProgressionTest
         finally { ProgressionValue.BeforeWrite = null; }
     }
 
+    /// <summary>Each checked traversal rejects an insertion made by its last element formatter.</summary>
+    [Fact]
+    public void CollectionWritersCheckTheFinalCallback()
+    {
+        var item = new ProgressionValue();
+        var queue = new Queue<ProgressionValue>();
+        var heap = new PriorityQueue<ProgressionValue, int>();
+        var set = new HashSet<ProgressionValue>();
+        queue.Enqueue(item);
+        heap.Enqueue(item, 7);
+        set.Add(item);
+        try
+        {
+            Check(() => queue.Enqueue(item), () => LuminPackSerializer.Serialize(queue));
+            Check(() => heap.Enqueue(item, 4), () => LuminPackSerializer.Serialize(heap));
+            Check(() => set.Add(new ProgressionValue()), () => LuminPackSerializer.Serialize(set));
+        }
+        finally { ProgressionValue.BeforeWrite = null; }
+
+        static void Check(Action mutate, Action write)
+        {
+            ProgressionValue.BeforeWrite = () =>
+            {
+                ProgressionValue.BeforeWrite = null;
+                mutate();
+            };
+            Assert.Throws<InvalidOperationException>(write);
+        }
+    }
+
+    /// <summary>A removal allowed by the set enumerator must also shorten the emitted header.</summary>
+    [Fact]
+    public void SetRemovalDuringWriteUsesTheEnumeratedCount()
+    {
+        var first = new ProgressionValue { Value = 3 };
+        var second = new ProgressionValue { Value = 7 };
+        var set = new HashSet<ProgressionValue> { first, second };
+        byte[] expected = LuminPackSerializer.Serialize(new HashSet<ProgressionValue> { first });
+        try
+        {
+            ProgressionValue.BeforeWrite = () => set.Remove(second);
+            Assert.Equal(expected, LuminPackSerializer.Serialize(set));
+        }
+        finally { ProgressionValue.BeforeWrite = null; }
+    }
+
     /// <summary>Runs caller code while the containing dictionary's entry storage is live.</summary>
     [LuminPackable]
     public sealed partial class ProgressionValue
