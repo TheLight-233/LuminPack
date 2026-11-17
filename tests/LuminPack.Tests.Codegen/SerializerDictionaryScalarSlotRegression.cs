@@ -67,9 +67,9 @@ internal static partial class SerializerDictionaryScalarSlotRegression
             .RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
         Require(!diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
         string generated = string.Join("\n", driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Select(result => result.SourceText.ToString()));
-        // Source expansion renames local functions, so the refill is located by its stable statements.
+        // Source expansion can rename the destination parameter when outlining the refill.
         bool hasSlots = generated.Contains("order.MoveNext()", StringComparison.Ordinal) &&
-            generated.Contains("CollectionsMarshal.GetValueRefOrNullRef(destination,", StringComparison.Ordinal);
+            generated.Contains("CollectionsMarshal.GetValueRefOrNullRef(", StringComparison.Ordinal);
         Require(hasSlots == slots, "Incorrect scalar dictionary-slot eligibility: " + key + " -> " + value + (unity ? " (Unity)" : modern ? "" : " (legacy)"));
         if (slots)
         {
