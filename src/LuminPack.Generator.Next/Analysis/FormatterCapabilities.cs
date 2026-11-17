@@ -318,6 +318,9 @@ internal static class FormatterCapabilities
             "System.Collections.Generic.SortedList" or "System.Collections.Generic.SortedDictionary" &&
             FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation))
             result.Add("BinaryRawPairs");
+        if (definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" &&
+            modern && !unity && FormatterConcurrentTraits.HasBoundedDenseRawPairs(compilation))
+            result.Add("BoundedDenseRawPairs");
         if (definition is "System.Collections.Generic.SortedDictionary" or "System.Collections.Immutable.ImmutableSortedDictionary" &&
             modern && !unity && named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsReferenceType &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))

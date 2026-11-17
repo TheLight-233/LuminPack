@@ -122,6 +122,45 @@ public sealed partial class TruncatedFixedHeaderTest
         Assert.Same(original, target.Keys.First());
     }
 
+    /// <summary>Checks dictionary interface wire bytes for dense, sparse and derived runtime implementations.</summary>
+    [Fact]
+    public void RawDictionaryInterfacesPreserveEnumerationWireOrder()
+    {
+        var dense = Enumerable.Range(0, 37).ToDictionary(index => -5 * index, index => index * 11 + 17);
+        Check(dense);
+        var bounded = Enumerable.Repeat((byte)0xC3, 36).ToArray();
+        Span<byte> output = bounded;
+        var writer = new LuminPack.Core.LuminPackWriter(ref output);
+        writer.WriteCollectionHeader(dense.Count);
+        Assert.False(LuminPack.Code.LuminPackMarshal.TryWriteBoundedDenseRawPairs(ref writer, dense, out _));
+        Assert.Equal(sizeof(int), writer.Position);
+        Assert.All(bounded[sizeof(int)..], value => Assert.Equal((byte)0xC3, value));
+
+        if (LuminPack.Code.LuminPackMarshal.TryGetDictionaryView(dense, out var view))
+        {
+            Span<byte> aliased = System.Runtime.InteropServices.MemoryMarshal.AsBytes(view._entries.AsSpan());
+            byte[] original = aliased.ToArray();
+            var aliasedWriter = new LuminPack.Core.LuminPackWriter(ref aliased);
+            Assert.False(LuminPack.Code.LuminPackMarshal.TryWriteBoundedDenseRawPairs(ref aliasedWriter, dense, out _));
+            Assert.Equal(0, aliasedWriter.Position);
+            Assert.Equal(original, aliased.ToArray());
+        }
+
+        dense.Remove(-10);
+        Check(dense);
+        Check(new DerivedRawDictionary(dense));
+
+        static void Check(Dictionary<int, int> source)
+        {
+            byte[] expected = LuminPackSerializer.Serialize(source);
+            Assert.Equal(expected, LuminPackSerializer.Serialize<IDictionary<int, int>>(source));
+            Assert.Equal(expected, LuminPackSerializer.Serialize<IReadOnlyDictionary<int, int>>(source));
+        }
+    }
+
+    /// <summary>Exercises the enumeration fallback for a derived dictionary.</summary>
+    private sealed class DerivedRawDictionary(IDictionary<int, int> source) : Dictionary<int, int>(source) { }
+
     /// <summary>Provides a concrete field whose type is also a fixed Union case.</summary>
     [LuminPackable]
     public sealed class FixedCaseContainer

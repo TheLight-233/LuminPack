@@ -188,6 +188,11 @@ internal static class DictionaryInterfaceOwnerFile
             w.Line(w.MethodImpl("NoInlining"));
             w.Line("static int " + method + "(scoped ref " + writer + " operationState, " + input + " items)");
             w.Open();
+            if (rawKernel && method == "WriteKnown" && c.Supports("BoundedDenseRawPairs"))
+            {
+                w.Line("if (" + marshal + ".TryWriteBoundedDenseRawPairs(ref operationState, items, out int denseCount))");
+                w.Indented(() => w.Line("return denseCount;"));
+            }
             w.Line("int count = 0;");
             w.Line("foreach (var item in items)");
             w.Open();

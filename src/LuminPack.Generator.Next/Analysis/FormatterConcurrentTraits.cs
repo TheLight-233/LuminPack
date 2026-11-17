@@ -54,6 +54,28 @@ internal static class FormatterConcurrentTraits
             HasBinaryWriterOperation(writer, "CompleteRun", false, SpecialType.System_Void, (SpecialType.System_Int32, RefKind.None));
     }
 
+    /// <summary>Checks the runtime's optional bounded writer for a dense dictionary of raw pairs.</summary>
+    /// <param name="compilation">The consumer's actual Core and framework references.</param>
+    /// <returns>Whether a generated interface writer can call the bounded dense operation.</returns>
+    internal static bool HasBoundedDenseRawPairs(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackMarshal");
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        var dictionary = compilation.GetTypeByMetadataName("System.Collections.Generic.Dictionary`2");
+        return owner != null && writer != null && dictionary != null &&
+            owner.GetMembers("TryWriteBoundedDenseRawPairs").OfType<IMethodSymbol>().Any(method =>
+                method.IsStatic && method.DeclaredAccessibility == Accessibility.Public && method.Arity == 2 &&
+                !method.ReturnsByRef && !method.ReturnsByRefReadonly &&
+                method.TypeParameters.All(parameter => parameter.HasUnmanagedTypeConstraint) &&
+                method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 3 &&
+                method.Parameters[0].RefKind == RefKind.Ref &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, writer) &&
+                method.Parameters[1].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type,
+                    dictionary.Construct(method.TypeParameters[0], method.TypeParameters[1])) &&
+                method.Parameters[2].RefKind == RefKind.Out && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32);
+    }
+
     /// <summary>Checks a non-generic binary writer operation against its expected signature.</summary>
     /// <param name="owner">The binary writer type.</param>
     /// <param name="name">The operation name.</param>
