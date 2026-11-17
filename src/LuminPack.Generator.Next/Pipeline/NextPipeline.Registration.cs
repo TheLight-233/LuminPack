@@ -46,6 +46,7 @@ internal static partial class NextPipeline
                 entries.TryGetValue(suffix, out GeneratedOperations existing);
                 entries[suffix] = existing | operation;
             }
+        var openUnionTags = new List<(string Definition, string Tags)>();
         var open = new Dictionary<string, TypeModel>(StringComparer.Ordinal);
         foreach (ModeledPayload payload in payloads)
         {
@@ -57,6 +58,14 @@ internal static partial class NextPipeline
             if (model.Identity.IsGeneric)
             {
                 open[type] = model;
+                if (model is UnionModel { Tier: not UnionDispatchTier.Virtual } genericUnion &&
+                    !genericUnion.Referenced && genericUnion.Cases.Length != 0)
+                {
+                    string definition = Regex.Replace(type, "<[^<>]+>", match =>
+                        "<" + new string(',', match.Value.Count(character => character == ',')) + ">");
+                    string tags = string.Join(", ", genericUnion.Cases.Select(item => item.Tag.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                    openUnionTags.Add((definition, tags));
+                }
                 continue;
             }
             if (model is UnionModel && RenderModelFactory.Create(model, options) is { } union)
@@ -96,7 +105,7 @@ internal static partial class NextPipeline
 
         sources.Add(new GeneratedSource("LuminPackGen.CustomFormatterRegistry.g.cs",
             CustomRegistrationSource.Render(custom, generated.Values, ProfileNames.Type(policy.Strings), ProfileNames.Type(policy.JsonInput),
-                options.AssemblyName, options.KnownFormatters), GenerationKind.Formatter));
+                options.AssemblyName, options.KnownFormatters, openUnionTags), GenerationKind.Formatter));
 
         void AddPayload(TypeModel model, string type, GeneratedOperations? selected = null, string arguments = "")
         {

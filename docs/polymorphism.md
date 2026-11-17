@@ -22,9 +22,8 @@ Shape copy = null!;
 LuminPackSerializer.Deserialize(bytes, ref copy);   // copy is Circle
 ```
 
-- The root, every case and every containing type must be `partial`.
-- Tags range from 0 to 65535. Tags 0 to 249 take one byte; larger tags take three. Prefer small tags, and keep them stable: the tag is what identifies a case on the wire.
-- `[LuminPackWideTag]` on the root selects the wide tag form for all of its cases.
+- In Next, if the root has more than 32 generated cases, the root, the cases and their containing types must be `partial` for virtual dispatch. Smaller roots use exact type comparisons, including for generic cases.
+- Numeric tags range from 0 to 65535. They identify JSON and explicitly registered cases in Next.
 - Generic cases are supported: an open case (`typeof(Case<>)`) covers the closed types actually used, and a closed case (`typeof(Case<int>)`) has priority over it.
 - On .NET 11, both generators support C# `union` declarations marked `[LuminPackable]`. Binary and JSON assign tags in case declaration order beginning at zero. A default Union with no case uses the null marker.
 
@@ -37,7 +36,9 @@ For eligible local, non-generic abstract class roots, the generator selects the 
 
 A direct call requires one sealed case, no other derived types in source, disabled registration and a root that other assemblies cannot extend. The pattern switch uses the existing virtual call for values outside its exact cases. Lists, arrays, immutable arrays and dictionaries follow the same tier for each element. Interface, generic and referenced roots retain their existing dispatch.
 
-Use `[LuminPackOption(WideTag = true)]` to select wide tags. `[LuminPackOption(SingleImplementation = true)]` declares that a root has exactly one implementation everywhere. Use it when no other assembly can add a case. It retains the existing Union frame and can enable the .NET 8 and later direct call when registration is disabled. The separate `[LuminPackWideTag]` and `[LuminPackSingleImplementation]` attributes remain compatible. See [Options](options.md#union-contract-switches).
+Next binary class and interface Unions write a four-byte little-endian FNV-1a hash of the canonical UTF-8 type name for each generated case. The canonical name uses namespaces, `+` for nesting, and fully qualified type arguments in angle brackets. An open type parameter is written in the canonical name as `!0`, `!1`, and so forth. For example, `Example.Case<System.Int32>` and `Example.Case<!0>` have different hashes. The generator rejects collisions, zero and `0xFFFFFFFF`. Renaming a case changes its binary schema. The type name text is never written to the stream.
+
+Binary `null` is four zero bytes. Registered cases use `0xFFFFFFFF` followed by the writer delegate's existing numeric tag and payload. `[LuminPackOption(WideTag = true)]` selects the tag width in that registered path. Explicit numeric tags also remain the JSON case IDs. A new binary reader expects hash headers. The earlier one-byte and three-byte generated case headers belong to a different binary schema.
 
 ## Types from referenced assemblies
 

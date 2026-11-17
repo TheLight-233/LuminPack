@@ -136,7 +136,12 @@ internal static class BinaryUnionSafetyTest
     {
         DynamicUnionBase value = new StaticDynamicUnionMember { Value = 123 };
         var payload = LuminPackSerializer.Serialize(value);
+#if LUMINPACK_NEXT_GENERATOR
+        Assert(System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(payload) == 0xEB0B6769u,
+            "The binary Union wrote the wrong case-name hash.");
+#else
         Assert(payload[0] == 1, "The class union fast path wrote the wrong constant tag.");
+#endif
 
         var result = global::LuminPackUnitTest.ConcreteReads.Read<DynamicUnionBase>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref DynamicUnionBase concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(result is StaticDynamicUnionMember { Value: 123 },
@@ -149,7 +154,12 @@ internal static class BinaryUnionSafetyTest
         IFastInterfaceUnion value = new FastInterfaceUnionMember { Value = 456 };
         var payload = LuminPackSerializer.Serialize(value);
         var json = LuminPackSerializer.SerializeJson(value);
+#if LUMINPACK_NEXT_GENERATOR
+        Assert(System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(payload) == 0x5DBF0D67u,
+            "The binary Union wrote the wrong case-name hash.");
+#else
         Assert(payload[0] == 7, "The interface union fast path wrote the wrong constant tag.");
+#endif
         Assert(global::LuminPackUnitTest.ConcreteReads.Read<IFastInterfaceUnion>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IFastInterfaceUnion concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is FastInterfaceUnionMember { Value: 456 },
             "The interface union binary fast path did not round-trip.");
         Assert(global::LuminPackUnitTest.ConcreteReads.ReadJson<IFastInterfaceUnion>(json, static (string concreteReadInput, ref IFastInterfaceUnion concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) is FastInterfaceUnionMember { Value: 456 },
@@ -186,8 +196,13 @@ internal static class BinaryUnionSafetyTest
 
         IWideUnion wide = new WideUnionMember { Value = 42 };
         var widePayload = LuminPackSerializer.Serialize(wide);
+#if LUMINPACK_NEXT_GENERATOR
+        Assert(System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(widePayload) == 0xA8E2BD53u,
+            "The binary Union wrote the wrong case-name hash.");
+#else
         Assert(widePayload[0] == LuminPack.Code.LuminPackCode.WideTag,
             "The wide-tag virtual path did not preserve the wide union header.");
+#endif
         Assert(global::LuminPackUnitTest.ConcreteReads.Read<IWideUnion>(widePayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IWideUnion concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is WideUnionMember { Value: 42 },
             "A wide-tag union did not round-trip.");
 
@@ -230,7 +245,12 @@ internal static class BinaryUnionSafetyTest
 
         IFastInterfaceUnion value = new RegisteredInterfaceUnionMember { Value = 321 };
         var payload = LuminPackSerializer.Serialize(value);
+#if LUMINPACK_NEXT_GENERATOR
+        Assert(System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(payload) == uint.MaxValue && payload[4] == 100,
+            "The registered union member wrote the wrong escape or numeric tag.");
+#else
         Assert(payload[0] == 100, "The registered union member wrote the wrong wire tag.");
+#endif
         Assert(global::LuminPackUnitTest.ConcreteReads.Read<IFastInterfaceUnion>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IFastInterfaceUnion concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is RegisteredInterfaceUnionMember { Value: 321 },
             "The registered union member did not round-trip.");
         var json = LuminPackSerializer.SerializeJson(value);
@@ -295,10 +315,20 @@ internal static class BinaryUnionSafetyTest
         var closedPayload = LuminPackSerializer.Serialize(closed);
         var secondPayload = LuminPackSerializer.Serialize(second);
 
+#if LUMINPACK_NEXT_GENERATOR
+        Assert(System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(closedPayload) == 0x9C789CE5u,
+            "The binary Union wrote the wrong case-name hash.");
+#else
         Assert(closedPayload[0] == 11,
             "The first explicit closed-generic union member wrote the wrong wire tag.");
+#endif
+#if LUMINPACK_NEXT_GENERATOR
+        Assert(System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(secondPayload) == 0x86E63A74u,
+            "The binary Union wrote the wrong case-name hash.");
+#else
         Assert(secondPayload[0] == 12,
             "The second explicit closed-generic union member wrote the wrong wire tag.");
+#endif
         Assert(global::LuminPackUnitTest.ConcreteReads.Read<IMixedGenericUnion<int>>(closedPayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IMixedGenericUnion<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is
                 MixedGenericUnionMember<int> { Value: 91 },
             "The first explicit closed-generic union member did not round-trip.");

@@ -245,6 +245,11 @@ internal static class DiagnosticDescriptors
         "Union participant must be partial",
         "Union participant '{0}' and every containing type must be partial so virtual union dispatch can be generated for '{1}'.");
 
+    /// <summary>A reserved or duplicate 32-bit case-name hash would make the binary Union ambiguous.</summary>
+    public static readonly DiagnosticDescriptor UnionCaseHashConflict = UnionError(
+        "LuminPack036", "Union case hash conflicts",
+        "Union case '{0}' hashes to reserved or duplicate value 0x{1} in '{2}'.");
+
     // Generator failures retain a reserved high number so adding a validation diagnostic does
     // not change the meaning of an unexpected source-generation failure.
     /// <summary>Stores the generator failure.</summary>
@@ -375,6 +380,7 @@ internal static class DiagnosticDescriptors
         [RentPoolMethodMustBeStatic.Id] = RentPoolMethodMustBeStatic,
         [ManagedArrayDataCompress.Id] = ManagedArrayDataCompress,
         [UnionParticipantMustBePartial.Id] = UnionParticipantMustBePartial,
+        [UnionCaseHashConflict.Id] = UnionCaseHashConflict,
         [GeneratorFailure.Id] = GeneratorFailure,
         [CustomMissingMethod.Id] = CustomMissingMethod,
         [CustomMethodMustBeStatic.Id] = CustomMethodMustBeStatic,

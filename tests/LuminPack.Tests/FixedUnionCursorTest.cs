@@ -23,7 +23,11 @@ public class FixedUnionCursorTest
         LuminPackSerializer.Serialize(in list, listDestination);
         byte[] listBytes = listDestination.GetSpan().ToArray();
         Assert.True(listDestination.TotalLength > initial);
+#if LUMINPACK_NEXT_GENERATOR
+        Assert.Equal(40020, listBytes.Length);
+#else
         Assert.Equal(40014, listBytes.Length);
+#endif
         var copy = global::LuminPackUnitTest.ConcreteReads.Read<List<CapacityRoot>>(listBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<CapacityRoot> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(31, Assert.IsType<CapacityCase>(copy[0]).Value.Marker);
         Assert.Equal(42, Assert.IsType<CapacityCase>(copy[1]).Tail);
@@ -37,7 +41,11 @@ public class FixedUnionCursorTest
         LuminPackSerializer.Serialize(in dense, denseDestination);
         LuminPackSerializer.Serialize(in sparse, sparseDestination);
         byte[] denseBytes = denseDestination.GetSpan().ToArray();
+#if LUMINPACK_NEXT_GENERATOR
+        Assert.Equal(40028, denseBytes.Length);
+#else
         Assert.Equal(40022, denseBytes.Length);
+#endif
         Assert.Equal(denseBytes, sparseDestination.GetSpan().ToArray());
         var dictionaryCopy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CapacityRoot>>(denseBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CapacityRoot> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(31, Assert.IsType<CapacityCase>(dictionaryCopy[1]).Value.Marker);
@@ -59,7 +67,11 @@ public class FixedUnionCursorTest
         int initial = destination.TotalLength;
         LuminPackSerializer.Serialize(in values, destination);
         byte[] bytes = destination.GetSpan().ToArray();
+#if LUMINPACK_NEXT_GENERATOR
+        Assert.Equal(32771, bytes.Length);
+#else
         Assert.Equal(32769, bytes.Length);
+#endif
         Assert.True(destination.TotalLength > initial);
         var copy = global::LuminPackUnitTest.ConcreteReads.Read<List<WideCapacityRoot>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<WideCapacityRoot> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(51, Assert.IsType<WideCapacityPrefix>(copy[0]).Value.Marker);
@@ -92,10 +104,11 @@ public class FixedUnionCursorTest
         foreach (var value in source)
         {
             writer.CheckBuffer();
-            if (value is null) writer.WriteNullUnionHeader();
 #if LUMINPACK_NEXT_GENERATOR
-            else value.Write_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56_Default(ref writer);
+            if (value is null) writer.Write(0u);
+            else LuminPackSerializer.Serialize(ref writer, in value);
 #else
+            if (value is null) writer.WriteNullUnionHeader();
             else value.LuminPackUnionSerialize_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref writer);
 #endif
         }
@@ -231,12 +244,16 @@ public class FixedUnionCursorTest
             writer.Advance(global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(writer.Buffer), (nint)(uint)index), pair.Key));
             if (pair.Value is null)
             {
+#if LUMINPACK_NEXT_GENERATOR
+                writer.Write(0u);
+#else
                 writer.Cursor = 255;
                 writer.Advance(1);
+#endif
             }
             else
 #if LUMINPACK_NEXT_GENERATOR
-                pair.Value.Write_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56_Default(ref writer);
+                LuminPackSerializer.Serialize(ref writer, pair.Value);
 #else
                 pair.Value.LuminPackUnionSerialize_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref writer);
 #endif
@@ -310,7 +327,11 @@ public class FixedUnionCursorTest
             }
         };
         byte[] payload = LuminPackSerializer.Serialize(source);
+#if LUMINPACK_NEXT_GENERATOR
+        Assert.Equal(24, RegisteredCase.Position);
+#else
         Assert.Equal(17, RegisteredCase.Position);
+#endif
         var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CursorRoot?>>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(71, Assert.IsType<RegisteredCase>(copy[2]).Number);
         Assert.Equal(payload, LuminPackSerializer.Serialize(copy));
@@ -326,7 +347,11 @@ public class FixedUnionCursorTest
         var sparse = new Dictionary<int, CursorRoot?>(dense) { [3] = new FixedCase { Number = 99 } };
         sparse.Remove(3);
         byte[] actual = LuminPackSerializer.Serialize<Dictionary<int, CursorRoot?>, TProfile>(dense);
+#if LUMINPACK_NEXT_GENERATOR
+        Assert.Equal(24, RegisteredCase.Position);
+#else
         Assert.Equal(17, RegisteredCase.Position);
+#endif
         Assert.Equal(LuminPackSerializer.Serialize<Dictionary<int, CursorRoot?>, TProfile>(sparse), actual);
         var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CursorRoot?>>(actual, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize<Dictionary<int, CursorRoot?>, TProfile>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(71, Assert.IsType<RegisteredCase>(copy[2]).Number);
@@ -461,21 +486,15 @@ public partial class FixedCase : CursorRoot
 public sealed class LegacyCase : FixedCase
 {
     public static int Calls;
+#if !LUMINPACK_NEXT_GENERATOR
     /// <summary>Observes published state before invoking the inherited original case body.</summary>
-    /// <param name = "writer">The caller's current operation.</param>
-#if LUMINPACK_NEXT_GENERATOR
-    public override void Write_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56_Default(ref LuminPackWriter writer)
-#else
+    /// <param name="writer">The caller's current operation.</param>
     public override void LuminPackUnionSerialize_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref LuminPackWriter writer)
-#endif
     {
         Calls++;
-#if LUMINPACK_NEXT_GENERATOR
-        base.Write_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56_Default(ref writer);
-#else
         base.LuminPackUnionSerialize_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref writer);
-#endif
     }
+#endif
 }
 
 /// <summary>Observes whether list writes invoke the separate public cursor slot.</summary>
@@ -484,17 +503,11 @@ public sealed class CursorOverrideCase : FixedCase
     /// <summary>Counts invocations of the cursor slot.</summary>
     public static int Calls;
 
+#if !LUMINPACK_NEXT_GENERATOR
     /// <summary>Counts a cursor-slot invocation before forwarding to the original implementation.</summary>
     /// <param name="writer">The caller's active binary writer.</param>
     /// <param name="initialIndex">The incoming absolute cursor.</param>
     /// <returns>The cursor returned by the inherited implementation.</returns>
-#if LUMINPACK_NEXT_GENERATOR
-    public override int WriteCursor_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref LuminPackWriter writer, int initialIndex)
-    {
-        Calls++;
-        return base.WriteCursor_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref writer, initialIndex);
-    }
-#else
     public override int LuminPackUnionSerializeCursor_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref LuminPackWriter writer, int initialIndex)
     {
         Calls++;

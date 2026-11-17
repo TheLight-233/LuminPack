@@ -14,6 +14,7 @@ internal static partial class SerializerIssueRegression
     {
         const string source = """
             using System;
+            using System.Buffers.Binary;
             using LuminPack;
             using LuminPack.Attribute;
             [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
@@ -26,7 +27,7 @@ internal static partial class SerializerIssueRegression
                 {
                     ProbeBox<int> value = new ProbeBoxA { V = 42 };
                     var bytes = LuminPackSerializer.Serialize(value);
-                    if (bytes[0] != 0) throw new Exception("First Union tag changed");
+                    if (BinaryPrimitives.ReadUInt32LittleEndian(bytes) != 0x6C9033EDu) throw new Exception("First Union hash changed");
                     ProbeBox<int> copy = null;
                     LuminPackSerializer.Deserialize(bytes, ref copy);
                     if (copy is not ProbeBoxA { V: 42 }) throw new Exception("Union binary round trip");
@@ -35,7 +36,7 @@ internal static partial class SerializerIssueRegression
                     if (!ReferenceEquals(existing, copy) || copy.V != 42) throw new Exception("Union reuse");
                     value = new ProbeBoxB { V = 73 };
                     bytes = LuminPackSerializer.Serialize(value);
-                    if (bytes[0] != 1) throw new Exception("Second Union tag changed");
+                    if (BinaryPrimitives.ReadUInt32LittleEndian(bytes) != 0x69902F34u) throw new Exception("Second Union hash changed");
                     LuminPackSerializer.Deserialize(bytes, ref copy);
                     if (copy is not ProbeBoxB { V: 73 }) throw new Exception("Union case replacement");
                     string json = LuminPackSerializer.SerializeJson(value);

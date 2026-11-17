@@ -181,7 +181,7 @@ internal static partial class BinaryEmitter
             if (model.ManagedFixedUnionCase)
             {
                 Method(fixedBody, "SerializeUnionAtCursor_" + readable, false,
-                    parameters + "ref byte initialCursor, byte? unionTag)", inline, "ref byte");
+                    parameters + "ref byte initialCursor, uint? unionTag)", inline, "ref byte");
                 w.Blank();
                 string buffer = w.A("MemoryMarshal") + ".GetReference(writer.Buffer)";
                 string unsafeType = w.A("Unsafe");
@@ -190,10 +190,10 @@ internal static partial class BinaryEmitter
                     "ref byte start = ref " + unsafeType + ".Add(ref " + buffer + ", unchecked((nint)(uint)initialIndex));",
                     "ref byte end = ref SerializeUnionAtCursor_" + readable + "(ref writer, input, ref start, unionTag);",
                     "return (int)" + unsafeType + ".ByteOffset(ref " + buffer + ", ref end);",
-                }, "SerializeUnionAt_" + readable, false, parameters + "int initialIndex, byte? unionTag)", inline, "int");
+                }, "SerializeUnionAt_" + readable, false, parameters + "int initialIndex, uint? unionTag)", inline, "int");
             }
             else
-                Method(fixedBody, "SerializeUnionAt_" + readable, false, parameters + "int initialIndex, byte? unionTag)", inline, "int");
+                Method(fixedBody, "SerializeUnionAt_" + readable, false, parameters + "int initialIndex, uint? unionTag)", inline, "int");
             w.Blank();
         }
         w.Suppressed = !reads;
@@ -783,7 +783,7 @@ internal static partial class BinaryEmitter
             if (union)
             {
                 string widths = string.Join(" + ", members.Select(member => member.Width));
-                body.Add("if (checked(3 + " + widths + ") > 4096)");
+                body.Add("if (checked(4 + " + widths + ") > 4096)");
                 body.Add("\t" + (bounded ? ";" : "writer.EnsureAdditionalCapacity(checked(" + widths + "));"));
             }
             else
@@ -2073,8 +2073,8 @@ internal static partial class BinaryEmitter
             body[index] = pattern.Replace(body[index], match => replacements[match.Value]);
     }
 
-    /// <summary>Projects an all-fixed Union write onto its returning cursor. A capacity reservation publishes the
-    /// position before the check and the managed path reacquires the cursor afterwards.</summary>
+    /// <summary>Projects an all-fixed Union write onto its returning cursor. The managed path combines the tag and
+    /// payload widths as an offset and rebases it after any capacity reservation.</summary>
     /// <param name="w">The generated source writer.</param>
     /// <param name="original">The original supplied to <c>FixedUnionBody</c>.</param>
     /// <param name="managedCursor">Whether to enable managed cursor for this operation.</param>
@@ -2082,21 +2082,23 @@ internal static partial class BinaryEmitter
     private static List<string> FixedUnionBody(CodeWriter w, List<string> original, bool managedCursor)
     {
         string unsafeType = w.A("Unsafe");
-        string destination = managedCursor ? "fixedUnionCursor" :
+        string destination = managedCursor ? unsafeType + ".Add(ref fixedUnionCursor, fixedUnionOffset)" :
             unsafeType + ".Add(ref " + w.A("MemoryMarshal") + ".GetReference(writer.Buffer), unchecked((nint)(uint)(fixedUnionIndex)))";
         string Advance(string width) => managedCursor
-            ? "fixedUnionCursor = ref " + unsafeType + ".Add(ref fixedUnionCursor, " + width + ");"
+            ? "fixedUnionOffset += " + width + ";"
             : "fixedUnionIndex += " + width + ";";
         var body = new List<string>
         {
             managedCursor ? "ref byte fixedUnionCursor = ref initialCursor;" : "int fixedUnionIndex = initialIndex;",
             "if (unionTag.HasValue)",
             "{",
-            destination + " = unionTag.GetValueOrDefault();",
-            Advance("1"),
+            w.A("LuminPackWriter") + ".Write(ref " + (managedCursor ? "fixedUnionCursor" : destination) + ", unionTag.GetValueOrDefault());",
+            Advance("4"),
             "}",
             "",
         };
+        if (managedCursor)
+            body.Insert(1, "int fixedUnionOffset = 0;");
         const string block = "\twriter.Write(ref ";
         const string advance = "writer.Advance(";
         const string write = "writer.Write(";
@@ -2105,10 +2107,13 @@ internal static partial class BinaryEmitter
             if (line.StartsWith("\twriter.EnsureAdditionalCapacity(", StringComparison.Ordinal))
             {
                 body.Add("{");
-                body.Add(managedCursor ? "writer.CommitRecords(ref fixedUnionCursor);" : "writer.Position = fixedUnionIndex;");
+                body.Add(managedCursor ? "writer.CommitRecords(ref " + destination + ");" : "writer.Position = fixedUnionIndex;");
                 body.Add(line.Substring(1));
                 if (managedCursor)
+                {
                     body.Add("fixedUnionCursor = ref writer.Cursor;");
+                    body.Add("fixedUnionOffset = 0;");
+                }
                 body.Add("}");
                 body.Add("");
             }
@@ -2134,7 +2139,7 @@ internal static partial class BinaryEmitter
         }
         if (body[body.Count - 1] == "}")
             body.Add("");
-        body.Add(managedCursor ? "return ref fixedUnionCursor;" : "return fixedUnionIndex;");
+        body.Add(managedCursor ? "return ref " + destination + ";" : "return fixedUnionIndex;");
         return body;
     }
 

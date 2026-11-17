@@ -28,7 +28,7 @@ A source generic method whose serializer call uses an open payload type runs its
 
 Ordinary records and their Union payloads share algorithms with stateless framing type arguments. `LuminPackObjectFraming` and `LuminPackPayloadFraming` live in Core. Their closed instantiations retain their own null/header handling, reservations, checked reads and publication boundaries. Wrappers that copy reader or writer state remain separate where failures must preserve the caller's cursor.
 
-Union writing propagates compiled options through one generic virtual method per format. Binary writes additionally retain one non-generic standard-profile slot. For eligible local, non-generic abstract class roots, binary writers compare the exact runtime type before calling the generated case slot. An unrecognized runtime type uses the registered writer directly or raises an unknown-case error. Closed generic cases use their cached dispatch slots. A Union reader uses one case switch for fresh and existing targets. Each case determines whether the current instance has the exact required type.
+Next writes up to 32 Union cases through an exact type comparison chain to concrete payload writers, including generic cases. Larger Unions pass the compiled options through virtual slots and retain the generic case cache. Binary readers use a checked four-byte type-name hash and a case switch.
 
 ## Owner structs and shared generic formatters
 
@@ -60,7 +60,7 @@ Every root of a shared owner is `NoInlining`. One call into a collection keeps t
 
 Use `[assembly: LuminPackable(typeof(Box<>))]` in the consuming assembly to generate owners for closed `Box<T>` constructions reached by serializer calls or members. Use `typeof(Box<int>)` to select one construction. Marked records inherit the consuming assembly's options and apply their own type and member options. Reference metadata that omits required automatic-property storage reports `LuminPack112`. Reference the implementation assembly when the generated owner needs that storage.
 
-For a marked generic Union defined in a Next-generated library with explicitly declared closed cases, the consumer reads the declared tags and the defining assembly's compiled Union slots write the payload. Both open and exact root markers work for these Unions.
+For a marked generic Union defined in a Next-generated library with explicitly declared closed cases, the consumer uses the same canonical hashes and dispatch tier as the defining assembly. Both open and exact root markers work for these Unions.
 
 An annotated reference member with `[LuminPackableObject]` uses its complete generated or registered formatter. An interface
 member can use a manually registered formatter even when the interface has no `[LuminPackable]` declaration.

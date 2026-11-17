@@ -32,8 +32,8 @@ public partial class Message
 | `MaxJsonDepth` | `1024` | JSON nesting limit; zero or less disables it. |
 | `ValidateJsonSyntax` | `false` | Strict JSON grammar checking. Turn it on for JSON from outside sources. |
 | `StandardFormat` | `"G"` | A constant handed to explicit formatted and `Custom` kernels. It does not change built-in number or date formats. |
-| `WideTag` | `false` | Wide Union reader support on this class or interface; does not inherit enclosing options. |
-| `SingleImplementation` | `false` | This class or interface promises one implementation everywhere; retains existing Union framing and virtual dispatch. |
+| `WideTag` | `false` | Wide numeric tags for the registered Union path in Next. The option does not inherit enclosing settings. |
+| `SingleImplementation` | `false` | This class or interface promises one implementation everywhere. Next selects the write tier by generated case count. |
 | `ReuseRectangularArraySlots` | `true` | Next reuses existing objects in binary rank-two arrays on .NET 8 and later. Set it to `false` directly on the ordinary object element class to replace the array. See [object matrix reuse](reuse.md#binary-object-matrix-reuse). |
 | `StructLayout` | `Tagged` | Storage of unmanaged structs; see below. Only valid on assemblies and structs. |
 | `UntrustedData` and limits | on, limits unbounded | Checked reads for untrusted input; declare limits for hostile input; see [Security](security.md). |
@@ -54,9 +54,9 @@ public abstract partial class MessageBase { }
 public sealed partial class MessageBody : MessageBase { public int Id; }
 ```
 
-These switches apply only to the annotated class or interface. They are invalid on assemblies, structs, fields and properties, do not inherit from containing or base types, and cannot be selected through `ILuminPackOptions`. Declaring only these switches does not pin string settings, so explicit operation profiles still flow normally. A tag of 250 or more still requires wide framing automatically.
+These switches apply only to the annotated class or interface. They are invalid on assemblies, structs, fields and properties, do not inherit from containing or base types, and cannot be selected through `ILuminPackOptions`. Declaring only these switches does not pin string settings, so explicit operation profiles still flow normally. A declared tag of 250 or more still selects wide numeric framing for explicitly registered cases.
 
-`[LuminPackWideTag]` and `[LuminPackSingleImplementation]` remain compatible spellings; prefer the grouped options. A legacy marker remains enabled even when the corresponding option is explicitly false. `SingleImplementation` is a caller guarantee, not a request to remove Union framing or virtual dispatch; use it only when no other assembly can add an implementation. The current generator retains those mechanisms.
+`[LuminPackWideTag]` and `[LuminPackSingleImplementation]` remain compatible spellings; prefer the grouped options. A legacy marker remains enabled even when the corresponding option is explicitly false. `SingleImplementation` is a caller guarantee, not a request to remove Union framing or virtual dispatch; use it only when no other assembly can add an implementation. In Next, generated cases use hash framing and the write tier is selected by case count.
 
 ## Explicit profiles
 

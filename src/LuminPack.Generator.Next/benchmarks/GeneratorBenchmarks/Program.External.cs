@@ -294,7 +294,7 @@ internal static partial class Program
                     "exact generic Union marker");
                 exactToken = new IntToken { Number = 37 };
                 byte[] exactBytes = LuminPackSerializer.Serialize(exactToken);
-                Check(exactBytes[0] == 9 && ((IntToken)LuminPackSerializer.Deserialize<IToken<int>>(exactBytes)).Number == 37,
+                Check(System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(exactBytes) == 0xCF7289C2u && ((IntToken)LuminPackSerializer.Deserialize<IToken<int>>(exactBytes)).Number == 37,
                     "non-generic case implements the constructed generic interface slot");
                 order.Tokens = new List<IToken<string>> { token };
                 Check(((Token<string>)LuminPackSerializer.Deserialize<Order>(LuminPackSerializer.Serialize(order)).Tokens![0]).Value == "generic" &&

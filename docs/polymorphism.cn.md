@@ -22,9 +22,8 @@ Shape copy = null!;
 LuminPackSerializer.Deserialize(bytes, ref copy);   // copy 是 Circle
 ```
 
-- 根类型、每个 case 以及所有外层包含类型都必须是 `partial`。
-- 标签范围 0 到 65535。0 到 249 占 1 字节，更大的占 3 字节。尽量用小标签，并保持稳定：数据中靠标签识别 case。
-- 在根类型上标 `[LuminPackWideTag]`，所有 case 都使用宽标签格式。
+- 在 Next 中，生成 case 数超过 32 时，根类型、各 case 及其外层包含类型必须声明为 `partial`，以生成虚方法。较小的 Union 使用精确类型比较，也适用于泛型 case。
+- 数字标签范围为 0 到 65535。在 Next 中，它们标识 JSON 和显式注册的 case。
 - 支持泛型 case：开放泛型 case（`typeof(Case<>)`）覆盖实际用到的闭合类型，闭合 case（`typeof(Case<int>)`）优先于它。
 - 在 .NET 11 上，两种生成器都支持标了 `[LuminPackable]` 的 C# `union` 声明。二进制和 JSON 都按 case 的声明顺序从零分配标签。未持有 case 的默认值使用空值标记。
 
@@ -37,7 +36,9 @@ LuminPackSerializer.Deserialize(bytes, ref copy);   // copy 是 Circle
 
 直调要求只有一个 sealed case、源码中无其他派生类型、未启用注册，且根无法被其他程序集扩展。精确类型模式之外的值走原虚槽。列表、数组、不可变数组和字典逐元素使用根选定的同一档位。接口根、泛型根和引用程序集中的根沿用原分派。
 
-用 `[LuminPackOption(WideTag = true)]` 选择宽标签。`[LuminPackOption(SingleImplementation = true)]` 声明该根在所有程序集中只有一个实现。只有确定其他程序集不会再加 case 时才使用。它保留既有 Union 帧，且在未启用注册时可让 .NET 8 及以上目标生成直调。独立的 `[LuminPackWideTag]` 和 `[LuminPackSingleImplementation]` 特性保留兼容。参见[选项](options.cn.md#union-类型契约开关)。
+Next 的类与接口 Union 为每个生成 case 写入四字节小端值，即规范 UTF-8 类型名的 FNV-1a 哈希。规范名称包含命名空间，以 `+` 分隔嵌套类型，以尖括号包围全限定类型参数。开放类型参数在规范名称中写为 `!0`、`!1` 等。例如 `Example.Case<System.Int32>` 和 `Example.Case<!0>` 的哈希不同。生成器拒绝冲突、零和 `0xFFFFFFFF`。重命名 case 会改变二进制模式。类型名文本不写入数据流。
+
+二进制 `null` 写为四个零字节。注册 case 写入 `0xFFFFFFFF`，后接委托原有的数字标签和负载。`[LuminPackOption(WideTag = true)]` 选择该注册路径的标签宽度。显式数字标签也是 JSON 的 case ID。新的二进制 reader 要求哈希头。此前生成 case 的单字节和三字节头属于另一套二进制模式。
 
 ## 引用程序集中的类型
 

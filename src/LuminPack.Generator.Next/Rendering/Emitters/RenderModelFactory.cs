@@ -156,7 +156,7 @@ internal static class RenderModelFactory
                 caseModel.Version != null || caseModel.ConstructorArguments != null || caseModel.Members.Length == 0 ||
                 !caseModel.Members.All(member => member.IsFixed)))
                 return PayloadEmitter.Reject<PayloadRenderModel>("union case read: " + item.Type.DisplayName);
-            cases[index] = new UnionRenderCase(item.Tag, item.Type.GlobalName, item.OwnEntry, item.ReadGeneric, item.Sealed,
+            cases[index] = new UnionRenderCase(item.Tag, item.NameHash, item.Type.GlobalName, item.OwnEntry, item.ReadGeneric, item.Sealed,
                 item.FixedCursor, caseModel!, item.Readable, item.Chain, item.Namespace!, item.Arguments, item.Definition, item.InterfaceContract);
         }
         string globalName = model.Identity.GlobalName;
@@ -172,7 +172,7 @@ internal static class RenderModelFactory
             unionChain: model.Chain, unionNamespace: model.Namespace!, unionReferenced: model.Referenced,
             unionBinarySlots: Slots(model.BinarySlots), unionJsonSlots: Slots(model.JsonSlots),
             unionCanonical: model.Canonical, unionStandardBinary: model.StandardBinary, unionStandardJson: model.StandardJson,
-            unionTier: (int)model.Tier, unionTierCases: model.TierCases, unionTierSealed: model.TierSealed, unionWide: model.WideTags,
+            unionTier: (int)model.Tier, unionWide: model.WideTags,
             trusted: model.Policy.Input == InputPolicy.Trusted, registration: options.RegisterMode != RegisterMode.Disabled,
             rejection: model.Rejection, limits: model.Policy.Input == InputPolicy.Untrusted ? model.Policy.Limits : null);
     }

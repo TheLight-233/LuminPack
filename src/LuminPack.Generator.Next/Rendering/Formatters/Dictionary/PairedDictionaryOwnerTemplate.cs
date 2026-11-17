@@ -865,7 +865,7 @@ internal static class PairedDictionaryOwnerTemplate
                     if (!spec.ReadsHeader)
                     {
                         // The original Dictionary, SortedDictionary and SortedList reads took TryReadCollectionHead: one byte per entry.
-                        w.Line("int length = operationState.ReadLength(" + (minimum.Split('+').Any(part => part.Trim() != "0") && (dictionary.StartsWith("global::System.Collections.Generic.Dictionary<", System.StringComparison.Ordinal) ||
+                        w.Line("int length = operationState.ReadLength(" + (context.UnionValue == null && minimum.Split('+').Any(part => part.Trim() != "0") && (dictionary.StartsWith("global::System.Collections.Generic.Dictionary<", System.StringComparison.Ordinal) ||
                             dictionary.StartsWith("global::System.Collections.Generic.SortedDictionary<", System.StringComparison.Ordinal) ||
                             dictionary.StartsWith("global::System.Collections.Generic.SortedList<", System.StringComparison.Ordinal)) ? "1" : minimum) + ");");
                         w.Line("if (length < 0)");

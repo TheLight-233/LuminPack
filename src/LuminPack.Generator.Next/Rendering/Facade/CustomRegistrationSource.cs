@@ -23,11 +23,13 @@ internal static class CustomRegistrationSource
     /// <param name="profile">The consuming assembly's default profile.</param>
     /// <param name="jsonReadProfile">The consuming assembly's default JSON read profile.</param>
     /// <param name="assemblyName">The consuming assembly name used by the Custom registry.</param>
+    /// <param name="openUnionTags">The open Union definitions and the numeric tags reserved by their generated cases.</param>
     /// <param name="known">Whether the referenced Core supplies the built-in registration table.</param>
     /// <returns>The generated registry source.</returns>
     internal static string Render(IReadOnlyList<string> custom,
         IEnumerable<(string Type, string BinarySuffix, string JsonSuffix, string Arguments, GeneratedOperations Operations)> generated,
-        string profile, string jsonReadProfile, string assemblyName, bool known)
+        string profile, string jsonReadProfile, string assemblyName, bool known,
+        IReadOnlyList<(string Definition, string Tags)>? openUnionTags = null)
     {
         string assembly = Sanitize(assemblyName);
         string? registryNamespace = assembly == "Unknown" ? null : "LuminPackRegisters." + assembly;
@@ -52,6 +54,17 @@ internal static class CustomRegistrationSource
             file.Append("            global::").Append(registry).Append(".RegisterFormatters();\n");
         file.Append("            DefaultGeneratedFormatters = RegisterGeneratedFormatters<").Append(profile).Append(", ")
             .Append(jsonReadProfile).Append(">();\n        }\n\n");
+        if (openUnionTags is { Count: > 0 })
+        {
+            file.Append("        static partial void ReserveOpenUnionTags<TUnion>()\n        {\n");
+            file.Append("            var type = typeof(TUnion);\n            if (!type.IsGenericType) return;\n");
+            file.Append("            var definition = type.GetGenericTypeDefinition();\n");
+            foreach (var (definition, tags) in openUnionTags)
+                file.Append("            if (definition == typeof(").Append(definition)
+                    .Append(")) global::LuminPack.Code.LuminPackUnionFormatter<TUnion>.ReserveTags(new int[] { ")
+                    .Append(tags).Append(" });\n");
+            file.Append("        }\n\n");
+        }
         file.Append("""
                     private static global::LuminPack.Code.LuminPackFormatter FindGeneratedFormatter<T, TOptions>()
                         where TOptions : struct, global::LuminPack.Option.ILuminPackOptions

@@ -8,6 +8,8 @@ internal sealed class UnionRenderCase : IEquatable<UnionRenderCase>
 {
     /// <summary>The narrow Union tag.</summary>
     internal readonly int Id;
+    /// <summary>The binary hash of the canonical case name.</summary>
+    internal readonly uint NameHash;
     /// <summary>The fully qualified case type.</summary>
     internal readonly string Type;
     /// <summary>Whether the case is a local reference type with a variable payload, whose binary read entry the switch calls
@@ -36,7 +38,8 @@ internal sealed class UnionRenderCase : IEquatable<UnionRenderCase>
     internal readonly string InterfaceContract;
 
     /// <summary>Captures one case.</summary>
-    /// <param name="id">The id supplied to <c>UnionRenderCase</c>.</param>
+    /// <param name="id">The original JSON tag.</param>
+    /// <param name="nameHash">The binary case-name hash.</param>
     /// <param name="type">The type being analyzed or emitted.</param>
     /// <param name="ownEntry">Whether to enable own entry for this operation.</param>
     /// <param name="readGeneric">Whether to enable read generic for this operation.</param>
@@ -49,7 +52,7 @@ internal sealed class UnionRenderCase : IEquatable<UnionRenderCase>
     /// <param name="arguments">The arguments supplied to <c>UnionRenderCase</c>.</param>
     /// <param name="definition">The definition supplied to <c>UnionRenderCase</c>.</param>
     /// <param name="interfaceContract">The interface contract supplied to <c>UnionRenderCase</c>.</param>
-    internal UnionRenderCase(int id, string type, bool ownEntry, bool readGeneric, bool sealedCase, bool fixedCursor, PayloadRenderModel model,
+    internal UnionRenderCase(int id, uint nameHash, string type, bool ownEntry, bool readGeneric, bool sealedCase, bool fixedCursor, PayloadRenderModel model,
         string readable, string[] chain, string @namespace, string arguments = "", string definition = null, string interfaceContract = null)
     {
         InterfaceContract = interfaceContract;
@@ -65,10 +68,11 @@ internal sealed class UnionRenderCase : IEquatable<UnionRenderCase>
         OwnEntry = ownEntry;
         Type = type;
         Id = id;
+        NameHash = nameHash;
     }
 
     /// <inheritdoc/>
-    public bool Equals(UnionRenderCase other) => other != null && Id == other.Id && Type == other.Type && OwnEntry == other.OwnEntry &&
+    public bool Equals(UnionRenderCase other) => other != null && Id == other.Id && NameHash == other.NameHash && Type == other.Type && OwnEntry == other.OwnEntry &&
         ReadGeneric == other.ReadGeneric && Sealed == other.Sealed && FixedCursor == other.FixedCursor && Namespace == other.Namespace &&
         Readable == other.Readable && Arguments == other.Arguments && Definition == other.Definition &&
         InterfaceContract == other.InterfaceContract && Same(Chain, other.Chain) &&

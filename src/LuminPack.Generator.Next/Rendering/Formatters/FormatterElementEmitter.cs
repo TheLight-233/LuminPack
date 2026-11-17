@@ -103,6 +103,6 @@ internal static class FormatterElementEmitter
     /// <summary>Returns a minimum standalone record width without assuming that generic unmanaged arguments use raw storage.</summary>
     /// <param name = "model">The normalized formatter or storage contract.</param>
     /// <returns>The generated source or selected source-ready name.</returns>
-    internal static string Minimum(FormatterModel model) => model.Raw ? "global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + model.Type + ">()" : model.Layout != null && (model.Definition is GenericIdentity.ValueTuple or FormatterDefinitions.PayloadReference ||
+    internal static string Minimum(FormatterModel model) => model.Payload is UnionModel || model.Definition == FormatterDefinitions.GenericUnion ? "4" : model.Raw ? "global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + model.Type + ">()" : model.Layout != null && (model.Definition is GenericIdentity.ValueTuple or FormatterDefinitions.PayloadReference ||
         GenericFormatterReuse.HasPackedMinimum(model)) ? model.Layout.WireSize.ToString(System.Globalization.CultureInfo.InvariantCulture) : "1";
 }

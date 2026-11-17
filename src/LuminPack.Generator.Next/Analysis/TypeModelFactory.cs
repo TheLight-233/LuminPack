@@ -385,18 +385,18 @@ internal static partial class TypeModelFactory
                     UnionCaseModel[] cases = UnionCases(symbol, declared, fixedCases, depth, issues, path, out bool readGeneric);
                     if (cases.Length == 0)
                         issues.Add("the Union root declares no cases");
-                    UnionDispatchTier tier = UnionTier(symbol, declared);
+                    UnionDispatchTier tier = UnionTier(symbol);
                     int encoding = (int)policy.Strings.Encoding, recording = (int)policy.Strings.Recording;
                     // An imported root writes through the virtual dispatch its own assembly generated, as the original referenced
                     // dispatch did; this assembly only reads, so the root must expose the compiled slots of both formats.
                     bool referenced = !SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, _compilation.Assembly);
                     string suffix = SlotSuffix(referenced && symbol.IsGenericType ? Identity(symbol.OriginalDefinition) : identity);
-                    if (referenced)
+                    if (referenced && tier == UnionDispatchTier.Virtual)
                         ReferencedDispatch(symbol, suffix, issues);
                     string? unionRejection = policy.Input == InputPolicy.Untrusted && policy.Limits.Explicit ? Rejection(symbol) : null;
                     return new UnionModel(identity, accessibility, policy, constraints, cases,
                         isInterface: symbol.TypeKind == TypeKind.Interface, wideTags: wide, unionSuffix: suffix,
-                        tier: tier, tierCases: TierCases(declared, tier), tierSealed: TierSealed(declared, tier),
+                        tier: tier,
                         cursor: fixedCases.Count != 0, readGeneric: readGeneric, chain: Chain(symbol), @namespace: identity.Namespace,
                         binarySlots: UnionSlots(json: false, encoding, recording), jsonSlots: UnionSlots(json: true, encoding, 0),
                         canonical: CanonicalUnionProfiles(),
@@ -1214,7 +1214,8 @@ internal static partial class TypeModelFactory
             readGeneric = false;
             var cases = new List<UnionCaseModel>(declared.Count);
             var symbols = declared.Select(item => item.Type).ToArray();
-            bool referenced = !IsLocal(root);
+            bool referenced = !SymbolEqualityComparer.Default.Equals(root.ContainingAssembly, _compilation.Assembly);
+            var names = UnionCaseDeclarations(root.OriginalDefinition).GroupBy(item => item.Tag).ToDictionary(group => group.Key, group => group.First().Type);
             foreach (var (tag, caseType) in declared)
             {
                 // A struct case implements an interface root; its slots are explicit interface implementations and its read
@@ -1249,7 +1250,7 @@ internal static partial class TypeModelFactory
                         : ReadableTypeName.Of(GeneratedNames.PayloadKey(definition));
                     try
                     {
-                        cases.Add(new UnionCaseModel(tag, Identity(caseType), UnionCaseRead.OwnEntry, ownEntry: true, readGeneric: true,
+                        cases.Add(new UnionCaseModel(tag, UnionNameHash(names[tag]), Identity(caseType), UnionCaseRead.OwnEntry, ownEntry: true, readGeneric: true,
                             sealedCase: root.TypeKind == TypeKind.Class && !HasDerivedCase(symbols, caseType.OriginalDefinition), fixedCursor: false,
                             definitionModel?.Model ?? closed?.Payload, caseReadable, Chain(caseType.OriginalDefinition),
                             NamespaceOf(caseType), closed != null ? string.Empty : genericArguments, definition, closed));
@@ -1301,7 +1302,7 @@ internal static partial class TypeModelFactory
                 try
                 {
                     string globalName = caseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    cases.Add(new UnionCaseModel(tag, Identity(caseType),
+                    cases.Add(new UnionCaseModel(tag, UnionNameHash(names[tag]), Identity(caseType),
                         ownEntry ? UnionCaseRead.OwnEntry : UnionCaseRead.ExpandedFixed, ownEntry, caseReadGeneric, sealedCase,
                         fixedCases.Contains(caseType), caseModel, ReadableTypeName.Of(GeneratedNames.PayloadKey(globalName)),
                         Chain(caseType), NamespaceOf(caseType), interfaceContract: interfaceContract));
@@ -1479,60 +1480,10 @@ internal static partial class TypeModelFactory
 
         /// <summary>Selects the compiled dispatch tier of a local class Union root.</summary>
         /// <param name="root">The Union root.</param>
-        /// <param name="declared">The declared cases.</param>
         /// <returns>The selected tier.</returns>
-        private UnionDispatchTier UnionTier(INamedTypeSymbol root, List<(int Tag, INamedTypeSymbol Type)> declared)
+        private UnionDispatchTier UnionTier(INamedTypeSymbol root)
         {
-            if (root is not { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } || !CanGeneratePartial(root))
-                return UnionDispatchTier.Virtual;
-            if (declared.Count == 0)
-                return UnionDispatchTier.Virtual;
-            var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-            foreach (var item in declared.OrderBy(member => member.Tag))
-            {
-                if (item.Type is not { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } ||
-                    !CanGeneratePartial(item.Type) || !seen.Add(item.Type.OriginalDefinition))
-                    return UnionDispatchTier.Virtual;
-            }
-            if (Options.Net8 && Options.RegisterMode == RegisterMode.Disabled && declared.Count == 1 &&
-                declared[0].Type.IsSealed && ClosedUnion(root))
-                return UnionDispatchTier.ExactType;
-            return Options.Net8 && declared.Count > 4 ? UnionDispatchTier.BinaryExactTypes : UnionDispatchTier.ExactPatterns;
-        }
-
-        /// <summary>Lists the exact tier cases in tag order, or nothing for the virtual tier.</summary>
-        /// <param name="declared">The declared cases.</param>
-        /// <param name="tier">The selected tier.</param>
-        /// <returns>The fully qualified exact case types.</returns>
-        private static string[] TierCases(List<(int Tag, INamedTypeSymbol Type)> declared, UnionDispatchTier tier)
-            => tier == UnionDispatchTier.Virtual
-                ? Array.Empty<string>()
-                : declared.OrderBy(item => item.Tag).Select(item => item.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).ToArray();
-
-        /// <summary>Lists whether each exact tier case is declared sealed, or nothing for the virtual tier.</summary>
-        /// <param name="declared">The declared cases.</param>
-        /// <param name="tier">The selected tier.</param>
-        /// <returns>The sealed flags in tag order.</returns>
-        private static bool[] TierSealed(List<(int Tag, INamedTypeSymbol Type)> declared, UnionDispatchTier tier)
-            => tier == UnionDispatchTier.Virtual
-                ? Array.Empty<bool>()
-                : declared.OrderBy(item => item.Tag).Select(item => item.Type.IsSealed).ToArray();
-
-        /// <summary>Checks that no other assembly can add a case to the root.</summary>
-        /// <param name="root">The Union root.</param>
-        /// <returns>Whether every implementation must be declared in this compilation.</returns>
-        private bool ClosedUnion(INamedTypeSymbol root)
-        {
-            if (OptionSwitch(root, "SingleImplementation") || HasAttribute(root, "LuminPack.Attribute.LuminPackSingleImplementationAttribute"))
-                return true;
-            if (_compilation.Assembly.GetAttributes().Any(attribute =>
-                    attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.InternalsVisibleToAttribute"))
-                return false;
-            for (var current = root; current != null; current = current.ContainingType)
-                if (current.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Protected or Accessibility.ProtectedOrInternal))
-                    return true;
-            return root.InstanceConstructors.All(constructor =>
-                constructor.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Protected or Accessibility.ProtectedOrInternal));
+            return UsesVirtualUnionDispatch(root) ? UnionDispatchTier.Virtual : UnionDispatchTier.Exact;
         }
 
         /// <summary>Lists the cases whose complete fixed payload uses the returning cursor kernel.</summary>
@@ -1544,12 +1495,11 @@ internal static partial class TypeModelFactory
         {
             var cases = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
             if (issues.Count != 0 || root is not { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } ||
-                !IsLocal(root) || GenerationMode(root) != "Object" || HasAttribute(root, WideTagAttribute) ||
-                OptionSwitch(root, "WideTag") || declared.Any(item => item.Tag >= 250))
+                !SymbolEqualityComparer.Default.Equals(root.ContainingAssembly, _compilation.Assembly) || GenerationMode(root) != "Object")
                 return cases;
             foreach (var item in declared.OrderBy(member => member.Tag))
                 if (item.Type is { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } &&
-                    CanGeneratePartial(item.Type) && CanUseCursorPayload(item.Type))
+                    CanUseCursorPayload(item.Type))
                     cases.Add(item.Type);
             return cases;
         }
@@ -1561,7 +1511,7 @@ internal static partial class TypeModelFactory
         /// independent payload; the checks mirror <see cref="FixedUnionCases"/> for that root.</remarks>
         private bool IsFixedUnionCase(INamedTypeSymbol type)
         {
-            if (type is not { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } || !IsLocal(type) ||
+            if (type is not { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } || !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly) ||
                 GenerationMode(type) != "Object")
                 return false;
             INamedTypeSymbol? root = FixedUnionRoot(type);
@@ -1570,8 +1520,7 @@ internal static partial class TypeModelFactory
             var issues = new List<string>();
             var declared = UnionMembers(root, issues, out _);
             if (issues.Count != 0 || root is not { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } ||
-                !IsLocal(root) || GenerationMode(root) != "Object" || HasAttribute(root, WideTagAttribute) ||
-                OptionSwitch(root, "WideTag") || declared.Any(item => item.Tag >= 250))
+                !SymbolEqualityComparer.Default.Equals(root.ContainingAssembly, _compilation.Assembly) || GenerationMode(root) != "Object")
                 return false;
             return declared.Any(item => SymbolEqualityComparer.Default.Equals(item.Type, type)) && CanUseCursorPayload(type);
         }
@@ -1598,14 +1547,14 @@ internal static partial class TypeModelFactory
         /// <returns>Whether the case can use the shared fixed write body.</returns>
         private bool CanUseCursorPayload(INamedTypeSymbol type)
         {
-            if (type is not { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } || !IsLocal(type))
+            if (type is not { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } || !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly))
                 return false;
             bool hasRoot = false;
             for (var parent = type.BaseType; parent != null && parent.SpecialType != SpecialType.System_Object; parent = parent.BaseType)
             {
                 if (parent.IsGenericType)
                     return false;
-                hasRoot |= parent.IsAbstract && IsLocal(parent) && IsPackable(parent);
+                hasRoot |= parent.IsAbstract && SymbolEqualityComparer.Default.Equals(parent.ContainingAssembly, _compilation.Assembly) && IsPackable(parent);
             }
             if (!hasRoot)
                 return false;

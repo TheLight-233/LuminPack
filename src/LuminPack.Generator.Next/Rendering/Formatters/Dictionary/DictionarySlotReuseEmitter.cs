@@ -174,16 +174,16 @@ internal static class DictionarySlotReuseEmitter
 
         void UnionCases()
         {
-            w.Line("reader.EnsureReadable(1);");
+            w.Line("reader.EnsureReadable(4);");
             w.Line("var item = slot;");
-            w.Line("switch (reader.Cursor)");
+            w.Line("switch (global::LuminPack.Core.LuminPackReader.Read<uint>(ref reader.Cursor))");
             w.Open();
             foreach (UnionCaseModel item in cases)
             {
-                w.Line("case " + item.Tag + ":");
+                w.Line("case " + item.NameHash.ToString(System.Globalization.CultureInfo.InvariantCulture) + "u:");
                 w.Open();
                 w.Line("if (item.GetType() != typeof(" + item.Type.GlobalName + ")) goto remaining;");
-                w.Line("reader.Advance(1);");
+                w.Line("reader.Advance(4);");
                 w.Line("var member = global::System.Runtime.CompilerServices.Unsafe.As<" + item.Type.GlobalName + ">(item);");
                 w.Line("global::LuminPack.LuminPackSerializer.DeserializeUnion" + (set.Options.Interceptors ? "_" + item.Readable : "") + "<TLuminProfile>(ref reader, ref member);");
                 w.Line("continue;");

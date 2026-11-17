@@ -32,11 +32,11 @@ internal static partial class TypeModelFactory
                         attribute.ConstructorArguments[0].Value != null && attribute.ConstructorArguments[1].Value is INamedTypeSymbol member)
                     {
                         int tag = Convert.ToInt32(attribute.ConstructorArguments[0].Value, CultureInfo.InvariantCulture);
-                        cases.Add(new UnionCaseDeclaration(tag, member, false));
+                        cases.Add(new UnionCaseDeclaration(tag, member.IsUnboundGenericType ? member.OriginalDefinition : member, false));
                         tags.Add(tag);
                     }
                 // A consumer cannot repeat source discovery in the declaring assembly. Its dispatch tags come from metadata.
-                if (!IsLocal(root))
+                if (!SymbolEqualityComparer.Default.Equals(root.ContainingAssembly, _compilation.Assembly))
                 {
                     UnionCaseDeclaration[] referenced = cases.ToArray();
                     _unionDeclarations[root] = referenced;
@@ -195,7 +195,8 @@ internal static partial class TypeModelFactory
         /// <param name="diagnostics">Receives Union diagnostics and discovery information.</param>
         private void ValidateUnion(INamedTypeSymbol type, ref DeclarationDiagnosticBag diagnostics)
         {
-            if (!CanGeneratePartial(type))
+            bool virtualDispatch = UsesVirtualUnionDispatch(type);
+            if (virtualDispatch && !CanGeneratePartial(type))
                 diagnostics.Add(DiagnosticDescriptors.UnionParticipantMustBePartial, type, type.Name, type.Name);
             if (type.IsSealed)
                 diagnostics.Add(DiagnosticDescriptors.SealedTypeCantBeUnion, type, type.Name);
@@ -207,6 +208,7 @@ internal static partial class TypeModelFactory
             if (cases.Length > 256)
                 diagnostics.Add(DiagnosticDescriptors.TooManyUnionMembers, type, type.Name, cases.Length.ToString(CultureInfo.InvariantCulture));
             var tags = new HashSet<int>();
+            var hashes = new HashSet<uint>();
             foreach (UnionCaseDeclaration item in cases)
             {
                 INamedTypeSymbol member = item.Type;
@@ -228,9 +230,52 @@ internal static partial class TypeModelFactory
                         diagnostics.Add(type.TypeKind == TypeKind.Interface ? DiagnosticDescriptors.UnionMemberTypeNotImplementBaseType :
                             DiagnosticDescriptors.UnionMemberTypeNotDerivedBaseType, member, member.Name, type.Name);
                 }
-                if (SymbolEqualityComparer.Default.Equals(member.ContainingAssembly, _compilation.Assembly) && !CanGeneratePartial(member))
+                uint hash = UnionNameHash(member);
+                if (hash is 0 or uint.MaxValue || !hashes.Add(hash))
+                    diagnostics.Add(DiagnosticDescriptors.UnionCaseHashConflict, member, member.ToDisplayString(),
+                        hash.ToString("X8", CultureInfo.InvariantCulture), type.ToDisplayString());
+                if (virtualDispatch && SymbolEqualityComparer.Default.Equals(member.ContainingAssembly, _compilation.Assembly) && !CanGeneratePartial(member))
                     diagnostics.Add(DiagnosticDescriptors.UnionParticipantMustBePartial, member, member.Name, type.Name);
             }
+        }
+
+        /// <summary>Chooses virtual dispatch for a Union with more than 32 case declarations.</summary>
+        /// <param name="root">The Union declaration or a closed construction of it.</param>
+        /// <returns>Whether code must be injected into the root and its cases.</returns>
+        private bool UsesVirtualUnionDispatch(INamedTypeSymbol root) => UnionCaseDeclarations(root.OriginalDefinition).Length > 32;
+
+        /// <summary>Hashes the canonical case name as UTF-8 with FNV-1a.</summary>
+        /// <param name="type">The declared case, before binding the root's type parameters.</param>
+        /// <returns>The persisted 32-bit case discriminator.</returns>
+        private static uint UnionNameHash(INamedTypeSymbol type)
+        {
+            uint hash = 2166136261u;
+            foreach (byte value in System.Text.Encoding.UTF8.GetBytes(CanonicalUnionName(type)))
+                hash = unchecked((hash ^ value) * 16777619u);
+            return hash;
+        }
+
+        /// <summary>Spells namespaces, nesting, concrete arguments, arrays and positional type parameters.</summary>
+        /// <param name="type">The type whose schema name is needed.</param>
+        /// <returns>A spelling independent of C# aliases and type-parameter names.</returns>
+        private static string CanonicalUnionName(ITypeSymbol type)
+        {
+            if (type is ITypeParameterSymbol parameter)
+                return "!" + parameter.Ordinal.ToString(CultureInfo.InvariantCulture);
+            if (type is IArrayTypeSymbol array)
+                return CanonicalUnionName(array.ElementType) + "[" + new string(',', array.Rank - 1) + "]";
+            if (type is IDynamicTypeSymbol)
+                return "System.Object";
+            if (type is not INamedTypeSymbol named)
+                return type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            if (named.IsUnboundGenericType)
+                named = named.OriginalDefinition;
+            if (named.IsTupleType && named.TupleUnderlyingType is { } underlying)
+                named = underlying;
+            string prefix = named.ContainingType is { } parent ? CanonicalUnionName(parent) + "+" :
+                named.ContainingNamespace.IsGlobalNamespace ? "" : named.ContainingNamespace.ToDisplayString() + ".";
+            return prefix + named.Name + (named.Arity == 0 ? "" :
+                "<" + string.Join(",", named.TypeArguments.Select(CanonicalUnionName)) + ">");
         }
 
         /// <summary>Checks the legacy declared-member order requirements for circle-reference records.</summary>

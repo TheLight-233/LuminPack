@@ -748,14 +748,8 @@ internal enum UnionDispatchTier
     /// <summary>Every case overrides the virtual slot.</summary>
     Virtual,
 
-    /// <summary>Sealed exact cases are matched by runtime type before the virtual slot.</summary>
-    ExactPatterns,
-
-    /// <summary>The root dispatches on the exact case type.</summary>
-    ExactType,
-
-    /// <summary>Known cases selected by exact type in binary writes.</summary>
-    BinaryExactTypes,
+    /// <summary>Generated cases use exact runtime type comparisons.</summary>
+    Exact,
 }
 
 /// <summary>The read strategy of one Union case.</summary>
@@ -773,6 +767,9 @@ internal sealed class UnionCaseModel : IEquatable<UnionCaseModel>
 {
     /// <summary>The narrow or wide tag.</summary>
     internal readonly int Tag;
+
+    /// <summary>The binary hash of the canonical case name.</summary>
+    internal readonly uint NameHash;
 
     /// <summary>The case type.</summary>
     internal readonly TypeIdentity Type;
@@ -818,6 +815,7 @@ internal sealed class UnionCaseModel : IEquatable<UnionCaseModel>
 
     /// <summary>Captures a Union case.</summary>
     /// <param name="tag">The numeric Union case tag.</param>
+    /// <param name="nameHash">The binary case-name hash.</param>
     /// <param name="type">The type being analyzed or emitted.</param>
     /// <param name="read">Whether to emit the read operation.</param>
     /// <param name="ownEntry">Whether to enable own entry for this operation.</param>
@@ -832,7 +830,7 @@ internal sealed class UnionCaseModel : IEquatable<UnionCaseModel>
     /// <param name="definition">The definition supplied to <c>UnionCaseModel</c>.</param>
     /// <param name="closed">The closed supplied to <c>UnionCaseModel</c>.</param>
     /// <param name="interfaceContract">The interface contract supplied to <c>UnionCaseModel</c>.</param>
-    internal UnionCaseModel(int tag, TypeIdentity type, UnionCaseRead read, bool ownEntry, bool readGeneric, bool sealedCase, bool fixedCursor,
+    internal UnionCaseModel(int tag, uint nameHash, TypeIdentity type, UnionCaseRead read, bool ownEntry, bool readGeneric, bool sealedCase, bool fixedCursor,
         TypeModel? model, string readable, string[] chain, string? @namespace, string arguments = "", string? definition = null,
         FormatterModel? closed = null, string? interfaceContract = null)
     {
@@ -851,10 +849,11 @@ internal sealed class UnionCaseModel : IEquatable<UnionCaseModel>
         Read = read;
         Type = type;
         Tag = tag;
+        NameHash = nameHash;
     }
 
     /// <inheritdoc/>
-    public bool Equals(UnionCaseModel? other) => ReferenceEquals(this, other) || other != null && Tag == other.Tag && Type.Equals(other.Type) &&
+    public bool Equals(UnionCaseModel? other) => ReferenceEquals(this, other) || other != null && Tag == other.Tag && NameHash == other.NameHash && Type.Equals(other.Type) &&
         Read == other.Read && OwnEntry == other.OwnEntry && ReadGeneric == other.ReadGeneric && Sealed == other.Sealed &&
         FixedCursor == other.FixedCursor && Readable == other.Readable && Namespace == other.Namespace && Arguments == other.Arguments &&
         Definition == other.Definition && InterfaceContract == other.InterfaceContract && Equals(Closed, other.Closed) &&
@@ -932,12 +931,6 @@ internal sealed class UnionModel : TypeModel
     /// <summary>The compiled dispatch tier.</summary>
     internal readonly UnionDispatchTier Tier;
 
-    /// <summary>The exact case types of a pattern or direct tier, in tag order.</summary>
-    internal readonly string[] TierCases;
-
-    /// <summary>Whether each exact tier case is declared sealed.</summary>
-    internal readonly bool[] TierSealed;
-
     /// <summary>Whether a fixed case gives the root the returning cursor protocol.</summary>
     internal readonly bool Cursor;
 
@@ -975,8 +968,6 @@ internal sealed class UnionModel : TypeModel
     /// <param name="wideTags">Whether to enable wide tags for this operation.</param>
     /// <param name="unionSuffix">The union suffix supplied to <c>UnionModel</c>.</param>
     /// <param name="tier">The tier supplied to <c>UnionModel</c>.</param>
-    /// <param name="tierCases">The tier cases supplied to <c>UnionModel</c>.</param>
-    /// <param name="tierSealed">The tier sealed supplied to <c>UnionModel</c>.</param>
     /// <param name="cursor">Whether to enable cursor for this operation.</param>
     /// <param name="readGeneric">Whether to enable read generic for this operation.</param>
     /// <param name="chain">The chain supplied to <c>UnionModel</c>.</param>
@@ -989,7 +980,7 @@ internal sealed class UnionModel : TypeModel
     /// <param name="referenced">Whether to enable referenced for this operation.</param>
     /// <param name="rejection">The rejection supplied to <c>UnionModel</c>.</param>
     internal UnionModel(TypeIdentity identity, TypeAccessibility accessibility, WirePolicy policy, string[] constraints, UnionCaseModel[] cases,
-        bool isInterface, bool wideTags, string unionSuffix, UnionDispatchTier tier, string[] tierCases, bool[] tierSealed, bool cursor,
+        bool isInterface, bool wideTags, string unionSuffix, UnionDispatchTier tier, bool cursor,
         bool readGeneric, string[] chain, string? @namespace, UnionSlotModel[] binarySlots, UnionSlotModel[] jsonSlots, bool canonical,
         string standardBinary, string standardJson, bool referenced = false, string? rejection = null)
         : base(identity, accessibility, PayloadKind.Union, System.Array.Empty<MemberModel>(), policy, constraints)
@@ -1005,8 +996,6 @@ internal sealed class UnionModel : TypeModel
         Chain = chain;
         ReadGeneric = readGeneric;
         Cursor = cursor;
-        TierSealed = tierSealed;
-        TierCases = tierCases;
         Tier = tier;
         UnionSuffix = unionSuffix;
         WideTags = wideTags;
@@ -1019,8 +1008,8 @@ internal sealed class UnionModel : TypeModel
         other is UnionModel union && base.Equals(other) && IsInterface == union.IsInterface && WideTags == union.WideTags &&
         UnionSuffix == union.UnionSuffix && Tier == union.Tier && Cursor == union.Cursor && ReadGeneric == union.ReadGeneric &&
         Canonical == union.Canonical && StandardBinary == union.StandardBinary && StandardJson == union.StandardJson &&
-        Namespace == union.Namespace && Same(Cases, union.Cases) && Same(TierCases, union.TierCases) &&
-        Same(TierSealed, union.TierSealed) && Same(Chain, union.Chain) && Same(BinarySlots, union.BinarySlots) &&
+        Namespace == union.Namespace && Same(Cases, union.Cases) &&
+        Same(Chain, union.Chain) && Same(BinarySlots, union.BinarySlots) &&
         Same(JsonSlots, union.JsonSlots) && Referenced == union.Referenced && Rejection == union.Rejection;
 
     /// <summary>Whether the root is declared by a referenced assembly whose generated virtual dispatch the writes call; the

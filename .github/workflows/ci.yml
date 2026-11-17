@@ -252,7 +252,7 @@ jobs:
             case "$operation" in
               lumin-write)
                 export DOTNET_JitDisasm='*LuminPackSerialize* *RootWrite* *LuminPackUnionSerialize* *Write*'
-                required='LuminPackBenchmark[.]FooA:(LuminPackUnionSerialize|Write_).*\(Tier1'
+                required='LuminPackSerializer[+](IFooFormatter:Write(Case[0-9]*)?|ListOfIFooFormatter:(RootWrite|Write)).*\(Tier1'
                 ;;
               lumin-read)
                 export DOTNET_JitDisasm='*LuminPackDeserialize* *RootRead* *Read* *TryPeekUnionHeader*'

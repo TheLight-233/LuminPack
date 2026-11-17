@@ -24,7 +24,7 @@
 
 普通对象与其 Union 载荷通过无状态 framing 类型参数共享算法。`LuminPackObjectFraming` 与 `LuminPackPayloadFraming` 位于 Core。不同封闭实例保留各自的 null／对象头处理、容量预留、读取检查和发布边界。异常时必须保留调用方游标的路径仍使用独立的 Reader／Writer 状态复制包装。
 
-Union 写入为每种格式保留一个泛型虚方法，向下传递编译期选项。二进制额外保留一个非泛型默认配置虚槽。对于符合条件的本地非泛型抽象类根，二进制写入精确比较运行时类型，再调用对应的生成槽位。未识别的运行时类型直接查找注册的写入方法或报未知 case 错误。封闭泛型子类型使用缓存的分派槽。Union 读取使用一套 case 分支处理新建和复用目标，每个分支判断现有实例是否正好匹配所需类型。
+Next 对不超过 32 个 case 的 Union 使用精确类型比较链，直接调用具体负载 writer，涵盖泛型 case。更大的 Union 使用虚槽传递编译期配置，并保留泛型 case 缓存。二进制读取对四字节类型名哈希进行边界检查后再通过 switch 分派。
 
 ## Owner 结构体与共享泛型 Formatter
 
@@ -56,7 +56,7 @@ Union、接口、`object`、布尔与可空元素保留各自的专用封闭 own
 
 在消费程序集声明 `[assembly: LuminPackable(typeof(Box<>))]`，可为序列化调用或成员用到的闭合 `Box<T>` 生成 owner。使用 `typeof(Box<int>)` 选择单个构造。标记的记录继承消费程序集选项，并应用类型和成员自身的选项。引用程序集元数据缺少所需的自动属性存储时，生成器报告 `LuminPack112`。此时请引用实现程序集。
 
-对于由 Next 生成且显式声明闭合 case 的库中泛型 Union，消费程序集按声明的标签读取，定义程序集的编译期 Union 槽负责写入。这类 Union 支持开放和精确根标记。
+对于由 Next 生成且显式声明闭合 case 的库中泛型 Union，消费程序集使用与定义程序集相同的规范哈希和分发档位。这类 Union 支持开放和精确根标记。
 
 引用成员标记 `[LuminPackableObject]` 后使用完整的生成或注册 Formatter。接口即使没有声明 `[LuminPackable]`，其成员也可使用手动注册的 Formatter。
 

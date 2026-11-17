@@ -17,6 +17,8 @@ namespace LuminPack
 {
     public static partial class LuminPackSerializer
     {
+        static partial void ReserveOpenUnionTags<TUnion>();
+
         /// <summary>Registers an additional binary and JSON Union case.</summary>
         /// <typeparam name=""TUnion"">The Union root.</typeparam>
         /// <typeparam name=""TMember"">The concrete case.</typeparam>
@@ -30,7 +32,10 @@ namespace LuminPack
             global::LuminPack.Code.LuminPackReadDelegate<TUnion> readValue,
             global::LuminPack.Code.LuminPackUnionJsonWriteDelegate<TUnion> writeValueJson,
             global::LuminPack.Code.LuminPackJsonReadDelegate<TUnion> readValueJson)
-            => global::LuminPack.Code.LuminPackUnionFormatter<TUnion>.Register<TMember>(tag, writeValue, readValue, writeValueJson, readValueJson);
+        {
+            ReserveOpenUnionTags<TUnion>();
+            global::LuminPack.Code.LuminPackUnionFormatter<TUnion>.Register<TMember>(tag, writeValue, readValue, writeValueJson, readValueJson);
+        }
 
         /// <summary>Registers binary delegates for generic payload entry points.</summary>
         /// <typeparam name=""T"">The runtime type to register.</typeparam>

@@ -9,7 +9,7 @@ All attributes are in `LuminPack.Attribute`; option enums are in `LuminPack.Opti
 | `[LuminPackable]` | class, struct, record, interface | Generate a formatter. `GeneratorType`: `Object` (default, positional), `VersionTolerant` (by name), `CircleReference` (reference tracking), `Custom` (your static methods), `NonGenerator`. |
 | `[assembly: LuminPackable(typeof(T))]` | assembly | Generate a type from a referenced assembly; repeatable; open generics (`typeof(G<>)`) cover the closed types used; works for Union roots. |
 | `[LuminPackUnion(tag, typeof(Case))]` | interface, abstract class | Declare a Union case explicitly (tags 0..65535; below 250 is one byte). Cases marked `[LuminPackable]` are also collected automatically. |
-| `[LuminPackOption(WideTag = true)]` | class/interface Union root | Accept wide tags; small tags retain their one-byte encoding. Declaration only. `[LuminPackWideTag]` remains compatible. |
+| `[LuminPackOption(WideTag = true)]` | class/interface Union root | Accept wide tags for registered cases in Next. Generated cases use type-name hashes. Declaration only. `[LuminPackWideTag]` remains compatible. |
 | `[LuminPackOption(SingleImplementation = true)]` | class/interface Union root | Promise one implementation everywhere; retains Union framing and, without generated `Register` APIs, lets the single sealed case be called directly. `[LuminPackSingleImplementation]` remains compatible. |
 | `[LuminPackBounded(maxBytes)]` | class, struct | Promise a maximum complete binary size; removes inner capacity checks. A wrong bound can overrun the buffer. |
 | `[LuminPackOption(...)]` | assembly, type, field, property | Compile-time options; see below. |
@@ -49,7 +49,7 @@ Delegate targets use the formatter signature of the member type, for example `st
 | `MaxJsonDepth` | 1024 | Whole JSON document. |
 | `ValidateJsonSyntax` | false | Whole JSON document. |
 | `StandardFormat` | `"G"` | Constant for Custom/formatted kernels. |
-| `WideTag` | false | Class/interface declaration only; accepts wide Union tags. Small tags still occupy one byte. |
+| `WideTag` | false | Class or interface declaration only; accepts wide numeric tags for registered cases in Next. |
 | `SingleImplementation` | false | Class/interface declaration only; caller guarantees one implementation everywhere. Retains Union framing; without registration the single sealed case is called directly. |
 | `StructLayout` | `LuminPackStructLayout.Tagged` | Assembly or struct. `Packed`: no padding, same bytes on 32/64-bit. `Native`: full native storage, identical layouts required. |
 | `UntrustedData` + `Max*` limits | on, limits unbounded | Root type or assembly; checked reads on the ordinary wire format. `false` restores trusted reads; declare limits for hostile input. |

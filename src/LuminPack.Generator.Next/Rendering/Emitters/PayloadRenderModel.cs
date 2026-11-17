@@ -516,12 +516,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal readonly string UnionStandardBinary;
     /// <summary>The imported string options type of the declared JSON profile.</summary>
     internal readonly string UnionStandardJson;
-    /// <summary>The selected compiled-slot dispatch tier: zero virtual, one exact patterns, two direct.</summary>
+    /// <summary>The selected Union write tier: virtual slots or exact comparisons.</summary>
     internal readonly int UnionTier;
-    /// <summary>The exact case types of a pattern or direct tier, in tag order.</summary>
-    internal readonly string[] UnionTierCases;
-    /// <summary>Whether each exact tier case is sealed, which needs no exact runtime type test.</summary>
-    internal readonly bool[] UnionTierSealed;
     /// <summary>Whether the root writes and reads three-byte Union headers, because a declared case tag exceeds the narrow
     /// byte protocol or the root declares <c>[LuminPackWideTag]</c>.</summary>
     internal readonly bool UnionWide;
@@ -653,8 +649,6 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <param name="unionStandardBinary">The union standard binary supplied to <c>PayloadRenderModel</c>.</param>
     /// <param name="unionStandardJson">The union standard JSON supplied to <c>PayloadRenderModel</c>.</param>
     /// <param name="unionTier">The union tier supplied to <c>PayloadRenderModel</c>.</param>
-    /// <param name="unionTierCases">The union tier cases supplied to <c>PayloadRenderModel</c>.</param>
-    /// <param name="unionTierSealed">The union tier sealed supplied to <c>PayloadRenderModel</c>.</param>
     /// <param name="circle">Whether to enable circle for this operation.</param>
     /// <param name="circleGuarded">Whether to enable circle guarded for this operation.</param>
     /// <param name="managedStruct">Whether to enable managed struct for this operation.</param>
@@ -686,8 +680,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         bool unionRoot = false, bool unionInterface = false, string unionSuffix = null, UnionRenderCase[] unionCases = null,
         bool unionCursor = false, bool unionReadGeneric = false, string[] unionChain = null, string unionNamespace = null, bool unionReferenced = false,
         UnionRenderSlot[] unionBinarySlots = null, UnionRenderSlot[] unionJsonSlots = null, bool unionCanonical = false,
-        string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, string[] unionTierCases = null,
-        bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false, bool managedStruct = false,
+        string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0,
+        bool circle = false, bool circleGuarded = false, bool managedStruct = false,
         PortableView portableView = null, bool unionWide = false, int[] mirrorOffsets = null, string[] typeParameters = null,
         string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, int[] circleSlots = null, int[] circleWidths = null, StorageMirrorModel[] mirrors = null,
         string rejection = null, InputLimits limits = null, bool recursive = false, bool registration = true,
@@ -717,8 +711,6 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         ManagedStruct = managedStruct;
         CircleGuarded = circleGuarded;
         Circle = circle;
-        UnionTierSealed = unionTierSealed;
-        UnionTierCases = unionTierCases;
         UnionTier = unionTier;
         UnionStandardJson = unionStandardJson;
         UnionStandardBinary = unionStandardBinary;
@@ -793,8 +785,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         UnionRoot == other.UnionRoot && UnionInterface == other.UnionInterface && UnionSuffix == other.UnionSuffix &&
         UnionCursor == other.UnionCursor && UnionReadGeneric == other.UnionReadGeneric && UnionNamespace == other.UnionNamespace &&
         UnionCanonical == other.UnionCanonical && UnionStandardBinary == other.UnionStandardBinary && UnionStandardJson == other.UnionStandardJson &&
-        UnionTier == other.UnionTier && UnionWide == other.UnionWide && Same(UnionChain, other.UnionChain) && UnionReferenced == other.UnionReferenced && Same(UnionTierCases, other.UnionTierCases) &&
-        Same(UnionTierSealed, other.UnionTierSealed) && Same(UnionBinarySlots, other.UnionBinarySlots) && Same(UnionJsonSlots, other.UnionJsonSlots) &&
+        UnionTier == other.UnionTier && UnionWide == other.UnionWide && Same(UnionChain, other.UnionChain) && UnionReferenced == other.UnionReferenced &&
+         Same(UnionBinarySlots, other.UnionBinarySlots) && Same(UnionJsonSlots, other.UnionJsonSlots) &&
         Same(Mirrors, other.Mirrors) && Circle == other.Circle && CircleGuarded == other.CircleGuarded && Same(CircleSlots, other.CircleSlots) &&
         Same(CircleWidths, other.CircleWidths) &&
         Same(UnionCases, other.UnionCases) && Same(TypeParameters, other.TypeParameters) && Same(TypeConstraints, other.TypeConstraints) &&

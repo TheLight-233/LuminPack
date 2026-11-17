@@ -32,8 +32,8 @@ public partial class Message
 | `MaxJsonDepth` | `1024` | JSON 嵌套深度上限；小于等于 0 表示不限制。 |
 | `ValidateJsonSyntax` | `false` | 严格 JSON 语法校验。处理外部来源的 JSON 时请开启。 |
 | `StandardFormat` | `"G"` | 传给显式格式化与 `Custom` 核心方法的常量，不会改变内置数值、日期格式。 |
-| `WideTag` | `false` | 当前类或接口接受宽 Union 标签；不继承外层选项。 |
-| `SingleImplementation` | `false` | 当前类或接口保证所有程序集中只有一个实现；保留既有 Union 帧和虚方法派发。 |
+| `WideTag` | `false` | 在 Next 中，为注册 Union 路径启用宽数字标签；不继承外层选项。 |
+| `SingleImplementation` | `false` | 当前类或接口保证所有程序集中只有一个实现。Next 按生成 case 数选择写入档位。 |
 | `ReuseRectangularArraySlots` | `true` | 在 .NET 8 及更高版本上，Next 复用二进制二维数组中已有的对象。在普通对象的元素类上设为 `false` 可改为替换数组。参见[对象矩阵复用](reuse.cn.md#二进制对象矩阵复用)。 |
 | `StructLayout` | `Tagged` | 非托管结构体的存储方式，见下文。只能用于程序集和结构体。 |
 | `UntrustedData` 及各项限额 | 开启，限额不设上限 | 面向不可信输入的带检查读取；面对恶意输入时请声明限额，见[安全](security.cn.md)。 |
@@ -54,9 +54,9 @@ public abstract partial class MessageBase { }
 public sealed partial class MessageBody : MessageBase { public int Id; }
 ```
 
-这两个开关只作用于被标注的类或接口。不能用于程序集、结构体、字段或属性，不从包含类型或基类型继承，也不能通过 `ILuminPackOptions` 选择。只声明这些开关不会固定字符串选项，显式操作配置仍正常传递。标签达到 250 时仍会自动使用宽标签帧。
+这两个开关只作用于被标注的类或接口。不能用于程序集、结构体、字段或属性，不从包含类型或基类型继承，也不能通过 `ILuminPackOptions` 选择。只声明这些开关不会固定字符串选项，显式操作配置仍正常传递。声明标签达到 250 时，显式注册的 case 自动使用宽数字标签帧。
 
-`[LuminPackWideTag]` 和 `[LuminPackSingleImplementation]` 保留兼容，推荐集中使用 Option。旧标记存在时，即使对应 Option 显式为 false，也仍然启用旧标记。`SingleImplementation` 是调用者保证，不是移除 Union 帧或虚方法派发的指令；只有确定其他程序集不会增加实现时才能使用。当前生成器保留这些机制。
+`[LuminPackWideTag]` 和 `[LuminPackSingleImplementation]` 保留兼容，推荐集中使用 Option。旧标记存在时，即使对应 Option 显式为 false，也仍然启用旧标记。`SingleImplementation` 是调用者保证，不是移除 Union 帧或虚方法派发的指令；只有确定其他程序集不会增加实现时才能使用。在 Next 中，生成 case 使用哈希帧，写入档位由 case 数决定。
 
 ## 显式配置
 

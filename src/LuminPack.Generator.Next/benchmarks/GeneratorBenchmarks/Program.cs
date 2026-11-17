@@ -27,6 +27,9 @@ internal static partial class Program
     /// <returns>Zero when every requested benchmark ran.</returns>
     private static int Main(string[] args)
     {
+        bool verifyUnionHashes = args.Contains("--verify-union-hashes", StringComparer.Ordinal);
+        if (verifyUnionHashes)
+            args = args.Where(argument => argument != "--verify-union-hashes").ToArray();
         if (!TryParse(args, out Options options, out string? error))
         {
             Console.Error.WriteLine(error);
@@ -41,6 +44,8 @@ internal static partial class Program
         IReadOnlyList<CorpusFile> corpus = options.Corpus == null ? SyntheticCorpus(options.Types) : ReadCorpus(options.Corpus);
         CSharpParseOptions parse = CreateParseOptions();
         var references = LoadReferences(coreDll, options.References);
+        if (verifyUnionHashes)
+            return VerifyUnionHashes(references, parse, coreDll);
         if (options.VerifyDocumentation)
             return VerifyDocumentation(references, parse);
         if (options.VerifyAssemblyOptions)
