@@ -58,13 +58,31 @@ public static partial class LuminPackMarshal
         }
     }
 
-    /// <summary>Extracts ordered values in groups of eight or four 12-byte entries and writes the scalar tail.</summary>
+    /// <summary>Extracts ordered values in groups of sixteen, eight or four 12-byte entries and writes the scalar tail.</summary>
     /// <param name="destination">The first byte in the reserved payload.</param>
     /// <param name="source">The first entry in the validated dense range.</param>
     /// <param name="count">The number of values to transfer.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void WriteDenseHashSetInt32(scoped ref byte destination, scoped ref byte source, int count)
     {
+        if (Avx512F.IsSupported)
+        {
+            // The first two blocks contain five values each, and the third block contains the remaining six.
+            var firstTen = Vector512.Create(2U, 5U, 8U, 11U, 14U, 17U, 20U, 23U, 26U, 29U, 0U, 0U, 0U, 0U, 0U, 0U);
+            var all = Vector512.Create(0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U, 9U, 16U, 19U, 22U, 25U, 28U, 31U);
+            while (count >= 16)
+            {
+                ref uint lanes = ref Unsafe.As<byte, uint>(ref source);
+                var low = Vector512.LoadUnsafe(ref lanes);
+                var middle = Vector512.LoadUnsafe(ref lanes, 16);
+                var high = Vector512.LoadUnsafe(ref lanes, 32);
+                var prefix = Avx512F.PermuteVar16x32x2(low, firstTen, middle);
+                Avx512F.PermuteVar16x32x2(prefix, all, high).StoreUnsafe(ref Unsafe.As<byte, uint>(ref destination));
+                source = ref Unsafe.Add(ref source, 192);
+                destination = ref Unsafe.Add(ref destination, 16 * sizeof(uint));
+                count -= 16;
+            }
+        }
         if (Avx2.IsSupported)
         {
             while (count >= 8)

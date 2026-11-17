@@ -305,6 +305,10 @@ internal static class FormatterCapabilities
             compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenSet`1") is { } frozenSet &&
             frozenSet.Construct(named.TypeArguments[0]).AllInterfaces.Any(candidate => SymbolEqualityComparer.Default.Equals(candidate, named)))
             result.Add("FrozenSetInterfaceTraversal");
+        if (definition is "System.Collections.Generic.HashSet" or "System.Collections.Generic.ISet" or "System.Collections.Generic.IReadOnlySet" &&
+            modern && !unity && named.TypeArguments[0].SpecialType == SpecialType.System_String &&
+            FormatterConcurrentTraits.HasStringSetWriter(compilation))
+            result.Add("StringSetWriter");
         if ((definition is "System.Collections.Concurrent.ConcurrentQueue" or "System.Collections.Concurrent.ConcurrentStack" or "System.Collections.Concurrent.ConcurrentBag"
             or "System.Collections.Immutable.ImmutableArray" or "System.Collections.Immutable.ImmutableList" or "System.Collections.Immutable.ImmutableQueue"
             or "System.Collections.Immutable.ImmutableStack" or "System.Collections.Immutable.ImmutableHashSet" or "System.Collections.Immutable.ImmutableSortedSet" ||

@@ -225,6 +225,34 @@ public sealed class RawScalarSpanSafetyTest
         public readonly int CompareTo(RawPairKey other) => Major == other.Major ? Minor.CompareTo(other.Minor) : Major.CompareTo(other.Major);
     }
 
+    /// <summary>Checks dense and sparse string set writes through the concrete and interface owners.</summary>
+    [Fact]
+    public void DenseStringSetsPreserveTheirReferenceOrder()
+    {
+        var set = Enumerable.Range(0, 101).Select(i => i % 4 == 0 ? "\u6F22\u5B57" + i : "Latin" + i).ToHashSet();
+        set.Add(null!);
+        set.Add(string.Empty);
+        Check(set);
+        set.Remove(set.First());
+        Check(set);
+
+        static void Check(HashSet<string> values)
+        {
+            var expected = new byte[8192];
+            Span<byte> output = expected;
+            var writer = new LuminPackWriter(ref output);
+            writer.WriteCollectionHeader(values.Count);
+            foreach (var value in values)
+                writer.Write<LuminPackDefaultOptions>(value);
+            byte[] bytes = output.Slice(0, writer.Position).ToArray();
+            ISet<string> set = values;
+            IReadOnlySet<string> readOnly = values;
+            Assert.Equal(bytes, LuminPackSerializer.Serialize(values));
+            Assert.Equal(bytes, LuminPackSerializer.Serialize(set));
+            Assert.Equal(bytes, LuminPackSerializer.Serialize(readOnly));
+        }
+    }
+
     /// <summary>Compares generated frozen writers and unaligned reservations with explicit key/value wire order.</summary>
     [Fact]
     public void FrozenRawPairsKeepOrderAcrossVectorTails()

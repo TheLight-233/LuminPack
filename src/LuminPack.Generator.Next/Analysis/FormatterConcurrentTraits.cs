@@ -153,6 +153,27 @@ internal static class FormatterConcurrentTraits
             (!checksCapacity || method.Parameters[2] is { RefKind: RefKind.None, Type.SpecialType: SpecialType.System_Boolean }));
     }
 
+    /// <summary>Checks the optional writer for an exact framework set of strings.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <returns>Whether the profile-aware writer has the expected public shape.</returns>
+    internal static bool HasStringSetWriter(Compilation compilation)
+    {
+        var marshal = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackMarshal");
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        var set = compilation.GetTypeByMetadataName("System.Collections.Generic.HashSet`1");
+        if (marshal is not { IsStatic: true, DeclaredAccessibility: Accessibility.Public } || writer is null || options is null || set is null)
+            return false;
+        var strings = set.Construct(compilation.GetSpecialType(SpecialType.System_String));
+        return marshal.GetMembers("TryWriteStringSet").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+            method.TypeParameters[0].HasValueTypeConstraint && method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+            SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options) &&
+            method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 2 &&
+            method.Parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, writer) &&
+            method.Parameters[1].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, strings));
+    }
+
     /// <summary>Checks a non-generic binary writer operation against its expected signature.</summary>
     /// <param name="owner">The binary writer type.</param>
     /// <param name="name">The operation name.</param>

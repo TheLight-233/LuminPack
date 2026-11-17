@@ -92,6 +92,14 @@ internal static class InterfaceOwnerFile
             w.Line("else");
             w.Indented(() => w.Line("WriteKnown(ref operationState, " + list + ");"));
         }
+        else if (setInterface && c.Text && c.Supports("StringSetWriter"))
+        {
+            string set = c.Memory + ".As<" + type + ">(value)";
+            w.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile +
+                " && global::LuminPack.Code.LuminPackMarshal.TryWriteStringSet<TLuminProfile>(ref operationState, " + set + "))");
+            w.Indented(() => w.Line("goto operationComplete_RootWrite;"));
+            w.Line("WriteKnown(ref operationState, " + set + ");");
+        }
         else if (c.Counted)
             w.Line("WriteKnown(ref operationState, " + c.Memory + ".As<" + type + ">(value));");
         else if (setInterface)
