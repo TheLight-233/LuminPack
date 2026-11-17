@@ -982,10 +982,13 @@ internal static class UnionEmitter
         string operation = json ? "WriteJsonCase" : "WriteCase";
         string state = w.A(json ? "LuminPackJsonWriter" : "LuminPackWriter");
         string arguments = model.TypeArguments(Profile);
+        // Several variable-size cases would each inline their capacity and growth path into the Union collection loop.
+        bool outlineVariableCases = !json && model.UnionCases.Count(item => item.Definition == null && !item.FixedCursor) >= 5;
         int index = 0;
         foreach (UnionRenderCase item in model.UnionCases.OrderBy(item => item.Id))
         {
-            w.Line(w.MethodImpl("AggressiveInlining"));
+            bool outline = outlineVariableCases && item.Definition == null && !item.FixedCursor;
+            w.Line(w.MethodImpl(outline ? "NoInlining" : "AggressiveInlining"));
             w.Line("private static void " + operation + Number(index++) + arguments + "(ref " + state + " writer, " + model.GlobalName + " value)");
             w.Indented(() => w.Line(constraints + "where " + Profile + " : struct, " + w.A("ILuminPackOptions")));
             w.Open();
