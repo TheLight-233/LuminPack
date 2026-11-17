@@ -107,10 +107,29 @@ internal static partial class SortedListOwnerFile
             MatchingPairs(c);
         w.Line("if (value is null && length > 1)");
         w.Open();
-        w.Line("var keys = global::System.Buffers.ArrayPool<" + c.Key + ">.Shared.Rent(length);");
-        w.Line(c.Value + "[]? values = null;");
+        bool useOwnedStorage = c.Supports("SortedListArrays");
+        if (useOwnedStorage)
+        {
+            w.Line("var fresh = length <= 8 ? new " + list + "(length) : null;");
+            w.Line(c.Key + "[]? keys = null;");
+            w.Line(c.Value + "[]? values = null;");
+            w.Line("bool owned = fresh is not null && global::LuminPack.Code.LuminPackCollectionAccess.TryGetSortedListStorage(fresh, out keys, out values) &&");
+            w.Line("    keys!.Length >= length && values!.Length >= length;");
+            w.Line("if (!owned)");
+            w.Open();
+            w.Line("values = null;");
+            w.Line("keys = global::System.Buffers.ArrayPool<" + c.Key + ">.Shared.Rent(length);");
+            w.Close();
+        }
+        else
+        {
+            w.Line("var keys = global::System.Buffers.ArrayPool<" + c.Key + ">.Shared.Rent(length);");
+            w.Line(c.Value + "[]? values = null;");
+        }
         w.Line("try");
         w.Open();
+        if (useOwnedStorage)
+            w.Line("if (!owned)");
         w.Line("values = global::System.Buffers.ArrayPool<" + c.Value + ">.Shared.Rent(length);");
         bool split = seedKeys && c.RawPairReadStorage && c.Supports("ReadInterleavedRawPairs");
         if (split)
@@ -139,7 +158,7 @@ internal static partial class SortedListOwnerFile
         if (split)
             w.Close();
         // Keys already in order are stored directly; other input is sorted first, and duplicates reach the bulk construction.
-        w.Line("value = new " + list + "(length);");
+        w.Line("value = " + (useOwnedStorage ? "fresh ?? " : "") + "new " + list + "(length);");
         w.Line("if (!global::LuminPack.Code.LuminPackCollectionAccess.TryFillSortedList(value, keys, values, length))");
         w.Open();
         w.Line("global::System.Array.Sort(keys, values, 0, length);");
@@ -149,6 +168,11 @@ internal static partial class SortedListOwnerFile
         w.Close();
         w.Line("finally");
         w.Open();
+        if (useOwnedStorage)
+        {
+            w.Line("if (!owned)");
+            w.Open();
+        }
         w.Line("global::System.Buffers.ArrayPool<" + c.Key + ">.Shared.Return(keys,");
         w.Indented(() => w.Line("global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + c.Key + ">());"));
         w.Line("if (values is not null)");
@@ -157,6 +181,8 @@ internal static partial class SortedListOwnerFile
             w.Line("global::System.Buffers.ArrayPool<" + c.Value + ">.Shared.Return(values,");
             w.Indented(() => w.Line("global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + c.Value + ">());"));
         });
+        if (useOwnedStorage)
+            w.Close();
         w.Close();
         w.Line("goto operationComplete_RootRead;");
         w.Close();

@@ -265,6 +265,8 @@ internal static class FormatterCapabilities
 
         if (definition == "System.Collections.Generic.SortedList")
         {
+            if (named.TypeArguments[0].SpecialType == SpecialType.System_String && FormatterRuntimeTraits.HasSortedListArrays(compilation, named))
+                result.Add("SortedListArrays");
             if (FormatterRuntimeTraits.HasSortedListTraversal(compilation))
                 result.Add("SortedListTraversal");
             if (FormatterRuntimeTraits.CanAppendSortedListOrdered(named.TypeArguments[0], compilation))

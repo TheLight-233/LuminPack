@@ -236,6 +236,26 @@ internal static class FormatterRuntimeTraits
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, span));
     }
 
+    /// <summary>Checks the two backing arrays supplied to a fresh sorted-list reader.</summary>
+    /// <param name="compilation">The consumer compilation.</param>
+    /// <param name="list">The sorted list being formatted.</param>
+    /// <returns>Whether the consumer exposes writable sorted-list storage.</returns>
+    internal static bool HasSortedListArrays(Compilation compilation, INamedTypeSymbol list)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        return access?.GetMembers("TryGetSortedListStorage").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 2, Parameters.Length: 3,
+                ReturnsByRef: false, ReturnsByRefReadonly: false, ReturnType.SpecialType: SpecialType.System_Boolean } &&
+            method.Parameters[0].RefKind == RefKind.None &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, list.OriginalDefinition.Construct(method.TypeParameters[0], method.TypeParameters[1])) &&
+            IsArray(method, 1) && IsArray(method, 2) && method.TypeParameters.All(type =>
+                !type.HasValueTypeConstraint && !type.HasReferenceTypeConstraint && !type.HasConstructorConstraint && type.ConstraintTypes.IsEmpty)) == true;
+
+        static bool IsArray(IMethodSymbol method, int index) =>
+            method.Parameters[index].RefKind == RefKind.Out && method.Parameters[index].Type is IArrayTypeSymbol { IsSZArray: true } array &&
+            SymbolEqualityComparer.Default.Equals(array.ElementType, method.TypeParameters[index - 1]);
+    }
+
     /// <summary>Checks both halves of the checked sorted-list traversal.</summary>
     /// <param name="compilation">The consumer's referenced runtime.</param>
     /// <returns>Whether the runtime can capture and validate the matching sorted-list storage.</returns>
