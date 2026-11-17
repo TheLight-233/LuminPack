@@ -12,6 +12,7 @@
     <EmbeddedResource Include="../../src/LuminPack.Core/Utility/Collections/LuminPackCollectionViews.cs" LogicalName="TestSupport.CollectionViews.cs" />
     <ProjectReference Include="../../src/LuminPack.Core/LuminPack.Core.csproj" />
     <ProjectReference Include="../../src/LuminPack.Generator/LuminPack.Generator.csproj" />
+    <ProjectReference Include="../../src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj" Aliases="ModelBasedAnalyzer" />
     <Reference Include="Microsoft.CodeAnalysis" HintPath="$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.dll" Private="true" />
     <Reference Include="Microsoft.CodeAnalysis.CSharp" HintPath="$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll" Private="true" />
   </ItemGroup>

@@ -442,9 +442,10 @@ internal static class UnionEmitter
                 w.Line(line);
             w.Blank();
             // A reused exact case is already in the slot; skip the reference store and its write barrier.
+            string assigned = Assign(model, item, "member" + Number(member));
             w.Line(reuse
-                ? "if (!global::System.Object.ReferenceEquals(" + target + ", member" + Number(member) + ")) " + target + " = member" + Number(member) + ";"
-                : target + " = member" + Number(member) + ";");
+                ? "if (!global::System.Object.ReferenceEquals(" + target + ", member" + Number(member) + ")) " + target + " = " + assigned + ";"
+                : target + " = " + assigned + ";");
             w.Line(exit);
             w.Close();
             w.Blank();

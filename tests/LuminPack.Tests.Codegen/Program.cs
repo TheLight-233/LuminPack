@@ -9,6 +9,11 @@ try
         .Split(Path.PathSeparator)
         .Select(path => MetadataReference.CreateFromFile(path))
         .ToArray();
+    if (args is ["--verify-closed-union-cases"])
+    {
+        SerializerIssueRegression.RunUnion(references);
+        return 0;
+    }
     if (args is ["--verify-frozen-collections"])
     {
         SerializerImmutableListWriteRegression.RunFrozen(references);
