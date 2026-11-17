@@ -16,6 +16,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <TargetFrameworks>net9.0;net10.0;net11.0</TargetFrameworks>
     <TargetFrameworks Condition="'$(LuminPackTestArea)' == 'Hooks'">net9.0;net10.0</TargetFrameworks>
+    <DefineConstants Condition="'$(LuminPackTestArea)' == 'Hooks'">$(DefineConstants);LUMINPACK_TEST_NETSTANDARD_CORE</DefineConstants>
     <GenerateProgramFile Condition="'$(LuminPackTestArea)' == 'All'">false</GenerateProgramFile>
     <GenerateProgramFile Condition="'$(LuminPackTestArea)' != 'All'">true</GenerateProgramFile>
     <LangVersion>latest</LangVersion>
@@ -33,15 +34,15 @@
   </PropertyGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' != 'Hooks' And '$(LuminPackGenerator)' != 'Next' And '$(LuminPackLegacyAnalyzer)' == ''">
     <ProjectReference Include="..\..\src\LuminPack.Generator\LuminPack.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' != 'Hooks' And '$(LuminPackGenerator)' != 'Next' And '$(LuminPackLegacyAnalyzer)' != ''">
     <Analyzer Include="$(LuminPackLegacyAnalyzer)" />
-    <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" AdditionalProperties="LuminPackLegacyGeneratorReference=false" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' != 'Hooks' And '$(LuminPackGenerator)' == 'Next'">
     <ProjectReference Include="..\..\src\LuminPack.Generator.Next\LuminPack.Generator.Next.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" AdditionalProperties="LuminPackLegacyGeneratorReference=false" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackTestArea)' != 'Hooks'">
+    <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' == 'Hooks'">
     <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" SetTargetFramework="TargetFramework=netstandard2.1" />

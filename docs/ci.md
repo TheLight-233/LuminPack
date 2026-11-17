@@ -12,7 +12,7 @@ Pushes to `main` and `refactor`, and pull requests, trigger the hosted checks. T
 | `unity.yml`, `unity-extensions.yml` | Unity Editor tests, IL2CPP and WebGL players, Unity object and Burst contracts. |
 | `benchmark-matrix.yml` | Round-trip validation of the serialization matrix; timing on manual runs. |
 | `fuzz.yml` | Bounded SharpFuzz/libFuzzer campaigns; see [fuzzing](fuzzing.md). |
-| `release.yml` | Unpublished release candidates and API comparison; see [releasing](releasing.md). |
+| `release.yml` | Release candidate builds, API comparison and NuGet publishing from the configured version tag. See [releasing](releasing.md). |
 
 ## Tests and platforms
 
@@ -51,6 +51,6 @@ Benchmarks run only on manual dispatch of `ci.yml` with `run_benchmarks` enabled
 
 ### Serialization matrix
 
-`benchmark-matrix.yml` validates round trips for relevant pushes and pull requests without timing. Manual dispatch, or a `ci.yml` run with `run_benchmarks`, samples every format and scenario in three processes of nine rounds on one runner, with Server GC and tiered compilation disabled. The `benchmark-matrix` artifact contains the JSONL samples, the machine information and `REPORT.md`.
+`benchmark-matrix.yml` validates round trips for relevant pushes and pull requests without timing. Manual dispatch, or a `ci.yml` run with `run_benchmarks`, samples every format and scenario in three processes of nine rounds on one runner. The matrix enables Server GC, tiered compilation, dynamic PGO and Quick JIT for loops. Each fixture, library and operation warms up for at least 64 calls and 15 milliseconds before calibrating its sample size. The `benchmark-matrix` artifact contains the JSONL samples, the machine information and `REPORT.md`.
 
 Chart generation from these artifacts is described in [Contributing](../CONTRIBUTING.md#benchmarks).

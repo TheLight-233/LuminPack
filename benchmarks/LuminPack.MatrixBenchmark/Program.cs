@@ -7,6 +7,9 @@ using System.Text.Json;
 
 internal static class Program
 {
+    private const int WarmupMinCalls = 64;
+    private const int WarmupMinMilliseconds = 15;
+
     private sealed record Operation(string Name, Action Invoke);
     private sealed record Measurement(string Operation, string Library, int Round, double Nanoseconds, double AllocatedBytes);
 
@@ -47,6 +50,11 @@ internal static class Program
             ProcessorCount = Environment.ProcessorCount,
             Rounds = rounds,
             TieredCompilation = Environment.GetEnvironmentVariable("DOTNET_TieredCompilation"),
+            TieredPGO = Environment.GetEnvironmentVariable("DOTNET_TieredPGO"),
+            QuickJit = Environment.GetEnvironmentVariable("DOTNET_TC_QuickJit"),
+            QuickJitForLoops = Environment.GetEnvironmentVariable("DOTNET_TC_QuickJitForLoops"),
+            WarmupMinCalls = rounds == 0 ? 0 : WarmupMinCalls,
+            WarmupMinMilliseconds = rounds == 0 ? 0 : WarmupMinMilliseconds,
             References = json
                 ? new Dictionary<string, string?> { ["System.Text.Json"] = VersionOf(typeof(JsonSerializer)) }
                 : new Dictionary<string, string?>
@@ -77,7 +85,11 @@ internal static class Program
                     if (codec.SupportsReuse)
                         Add("reuse", codec.Reuse);
 
-                    void Add(string name, Action action) => work.Add((codec.Library, new(name, action), Calibrate(action)));
+                    void Add(string name, Action action)
+                    {
+                        WarmUp(action);
+                        work.Add((codec.Library, new(name, action), Calibrate(action)));
+                    }
                 }
                 catch (Exception exception) when (codec.Library == "LuminPack" ||
                     exception is NotSupportedException or InvalidOperationException or JsonException or MemoryPack.MemoryPackSerializationException)
@@ -118,6 +130,19 @@ internal static class Program
     /// <returns>The recorded version, if available.</returns>
     private static string? VersionOf(Type type)
         => type.Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+
+    /// <summary>Exercises an operation before calibration so hot code can tier up before sampling.</summary>
+    /// <param name="action">The benchmark operation to warm up.</param>
+    private static void WarmUp(Action action)
+    {
+        long start = Stopwatch.GetTimestamp();
+        do
+        {
+            for (int i = 0; i < WarmupMinCalls; i++)
+                action();
+        }
+        while (Stopwatch.GetElapsedTime(start).TotalMilliseconds < WarmupMinMilliseconds);
+    }
 
     /// <summary>Chooses a repetition count for an approximately five-millisecond sample.</summary>
     /// <param name="action">The benchmark operation to calibrate.</param>

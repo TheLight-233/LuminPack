@@ -12,7 +12,7 @@
 | `unity.yml`、`unity-extensions.yml` | Unity Editor 测试、IL2CPP 与 WebGL Player、Unity 对象与 Burst 契约。 |
 | `benchmark-matrix.yml` | 序列化矩阵的往返校验；手动运行时计时。 |
 | `fuzz.yml` | 有预算上限的 SharpFuzz/libFuzzer 测试，见 [Fuzz 测试](fuzzing.cn.md)。 |
-| `release.yml` | 构建不发布的候选包并比较 API，见[发布](releasing.cn.md)。 |
+| `release.yml` | 构建候选包、比较 API，并通过配置的版本标签发布到 NuGet。见[发布](releasing.cn.md)。 |
 
 ## 测试与平台
 
@@ -51,6 +51,6 @@ Unity 2022.3.51f1 和 6000.0.43f1 依次运行 Editor 测试、IL2CPP smoke Play
 
 ### 序列化矩阵
 
-`benchmark-matrix.yml` 在相关推送和拉取请求上只做往返校验，不计时。手动触发它，或在 `ci.yml` 中开启 `run_benchmarks`，会在同一台机器上对每种格式和场景运行三个进程、每个进程九轮，使用 Server GC 并关闭分层编译。`benchmark-matrix` 产物包含 JSONL 样本、机器信息和 `REPORT.md`。
+`benchmark-matrix.yml` 在相关推送和拉取请求上只做往返校验，不计时。手动触发它，或在 `ci.yml` 中开启 `run_benchmarks`，会在同一台机器上对每种格式和场景运行三个进程、每个进程九轮。矩阵启用 Server GC、分层编译、动态 PGO 和循环的 Quick JIT。每个 fixture、库和操作在校准采样次数前至少预热 64 次且达到 15 毫秒。`benchmark-matrix` 产物包含 JSONL 样本、机器信息和 `REPORT.md`。
 
 如何用这些产物生成图表，见[贡献指南](CONTRIBUTING.cn.md#基准测试)。

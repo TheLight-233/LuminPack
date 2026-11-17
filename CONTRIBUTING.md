@@ -86,7 +86,7 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --verify-fixtu
 The independent [serialization matrix](benchmarks/LuminPack.MatrixBenchmark) exercises framework types, model graphs and 51 collection families. Binary compares with MemoryPack and Nino, including Nino's official immutable collection formatters; JSON compares with System.Text.Json using source-generated metadata. Write returns a new byte array or string, Fresh reads into an empty target and Reuse reads into an existing target; System.Text.Json has no root Reuse operation. The report lists unsupported operations and operations that fail round-trip validation, and each reference has its own ratios from valid pairs in the same process. To validate a scenario locally, pass the format, scenario, round count and JSONL output path; zero rounds only validates.
 
 ```bash
-dotnet run --project benchmarks/LuminPack.MatrixBenchmark -c Release -p:LuminPackLegacyGeneratorReference=false -p:LuminPackUseSatori=false -- binary small 0 matrix.jsonl
+dotnet run --project benchmarks/LuminPack.MatrixBenchmark -c Release -p:LuminPackUseSatori=false -- binary small 0 matrix.jsonl
 ```
 
 ### README charts

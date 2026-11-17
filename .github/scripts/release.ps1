@@ -14,9 +14,6 @@ Push-Location $repo
 try {
     $settings = [xml](Get-Content -Raw (Join-Path $repo 'eng/Versions.props'))
     $baseVersion = [string]$settings.Project.PropertyGroup.LuminPackReleaseVersion
-    if ([string]$settings.Project.PropertyGroup.LuminPackPublishingEnabled -ne 'false') {
-        throw 'Publishing is not implemented in this build-only workflow; keep LuminPackPublishingEnabled=false.'
-    }
     if (!$BaselineVersion) { $BaselineVersion = [string]$settings.Project.PropertyGroup.LuminPackReleaseBaselineVersion }
     $revision = (& git rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve the candidate commit.' }
@@ -40,8 +37,6 @@ try {
     New-Item -ItemType Directory -Force $packages | Out-Null
     Write-Output "Build-only release candidate: $Version at $revision; dirty=$dirty; output=$run"
     $common = @('-c', 'Release', '-p:GeneratePackageOnBuild=false', "-p:Version=$Version", "-p:SourceRevisionId=$revision", '-p:ContinuousIntegrationBuild=true')
-    & dotnet pack src/LuminPack.Generator/LuminPack.Generator.csproj @common -o $packages
-    if ($LASTEXITCODE -ne 0) { throw 'Generator packaging failed.' }
     $validation = @('-p:LuminPackReleaseBuild=true')
     if ($BaselineVersion) { $validation += "-p:PackageValidationBaselineVersion=$BaselineVersion" }
     & dotnet pack src/LuminPack.Core/LuminPack.Core.csproj @common @validation -o $packages
@@ -68,9 +63,19 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not export the API base commit.' }
         Expand-Archive -LiteralPath $archive -DestinationPath $baseRoot
         $basePackages = Join-Path $run 'api-base-packages'
-        foreach ($project in @('LuminPack.Generator', 'LuminPack.Core')) {
-            & dotnet pack (Join-Path $baseRoot "src/$project/$project.csproj") -c Release -p:GeneratePackageOnBuild=false -p:Version=0.0.0-api-base -o $basePackages
-            if ($LASTEXITCODE -ne 0) { throw "API base packaging failed for $project." }
+        $basePackArgs = @('-c', 'Release', '-p:GeneratePackageOnBuild=false', '-p:Version=0.0.0-api-base', '-o', $basePackages)
+        & dotnet pack (Join-Path $baseRoot 'src/LuminPack.Core/LuminPack.Core.csproj') @basePackArgs
+        if ($LASTEXITCODE -ne 0) { throw 'API base packaging failed for Core.' }
+        $basePackage = [IO.Compression.ZipFile]::OpenRead((Join-Path $basePackages 'LuminPack.0.0.0-api-base.nupkg'))
+        try {
+            $hasBundledAnalyzers = $null -ne $basePackage.GetEntry('analyzers/dotnet/cs/LuminPack.SourceGenerator.dll')
+        }
+        finally {
+            $basePackage.Dispose()
+        }
+        if (!$hasBundledAnalyzers) {
+            & dotnet pack (Join-Path $baseRoot 'src/LuminPack.Generator/LuminPack.Generator.csproj') @basePackArgs
+            if ($LASTEXITCODE -ne 0) { throw 'API base packaging failed for the separate generator package.' }
         }
         $baseApi = Join-Path $run 'api-base'
         & dotnet $checks --package-api $basePackages $baseApi
@@ -83,16 +88,19 @@ try {
     elseif ($RequireUnchangedApi) { throw 'Strict API checking requires -ApiBaseRef.' }
 
     if (!$SkipInstallationCheck) {
-        & dotnet run --project tests/LuminPack.Tests.CodeFixes -c Release -- --verify-package (Join-Path $packages "LuminPack.Generator.$Version.nupkg")
+        & dotnet run --project tests/LuminPack.Tests.CodeFixes -c Release -- --verify-package (Join-Path $packages "LuminPack.$Version.nupkg")
         if ($LASTEXITCODE -ne 0) { throw 'The installed analyzer package contract failed.' }
         $feedConfig = Join-Path $run 'NuGet.Config'
         $config = [xml]'<configuration><packageSources><clear /><add key="local" value="" /><add key="nuget" value="https://api.nuget.org/v3/index.json" /></packageSources><packageSourceMapping><packageSource key="local"><package pattern="LuminPack*" /></packageSource><packageSource key="nuget"><package pattern="*" /></packageSource></packageSourceMapping></configuration>'
         $config.configuration.packageSources.add[0].SetAttribute('value', $packages)
         $config.Save($feedConfig)
-        & dotnet restore tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj "-p:LuminPackPackageVersion=$Version" --configfile $feedConfig --packages (Join-Path $run 'package-cache')
+        $packageCache = Join-Path $run 'package-cache'
+        & dotnet restore tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj "-p:LuminPackPackageVersion=$Version" --configfile $feedConfig --packages $packageCache
         if ($LASTEXITCODE -ne 0) { throw 'The local package consumer failed to restore.' }
         & dotnet run --project tests/LuminPack.Tests.Aot -c Release --no-restore "-p:LuminPackPackageVersion=$Version" -- --verify-installation
         if ($LASTEXITCODE -ne 0) { throw 'The local package consumer failed.' }
+        & "$PSScriptRoot/verify-next-package.ps1" -Version $Version -Config $feedConfig -Cache $packageCache -Output (Join-Path $run 'next-package-consumer')
+        if ($LASTEXITCODE -ne 0) { throw 'The installed Next analyzer failed its binding checks.' }
     }
     $range = if ($baseCommit) { "$baseCommit..$revision" } else { $revision }
     $changes = @(& git log --format='%h %s' $range)
@@ -101,10 +109,11 @@ try {
         'This artifact has not been published. Uncommitted changes are not represented by the commit list.', '', '## Changes', '')
     $notes += $changes | ForEach-Object { "- $_" }
     $notes | Set-Content -LiteralPath (Join-Path $run 'CHANGELOG.md') -Encoding utf8
-    Get-ChildItem -LiteralPath $packages -File | ForEach-Object {
+    $hashes = Get-ChildItem -LiteralPath $packages -File | ForEach-Object {
         $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         "$hash  $($_.Name)"
-    } | Set-Content -LiteralPath (Join-Path $run 'SHA256SUMS') -Encoding utf8
+    }
+    [IO.File]::WriteAllText((Join-Path $run 'SHA256SUMS'), ($hashes -join "`n") + "`n")
     [ordered]@{
         version = $Version; revision = $revision; dirty = $dirty; publishingEnabled = $false
         baselineVersion = $BaselineVersion; apiBaseCommit = $baseCommit; apiChanged = $apiChanged

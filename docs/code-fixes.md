@@ -2,10 +2,10 @@
 
 [Chinese](code-fixes.cn.md)
 
-The `LuminPack.Generator` NuGet package includes C# quick actions for its diagnostics. Consumers only install `LuminPack`, which automatically brings in the generator package:
+The `LuminPack` NuGet package includes the Next source generator and C# quick actions for supported diagnostics.
 
 ```xml
-<PackageReference Include="LuminPack" Version="2.0.0" />
+<PackageReference Include="LuminPack" Version="2.0.0-rc.1" />
 ```
 
 In an IDE with Roslyn code-fix support, place the cursor on a diagnostic and open Quick Actions (for example, `Ctrl+.` in Visual Studio). Review the preview and apply the fix. No separate CodeFix package or Workspaces reference is required in the consuming project. Command-line builds still report generator diagnostics without applying edits.
@@ -36,7 +36,7 @@ Fixes preserve unrelated attributes and declaration comments, recognize attribut
 
 `src/LuminPack.CodeFixes` targets `netstandard2.0` and uses `Microsoft.CodeAnalysis.CSharp.Workspaces` 4.3.0, matching the generator's Roslyn baseline. `CodeFixProvider` comes from Workspaces; the C# package also supplies C# workspace services. Dependencies use `PrivateAssets="all"`.
 
-The generator package contains both `LuminPack.Generator.dll` and `LuminPack.CodeFixes.dll` with their XML documentation under `analyzers/dotnet/cs`. The CodeFix project is not separately packable. Its build-only project reference in the generator does not introduce an assembly reference or a NuGet dependency. Roslyn and composition DLLs are not bundled; the IDE supplies them. Neither the runtime nor the generator references the fix assembly or Workspaces, and the fix assembly references neither product assembly. This keeps compiler-only and Unity generator loading independent of IDE services. Unity needs an editor integration that loads Roslyn code-fix assemblies; copying the source generator alone does not enable quick actions.
+`LuminPack` carries `LuminPack.SourceGenerator.dll` and `LuminPack.CodeFixes.dll` with their XML documentation under `analyzers/dotnet/cs`. The fix assembly loads independently of Core and the generator and uses the Roslyn and composition services supplied by the IDE. Unity quick actions require an editor integration that loads Roslyn code-fix assemblies.
 
 Run the focused workspace checks with:
 

@@ -1,8 +1,8 @@
 # LuminPack
 
 Source-generated binary and JSON serializer for C#: .NET (`netstandard2.1`, `net8.0` to `net11.0`), Unity (Mono,
-IL2CPP, Burst) and NativeAOT. The NuGet candidates are `LuminPack` (Core) and `LuminPack.Generator`; platform adapters
-are source projects. Version 2.0 is being refactored on the `refactor` branch and is not on NuGet yet (NuGet's
+IL2CPP, Burst) and NativeAOT. The `LuminPack` NuGet candidate bundles Core, the Next generator, CodeFixes and the IL
+postprocessor. Platform adapters are source projects. Version 2.0 is in development on the `refactor` branch (NuGet's
 `LuminPack` 1.x is the previous generation). Code, comments, XML docs, diagnostics, tests, commits and maintenance
 documents are English; README files and `*.cn.md` editions are the exception.
 
@@ -28,8 +28,8 @@ and run the full suites only when the change needs them.
 ## Layout
 
 ```
-src/            LuminPack.Core (runtime), LuminPack.Generator (packaged generator) and LuminPack.Generator.Next
-                (model-based successor), LuminPack.CodeFixes, LuminPack.ILPostProcessor (IL rewriting build task),
+src/            LuminPack.Core (runtime and NuGet package), LuminPack.Generator (frozen legacy generator),
+                LuminPack.Generator.Next (shipped generator), LuminPack.CodeFixes, LuminPack.ILPostProcessor (build task),
                 LuminPack.Platforms (shared adapter code) and the adapters (AspNetCore, Avalonia, Drawing, Maui,
                 MonoGame, SkiaSharp, Wpf, Unity, Burst)
 tests/          runtime tests (LuminPack.Tests, with test areas), codegen and generator contracts, code fixes, AOT and

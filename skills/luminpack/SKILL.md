@@ -21,7 +21,7 @@ When a project explicitly selects the Next generator, its single incremental pip
 
 For repository builds using Next, `-p:LuminPackReportGeneratorOutput=true -p:EmitCompilerGeneratedFiles=true` writes a comment-only output report with the final source size and selected operation counts. See [Next output accounting](../../docs/next-generator-prototype.md#output-accounting).
 
-A local NuGet candidate built with `LuminPackPackNext=true` includes the model-based `LuminPack.SourceGenerator.dll` analyzer. Set `LuminPackGenerator=Next` in the consumer project to select it. Rider can show all generated files under one `LuminPack.SourceGenerator.LuminPackSourceGenerator` node. See [Next generator](../../docs/generator-next.md) for the installation check and output paths.
+The `LuminPack` NuGet package loads the model-based `LuminPack.SourceGenerator.dll` analyzer automatically. Rider can show all generated files under one `LuminPack.SourceGenerator.LuminPackSourceGenerator` node. See [Next generator](../../docs/generator-next.md) for the installation check and output paths.
 
 ## Quick start
 
@@ -46,7 +46,7 @@ Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
 LuminPackSerializer.DeserializeJson(json, ref fromJson);  // reuses the existing JSON graph
 ```
 
-`LuminPackSerializer` is generated into the consuming assembly (namespace `LuminPack`). LuminPack 2.0 is not on NuGet yet (NuGet's `LuminPack` 1.x has a different API): reference `src/LuminPack.Core` and `src/LuminPack.Generator` (as an analyzer) from source, as in [Getting started](../../docs/getting-started.md#from-source). Once 2.0 ships, `dotnet add package LuminPack` brings the generator package with it.
+`LuminPackSerializer` is generated into the consuming assembly (namespace `LuminPack`). For 2.0, use the single `LuminPack` package or reference `src/LuminPack.Core` and `src/LuminPack.Generator.Next` (as an analyzer) from source. See [Getting started](../../docs/getting-started.md#installation) for the package version and project references.
 
 IDE quick actions are bundled in `LuminPack.Generator`, which comes automatically with `LuminPack`; no additional package is needed. They fix supported generator diagnostics such as missing packable markers, Union partial declarations, invalid attributes and accessibility. Constructor diagnostics offer an explicit choice; other mechanical fixes support Fix All. Review edits that change modifiers. See [IDE code fixes](../../docs/code-fixes.md) for supported IDs and loading requirements.
 

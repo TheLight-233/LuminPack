@@ -2,29 +2,28 @@
 
 [English](releasing.md)
 
-当前发布工作流**只构建和验证候选产物**，不会上传 NuGet、创建 GitHub Release 或创建标签。工作流只具有仓库读取权限，不需要 NuGet API Key。项目仍在重构，候选构建成功不代表 API 已冻结或库已经发布。
+发布工作流先构建和验证候选包，供维护者审查。在上游仓库中，推送与 `eng/Versions.props` 配置完全匹配的发布标签，会在验证通过后启动 NuGet 发布任务。
 
 ## 包范围
 
-目前维护的 NuGet 候选包为 `LuminPack`（Core）和 `LuminPack.Generator`。Core 依赖同版本 Generator；Generator 包含生成器和 CodeFixes 程序集。可选平台、Unity 和 Burst 项目目前保持不可打包状态。平台包需要先确定依赖与目标框架契约，再加入工作流；Unity 分发单独处理。
+使用方只需安装一个 `LuminPack` NuGet 包。包内的 `lib/` 存放 Core 运行时，`analyzers/dotnet/cs/` 存放 Next 生成器和 CodeFixes，`tools/` 存放 IL 后处理器和 Mono.Cecil。`buildTransitive/` 提供编译器拦截和 IL 重写所需的构建配置。Core 的可移植符号另以 `.snupkg` 上传到 NuGet 符号服务。平台适配器、Unity 和 Burst 仍通过源码分发。
 
-`eng/Versions.props` 统一管理开发目标版本、可选的已发布 Core 基线，以及禁用发布标记。现有目标版本仍为 `2.0.0`，该文件不表示已经实际发布。
+`eng/Versions.props` 配置开发目标版本 `2.0.0`、可选的已发布 Core 基线，以及允许上传 NuGet 的版本。`LuminPackNuGetPublishVersion` 当前设为 `2.0.0-rc.1`，留空时工作流只验证候选包。
 
 - 使用 `major.minor.patch`，可附加 SemVer 预发布标识。候选的数字版本必须与版本文件一致，纯数字预发布标识不能有前导零。
 - 不兼容的公共 API 或数据格式契约变更应提升主版本。提升主版本不能替代机制变更所需的批准。
-- 未指定候选版本时生成 `<version>-ci.g<commit>`。手动输入可选择已审查的预览版本。推送 `v*` 标签会采用其版本，但仍然只构建产物。
-- 确定兼容基线后，再把 `LuminPackReleaseBaselineVersion` 设为真实发布过的 Core 版本。当前留空，因为本次重构尚不建立新的已发布基线。
-- 保持 `LuminPackPublishingEnabled=false`。修改该值不能实现发布；仅构建脚本会拒绝运行。
+- 未指定候选版本时生成 `<version>-ci.g<commit>`。手动触发和推送 `v*` 标签都可以指定待验证版本。
+- 需要保持与某个已发布版本的 API 兼容性时，设置 `LuminPackReleaseBaselineVersion`。2.0 是主版本升级，该值留空，仍执行跨框架 PackageValidation。可通过 `-BaselineVersion 1.1.9` 单独调查与 1.x 的 SDK 兼容性。
 
 ## 本地构建候选包
 
-安装 PowerShell 7 和仓库要求的 SDK（包括 .NET 11 预览版），在仓库根目录执行：
+安装 PowerShell 7 和仓库要求的 SDK（包括 .NET 11 SDK），在仓库根目录执行以下命令。
 
 ```powershell
-pwsh -File .github/scripts/release.ps1 -Version 2.0.0-preview.1 -ApiBaseRef HEAD
+pwsh -File .github/scripts/release.ps1 -Version 2.0.0-rc.1 -ApiBaseRef 'HEAD^'
 ```
 
-该命令打包两个候选包，运行 Core PackageValidation，核验包身份和依赖版本，核验可移植 SourceLink 符号，导出公共 API，并与指定 Git 提交构建的包比较；随后检查分析器包，并通过隔离的本地源运行包消费程序的定向入口 `--verify-installation`，检查二进制/JSON 值、复用和截断输入拒绝。完整裁剪/AOT 契约仍是独立的 CI 门禁。不使用密钥或上传权限。
+该命令构建候选包和符号，运行 Core PackageValidation，核验包布局和 SourceLink，并与指定 Git 提交比较公共 API。安装验证使用隔离的本地源，消费项目只引用一个 `LuminPack` 包，检查二进制/JSON 值、复用、截断输入拒绝、编译器拦截、IL 重写和注册回退。完整裁剪/AOT 契约由运行时兼容性工作流检查。
 
 API 基线导出到全新的临时目录，不覆盖检出、分支或工作文件。每次运行在 `.tmp/release-validation` 下创建新的 `run-*` 目录，`-Output` 可修改父目录。`-SkipInstallationCheck` 用于针对性打包诊断；托管工作流不使用它，清单会记录是否跳过。
 
@@ -44,26 +43,31 @@ API 清单用于审查，不是完整的二进制/源码兼容证明。SDK Packa
 
 `eng/CompatibilitySuppressions.xml` 列出六项精确的既有跨框架差异，涵盖仅 Standard 存在的 Burst 钩子、在 Standard 上使用 Span 且在新版目标上使用托管引用的四个游标字段，以及 .NET 10 BitArray 存储视图。每项例外都限定诊断、API 和左右产物。它们记录既有条件契约，不改变机制，也不授权新破坏性变更或大范围屏蔽基线错误。
 
-Generator 包包含分析器，而不是普通 `lib` 产物，因此显式验证其包布局、依赖使用和安装行为，不把它描述成已完成 SDK 运行时产物验证。
+仓库通过包布局、依赖和安装检查验证内置分析器与构建工具。SDK PackageValidation 覆盖 Core 运行时产物。
 
 ## SourceLink 与产物
 
-采用 SDK 内置的 [SourceLink 集成](https://github.com/dotnet/sourcelink)记录 GitHub 源码映射。共享构建属性启用仓库元数据、可移植符号、确定性编译、嵌入未跟踪源码及 CI 路径归一化。Core 生成本地 `.snupkg` 候选；Generator 在 `.nupkg` 内把可移植 PDB 放在两个分析器 DLL 旁边。
+采用 SDK 内置的 [SourceLink 集成](https://github.com/dotnet/sourcelink)记录 GitHub 源码映射。共享构建属性启用仓库元数据、可移植符号、确定性编译、嵌入未跟踪源码及 CI 路径归一化。`.nupkg` 在两个分析器 DLL 旁包含可移植 PDB，`.snupkg` 提供运行时符号。
 
-检查工具要求五个 Core 框架产物、两个分析器程序集及其符号，匹配的版本/依赖/仓库元数据，以及七份映射到候选提交的 SourceLink PDB。检查不会下载源码文档或发布符号。
+检查工具要求五个 Core 框架产物、两个分析器程序集及其符号、MSBuild 文件，以及匹配的候选版本和提交元数据。每份打包的可移植 PDB 都必须映射到候选提交。
 
 每次成功验证保留：
 
-- `packages/`：候选 `.nupkg`、`.snupkg`。
+- `packages/`：一个候选 `.nupkg` 和对应的 `.snupkg`。
 - `api/`、`api-base/`、`public-api.diff`：可审查的逐程序集、逐框架 API。
-- `release-manifest.json`：版本、提交、工作区改动状态、配置的基线及执行的检查，始终标记禁用发布。
+- `release-manifest.json`：候选版本、提交、工作区改动状态、配置的基线及执行的检查。
 - `CHANGELOG.md`：自动生成、明确标记未发布的变更记录，范围为 API 基线至候选提交。提交列表不包含尚未提交的修改。
 - `SHA256SUMS`：候选包文件哈希。
 
 按仓库规则，历史记录生成到构建产物，不维护在 README 或 `docs` 中。
 
-## 工作流与未来发布
+## 发布到 NuGet.org
 
-`.github/workflows/release.yml` 在相关 PR 改动、`v*` 标签推送及手动触发时运行。它拉取完整历史、安装 SDK、执行包/API/安装检查并上传产物；失败时也保留已有证据。创建标签仍需所有者明确授权，工作流本身不创建标签或 Release。
+`.github/workflows/release.yml` 在相关 PR 改动、`v*` 标签推送及手动触发时运行。候选包和 API 差异会保存在工作流产物中，失败时也会保留已有证据。GitHub 要求工作流出现在默认分支上，才能手动触发。
 
-重构完成后，再确定 API/数据格式基线和版本，审查 API 差异与变更记录，运行必要的平台/兼容测试，然后单独实现并授权发布。未来上传任务可以从受保护的 GitHub Environment 读取 `NUGET_API_KEY`，或采用 NuGet 可信发布。凭据不能放进 Git、工作流输入、命令示例或聊天。仅添加 Secret 不会让当前仅构建工作流开始上传。
+1. 在 GitHub 创建 `nuget` 环境，把环境变量 `NUGET_USER` 设为拥有 `LuminPack` 的 NuGet.org 账号名（`TheLight233`）。可通过环境设置限制发布标签并启用审查人。
+2. 在 NuGet.org 创建[可信发布策略](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing)。填写仓库所有者 `TheLight-233`、仓库 `LuminPack`、工作流文件 `release.yml` 和环境 `nuget`。权限限定为为现有 `LuminPack` 包上传新版本。
+3. 审查目标提交的候选 API 差异、变更记录及平台检查结果。将已授权的 `v2.0.0-rc.1` 标签推送到该提交，提交须包含发布工作流。标签版本必须与 `LuminPackNuGetPublishVersion` 一致。
+4. 发布任务检查候选清单和哈希，通过 OIDC 获取短期 NuGet 密钥，然后上传验证过的包和符号。发布中断时，在同一次运行中重试失败的任务，复用同一份产物。需要发布不同构建时使用新版本。
+
+PR 构建、手动验证和其他版本标签只生成候选产物。Git 标签和 GitHub Release 由维护者管理。
