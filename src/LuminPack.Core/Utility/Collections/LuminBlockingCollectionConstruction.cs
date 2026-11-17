@@ -29,6 +29,18 @@ public static partial class LuminPackCollectionAccess
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentOutOfRangeException.ThrowIfGreaterThan((uint)count, (uint)items.Length, nameof(count));
+#if NET10_0_OR_GREATER
+        // The framework's default segment holds 32 items. The published queue can keep using it normally.
+        if ((uint)(count - 1) < 32 && !RuntimeHelpers.IsReferenceOrContainsReferences<T>() && ConcurrentQueueSegments<T>.Available)
+        {
+            var queue = new ConcurrentQueue<T>();
+            var segment = LuminFieldLayout.Field<object>(queue, ConcurrentQueueSegments<T>.Tail);
+            int index = ConcurrentQueueSegments<T>.EnqueueRange(segment, items, 0, count);
+            for (; index < count; index++)
+                queue.Enqueue(items[index]);
+            return queue;
+        }
+#endif
         IEnumerable<T> source = count == items.Length ? items : count == 0 ? Array.Empty<T>() : new QueueCopySource<T>(items, count);
         return new ConcurrentQueue<T>(source);
     }
