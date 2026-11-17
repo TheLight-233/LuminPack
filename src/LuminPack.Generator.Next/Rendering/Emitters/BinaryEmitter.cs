@@ -1635,7 +1635,7 @@ internal static partial class BinaryEmitter
         if (clearOnNull)
             body.Add("}");
         body.Add("var " + instance + " = " + local + " ??= " + NewInstance(element) + ";");
-        AddStreamRead(body, element, instance, 0, prove: true, markerSeen: true, w, names, ref cursors, ref strings, ref ends);
+        AddStreamRead(body, element, instance, 0, prove: true, w, names, ref cursors, ref strings, ref ends);
         body.Add(exit + ":");
         body.Add("\t;");
         body.Add("}");
@@ -2613,10 +2613,8 @@ internal static partial class BinaryEmitter
         var members = model.Members;
         var body = new List<string>();
         string Policy() => w.A("LuminPackInputPolicy");
-        // A trusted root reads the null marker as a plain byte; its leading lone byte is then an ordinary value.
         bool trusted = model.Trusted;
-        // Without the null marker, the safe-read projection checks the first lone byte read as the object's member marker.
-        bool markerSeen = !union || trusted;
+        // The Union discriminator already framed the payload. No member-count marker precedes its fields.
         if (!union)
         {
             body.Add(trusted ? "if (reader.Read<byte>() == 255)" : "if (" + Policy() + ".ReadNullMarker(ref reader, " +
@@ -2637,14 +2635,8 @@ internal static partial class BinaryEmitter
                 int last = RunEnd(members, index);
                 if (last == index)
                 {
-                    if (member.Scalar == "byte" && !markerSeen)
-                    {
-                        markerSeen = true;
-                        body.Add("instance." + member.Name + " = " + Policy() + ".ReadMarker(ref reader, " + members.Length.ToString(CultureInfo.InvariantCulture) + ");");
-                    }
-                    else
-                        body.Add("instance." + member.Name + " = " + (member.IsBoolean && !trusted
-                            ? Policy() + ".ReadBoolean(ref reader);" : "reader.Read<" + member.Scalar + ">();"));
+                    body.Add("instance." + member.Name + " = " + (member.IsBoolean && !trusted
+                        ? Policy() + ".ReadBoolean(ref reader);" : "reader.Read<" + member.Scalar + ">();"));
                     continue;
                 }
                 // The checked block validates the complete run before copying, so a reused case gains no partial write.
@@ -2780,7 +2772,7 @@ internal static partial class BinaryEmitter
         }
         body.Add("var instance = value ??= " + NewInstance(model) + ";");
         int cursors = 0, strings = 0, ends = 0;
-        AddStreamRead(body, model, "instance", 0, !union, !union || model.Trusted, w, new Dictionary<string, int>(StringComparer.Ordinal), ref cursors, ref strings, ref ends);
+        AddStreamRead(body, model, "instance", 0, !union, w, new Dictionary<string, int>(StringComparer.Ordinal), ref cursors, ref strings, ref ends);
         while (body.Count != 0 && body[body.Count - 1].Length == 0)
             body.RemoveAt(body.Count - 1);
         ReduceInlineNames(body);
@@ -2794,13 +2786,12 @@ internal static partial class BinaryEmitter
     /// <param name="owner">The expression holding the record being filled.</param>
     /// <param name="depth">The inline nesting depth, which names the inline locals.</param>
     /// <param name="prove">Whether a contiguous fixed run is proven on a 64-bit target; a Union payload reads it without proof.</param>
-    /// <param name="markerSeen">Whether the member count was already consumed, which makes a lone leading byte a plain value.</param>
     /// <param name="w">The file writer.</param>
     /// <param name="names">The occurrence counters of the inline locals of this method.</param>
     /// <param name="cursors">The cursor local counter shared by the whole method.</param>
     /// <param name="strings">The mirrored string local counter shared by the whole method.</param>
     /// <param name="ends">The exit-label counter of the outlined trusted child reads.</param>
-    private static void AddStreamRead(List<string> body, PayloadRenderModel model, string owner, int depth, bool prove, bool markerSeen,
+    private static void AddStreamRead(List<string> body, PayloadRenderModel model, string owner, int depth, bool prove,
         CodeWriter w, Dictionary<string, int> names, ref int cursors, ref int strings, ref int ends)
     {
         var members = model.Members;
@@ -2841,7 +2832,7 @@ internal static partial class BinaryEmitter
                         body.Add("");
                     continue;
                 }
-                if (CanCallInlineMemberRead(model, member, prove, markerSeen))
+                if (CanCallInlineMemberRead(model, member))
                 {
                     AddFormatterMemberRead(body, model, member, owner, prove, w, names);
                     continue;
@@ -2853,7 +2844,7 @@ internal static partial class BinaryEmitter
                 body.Add("else");
                 body.Add("{");
                 body.Add("var " + name + " = " + owner + "." + member.Name + " ?? " + NewInstance(member.Nested) + ";");
-                AddStreamRead(body, member.Nested, name, depth + 1, prove, markerSeen || member.Nested.Trusted, w, names, ref cursors, ref strings, ref ends);
+                AddStreamRead(body, member.Nested, name, depth + 1, prove, w, names, ref cursors, ref strings, ref ends);
                 body.Add(owner + "." + member.Name + " = " + name + ";");
                 body.Add("}");
                 // A following unproven fixed run opens with its own cursor local, which the presentation keeps directly
@@ -2939,15 +2930,8 @@ internal static partial class BinaryEmitter
             int last = RunEnd(members, index);
             if (last == index)
             {
-                if (member.Scalar == "byte" && !markerSeen)
-                {
-                    markerSeen = true;
-                    body.Add(owner + "." + member.Name + " = " + Policy() + ".ReadMarker(ref reader, " +
-                        members.Length.ToString(CultureInfo.InvariantCulture) + ");");
-                }
-                else
-                    body.Add(owner + "." + member.Name + " = " + (member.IsBoolean && !trusted
-                        ? Policy() + ".ReadBoolean(ref reader);" : "reader.Read<" + member.Scalar + ">();"));
+                body.Add(owner + "." + member.Name + " = " + (member.IsBoolean && !trusted
+                    ? Policy() + ".ReadBoolean(ref reader);" : "reader.Read<" + member.Scalar + ">();"));
                 continue;
             }
             int width = 0;
@@ -3013,21 +2997,15 @@ internal static partial class BinaryEmitter
     /// <summary>Checks whether the nested read can reuse the child's concrete object or payload root.</summary>
     /// <param name="parent">The containing record.</param>
     /// <param name="member">The nested member to read.</param>
-    /// <param name="prove">Whether the object read uses field-address proofs for fixed runs.</param>
-    /// <param name="markerSeen">Whether a lone leading byte can be read without the member-count marker check.</param>
     /// <returns>True when the root can preserve the inline read's framing, validation, and member assignment.</returns>
-    private static bool CanCallInlineMemberRead(PayloadRenderModel parent, RenderMember member, bool prove, bool markerSeen)
+    private static bool CanCallInlineMemberRead(PayloadRenderModel parent, RenderMember member)
     {
         var child = member.Nested;
-        // An untrusted payload reader can validate its first lone byte as a marker, including in a child
-        // reached before that marker. Reuse it only when the caller's marker state agrees or cannot matter.
-        bool sameMarkerState = prove || !markerSeen || child.Trusted ||
-            !child.Members.Any(field => field.Scalar == "byte" || field.Kind == RenderMemberKind.Object);
         return parent.Net8 && !member.Mirrored && !member.Property && !member.Volatile &&
             parent.Redirect == null && child.Redirect == null && parent.Trusted == child.Trusted &&
             parent.Limits?.Bounded != true && child.Limits?.Bounded != true &&
             !child.Recursive && child.Rejection == null && child.Bounded == null && child.TypeParameters.Length == 0 &&
-            child.DeclaredProfile == null && member.ScopeProfile == null && sameMarkerState &&
+            child.DeclaredProfile == null && member.ScopeProfile == null &&
             RenderModelFactory.Covered(child);
     }
 

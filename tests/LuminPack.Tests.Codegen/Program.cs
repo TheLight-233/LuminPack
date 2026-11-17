@@ -14,6 +14,11 @@ try
         SerializerIssueRegression.RunUnion(references);
         return 0;
     }
+    if (args is ["--verify-union-byte-payload"])
+    {
+        SerializerIssueRegression.RunUnionBytePayload(references);
+        return 0;
+    }
     if (args is ["--verify-framework-scalar-collections"])
     {
         SerializerIssueRegression.RunFrameworkCollections(references);
@@ -411,6 +416,7 @@ try
         return 0;
     }
     SerializerIssueRegression.RunUnion(references);
+    SerializerIssueRegression.RunUnionBytePayload(references);
     SerializerIssueRegression.RunFrameworkCollections(references);
     SerializerImportedLayoutRegression.Run(references);
     SerializerDocumentationRegression.Run(references);
