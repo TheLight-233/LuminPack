@@ -8,6 +8,7 @@ namespace LuminPack.Code;
 
 public static partial class LuminPackCollectionAccess
 {
+#if NET6_0_OR_GREATER
     /// <summary>Reads a complete raw pair window through the existing fresh or ordered reuse dictionary path.</summary>
     /// <typeparam name="TKey">The raw key storage.</typeparam>
     /// <typeparam name="TValue">The raw value storage.</typeparam>
@@ -63,6 +64,7 @@ public static partial class LuminPackCollectionAccess
         refill.Complete();
         return true;
     }
+#endif
 
     /// <summary>Writes pairs from the established weakly consistent traversal into bounded raw runs.</summary>
     /// <typeparam name="TKey">The raw key type.</typeparam>
