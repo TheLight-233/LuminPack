@@ -344,7 +344,7 @@ namespace LuminPack.Core
         /// same per-record capacity proof as a single write; a record that does not fit takes the single-record path,
         /// which grows the storage. Other profiles write each record through the single-record path.</remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining | LuminPackJit.Optimized)]
         public void WriteStrings<TOptions>(scoped ReadOnlySpan<string?> values)
             where TOptions : struct, ILuminPackOptions
         {
@@ -370,7 +370,7 @@ namespace LuminPack.Core
         /// <typeparam name="TOptions">The stateless binary string profile.</typeparam>
         /// <param name="values">The values in segment order.</param>
         [EditorBrowsable(EditorBrowsableState.Never)]
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
         public void WriteCheckedStrings<TOptions>(scoped ReadOnlySpan<string?> values) where TOptions : struct, ILuminPackOptions
         {
             if (UsesUtf16LengthRecords<TOptions>())

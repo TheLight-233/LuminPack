@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LuminPack.Option;
+using LuminPack.Utility;
 
 namespace LuminPack.Core;
 
@@ -91,7 +92,7 @@ public ref partial struct LuminPackJsonWriter
     /// <typeparam name="T">An integer type selected by the overload.</typeparam>
     /// <param name="items">The values in wire order.</param>
     /// <param name="readBeforeSeparator">Whether to capture the next item before a separate capacity check.</param>
-    [MethodImpl(MethodImplOptions.NoInlining)]
+    [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
     private void WriteIntegerRunCore<TOptions, T>(scoped ReadOnlySpan<T> items, bool readBeforeSeparator)
         where TOptions : struct, ILuminPackOptions where T : unmanaged
     {

@@ -111,7 +111,7 @@ public static partial class StringSerializer
     /// <param name="chars">The first character.</param>
     /// <param name="length">The character count, above sixteen.</param>
     /// <returns>Whether every character is at most U+00FF.</returns>
-    [MethodImpl(MethodImplOptions.NoInlining)]
+    [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
     private static bool IsLatin1Long(ref ushort chars, nuint length)
     {
         nuint i = 0;
@@ -274,7 +274,7 @@ public static partial class StringSerializer
     /// <param name="destination">The first payload byte, followed by room for <c>2 * value.Length</c> bytes.</param>
     /// <param name="value">The nonempty string.</param>
     /// <returns>The record header.</returns>
-    [MethodImpl(MethodImplOptions.NoInlining)]
+    [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
     internal static int WriteUtf16RecordPayloadSlow(ref byte destination, string value)
     {
         int length = value.Length;
@@ -454,7 +454,7 @@ public static partial class StringSerializer
     /// <param name="destination">Room for <paramref name="length"/> bytes.</param>
     /// <param name="length">The character count, above sixteen.</param>
     /// <returns>Whether every character narrowed.</returns>
-    [MethodImpl(MethodImplOptions.NoInlining)]
+    [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
     private static bool TryNarrowLatin1Long(ref ushort source, ref byte destination, nuint length)
     {
         nuint i = 0;
@@ -634,7 +634,7 @@ public static partial class StringSerializer
     /// <param name="length">The positive character count.</param>
     /// <param name="current">The immutable storage available for reuse.</param>
     /// <returns>The existing equal string or a fresh one.</returns>
-    [MethodImpl(MethodImplOptions.NoInlining)]
+    [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
     private static string ReadLatin1PayloadSlow(ref byte payload, int length, string? current)
     {
 #if NET8_0_OR_GREATER
@@ -833,7 +833,7 @@ public static partial class StringSerializer
     /// <param name="source">The first payload byte.</param>
     /// <param name="destination">The first character of the string.</param>
     /// <param name="length">The character count, above sixteen.</param>
-    [MethodImpl(MethodImplOptions.NoInlining)]
+    [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
     private static void WidenLatin1Long(ref byte source, ref ushort destination, nuint length)
     {
         nuint i = 0;
@@ -928,7 +928,7 @@ public static partial class StringSerializer
     /// <param name="chars">The first candidate character.</param>
     /// <param name="length">The character count, above sixteen.</param>
     /// <returns>Whether every character equals its widened byte.</returns>
-    [MethodImpl(MethodImplOptions.NoInlining)]
+    [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
     private static bool MatchesLatin1Long(ref byte source, ref ushort chars, nuint length)
     {
         nuint i = 0;

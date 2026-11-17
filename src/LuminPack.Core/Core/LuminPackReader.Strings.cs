@@ -502,7 +502,7 @@ namespace LuminPack.Core
         /// <typeparam name="TOptions">The stateless binary string profile.</typeparam>
         /// <param name="strings">The destination slots after their collection framing has been validated.</param>
         [EditorBrowsable(EditorBrowsableState.Never)]
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
         public void ReadStrings<TOptions>(Span<string?> strings) where TOptions : struct, ILuminPackOptions
         {
 #if NET8_0_OR_GREATER
@@ -544,7 +544,7 @@ namespace LuminPack.Core
         /// <param name="header">The first short Latin-1 header, already read at the cursor.</param>
         /// <param name="remaining">The validated number of bytes from the current position.</param>
         /// <returns>The number of complete string records read.</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
         private int ReadFreshLatin1Prefix(Span<string?> slots, int header, uint remaining)
         {
             int i = 0;
@@ -581,7 +581,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless binary profile.</typeparam>
         /// <param name = "current">The immutable string available for reuse.</param>
         /// <returns>The parsed string, retaining equal storage.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining | LuminPackJit.Optimized)]
         public string? Read<TOptions>(string? current)
             where TOptions : struct, ILuminPackOptions
         {

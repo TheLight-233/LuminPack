@@ -19,6 +19,7 @@ namespace LuminPack.Core
         /// <summary>Counts array elements with the selected document profile without advancing this reader.</summary>
         /// <typeparam name="TOptions">The stateless JSON profile.</typeparam>
         /// <returns>The number of complete elements in the current array.</returns>
+        [MethodImpl(LuminPackJit.Optimized)]
         public int CountArrayElements<TOptions>() where TOptions : struct, ILuminPackOptions
         {
             if (LuminPackMarshal.ConstantStringProfile<TOptions>() && !default(TOptions).ValidateJsonSyntax)
