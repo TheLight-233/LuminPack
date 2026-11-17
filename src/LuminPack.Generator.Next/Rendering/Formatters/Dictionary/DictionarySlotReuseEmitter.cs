@@ -26,6 +26,9 @@ internal static class DictionarySlotReuseEmitter
         if (!scalar && !leaf && cases.Length == 0)
             return;
         FormatterModel key = model.Arguments[0], value = model.Arguments[1];
+        string keyStorage = GenericFormatterReuse.Real(key.Type);
+        bool textValuePrefix = scalar && !rawPair && value.Type == "string" && key.Raw &&
+            keyStorage != "bool" && GenericIdentity.IsRaw(keyStorage);
         string pair = "global::System.Collections.Generic.KeyValuePair<" + key.Type + ", " + value.Type + ">";
         string pool = "global::System.Buffers.ArrayPool<" + key.Type + ">.Shared";
         const string add = "global::System.Runtime.CompilerServices.Unsafe.Add";
@@ -44,6 +47,8 @@ internal static class DictionarySlotReuseEmitter
         w.Open();
         if (scalar && rawPair)
             DensePrefix();
+        else if (textValuePrefix)
+            DenseTextValuePrefix();
         else
             w.Line("int matched = 0;");
         w.Line("var order = destination.GetEnumerator();");
@@ -130,6 +135,39 @@ internal static class DictionarySlotReuseEmitter
             w.Close();
             w.Close();
             w.Close();
+            FinishPrefix();
+        }
+
+        void DenseTextValuePrefix()
+        {
+            const string builtIn = "typeof(TLuminProfile) == typeof(global::LuminPack.Option.";
+            w.Line("int matched = 0;");
+            w.Line("if (seen is null && global::System.IntPtr.Size == 8 &&");
+            w.Line("    (" + builtIn + "LuminPackDefaultOptions) || " + builtIn + "LuminPackUtf16LengthOptions) ||");
+            w.Line("     " + builtIn + "LuminPackUtf8LengthOptions) || " + builtIn + "LuminPackUtf16TokenOptions) ||");
+            w.Line("     " + builtIn + "LuminPackUtf8TokenOptions)) &&");
+            w.Line("    global::LuminPack.Code.LuminPackMarshal.TryGetDictionaryView(destination, out var view) &&");
+            w.Line("    view._freeCount == 0 && view._count == count)");
+            w.Open();
+            w.Line("int keyWidth = global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + key.Type + ">();");
+            w.Line("ref var first = ref " + arrayReference + "(view._entries!);");
+            w.Line("do");
+            w.Open();
+            w.Line("ref byte cursor = ref reader.PeekInput(keyWidth, out bool available);");
+            w.Line("if (!available) break;");
+            w.Line("ref var entry = ref " + add + "(ref first, (nint)(uint)matched);");
+            w.Line(key.Type + " incoming = global::LuminPack.Core.LuminPackReader.Read<" + key.Type + ">(ref cursor);");
+            w.Line("if (!global::System.Collections.Generic.EqualityComparer<" + key.Type + ">.Default.Equals(incoming, entry.Key)) break;");
+            w.Line("reader.Cursor = ref " + add + "(ref cursor, keyWidth);");
+            FormatterElementEmitter.Read(w, set, value, "entry.Value");
+            w.Close();
+            w.Line("while (++matched < count);");
+            w.Close();
+            FinishPrefix();
+        }
+
+        void FinishPrefix()
+        {
             w.Line("if (matched == count) return;");
             w.Line("if (matched > 0) seen = RecordPrefix(destination, count, matched);");
         }

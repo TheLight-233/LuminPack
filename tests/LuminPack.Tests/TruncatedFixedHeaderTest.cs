@@ -80,6 +80,48 @@ public sealed partial class TruncatedFixedHeaderTest
         Assert.Null(target.Child);
     }
 
+    /// <summary>Checks string identity, partial reads, and fallback after a matching dictionary key.</summary>
+    [Fact]
+    public void MixedDictionaryKeepsMatchedValuesBeforeFallback()
+    {
+        string original = new string('a', 10);
+        var target = new Dictionary<int, string?> { [1] = original, [2] = "old" };
+        var matching = new Dictionary<int, string?> { [1] = new string('a', 10), [2] = null };
+        byte[] bytes = LuminPackSerializer.Serialize(matching);
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref target));
+        Assert.Same(original, target[1]);
+        Assert.Null(target[2]);
+
+        matching[1] = "changed";
+        matching[2] = "truncated";
+        bytes = LuminPackSerializer.Serialize(matching);
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(bytes.AsSpan(0, bytes.Length - 1), ref target));
+        Assert.Equal("changed", target[1]);
+        Assert.Null(target[2]);
+
+        var reordered = new Dictionary<int, string?> { [1] = "retained", [3] = "inserted" };
+        bytes = LuminPackSerializer.Serialize(reordered);
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref target));
+        Assert.Equal(reordered.ToArray(), target.ToArray());
+    }
+
+    /// <summary>Checks string-key identity and staged publication when the value is fully replaced.</summary>
+    [Fact]
+    public void StringKeyDictionaryStagesCompleteRawValues()
+    {
+        string original = new string('a', 10);
+        var target = new Dictionary<string, int> { [original] = 11, ["old"] = 25 };
+        var source = new Dictionary<string, int> { [new string('a', 10)] = 31, ["new"] = 45 };
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(bytes.AsSpan(0, bytes.Length - 1), ref target));
+        Assert.Equal(11, target[original]);
+        Assert.Equal(25, target["old"]);
+
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref target));
+        Assert.Equal(source.ToArray(), target.ToArray());
+        Assert.Same(original, target.Keys.First());
+    }
+
     /// <summary>Provides a concrete field whose type is also a fixed Union case.</summary>
     [LuminPackable]
     public sealed class FixedCaseContainer

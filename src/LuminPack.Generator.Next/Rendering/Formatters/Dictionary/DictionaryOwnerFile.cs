@@ -72,6 +72,8 @@ internal static class DictionaryOwnerFile
         var contractModel = set.FindFormatter(dictionary);
         bool rawPairWrite = pair && contractModel?.Supports("BinaryRawPairs") == true;
         bool textPairWrite = !sparse && rawKey != rawValue && contractModel?.Supports("BinaryTextPair") == true;
+        bool enumeratedStringKey = key == "string" && contractModel?.Supports("EnumeratedStringKey") == true;
+        bool completeRawValue = enumeratedStringKey && rawValue && !sparse && CallbackFree(value);
         string rawWidth = memory + ".SizeOf<" + (rawKey ? key : value) + ">()";
         bool readRawPair = pair && GenericFormatterReuse.Real(key) == "int" &&
             (GenericFormatterReuse.Real(value) is "int" or "long");
@@ -292,18 +294,19 @@ internal static class DictionaryOwnerFile
             w.Line("private static void WriteTextPair<TLuminProfile>(scoped ref " + writer + " operationState, in " + key + " key, in " + value + " itemValue)");
             w.Line(generic + options);
             w.Open();
+            w.Line("string text;");
             w.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
-            w.Line("    (long)operationState.RecordRoom() - " + rawWidth + " >= " + runtimeWriter + ".Utf16RecordBound(" + text + "))");
+            w.Line("    (long)operationState.RecordRoom() - " + rawWidth + " >= " + runtimeWriter + ".Utf16RecordBound(text = " + text + "))");
             w.Open();
             w.Line("ref byte cursor = ref operationState.Cursor;");
             if (rawKey)
             {
                 w.Line(runtimeWriter + ".Write(ref cursor, in " + scalar + ");");
-                w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref " + memory + ".Add(ref cursor, " + rawWidth + "), " + text + ");");
+                w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref " + memory + ".Add(ref cursor, " + rawWidth + "), text);");
             }
             else
             {
-                w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref cursor, " + text + ");");
+                w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref cursor, text);");
                 w.Line(runtimeWriter + ".Write(ref " + memory + ".Add(ref cursor, (nint)(uint)written), in " + scalar + ");");
             }
             w.Line("operationState.CompleteRun(written + " + rawWidth + ");");
@@ -508,7 +511,7 @@ internal static class DictionaryOwnerFile
                     if (key == "string")
                     {
                         w.Line("var previous = destination.GetEnumerator();");
-                        if (set.FindFormatter(dictionary)?.Supports("EnumeratedStringKey") == true)
+                        if (enumeratedStringKey)
                             w.Line("bool useEnumeratedValue = operationState.CanReuseEnumeratedStringKey<TLuminProfile>(destination.Comparer);");
                     }
                     if (observeRawLookup)
@@ -528,8 +531,14 @@ internal static class DictionaryOwnerFile
                             w.Line("if (observeLookup) destination.TryGetValue(key, out _);");
                         w.Line(value + " item = default!;");
                     }
+                    else if (completeRawValue)
+                    {
+                        // The default string comparer has no observers and the read overwrites the entire scalar.
+                        w.Line(value + " item = default;");
+                        w.Line("if (!useEnumeratedValue && key is not null) destination.TryGetValue(key, out item);");
+                    }
                     else
-                        w.Line(value + " item = " + (key == "string" && set.FindFormatter(dictionary)?.Supports("EnumeratedStringKey") == true ?
+                        w.Line(value + " item = " + (enumeratedStringKey ?
                             "useEnumeratedValue && global::System.Object.ReferenceEquals(key, prior.Key) ? prior.Value : " : "") +
                             // A non-nullable value key needs no null check before the lookup.
                             (key == "string" || key == "object" || key.EndsWith("?", System.StringComparison.Ordinal) ? "key is not null && " : "") +
