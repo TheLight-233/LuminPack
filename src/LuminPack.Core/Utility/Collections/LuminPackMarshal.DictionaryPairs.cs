@@ -49,11 +49,61 @@ public static partial class LuminPackMarshal
     }
 
 #if NET8_0_OR_GREATER
+    /// <summary>Copies a proven dense layout with the packed pair in the upper eight bytes of each 16-byte entry.</summary>
+    /// <param name="entries">The first metadata lane, followed by the live entry array.</param>
+    /// <param name="target">The first packed output pair.</param>
+    /// <param name="count">The number of complete entries and available output pairs.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining | global::LuminPack.Utility.LuminPackJit.Optimized)]
+    private static void CopyPackedDensePairLanes(ref ulong entries, ref ulong target, int count)
+    {
+        int i = 0;
+        if (Avx512F.IsSupported)
+        {
+            var indices = Vector512.Create(1UL, 3UL, 5UL, 7UL, 9UL, 11UL, 13UL, 15UL);
+            for (; i <= count - 8; i += 8)
+            {
+                nuint offset = (nuint)i * 2;
+                var first = Vector512.LoadUnsafe(ref entries, offset);
+                var second = Vector512.LoadUnsafe(ref entries, offset + 8);
+                var pairs = Avx512F.PermuteVar8x64x2(first, indices, second);
+                Vector512.StoreUnsafe(pairs, ref target, (nuint)i);
+            }
+        }
+        if (Avx2.IsSupported)
+        {
+            for (; i <= count - 4; i += 4)
+            {
+                nuint offset = (nuint)i * 2;
+                var first = Vector256.LoadUnsafe(ref entries, offset);
+                var second = Vector256.LoadUnsafe(ref entries, offset + 4);
+                // Unpack works within each 128-bit lane and yields pairs in order 0, 2, 1, 3.
+                var unpacked = Avx2.UnpackHigh(first, second);
+                var pairs = Avx2.Permute4x64(unpacked, 0xD8);
+                Vector256.StoreUnsafe(pairs, ref target, (nuint)i);
+            }
+        }
+        for (; i <= count - 2; i += 2)
+        {
+            nuint offset = (nuint)i * 2;
+            var first = Vector128.LoadUnsafe(ref entries, offset);
+            var second = Vector128.LoadUnsafe(ref entries, offset + 2);
+            var pairs = Sse2.IsSupported
+                ? Sse2.UnpackHigh(first, second)
+                : AdvSimd.Arm64.ZipHigh(first, second);
+            Vector128.StoreUnsafe(pairs, ref target, (nuint)i);
+        }
+        if (i < count)
+        {
+            ulong pair = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<ulong, byte>(ref Unsafe.Add(ref entries, (nint)i * 2 + 1)));
+            Unsafe.WriteUnaligned(ref Unsafe.As<ulong, byte>(ref Unsafe.Add(ref target, i)), pair);
+        }
+    }
+
     /// <summary>Places each pair in the upper half of its entry, leaving zeroed metadata for the bucket builder.</summary>
     /// <param name="source">The first validated wire pair.</param>
     /// <param name="destination">The first empty entry's metadata lane.</param>
     /// <param name="count">The number of complete pairs and entries.</param>
-    [MethodImpl(MethodImplOptions.NoInlining)]
+    [MethodImpl(MethodImplOptions.NoInlining | global::LuminPack.Utility.LuminPackJit.Optimized)]
     private static void ExpandPairs(ref ulong source, ref ulong destination, int count)
     {
         int index = 0;

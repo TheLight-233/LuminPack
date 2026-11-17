@@ -669,52 +669,17 @@ public static partial class LuminPackMarshal
         int pair = Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>();
         if (Unsafe.SizeOf<IntPtr>() == 8 && pair == 8 && AdjacentPair<TKey, TValue>.Value)
         {
-            int i = 0;
 #if NET8_0_OR_GREATER
             // The upper 64-bit lane of each sixteen-byte entry is its pair. Every vector load stays within the live entries.
             if (Unsafe.SizeOf<DictionaryView<TKey, TValue>.Entry>() == 16 && AdjacentPair<TKey, TValue>.UpperHalf &&
                 (System.Runtime.Intrinsics.X86.Sse2.IsSupported || System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported))
             {
-                ref ulong entries = ref Unsafe.As<DictionaryView<TKey, TValue>.Entry, ulong>(ref entry);
-                ref ulong target = ref Unsafe.As<byte, ulong>(ref destination);
-                if (System.Runtime.Intrinsics.X86.Avx512F.IsSupported)
-                {
-                    var indices = System.Runtime.Intrinsics.Vector512.Create(1UL, 3UL, 5UL, 7UL, 9UL, 11UL, 13UL, 15UL);
-                    for (; i <= count - 8; i += 8)
-                    {
-                        nuint offset = (nuint)i * 2;
-                        var first = System.Runtime.Intrinsics.Vector512.LoadUnsafe(ref entries, offset);
-                        var second = System.Runtime.Intrinsics.Vector512.LoadUnsafe(ref entries, offset + 8);
-                        var pairs = System.Runtime.Intrinsics.X86.Avx512F.PermuteVar8x64x2(first, indices, second);
-                        System.Runtime.Intrinsics.Vector512.StoreUnsafe(pairs, ref target, (nuint)i);
-                    }
-                }
-                if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
-                {
-                    for (; i <= count - 4; i += 4)
-                    {
-                        nuint offset = (nuint)i * 2;
-                        var first = System.Runtime.Intrinsics.Vector256.LoadUnsafe(ref entries, offset);
-                        var second = System.Runtime.Intrinsics.Vector256.LoadUnsafe(ref entries, offset + 4);
-                        // Unpack works within each 128-bit lane and yields pairs in order 0, 2, 1, 3.
-                        var unpacked = System.Runtime.Intrinsics.X86.Avx2.UnpackHigh(first, second);
-                        var pairs = System.Runtime.Intrinsics.X86.Avx2.Permute4x64(unpacked, 0xD8);
-                        System.Runtime.Intrinsics.Vector256.StoreUnsafe(pairs, ref target, (nuint)i);
-                    }
-                }
-                for (; i <= count - 2; i += 2)
-                {
-                    nuint offset = (nuint)i * 2;
-                    var first = System.Runtime.Intrinsics.Vector128.LoadUnsafe(ref entries, offset);
-                    var second = System.Runtime.Intrinsics.Vector128.LoadUnsafe(ref entries, offset + 2);
-                    var pairs = System.Runtime.Intrinsics.X86.Sse2.IsSupported
-                        ? System.Runtime.Intrinsics.X86.Sse2.UnpackHigh(first, second)
-                        : System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.ZipHigh(first, second);
-                    System.Runtime.Intrinsics.Vector128.StoreUnsafe(pairs, ref target, (nuint)i);
-                }
+                CopyPackedDensePairLanes(ref Unsafe.As<DictionaryView<TKey, TValue>.Entry, ulong>(ref entry),
+                    ref Unsafe.As<byte, ulong>(ref destination), count);
+                return;
             }
 #endif
-            for (; i < count; i++)
+            for (int i = 0; i < count; i++)
                 Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)i * 8),
                     Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<TKey, byte>(ref Unsafe.Add(ref entry, (nint)i).Key)));
         }

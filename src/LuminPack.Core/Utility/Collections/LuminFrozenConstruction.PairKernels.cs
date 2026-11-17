@@ -103,7 +103,7 @@ public static partial class LuminFrozenConstruction
     /// <param name="count">The number of pairs in the payload.</param>
     /// <param name="width">The common width of one key and one value.</param>
     /// <returns>The number of pairs read before the scalar tail.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining | LuminPackJit.Optimized)]
     private static int ReadInterleavedPrefix(ref byte source, ref byte keys, ref byte values, int count, int width)
     {
         // Each 128-bit shuffle collects its key bytes into the low eight bytes and clears the high eight.
@@ -220,7 +220,7 @@ public static partial class LuminFrozenConstruction
     /// <param name="values">The first lane of the validated value span.</param>
     /// <param name="count">The number of complete pairs in the spans.</param>
     /// <returns>The number of pairs written before the scalar tail.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining | LuminPackJit.Optimized)]
     private static int WriteInterleaved<T>(ref T destination, ref T keys, ref T values, int count) where T : unmanaged
     {
         int index = 0;

@@ -62,7 +62,7 @@ public static partial class LuminPackMarshal
     /// <param name="destination">The first byte in the reserved payload.</param>
     /// <param name="source">The first entry in the validated dense range.</param>
     /// <param name="count">The number of values to transfer.</param>
-    [MethodImpl(MethodImplOptions.NoInlining)]
+    [MethodImpl(MethodImplOptions.NoInlining | global::LuminPack.Utility.LuminPackJit.Optimized)]
     private static void WriteDenseHashSetInt32(scoped ref byte destination, scoped ref byte source, int count)
     {
         if (Avx512F.IsSupported)

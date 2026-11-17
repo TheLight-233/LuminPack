@@ -31,6 +31,7 @@ public static partial class LuminPackMarshal
     /// <param name="writer">The output state before the header.</param>
     /// <param name="set">The exact framework set.</param>
     /// <returns>Whether the dense layout and entry range were proved and written.</returns>
+    [MethodImpl(global::LuminPack.Utility.LuminPackJit.Optimized)]
     private static bool TryWriteDenseStringSet<TOptions>(ref LuminPackWriter writer, HashSet<string?> set)
         where TOptions : struct, ILuminPackOptions
     {

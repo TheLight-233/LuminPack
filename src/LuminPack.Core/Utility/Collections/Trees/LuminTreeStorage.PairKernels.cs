@@ -85,7 +85,7 @@ public static partial class LuminTreeStorage
         /// <param name="input">The complete typed staging storage as bytes.</param>
         /// <param name="output">The complete destination wire bytes.</param>
         /// <param name="count">The validated pair count.</param>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
         private static void Pack(ReadOnlySpan<byte> input, Span<byte> output, int count)
         {
             const int lane = 16;
@@ -131,7 +131,7 @@ public static partial class LuminTreeStorage
         /// <param name="input">The complete reserved wire bytes.</param>
         /// <param name="output">The complete typed staging storage as bytes.</param>
         /// <param name="count">The validated pair count.</param>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
         private static void Unpack(ReadOnlySpan<byte> input, Span<byte> output, int count)
         {
             const int lane = 16;
