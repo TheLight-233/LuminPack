@@ -590,36 +590,127 @@ public static partial class LuminPackMarshal
         writer.Advance(count * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>()));
     }
 
+    /// <summary>Writes the packed pairs of an exact dictionary if the complete dense payload fits the current output window.</summary>
+    /// <typeparam name="TKey">The raw key type.</typeparam>
+    /// <typeparam name="TValue">The raw value type.</typeparam>
+    /// <param name="writer">The writer positioned after the collection header.</param>
+    /// <param name="dictionary">The exact framework dictionary selected by the caller.</param>
+    /// <param name="count">The number of pairs written when the dense path succeeds.</param>
+    /// <returns>Whether the bounded dense path wrote the payload.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryWriteBoundedDenseRawPairs<TKey, TValue>(ref LuminPackWriter writer,
+        Dictionary<TKey, TValue> dictionary, out int count)
+        where TKey : unmanaged where TValue : unmanaged
+    {
+        count = dictionary.Count;
+        return IntPtr.Size == 8 && count >= 16 && TryWriteDenseRawPairPayload(ref writer, dictionary, count);
+    }
+
+    /// <summary>Validates the complete raw payload and copies it without a capacity operation inside the traversal.</summary>
+    /// <typeparam name="TKey">The raw key type.</typeparam>
+    /// <typeparam name="TValue">The raw value type.</typeparam>
+    /// <param name="writer">The writer positioned after the collection header.</param>
+    /// <param name="dictionary">The exact framework dictionary selected by the caller.</param>
+    /// <param name="count">The captured count of dictionary pairs.</param>
+    /// <returns>Whether the whole dense payload fit and was written.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static bool TryWriteDenseRawPairPayload<TKey, TValue>(ref LuminPackWriter writer,
+        Dictionary<TKey, TValue> dictionary, int count)
+        where TKey : unmanaged where TValue : unmanaged
+    {
+        long bytes = (long)count * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>());
+        if (bytes > writer.RecordRoom() ||
+            !TryGetDictionaryView(dictionary, out var view) || view._count != count || view._freeCount != 0 ||
+            view._entries is not { } entries || count > entries.Length)
+            return false;
+
+        ref var entry = ref GetArrayReference(entries);
+        ref byte source = ref Unsafe.As<DictionaryView<TKey, TValue>.Entry, byte>(ref entry);
+        ref byte destination = ref writer.CurrentReference;
+        nint displacement = Unsafe.ByteOffset(ref source, ref destination);
+        long sourceBytes = (long)count * Unsafe.SizeOf<DictionaryView<TKey, TValue>.Entry>();
+        if (displacement > -bytes && displacement < sourceBytes)
+            return false;
+
+        int version = view._version;
+        CopyDenseRawPairEntries(ref destination, ref entry, count);
+        writer.CompleteRun((int)bytes);
+        if (view._version != version || view._count != count || view._freeCount != 0 || !ReferenceEquals(view._entries, entries))
+            LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
+        return true;
+    }
+
     /// <summary>Copies the raw key and value storage of a dense dictionary's first <paramref name="count"/> entries.</summary>
     /// <param name="destination">Writable room for <paramref name="count"/> packed pairs.</param>
     /// <param name="dictionary">A dictionary without removed entries, so its first entries are its live pairs in enumeration order.</param>
     /// <param name="count">The positive number of pairs.</param>
     /// <typeparam name="TKey">The raw key type.</typeparam>
     /// <typeparam name="TValue">The raw value type.</typeparam>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void CopyDenseRawPairs<TKey, TValue>(ref byte destination, Dictionary<TKey, TValue> dictionary, int count)
         where TKey : unmanaged where TValue : unmanaged
     {
         var view = GetDictionaryView(dictionary);
         ref var entry = ref GetArrayReference(view._entries);
+        CopyDenseRawPairEntries(ref destination, ref entry, count);
+    }
+
+    /// <summary>Copies packed pairs from the captured first entry of the proven dense range.</summary>
+    /// <typeparam name="TKey">The raw key type.</typeparam>
+    /// <typeparam name="TValue">The raw value type.</typeparam>
+    /// <param name="destination">The already reserved packed output.</param>
+    /// <param name="entry">The first entry of the captured dense array.</param>
+    /// <param name="count">The number of complete live entries in that array.</param>
+    private static void CopyDenseRawPairEntries<TKey, TValue>(ref byte destination,
+        ref DictionaryView<TKey, TValue>.Entry entry, int count)
+        where TKey : unmanaged where TValue : unmanaged
+    {
         int pair = Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>();
         if (Unsafe.SizeOf<IntPtr>() == 8 && pair == 8 && AdjacentPair<TKey, TValue>.Value)
         {
             int i = 0;
 #if NET8_0_OR_GREATER
-            // A sixteen-byte entry holding its pair in its upper half: two entries load as two vectors and one unpack of their
-            // upper 64-bit lanes stores both pairs. Each load covers exactly one entry of the counted range.
+            // The upper 64-bit lane of each sixteen-byte entry is its pair. Every vector load stays within the live entries.
             if (Unsafe.SizeOf<DictionaryView<TKey, TValue>.Entry>() == 16 && AdjacentPair<TKey, TValue>.UpperHalf &&
                 (System.Runtime.Intrinsics.X86.Sse2.IsSupported || System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported))
             {
-                ref byte entries = ref Unsafe.As<DictionaryView<TKey, TValue>.Entry, byte>(ref entry);
-                for (; i + 2 <= count; i += 2)
+                ref ulong entries = ref Unsafe.As<DictionaryView<TKey, TValue>.Entry, ulong>(ref entry);
+                ref ulong target = ref Unsafe.As<byte, ulong>(ref destination);
+                if (System.Runtime.Intrinsics.X86.Avx512F.IsSupported)
                 {
-                    var first = System.Runtime.Intrinsics.Vector128.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref entries, (nint)i * 16)));
-                    var second = System.Runtime.Intrinsics.Vector128.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref entries, (nint)i * 16 + 16)));
+                    var indices = System.Runtime.Intrinsics.Vector512.Create(1UL, 3UL, 5UL, 7UL, 9UL, 11UL, 13UL, 15UL);
+                    for (; i <= count - 8; i += 8)
+                    {
+                        nuint offset = (nuint)i * 2;
+                        var first = System.Runtime.Intrinsics.Vector512.LoadUnsafe(ref entries, offset);
+                        var second = System.Runtime.Intrinsics.Vector512.LoadUnsafe(ref entries, offset + 8);
+                        var pairs = System.Runtime.Intrinsics.X86.Avx512F.PermuteVar8x64x2(first, indices, second);
+                        System.Runtime.Intrinsics.Vector512.StoreUnsafe(pairs, ref target, (nuint)i);
+                    }
+                }
+                if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
+                {
+                    for (; i <= count - 4; i += 4)
+                    {
+                        nuint offset = (nuint)i * 2;
+                        var first = System.Runtime.Intrinsics.Vector256.LoadUnsafe(ref entries, offset);
+                        var second = System.Runtime.Intrinsics.Vector256.LoadUnsafe(ref entries, offset + 4);
+                        // Unpack works within each 128-bit lane and yields pairs in order 0, 2, 1, 3.
+                        var unpacked = System.Runtime.Intrinsics.X86.Avx2.UnpackHigh(first, second);
+                        var pairs = System.Runtime.Intrinsics.X86.Avx2.Permute4x64(unpacked, 0xD8);
+                        System.Runtime.Intrinsics.Vector256.StoreUnsafe(pairs, ref target, (nuint)i);
+                    }
+                }
+                for (; i <= count - 2; i += 2)
+                {
+                    nuint offset = (nuint)i * 2;
+                    var first = System.Runtime.Intrinsics.Vector128.LoadUnsafe(ref entries, offset);
+                    var second = System.Runtime.Intrinsics.Vector128.LoadUnsafe(ref entries, offset + 2);
                     var pairs = System.Runtime.Intrinsics.X86.Sse2.IsSupported
                         ? System.Runtime.Intrinsics.X86.Sse2.UnpackHigh(first, second)
                         : System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.ZipHigh(first, second);
-                    System.Runtime.Intrinsics.Vector128.StoreUnsafe(pairs, ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref destination, (nint)i * 8)));
+                    System.Runtime.Intrinsics.Vector128.StoreUnsafe(pairs, ref target, (nuint)i);
                 }
             }
 #endif

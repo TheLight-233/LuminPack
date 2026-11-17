@@ -177,6 +177,9 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <summary>Whether a payload member of a reference type is preceded by a null object marker, whose read resets the member.</summary>
     internal readonly bool NullObjectGuard;
 
+    /// <summary>The object marker's member count when the checked object and payload readers share the same fixed body.</summary>
+    internal readonly int FixedPayloadMemberCount;
+
     /// <summary>Whether the member is a managed struct whose own read reuses the references the existing value holds, so a
     /// fresh enclosing struct starts it from the existing member, as the original expanded read reused them.</summary>
     internal readonly bool SeedExisting;
@@ -217,11 +220,12 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <param name="isVolatile">Whether to enable is volatile for this operation.</param>
     /// <param name="seedExisting">Whether to enable seed existing for this operation.</param>
     /// <param name="reservableArray">Whether to enable reservable array for this operation.</param>
+    /// <param name="fixedPayloadMemberCount">The checked marker's member count, or zero when the object reader is required.</param>
     internal RenderMember(string name, RenderMemberKind kind, string scalar, string typeName, int size, string formatter, ScalarKind fieldType,
         bool mirrored, string underlying = null, bool raw = false, bool builtin = false, PayloadRenderModel nested = null, bool formatterCall = false,
         bool property = false, RenderDictionary dictionary = null, RenderCollection collection = null, bool valueTypeParameter = false,
         bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false, string scopeProfile = null, SequenceFormatter sequence = null, bool isVolatile = false,
-        bool seedExisting = false, bool reservableArray = false)
+        bool seedExisting = false, bool reservableArray = false, int fixedPayloadMemberCount = 0)
     {
         SeedExisting = seedExisting;
         ReservableArray = reservableArray;
@@ -230,6 +234,7 @@ internal sealed class RenderMember : IEquatable<RenderMember>
         ScopeProfile = scopeProfile;
         ReferencePayload = referencePayload;
         NullObjectGuard = nullObjectGuard;
+        FixedPayloadMemberCount = fixedPayloadMemberCount;
         BareParameter = bareParameter;
         ValueTypeParameter = valueTypeParameter;
         Collection = collection;
@@ -283,7 +288,8 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <returns>The compiled member scope.</returns>
     internal RenderMember WithScope(string profile) => new RenderMember(Name, Kind, Scalar, TypeName, Size, Formatter, FieldType,
         Mirrored, Underlying, Raw, Builtin, Nested, FormatterCall, Property, Dictionary, Collection, ValueTypeParameter,
-        BareParameter, NullObjectGuard, ReferencePayload, profile, Sequence, Volatile, reservableArray: ReservableArray);
+        BareParameter, NullObjectGuard, ReferencePayload, profile, Sequence, Volatile, reservableArray: ReservableArray,
+        fixedPayloadMemberCount: FixedPayloadMemberCount);
 
     /// <summary>Whether fixed field access is volatile and excluded from adjacent-field copies.</summary>
     internal readonly bool Volatile;
@@ -310,7 +316,7 @@ internal sealed class RenderMember : IEquatable<RenderMember>
         Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin && FormatterCall == other.FormatterCall &&
         Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Collection, other.Collection) &&
         ValueTypeParameter == other.ValueTypeParameter && BareParameter == other.BareParameter &&
-        NullObjectGuard == other.NullObjectGuard && ReferencePayload == other.ReferencePayload &&
+        NullObjectGuard == other.NullObjectGuard && FixedPayloadMemberCount == other.FixedPayloadMemberCount && ReferencePayload == other.ReferencePayload &&
         Volatile == other.Volatile && ReservableArray == other.ReservableArray && ReferenceEquals(Sequence, other.Sequence) &&
         ScopeProfile == other.ScopeProfile && Equals(Nested, other.Nested);
 
@@ -559,6 +565,12 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <summary>The reason every operation of an explicitly untrusted payload fails closed, or null.</summary>
     internal readonly string Rejection;
 
+    /// <summary>The declared list base whose contents are this payload's entire body, or null.</summary>
+    internal readonly string SequenceBase;
+
+    /// <summary>The element spelling of <see cref="SequenceBase"/>, or null.</summary>
+    internal readonly string SequenceElement;
+
     /// <summary>The frozen limits of an untrusted root, or null for a trusted one.</summary>
     internal InputLimits Limits { get; private set; }
 
@@ -664,6 +676,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <param name="registration">Whether to enable registration for this operation.</param>
     /// <param name="generatedPropertyHeads">Whether to write bounded static heads for reference-tracked JSON.</param>
     /// <param name="generatedInt32Runs">Whether the runtime supports bounded integer runs.</param>
+    /// <param name="sequenceBase">The list base whose contents are the payload's body.</param>
+    /// <param name="sequenceElement">The list base's element spelling.</param>
     internal PayloadRenderModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         RenderMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
@@ -677,8 +691,11 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         PortableView portableView = null, bool unionWide = false, int[] mirrorOffsets = null, string[] typeParameters = null,
         string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, int[] circleSlots = null, int[] circleWidths = null, StorageMirrorModel[] mirrors = null,
         string rejection = null, InputLimits limits = null, bool recursive = false, bool registration = true,
-        bool generatedPropertyHeads = false, bool generatedInt32Runs = false)
+        bool generatedPropertyHeads = false, bool generatedInt32Runs = false,
+        string sequenceBase = null, string sequenceElement = null)
     {
+        SequenceBase = sequenceBase;
+        SequenceElement = sequenceElement;
         GeneratedPropertyHeads = generatedPropertyHeads;
         GeneratedInt32Runs = generatedInt32Runs;
         Registration = registration;
@@ -783,6 +800,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         Same(UnionCases, other.UnionCases) && Same(TypeParameters, other.TypeParameters) && Same(TypeConstraints, other.TypeConstraints) &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Same(MirrorOffsets, other.MirrorOffsets) &&
+        SequenceBase == other.SequenceBase && SequenceElement == other.SequenceElement &&
         Members.SequenceEqual(other.Members);
 
     /// <inheritdoc/>

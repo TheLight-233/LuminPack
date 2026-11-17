@@ -6,6 +6,10 @@ using System.Collections.Frozen;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+#if NET8_0_OR_GREATER
+using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
+#endif
 using LuminPack.Code;
 using LuminPack.Core;
 
@@ -13,7 +17,7 @@ namespace LuminPack.Utility;
 
 /// <summary>Owns temporary mutable construction storage and fixed scalar writes for frozen collections.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public static class LuminFrozenConstruction
+public static partial class LuminFrozenConstruction
 {
     private const int MaximumRetainedCapacity = 4096;
     private const int LastTablePrimeBelowLimit = 4049;
@@ -47,6 +51,36 @@ public static class LuminFrozenConstruction
         if (capacity <= RetainedTableCapacity(count) && capacity <= Math.Max(128, count * 4) &&
             ReferenceEquals(value.Comparer, EqualityComparer<TKey>.Default))
             Cache<Dictionary<TKey, TValue>>.Items.TryStore(value);
+    }
+
+    /// <summary>Adds a complete raw pair payload in wire order to the existing frozen dictionary builder.</summary>
+    /// <typeparam name="TKey">The raw key storage.</typeparam>
+    /// <typeparam name="TValue">The raw value storage.</typeparam>
+    /// <param name="reader">The state after the positive collection count.</param>
+    /// <param name="builder">The exclusively owned construction dictionary.</param>
+    /// <param name="count">The declared number of pairs.</param>
+    /// <returns>Whether the complete window was available and the pairs were added.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static bool TryAddRawDictionaryPairs<TKey, TValue>(scoped ref LuminPackReader reader,
+        Dictionary<TKey, TValue> builder, int count) where TKey : unmanaged where TValue : unmanaged
+    {
+        if (count < 16)
+            return false;
+
+        int keyWidth = Unsafe.SizeOf<TKey>();
+        int pairWidth = keyWidth + Unsafe.SizeOf<TValue>();
+        ref byte source = ref reader.CurrentReference;
+        if (!reader.TryAdvanceFixedPayload(count, pairWidth))
+            return false;
+
+        do
+        {
+            TKey key = LuminPackReader.Read<TKey>(ref source);
+            TValue item = LuminPackReader.Read<TValue>(ref Unsafe.Add(ref source, keyWidth));
+            builder.Add(key, item);
+            source = ref Unsafe.Add(ref source, pairWidth);
+        } while (--count != 0);
+        return true;
     }
 
     /// <summary>Rents an exclusive empty set using the default comparer.</summary>
@@ -220,19 +254,65 @@ public static class LuminFrozenConstruction
         writer.WriteCollectionHeader(keys.Length);
         if (!keys.IsEmpty)
         {
-            ref byte destination = ref MemoryMarshal.GetReference(writer.Buffer.Slice(writer.Position, bytes));
+            Span<byte> payload = writer.Buffer.Slice(writer.Position, bytes);
+            ref byte destination = ref MemoryMarshal.GetReference(payload);
             ref TKey firstKey = ref MemoryMarshal.GetReference(keys);
             ref TValue firstValue = ref MemoryMarshal.GetReference(values);
             int index = 0;
-            do
+#if NET8_0_OR_GREATER
+            if (CanInterleave<TKey, TValue>(keys.Length))
+            {
+                index = WriteInterleavedPrefix(payload, keys, values);
+                destination = ref Unsafe.Add(ref destination, (nint)index * (keyWidth + valueWidth));
+            }
+#endif
+            for (; index < keys.Length; index++)
             {
                 WriteScalar(ref destination, ref Unsafe.Add(ref firstKey, (nint)(uint)index));
                 WriteScalar(ref Unsafe.Add(ref destination, (nint)(uint)keyWidth), ref Unsafe.Add(ref firstValue, (nint)(uint)index));
                 destination = ref Unsafe.Add(ref destination, (nint)(uint)(keyWidth + valueWidth));
-            } while (++index < keys.Length);
+            }
         }
         writer.Advance(bytes);
         writer.CheckBuffer();
+    }
+
+    /// <summary>Writes already captured sorted-list arrays when the complete interleaved payload fits.</summary>
+    /// <typeparam name="TKey">The raw key type.</typeparam>
+    /// <typeparam name="TValue">The raw value type.</typeparam>
+    /// <param name="writer">The writer positioned after the header.</param>
+    /// <param name="keys">The captured key array.</param>
+    /// <param name="values">The captured value array.</param>
+    /// <param name="count">The number of pairs to write.</param>
+    /// <returns>Whether the entire payload was written.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryWriteInterleavedPairs<TKey, TValue>(ref LuminPackWriter writer, TKey[] keys, TValue[] values, int count)
+        where TKey : unmanaged where TValue : unmanaged
+    {
+#if NET8_0_OR_GREATER
+        if (CanInterleave<TKey, TValue>(count))
+            return TryWriteInterleavedPayload(ref writer, keys, values, count);
+#endif
+        return false;
+    }
+
+    /// <summary>Splits a complete wire pair payload into the two already rented sorted-list arrays.</summary>
+    /// <typeparam name="TKey">The raw key type.</typeparam>
+    /// <typeparam name="TValue">The raw value type.</typeparam>
+    /// <param name="reader">The reader positioned after the count.</param>
+    /// <param name="keys">The key staging array.</param>
+    /// <param name="values">The value staging array.</param>
+    /// <param name="count">The number of pairs in the payload.</param>
+    /// <returns>Whether the complete payload was consumed.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryReadInterleavedPairs<TKey, TValue>(ref LuminPackReader reader, TKey[] keys, TValue[] values, int count)
+        where TKey : unmanaged where TValue : unmanaged
+    {
+#if NET8_0_OR_GREATER
+        if ((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) && CanInterleave<TKey, TValue>(count))
+            return TryReadInterleavedPayload(ref reader, keys, values, count);
+#endif
+        return false;
     }
 
     /// <summary>Stores one scalar with the existing architecture-specific fixed-access contract.</summary>

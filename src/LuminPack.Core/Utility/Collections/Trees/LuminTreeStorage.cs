@@ -24,6 +24,84 @@ namespace LuminPack.Utility;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static partial class LuminTreeStorage
 {
+    /// <summary>Copies complete raw pairs from a staged tree snapshot into an existing bounded output window.</summary>
+    /// <typeparam name="TKey">The raw key type.</typeparam>
+    /// <typeparam name="TValue">The raw value type.</typeparam>
+    /// <param name="writer">The output state after the collection header.</param>
+    /// <param name="pairs">The captured pairs in enumeration order.</param>
+    /// <param name="count">The number of captured pairs.</param>
+    /// <returns>Whether the complete packed payload was written.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryWritePackedPairs<TKey, TValue>(ref LuminPackWriter writer, KeyValuePair<TKey, TValue>[] pairs, int count)
+        where TKey : unmanaged where TValue : unmanaged
+    {
+        if (IntPtr.Size != 8 || count < 64 || count > pairs.Length)
+            return false;
+        long bytes = (long)count * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>());
+        if (bytes > writer.RecordRoom())
+            return false;
+        if (!PackedPairLayout<TKey, TValue>.CanCopy)
+        {
+#if NET8_0_OR_GREATER
+            return PaddedPairLayout<TKey, TValue>.CanTransfer(count) &&
+                PaddedPairLayout<TKey, TValue>.TryPack(ref writer, pairs, count, (int)bytes);
+#else
+            return false;
+#endif
+        }
+        var source = MemoryMarshal.AsBytes(pairs.AsSpan(0, count));
+        var payload = writer.Buffer.Slice(writer.Position, (int)bytes);
+        if (source.Overlaps(payload))
+            return false;
+        source.CopyTo(payload);
+        writer.CompleteRun((int)bytes);
+        return true;
+    }
+
+    /// <summary>Reads complete raw pairs into an existing staged snapshot with a verified pair layout.</summary>
+    /// <typeparam name="TKey">The raw key type.</typeparam>
+    /// <typeparam name="TValue">The raw value type.</typeparam>
+    /// <param name="reader">The reader positioned after the collection header.</param>
+    /// <param name="pairs">The private staging array.</param>
+    /// <param name="count">The number of wire pairs.</param>
+    /// <returns>Whether the complete payload was consumed.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryReadPackedPairs<TKey, TValue>(ref LuminPackReader reader, KeyValuePair<TKey, TValue>[] pairs, int count)
+        where TKey : unmanaged where TValue : unmanaged
+    {
+        if (IntPtr.Size != 8 || count < 64 || count > pairs.Length)
+            return false;
+        long bytes = (long)count * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>());
+        var input = reader.Buffer;
+        int position = reader.Position;
+        if ((uint)position > (uint)input.Length || bytes > input.Length - position)
+            return false;
+        if (!PackedPairLayout<TKey, TValue>.CanCopy)
+        {
+#if NET8_0_OR_GREATER
+            return PaddedPairLayout<TKey, TValue>.CanTransfer(count) &&
+                PaddedPairLayout<TKey, TValue>.TryUnpack(ref reader, pairs, count, (int)bytes);
+#else
+            return false;
+#endif
+        }
+        var destination = pairs.AsSpan(0, count);
+        if (MemoryMarshal.AsBytes(destination).Overlaps(input))
+            return false;
+        reader.Read(destination);
+        return true;
+    }
+
+    /// <summary>Caches the actual offsets and total storage width of the closed framework pair.</summary>
+    /// <typeparam name="TKey">The raw key type.</typeparam>
+    /// <typeparam name="TValue">The raw value type.</typeparam>
+    private static class PackedPairLayout<TKey, TValue> where TKey : unmanaged where TValue : unmanaged
+    {
+        internal static readonly bool CanCopy = Unsafe.SizeOf<KeyValuePair<TKey, TValue>>() == Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>() &&
+            ValueField(typeof(KeyValuePair<TKey, TValue>), "key") == 0 &&
+            ValueField(typeof(KeyValuePair<TKey, TValue>), "value") == Unsafe.SizeOf<TKey>();
+    }
+
     /// <summary>Copies a sorted set's items in order.</summary>
     /// <typeparam name="T">The element type.</typeparam>
     /// <param name="set">The set to copy.</param>

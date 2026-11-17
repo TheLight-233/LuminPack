@@ -67,7 +67,7 @@ internal static class JsonEmitter
             if (model.Recursive)
                 w.Line(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
             var names = new JsonTable();
-            var writeBody = WriteBody(model, w, helper, names);
+            var writeBody = model.SequenceBase != null ? SequenceWriteBody(model, w) : WriteBody(model, w, helper, names);
             Lines(w, writeBody);
         }
         w.Close();
@@ -83,7 +83,10 @@ internal static class JsonEmitter
         {
             if (model.Recursive)
                 w.Line(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
-            ReadBody(model, w, helper);
+            if (model.SequenceBase != null)
+                SequenceReadBody(model, w);
+            else
+                ReadBody(model, w, helper);
         }
         w.Close();
         w.Suppressed = false;
@@ -412,6 +415,72 @@ internal static class JsonEmitter
         }
         body.Add("\twriter.WriteRaw(" + raw + ");");
         return false;
+    }
+
+    /// <summary>Builds the JSON write body of a list-derived payload.</summary>
+    /// <param name="model">The record whose payload is its list base.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <returns>The body lines.</returns>
+    private static List<string> SequenceWriteBody(PayloadRenderModel model, CodeWriter w)
+    {
+        string element = "global::LuminPack." + model.Owner;
+        return new List<string>
+        {
+            "if (input is null)",
+            "{",
+            "\twriter.WriteNull<" + Profile + ">();",
+            "\treturn;",
+            "}",
+            "writer.WriteArrayStart<" + Profile + ">();",
+            "var span = " + w.A("LuminPackMarshal") + ".GetListSpan(input);",
+            "if (!span.IsEmpty)",
+            "{",
+            "\tref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(span);",
+            "\tint index = 0;",
+            "\tdo",
+            "\t{",
+            "\t\tif (index != 0)",
+            "\t\t\twriter.WriteByteRaw<" + Profile + ">((byte)',');",
+            "\t\twriter.SetFirstElement(true);",
+            "\t\t" + element + ".Write<" + Profile + ">(ref writer, in global::System.Runtime.CompilerServices.Unsafe.Add(ref first, (nint)(uint)index));",
+            "\t}",
+            "\twhile (++index < span.Length);",
+            "}",
+            "writer.WriteArrayEnd<" + Profile + ">();",
+        };
+    }
+
+    /// <summary>Emits the JSON read body of a list-derived payload, keeping the incoming derived instance.</summary>
+    /// <param name="model">The record whose payload is its list base.</param>
+    /// <param name="w">The generated source writer.</param>
+    private static void SequenceReadBody(PayloadRenderModel model, CodeWriter w)
+    {
+        string jsonReader = w.A("LuminPackJsonReader");
+        string element = "global::LuminPack." + model.Owner;
+        w.Line("if (reader.IsNull())");
+        w.Open();
+        w.Line("value = null;");
+        w.Line("return;");
+        w.Close();
+        w.Line("reader.TryConsumeArrayStart<" + Profile + ">();");
+        w.Line("value ??= new " + model.GlobalName + "();");
+        w.Line("int count = 0;");
+        w.Line("while (reader.Read<" + Profile + ">())");
+        w.Open();
+        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");
+        w.Indented(() => w.Line("break;"));
+        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
+        w.Indented(() => w.Line("continue;"));
+        w.Line("var item = count < value.Count ? value[count] : default;");
+        w.Line(element + ".Read<" + Profile + ">(ref reader, ref item);");
+        w.Line("if (count < value.Count)");
+        w.Indented(() => w.Line("value[count] = item;"));
+        w.Line("else");
+        w.Indented(() => w.Line("value.Add(item);"));
+        w.Line("count++;");
+        w.Close();
+        w.Line("if (count < value.Count)");
+        w.Line("    value.RemoveRange(count, value.Count - count);");
     }
 
     /// <summary>Builds the JSON read body.</summary>

@@ -1199,9 +1199,21 @@ namespace LuminPack.Core
             int initialDepth = Depth;
             while (Read<TOptions>())
             {
-                if ((CurrentTokenType is JsonTokenType.ObjectEnd or JsonTokenType.ArrayEnd) && Depth < initialDepth)
-                    return;
-                SkipScalarToken<TOptions>();
+                switch (CurrentTokenType)
+                {
+                    case JsonTokenType.ObjectEnd:
+                    case JsonTokenType.ArrayEnd:
+                        if (Depth < initialDepth)
+                            return;
+                        break;
+                    case JsonTokenType.String:
+                    case JsonTokenType.PropertyName:
+                        SkipStringToken<TOptions>();
+                        break;
+                    case JsonTokenType.Number:
+                        SkipNumberToken<TOptions>();
+                        break;
+                }
             }
             LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON object or array");
         }

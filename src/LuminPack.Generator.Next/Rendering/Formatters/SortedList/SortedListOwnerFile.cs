@@ -43,12 +43,20 @@ internal static partial class SortedListOwnerFile
         w.Open();
         w.Line("if ((uint)count > (uint)storedKeys!.Length || (uint)count > (uint)storedValues!.Length)");
         w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();"));
+        bool interleave = c.RawPairStorage && c.Supports("InterleavedRawPairs");
+        if (interleave)
+        {
+            w.Line("if (!global::LuminPack.Utility.LuminFrozenConstruction.TryWriteInterleavedPairs(ref operationState, storedKeys, storedValues, count))");
+            w.Open();
+        }
         w.Line("ref var firstKey = ref " + ArrayReference + "(storedKeys);");
         w.Line("ref var firstValue = ref " + ArrayReference + "(storedValues);");
         bool fused = c.BeginRawRun(c.Memory + ".Add(ref firstKey, (nint)(uint)index)",
             c.Memory + ".Add(ref firstValue, (nint)(uint)index)");
         ParallelDictionaryWrite.Emit(c, "count", allowBoundedKey: true);
         if (fused)
+            w.Close();
+        if (interleave)
             w.Close();
         w.Close();
         w.Line("else");
@@ -104,6 +112,12 @@ internal static partial class SortedListOwnerFile
         w.Line("try");
         w.Open();
         w.Line("values = global::System.Buffers.ArrayPool<" + c.Value + ">.Shared.Rent(length);");
+        bool split = seedKeys && c.RawPairReadStorage && c.Supports("ReadInterleavedRawPairs");
+        if (split)
+        {
+            w.Line("if (!global::LuminPack.Utility.LuminFrozenConstruction.TryReadInterleavedPairs(ref operationState, keys, values, length))");
+            w.Open();
+        }
         w.Line("ref var firstKey = ref " + ArrayReference + "(keys);");
         w.Line("ref var firstValue = ref " + ArrayReference + "(values);");
         w.Line("int index = 0;");
@@ -122,6 +136,8 @@ internal static partial class SortedListOwnerFile
         w.Line(c.Memory + ".Add(ref firstValue, (nint)(uint)index) = v;");
         w.Close();
         w.Line("while (++index < length);");
+        if (split)
+            w.Close();
         // Keys already in order are stored directly; other input is sorted first, and duplicates reach the bulk construction.
         w.Line("value = new " + list + "(length);");
         w.Line("if (!global::LuminPack.Code.LuminPackCollectionAccess.TryFillSortedList(value, keys, values, length))");

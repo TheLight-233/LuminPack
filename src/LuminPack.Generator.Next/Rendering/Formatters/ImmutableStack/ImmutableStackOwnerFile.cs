@@ -80,21 +80,26 @@ internal static class ImmutableStackOwnerFile
                     w.Line("goto operationComplete_RootWrite;");
                     w.Close();
                     w.Line("int countPosition = operationState.BeginCollection();");
-                    w.Line("int count = 0;");
-                    w.Line("foreach (var item in value)");
-                    w.Open();
-                    w.Line("operationState.CheckBuffer();");
-                    w.Line("count++;");
-                    w.Line("var v = item;");
-                    // A Boolean element writes through a read-only alias, as the legacy element write does.
-                    if (scalar == "bool")
-                    {
-                        w.Line("ref readonly bool value2 = ref v;");
-                        w.Line("operationState.Write(in value2);");
-                    }
+                    if (set.FindFormatter(sequence)?.Supports("BoundedImmutableRawStack") == true)
+                        w.Line("int count = global::LuminPack.Code.LuminPackCollectionAccess.WriteImmutableRawStack(ref operationState, value, false);");
                     else
-                        w.Line("operationState.Write(in v);");
-                    w.Close();
+                    {
+                        w.Line("int count = 0;");
+                        w.Line("foreach (var item in value)");
+                        w.Open();
+                        w.Line("operationState.CheckBuffer();");
+                        w.Line("count++;");
+                        w.Line("var v = item;");
+                        // A Boolean element writes through a read-only alias, as the legacy element write does.
+                        if (scalar == "bool")
+                        {
+                            w.Line("ref readonly bool value2 = ref v;");
+                            w.Line("operationState.Write(in value2);");
+                        }
+                        else
+                            w.Line("operationState.Write(in v);");
+                        w.Close();
+                    }
                     w.Blank();
                     w.Line("operationState.EndCollection(countPosition, count);");
                     w.Line("operationState.CheckBuffer();");

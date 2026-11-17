@@ -185,7 +185,7 @@ internal static class ClosedGenericOwnerFile
                 if (text)
                     w.Line("item" + i + " = ReadCompoundString<TLuminProfile>(ref reader, item" + i + ");");
                 else
-                    FormatterElementEmitter.Read(w, set, argument, "item" + i);
+                    FormatterElementEmitter.Read(w, set, argument, "item" + i, fresh: true);
             }
 
             Assign(w);

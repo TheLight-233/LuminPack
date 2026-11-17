@@ -130,6 +130,23 @@ namespace LuminPack.Core
             return count;
         }
 
+        /// <summary>Checks a complete fixed-width payload before entering a bounded collection loop.</summary>
+        /// <param name="count">The number of records after the header.</param>
+        /// <param name="width">The proven positive wire width of one record.</param>
+        /// <returns>Whether the reader advanced over the whole payload. A short window keeps the original cursor for scalar reads.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal bool TryAdvanceFixedPayload(int count, int width)
+        {
+            long bytes = (long)count * width;
+            int position = Position;
+            int length = _buffer.Length;
+            if (count <= 0 || (uint)position > (uint)length || bytes > length - position)
+                return false;
+
+            Advance((int)bytes);
+            return true;
+        }
+
         /// <summary>Computes the minimum payload width using the existing overflow limit.</summary>
         /// <param name="count">The nonnegative collection count.</param>
         /// <param name="minimumElementSize">The minimum encoded width per element.</param>

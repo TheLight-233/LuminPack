@@ -58,7 +58,7 @@ internal static class DictionaryInterfaceOwnerFile
                 return;
             ImmutableTreeTraversal.Select(c.W, c.Dictionary, c.Key + ", " + c.Value, family, source =>
             {
-                c.TreeWrite(batchRaw: true, source: source);
+                c.TreeWrite(source: source);
                 c.W.Line("goto operationComplete_RootWrite;");
             });
         }
@@ -71,18 +71,46 @@ internal static class DictionaryInterfaceOwnerFile
         var w = c.W;
         string concrete = "global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">";
         string writer = w.A("LuminPackWriter");
-        bool rawKernel = c.RawPairs && c.Supports("BinaryRawPairs");
+        bool rawKernel = c.RawPairStorage && c.Supports("BinaryRawPairs");
         bool textKernel = c.UsesRawOrStringEntries && (c.Key == "string" || c.Value == "string") && c.Supports("BinaryTextPair");
         bool textPair = c.Key == "string" && c.Value == "string";
         bool denseText = textKernel && textPair && c.Supports("DenseDictionaryView");
         bool denseCompound = c.Key == "string" && c.Supports("DenseDictionaryView") && c.DenseCompoundValue;
         bool dense = denseText || denseCompound;
+        bool frozenTraversal = c.Supports("FrozenDictionaryTraversal");
         const string runtimeWriter = "global::LuminPack.Core.LuminPackWriter";
         const string marshal = "global::LuminPack.Code.LuminPackMarshal";
         const string textPairFits = "operationState.RecordRoom() >= 2 * sizeof(int) + ((long)(key?.Length ?? 0) + (itemValue?.Length ?? 0)) * sizeof(char)";
         string keyWidth = c.Memory + ".SizeOf<" + c.Key + ">()";
         string width = keyWidth + " + " + c.Memory + ".SizeOf<" + c.Value + ">()";
         string rawWidth = c.Memory + ".SizeOf<" + (c.Key == "string" ? c.Value : c.Key) + ">()";
+        string frozen = "global::System.Collections.Frozen.FrozenDictionary<" + c.Key + ", " + c.Value + ">";
+        if (rawKernel && c.Supports("FrozenRawPairs"))
+        {
+            w.Line("if (value is " + frozen + " frozen &&");
+            w.Line("    sizeof(int) + (long)frozen.Count * (" + width + ") <= operationState.RecordRoom())");
+            w.Open();
+            w.Line("global::LuminPack.Utility.LuminFrozenConstruction.WritePairs<" + c.Key + ", " + c.Value +
+                ">(ref operationState, frozen.Keys.AsSpan(), frozen.Values.AsSpan());");
+            w.Line("goto operationComplete_RootWrite;");
+            w.Close();
+        }
+        if (c.UsesRawOrStringEntries && textPair && c.Supports("FrozenStringPairRuns"))
+        {
+            w.Line("if (value is " + frozen + " frozen)");
+            w.Open();
+            w.Line("var keys = frozen.Keys.AsSpan();");
+            w.Line("var values = frozen.Values.AsSpan();");
+            w.Line("if (keys.Length == values.Length && keys.Length == frozen.Count)");
+            w.Open();
+            w.Line("int header = operationState.BeginCollection();");
+            w.Line("operationState.WriteStringPairRuns<TLuminProfile>(keys, values);");
+            w.Line("operationState.EndCollection(header, keys.Length);");
+            w.Line("operationState.CheckBuffer();");
+            w.Line("goto operationComplete_RootWrite;");
+            w.Close();
+            w.Close();
+        }
         if (dense)
         {
             w.Line("var dictionary = value.GetType() == typeof(" + concrete + ") ? " + c.Memory + ".As<" + concrete + ">(value) : null;");
@@ -95,6 +123,19 @@ internal static class DictionaryInterfaceOwnerFile
         w.Indented(() =>
         {
             w.Line("? WriteKnown(ref operationState, " + (dense ? "dictionary" : c.Memory + ".As<" + concrete + ">(value)") + ")");
+            if (c.Supports("ReadOnlyTypedDictionaryStorage"))
+            {
+                string wrapper = "global::System.Collections.ObjectModel.ReadOnlyDictionary<" + c.Key + ", " + c.Value + ">";
+                w.Line(": value is " + wrapper + " readOnly && global::LuminPack.Code.LuminPackCollectionAccess.GetReadOnlyDictionaryStorage(readOnly) is { } backing");
+                w.Line("? WriteKnown(ref operationState, backing)");
+            }
+            if (frozenTraversal)
+            {
+                w.Line(": value is " + frozen + " frozenItems");
+                w.Line("? WriteFrozen(ref operationState, frozenItems)");
+            }
+            EmitImmutableDispatch("ImmutableDictionary", "immutableItems");
+            EmitImmutableDispatch("ImmutableSortedDictionary", "immutableSortedItems");
             w.Line(": WriteInterface(ref operationState, value);");
         });
         w.Line("operationState.EndCollection(countPosition, count);");
@@ -103,6 +144,10 @@ internal static class DictionaryInterfaceOwnerFile
         if (dense)
             EmitDense();
         EmitLoop("WriteKnown", concrete);
+        if (frozenTraversal)
+            EmitLoop("WriteFrozen", frozen);
+        EmitImmutableLoop("ImmutableDictionary");
+        EmitImmutableLoop("ImmutableSortedDictionary");
         EmitLoop("WriteInterface", c.Dictionary);
         if (rawKernel || textKernel)
         {
@@ -112,6 +157,22 @@ internal static class DictionaryInterfaceOwnerFile
             c.WriteMember(c.Key, "key");
             c.WriteMember(c.Value, "itemValue");
             w.Close();
+        }
+
+        string ImmutableType(string family) => "global::System.Collections.Immutable." + family + "<" + c.Key + ", " + c.Value + ">";
+
+        void EmitImmutableDispatch(string family, string local)
+        {
+            if (!c.Supports(family + "Traversal"))
+                return;
+            w.Line(": value is " + ImmutableType(family) + " " + local);
+            w.Line("? Write" + family + "(ref operationState, " + local + ")");
+        }
+
+        void EmitImmutableLoop(string family)
+        {
+            if (c.Supports(family + "Traversal"))
+                EmitLoop("Write" + family, ImmutableType(family), captureTree: rawKernel && c.Supports(family + "RawTraversal"));
         }
 
         void EmitDense()
@@ -183,15 +244,27 @@ internal static class DictionaryInterfaceOwnerFile
             w.Line("operationState.CompleteRun(written);");
         }
 
-        void EmitLoop(string method, string input)
+        void EmitLoop(string method, string input, bool captureTree = false)
         {
             w.Line(w.MethodImpl("NoInlining"));
             w.Line("static int " + method + "(scoped ref " + writer + " operationState, " + input + " items)");
             w.Open();
-            w.Line("int count = 0;");
+            if (rawKernel && method == "WriteKnown" && c.Supports("BoundedDenseRawPairs"))
+            {
+                w.Line("if (" + marshal + ".TryWriteBoundedDenseRawPairs(ref operationState, items, out int denseCount))");
+                w.Indented(() => w.Line("return denseCount;"));
+            }
+            if (captureTree)
+            {
+                w.Line("if (items.Count >= 16 && (long)items.Count * (" + width + ") <= operationState.RecordRoom())");
+                w.Open();
+                c.TreeWrite(source: "items", writeHeader: false);
+                w.Close();
+            }
+            w.Line("int observed = 0;");
             w.Line("foreach (var item in items)");
             w.Open();
-            w.Line("count++;");
+            w.Line("observed++;");
             w.Line("var key = item.Key;");
             if (!rawKernel && !textKernel)
                 c.WriteMember(c.Key, "key");
@@ -208,7 +281,7 @@ internal static class DictionaryInterfaceOwnerFile
                 w.Line("else");
                 w.Indented(() => w.Line("WritePairSlow(ref operationState, key, itemValue);"));
             }
-            else if (textKernel && method == "WriteKnown")
+            else if (textKernel && method != "WriteInterface" && method != "WriteFrozen")
             {
                 string text = c.Key == "string" ? "key" : "itemValue";
                 w.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
@@ -242,7 +315,7 @@ internal static class DictionaryInterfaceOwnerFile
             else
                 c.WriteMember(c.Value, "itemValue");
             w.Close();
-            w.Line("return count;");
+            w.Line("return observed;");
             w.Close();
             w.Blank();
         }

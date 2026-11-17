@@ -376,10 +376,13 @@ internal static class UnionEmitter
             w.Line("reader.TryPeekUnionHeader(out var tag);");
         }
         w.Blank();
+        var blocks = SharedBlocks.Plan(model, w, reuse: true, "reader", "readBlock");
+        blocks.Declare(model, w, reuse: true);
         w.Line("switch (tag)");
         w.Open();
-        ReadArms(model, w, true, "reader", new SwitchCounters());
+        ReadArms(model, w, true, "reader", new SwitchCounters(), blocks: blocks);
         w.Close();
+        blocks.Emit(w, "reader", reuse: true, "value", "return;");
     }
 
     /// <summary>Emits the marked case switch of a read root, fresh or seeded from an existing instance.</summary>
@@ -390,8 +393,9 @@ internal static class UnionEmitter
     /// <param name="counters">The counters supplied to <c>ReadArms</c>.</param>
     /// <param name="freshTarget">The fresh target supplied to <c>ReadArms</c>.</param>
     /// <param name="freshExit">The fresh exit supplied to <c>ReadArms</c>.</param>
+    /// <param name="blocks">The checked block reads that same-width fixed cases share, or null to expand every case.</param>
     private static void ReadArms(PayloadRenderModel model, CodeWriter w, bool reuse, string reader, SwitchCounters counters,
-        string? freshTarget = null, string? freshExit = null)
+        string? freshTarget = null, string? freshExit = null, SharedBlocks? blocks = null)
     {
         string target = freshTarget ?? "value";
         string exit = freshExit ?? "return;";
@@ -432,6 +436,8 @@ internal static class UnionEmitter
                 counters.Instances++;
             int cursors = counters.Cursors;
             body = Rename(body, member, hasInstance ? instance : -1, cursors, ref counters.Cursors, reader, reuse);
+            if (blocks != null)
+                body = blocks.Redirect(body, reader, reuse ? null : target, "member" + Number(member));
             foreach (string line in body)
                 w.Line(line);
             w.Blank();
@@ -445,7 +451,8 @@ internal static class UnionEmitter
         }
         w.Line("default:");
         w.Open();
-        if (reuse && !model.UnionWide)
+        // The narrow peek leaves the null marker to this arm in both switches; no case uses its tag.
+        if (!model.UnionWide)
         {
             w.Line("if (tag == " + w.A("LuminPackCode") + ".NullObject)");
             w.Open();
@@ -483,17 +490,176 @@ internal static class UnionEmitter
     internal static void FreshElementRead(PayloadRenderModel model, CodeWriter w, string target, string label, string reader = "reader")
     {
         Reject(model, w);
-        w.Line("if (!" + reader + "." + (model.UnionWide ? "TryPeekWideUnionHeader" : "TryPeekUnionHeader") + "(out var tag))");
-        w.Open();
-        w.Line(target + " = default;");
-        w.Line("goto " + label + ";");
-        w.Close();
+        if (model.UnionWide)
+        {
+            w.Line("if (!" + reader + ".TryPeekWideUnionHeader(out var tag))");
+            w.Open();
+            w.Line(target + " = default;");
+            w.Line("goto " + label + ";");
+            w.Close();
+        }
+        else
+            // As in the root read, the narrow null marker reaches the default arm instead of a separate test per element.
+            w.Line(reader + ".TryPeekUnionHeader(out var tag);");
         w.Blank();
+        var blocks = SharedBlocks.Plan(model, w, reuse: false, reader, label + "Block");
+        blocks.Declare(model, w, reuse: false);
         w.Line("// Union cases");
         w.Line("switch (tag)");
         w.Open();
-        ReadArms(model, w, false, reader, new SwitchCounters(), target, "goto " + label + ";");
+        ReadArms(model, w, false, reader, new SwitchCounters(), target, "goto " + label + ";", blocks);
         w.Close();
+        blocks.Emit(w, reader, reuse: false, target, "goto " + label + ";");
+    }
+
+    /// <summary>The checked block reads of one case switch that two or more fixed cases of the same payload width share.</summary>
+    /// <remarks>Each case keeps its own allocation or reuse, its field-address proof and its field-wise fallback; a proven case
+    /// selects its destination block and jumps to the one checked read of its width. A fresh case assigns its local target
+    /// before the jump, which its caller publishes only after the label; a reused case publishes after the shared read, as
+    /// its own arm does.</remarks>
+    private sealed class SharedBlocks
+    {
+        private readonly string _prefix;
+        private readonly List<string> _widths;
+
+        /// <summary>Creates the shared reads for the widths that occur more than once.</summary>
+        /// <param name="prefix">The label and local prefix, unique in the enclosing method.</param>
+        /// <param name="widths">The shared payload widths in first-case order.</param>
+        private SharedBlocks(string prefix, List<string> widths)
+        {
+            _prefix = prefix;
+            _widths = widths;
+        }
+
+        /// <summary>Finds the payload widths that two or more fixed cases read as one checked block.</summary>
+        /// <param name="model">The Union root.</param>
+        /// <param name="w">The source writer.</param>
+        /// <param name="reuse">Whether the switch reuses the existing destination.</param>
+        /// <param name="reader">The reader local.</param>
+        /// <param name="prefix">The label and local prefix.</param>
+        /// <returns>The plan, empty when no width repeats.</returns>
+        internal static SharedBlocks Plan(PayloadRenderModel model, CodeWriter w, bool reuse, string reader, string prefix)
+        {
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            var order = new List<string>();
+            foreach (var item in model.UnionCases)
+            {
+                if (item.OwnEntry)
+                    continue;
+                var body = FixedCaseRead(model, item, w, fresh: !reuse);
+                if (!Split(body, "reader", out _, out string width))
+                    continue;
+                if (counts.TryGetValue(width, out int count))
+                    counts[width] = count + 1;
+                else
+                {
+                    counts.Add(width, 1);
+                    order.Add(width);
+                }
+            }
+            return new SharedBlocks(prefix, order.Where(width => counts[width] > 1).ToList());
+        }
+
+        /// <summary>Declares the shared destination block and, for a reused case, its selected object.</summary>
+        /// <param name="model">The Union root.</param>
+        /// <param name="w">The source writer.</param>
+        /// <param name="reuse">Whether the switch reuses the existing destination.</param>
+        internal void Declare(PayloadRenderModel model, CodeWriter w, bool reuse)
+        {
+            if (_widths.Count == 0)
+                return;
+            w.Line("ref byte " + _prefix + "Target = ref " + w.A("Unsafe") + ".NullRef<byte>();");
+            if (reuse)
+                w.Line(model.GlobalName + " " + _prefix + "Owner = default!;");
+        }
+
+        /// <summary>Replaces a proven case's own block read with the jump to its shared read.</summary>
+        /// <param name="body">The renamed case body.</param>
+        /// <param name="reader">The reader local.</param>
+        /// <param name="freshTarget">The fresh local target, or null for a reused destination.</param>
+        /// <param name="member">The case object local.</param>
+        /// <returns>The case body.</returns>
+        internal List<string> Redirect(List<string> body, string reader, string? freshTarget, string member)
+        {
+            if (_widths.Count == 0 || !Split(body, reader, out string block, out string width))
+                return body;
+            int index = _widths.IndexOf(width);
+            if (index < 0)
+                return body;
+            var result = new List<string>(body.Count + 4) { body[0], body[1], "{" };
+            result.Add(_prefix + "Target = ref " + block + ";");
+            result.Add((freshTarget ?? _prefix + "Owner") + " = " + member + ";");
+            result.Add("goto " + Label(index) + ";");
+            result.Add("}");
+            result.AddRange(body.Skip(3));
+            return result;
+        }
+
+        /// <summary>Emits each shared checked block read after the switch.</summary>
+        /// <param name="w">The source writer.</param>
+        /// <param name="reader">The reader local.</param>
+        /// <param name="reuse">Whether the switch reuses the existing destination.</param>
+        /// <param name="target">The destination the cases publish.</param>
+        /// <param name="exit">The statement that leaves a completed case.</param>
+        internal void Emit(CodeWriter w, string reader, bool reuse, string target, string exit)
+        {
+            for (int index = 0; index < _widths.Count; index++)
+            {
+                w.Blank();
+                w.Line(Label(index) + ":");
+                w.Line(reader + ".Read(ref " + _prefix + "Target, " + _widths[index] + ");");
+                if (reuse)
+                    w.Line("if (!global::System.Object.ReferenceEquals(" + target + ", " + _prefix + "Owner)) " + target + " = " + _prefix + "Owner;");
+                w.Line(exit);
+            }
+        }
+
+        /// <summary>Spells the label of a shared read.</summary>
+        /// <param name="index">The shared width index.</param>
+        /// <returns>The label.</returns>
+        private string Label(int index) => _prefix + Number(index);
+
+        /// <summary>Splits a fixed case body that consists of one proven checked block read and its field-wise fallback.</summary>
+        /// <param name="body">The case body.</param>
+        /// <param name="reader">The reader local the body reads from.</param>
+        /// <param name="block">Receives the proven destination block.</param>
+        /// <param name="width">Receives the payload width expression.</param>
+        /// <returns>Whether the body has that shape.</returns>
+        private static bool Split(List<string> body, string reader, out string block, out string width)
+        {
+            block = width = null;
+            if (body.Count < 6 || !body[0].StartsWith("var instance", StringComparison.Ordinal) ||
+                !body[1].StartsWith("if (", StringComparison.Ordinal) || body[3] != "else" || body[4] != "{")
+                return false;
+            // The fallback must be the last statement: a body with later members or callbacks keeps its own read.
+            int close = body.IndexOf("}", 5);
+            if (close < 0 || body.Skip(5).Take(close - 5).Any(line => line.Length != 0 && (line[0] == '{' || line[0] == '}')) ||
+                body.Skip(close + 1).Any(line => line.Length != 0))
+                return false;
+            string prefix = "\t" + reader + ".Read(ref ";
+            string line = body[2];
+            if (!line.StartsWith(prefix, StringComparison.Ordinal) || !line.EndsWith(");", StringComparison.Ordinal))
+                return false;
+            string inner = line.Substring(prefix.Length, line.Length - prefix.Length - 2);
+            int depth = 0;
+            for (int index = 0; index + 1 < inner.Length; index++)
+            {
+                switch (inner[index])
+                {
+                    case '(' or '<' or '[':
+                        depth++;
+                        break;
+                    case ')' or '>' or ']':
+                        depth--;
+                        break;
+                    case ',' when depth == 0 && inner[index + 1] == ' ':
+                        block = inner.Substring(0, index);
+                        width = inner.Substring(index + 2);
+                        return true;
+                }
+            }
+            return false;
+        }
     }
 
     /// <summary>Rejects an input-selected case graph before reading or writing its framing.</summary>

@@ -116,6 +116,10 @@ internal static class FormatterCapabilities
                 if (FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation))
                     result.Add("ImmutableQueueRawWindow");
             }
+            if ((concrete == "ImmutableStack" || definition == "System.Collections.Immutable.IImmutableQueue") &&
+                modern && !unity && named.TypeArguments[0].IsUnmanagedType && FormatterConcurrentTraits.HasRawCollectionWriter(compilation,
+                    "WriteImmutableRawStack", "System.Collections.Immutable.ImmutableStack`1", SpecialType.System_Int32, checksCapacity: true))
+                result.Add("BoundedImmutableRawStack");
             if (definition == "System.Collections.Immutable.ImmutableList" && FormatterImmutableTraits.HasRawListWriter(compilation))
                 result.Add("ImmutableRawListWrite");
             if (concrete == "ImmutableList" && FormatterImmutableTraits.HasTreeCopy(compilation, concrete, 1))
@@ -137,7 +141,7 @@ internal static class FormatterCapabilities
                 if ((concrete == sorted || named.Name.StartsWith("IImmutable", StringComparison.Ordinal)) &&
                     FormatterImmutableTraits.HasTreeCopy(compilation, sorted, named.Arity))
                     result.Add("CopyImmutableSortedTree");
-                if (definition == "System.Collections.Immutable.ImmutableSortedDictionary" && modern && !unity &&
+                if (named.Arity == 2 && modern && !unity &&
                     named.TypeArguments.All(argument => argument.SpecialType == SpecialType.System_String) &&
                     FormatterImmutableTraits.HasBinaryStringPairPrefix(compilation))
                     result.Add("BinaryStringPairPrefix");
@@ -297,10 +301,45 @@ internal static class FormatterCapabilities
             result.Add("StageConcurrentStack");
         if (definition == "System.Collections.Concurrent.ConcurrentStack" && FormatterConcurrentTraits.HasStackRangePush(compilation, named))
             result.Add("PushConcurrentStackRange");
-        if (definition == "System.Collections.Generic.IReadOnlySet" && modern &&
-            compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenSet`1") is { } frozenSet &&
-            frozenSet.Construct(named.TypeArguments[0]).AllInterfaces.Any(candidate => SymbolEqualityComparer.Default.Equals(candidate, named)))
-            result.Add("FrozenSetInterfaceTraversal");
+        if (definition is "System.Collections.Generic.ISet" or "System.Collections.Generic.IReadOnlySet" && modern)
+        {
+            var element = named.TypeArguments[0];
+            bool raw = !unity && element.IsUnmanagedType && element.SpecialType != SpecialType.System_Boolean &&
+                FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation);
+            bool text = !unity && element.SpecialType == SpecialType.System_String &&
+                FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteStrings", element);
+            if (raw && compilation.GetTypeByMetadataName("System.Collections.Generic.SortedSet`1") is { } sorted &&
+                FormatterImmutableTraits.HasRawTreeWriter(compilation, sorted))
+                result.Add("WriteSetInterfaceRawSorted");
+            foreach (string family in new[] { "ImmutableHashSet", "ImmutableSortedSet" })
+            {
+                if (unity || compilation.GetTypeByMetadataName("System.Collections.Immutable." + family + "`1") is not { } tree ||
+                    !FormatterImmutableTraits.CanEnumerateSet(tree, named))
+                    continue;
+                result.Add(family + "InterfaceTraversal");
+                if (raw && FormatterImmutableTraits.HasRawTreeWriter(compilation, tree))
+                    result.Add("WriteSetInterfaceRaw" + family);
+                if (text && FormatterImmutableTraits.HasTreeCopy(compilation, family, 1))
+                    result.Add("WriteSetInterfaceStrings" + family);
+            }
+            if (definition == "System.Collections.Generic.IReadOnlySet" &&
+                compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenSet`1")?.Construct(element) is { } frozen &&
+                frozen.AllInterfaces.Any(candidate => SymbolEqualityComparer.Default.Equals(candidate, named)))
+            {
+                result.Add("FrozenSetInterfaceTraversal");
+                if (FormatterFrozenTraits.CanReadSetItems(compilation, frozen))
+                {
+                    if (raw)
+                        result.Add("WriteSetInterfaceRawFrozen");
+                    if (text)
+                        result.Add("WriteSetInterfaceStringsFrozen");
+                }
+            }
+        }
+        if (definition is "System.Collections.Generic.HashSet" or "System.Collections.Generic.ISet" or "System.Collections.Generic.IReadOnlySet" &&
+            modern && !unity && named.TypeArguments[0].SpecialType == SpecialType.System_String &&
+            FormatterConcurrentTraits.HasStringSetWriter(compilation))
+            result.Add("StringSetWriter");
         if ((definition is "System.Collections.Concurrent.ConcurrentQueue" or "System.Collections.Concurrent.ConcurrentStack" or "System.Collections.Concurrent.ConcurrentBag"
             or "System.Collections.Immutable.ImmutableArray" or "System.Collections.Immutable.ImmutableList" or "System.Collections.Immutable.ImmutableQueue"
             or "System.Collections.Immutable.ImmutableStack" or "System.Collections.Immutable.ImmutableHashSet" or "System.Collections.Immutable.ImmutableSortedSet" ||
@@ -315,13 +354,68 @@ internal static class FormatterCapabilities
             FormatterConcurrentTraits.HasJsonIntegerPairs(compilation))
             result.Add("JsonIntegerPair");
         if (definition is "System.Collections.Generic.Dictionary" or "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" or
-            "System.Collections.Generic.SortedList" or "System.Collections.Generic.SortedDictionary" &&
+            "System.Collections.Generic.SortedList" or "System.Collections.Generic.SortedDictionary" or
+            "System.Collections.Immutable.ImmutableDictionary" or "System.Collections.Immutable.ImmutableSortedDictionary" or
+            "System.Collections.Immutable.IImmutableDictionary" &&
             FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation))
             result.Add("BinaryRawPairs");
+        if (definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" &&
+            modern && !unity && FormatterConcurrentTraits.HasBoundedDenseRawPairs(compilation))
+            result.Add("BoundedDenseRawPairs");
+        if (definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" && modern && !unity)
+        {
+            bool raw = named.TypeArguments.All(argument => argument.IsUnmanagedType);
+            foreach (string family in new[] { "ImmutableDictionary", "ImmutableSortedDictionary" })
+            {
+                if (!FormatterImmutableTraits.CanEnumerateDictionary(compilation, named, family))
+                    continue;
+                result.Add(family + "Traversal");
+                if (raw && FormatterImmutableTraits.HasTreeCopy(compilation, family, 2))
+                    result.Add(family + "RawTraversal");
+            }
+            if (raw && FormatterConcurrentTraits.HasCapturedRawPairTransfer(compilation, interleave: false))
+                result.Add("PackedTreeRawPairs");
+        }
+        if (definition == "System.Collections.Generic.Dictionary" && modern && !unity &&
+            named.TypeArguments.All(argument => argument.IsUnmanagedType && argument.SpecialType != SpecialType.System_Boolean) &&
+            FormatterConcurrentTraits.HasRawDictionaryExpansion(compilation))
+            result.Add("ExpandDenseRawPairs");
+        if (definition is "System.Collections.ObjectModel.ReadOnlyDictionary" or "System.Collections.Generic.IDictionary" or
+            "System.Collections.Generic.IReadOnlyDictionary" && modern && !unity &&
+            FormatterConcurrentTraits.HasReadOnlyDictionaryRefill(compilation))
+        {
+            result.Add("ReadOnlyTypedDictionaryStorage");
+            if (definition == "System.Collections.ObjectModel.ReadOnlyDictionary" &&
+                named.TypeArguments.All(argument => argument.IsUnmanagedType) && FormatterConcurrentTraits.HasBoundedDenseRawPairs(compilation))
+                result.Add("BoundedReadOnlyRawPairs");
+        }
+        if (definition == "System.Collections.Generic.SortedList" && modern && !unity &&
+            named.TypeArguments.All(argument => argument.IsUnmanagedType))
+        {
+            if (FormatterConcurrentTraits.HasCapturedRawPairTransfer(compilation, interleave: true))
+                result.Add("InterleavedRawPairs");
+            if (named.TypeArguments.All(argument => argument.SpecialType != SpecialType.System_Boolean) &&
+                FormatterConcurrentTraits.HasCapturedRawPairTransfer(compilation, interleave: true, read: true))
+                result.Add("ReadInterleavedRawPairs");
+        }
+        if (definition is "System.Collections.Generic.SortedDictionary" or "System.Collections.Immutable.ImmutableDictionary" or
+            "System.Collections.Immutable.ImmutableSortedDictionary" or "System.Collections.Immutable.IImmutableDictionary" &&
+            modern && !unity && named.TypeArguments.All(argument => argument.IsUnmanagedType) &&
+            FormatterConcurrentTraits.HasCapturedRawPairTransfer(compilation, interleave: false))
+            result.Add("PackedTreeRawPairs");
+        if (definition is "System.Collections.Generic.Dictionary" or "System.Collections.Generic.SortedDictionary" or
+            "System.Collections.Immutable.ImmutableDictionary" or "System.Collections.Immutable.ImmutableSortedDictionary" &&
+            modern && !unity && named.TypeArguments.All(argument => argument.IsUnmanagedType && argument.SpecialType != SpecialType.System_Boolean) &&
+            FormatterConcurrentTraits.HasCapturedRawPairTransfer(compilation, interleave: false, read: true))
+            result.Add("ReadPackedRawPairs");
         if (definition is "System.Collections.Generic.SortedDictionary" or "System.Collections.Immutable.ImmutableSortedDictionary" &&
             modern && !unity && named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsReferenceType &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
             result.Add("SortedTreeBinaryBoundedKey");
+        if (definition == "System.Collections.Generic.SortedDictionary" && modern && !unity &&
+            named.TypeArguments.All(argument => argument.SpecialType == SpecialType.System_String) &&
+            FormatterImmutableTraits.HasBinaryStringPairPrefix(compilation))
+            result.Add("BinaryStringPairPrefix");
         if (definition == "System.Collections.Generic.SortedList" && modern && !unity &&
             named.TypeArguments[0].SpecialType == SpecialType.System_String &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
@@ -330,6 +424,15 @@ internal static class FormatterCapabilities
             named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
             result.Add("ConcurrentBinaryTextPair");
+        if (definition == "System.Collections.Concurrent.ConcurrentDictionary" && modern && !unity &&
+            named.TypeArguments.All(argument => argument.IsUnmanagedType) &&
+            FormatterConcurrentTraits.HasRawCollectionWriter(compilation,
+                "WriteConcurrentRawPairs", "System.Collections.Concurrent.ConcurrentDictionary`2", SpecialType.System_Int32))
+            result.Add("ConcurrentRawPairs");
+        if (definition is "System.Collections.Concurrent.ConcurrentDictionary" or "System.Collections.Frozen.FrozenDictionary" &&
+            modern && !unity && named.TypeArguments.All(argument => argument.IsUnmanagedType && argument.SpecialType != SpecialType.System_Boolean) &&
+            FormatterConcurrentTraits.HasRawDictionaryReader(compilation, concurrent: definition == "System.Collections.Concurrent.ConcurrentDictionary"))
+            result.Add("ReadBoundedRawDictionary");
         if ((definition is "System.Collections.Generic.Dictionary" or "System.Collections.Generic.IDictionary" or
              "System.Collections.Generic.IReadOnlyDictionary" or "System.Collections.Generic.SortedList" or
              "System.Collections.Generic.SortedDictionary" or "System.Collections.Immutable.ImmutableDictionary" or
@@ -375,8 +478,21 @@ internal static class FormatterCapabilities
         {
             if (FormatterFrozenTraits.Available(compilation, "Dictionary", 2))
                 result.Add("RentFrozenDictionary");
-            if (FormatterFrozenTraits.CanWritePairs(compilation))
+        }
+        bool concreteFrozenDictionary = definition == "System.Collections.Frozen.FrozenDictionary";
+        if (concreteFrozenDictionary || ((definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary") &&
+            modern && !unity && compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenDictionary`2") is { } frozenDictionary &&
+            frozenDictionary.Construct(named.TypeArguments[0], named.TypeArguments[1]).AllInterfaces.Any(candidate =>
+                SymbolEqualityComparer.Default.Equals(candidate, named))))
+        {
+            if (!concreteFrozenDictionary)
+                result.Add("FrozenDictionaryTraversal");
+            if (named.TypeArguments.All(argument => argument.IsUnmanagedType) && FormatterFrozenTraits.CanWritePairs(compilation) &&
+                (concreteFrozenDictionary || FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation)))
                 result.Add("FrozenRawPairs");
+            if (modern && !unity && named.TypeArguments.All(argument => argument.SpecialType == SpecialType.System_String) &&
+                FormatterFrozenTraits.CanWriteStringPairRuns(compilation))
+                result.Add("FrozenStringPairRuns");
         }
 
         return result.ToArray();

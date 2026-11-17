@@ -205,7 +205,16 @@ internal static class ArrayScalarOwnerFile
                     w.Line("if (value is null || value.Length != length)");
                     w.Line("    value = " + w.A("LuminPackMarshal") + ".AllocateUninitializedArray<" + scalar + ">(length);");
                     w.Line("ref var first = ref " + w.A("LuminPackMarshal") + ".GetNotNullArrayReference(value);");
-                    w.Line("reader.Read(ref " + memory + ".As<" + scalar + ", byte>(ref first), checked(length * " + memory + ".SizeOf<" + scalar + ">()));");
+                    if (set.Options is { Net8: true, PointerCursor: false, SpanCursor: false })
+                    {
+                        // ReadLength proved the complete payload width before allocation or reuse.
+                        w.Line("uint payloadBytes = unchecked((uint)(length * " + memory + ".SizeOf<" + scalar + ">()));");
+                        w.Line("ref byte source = ref reader.Cursor;");
+                        w.Line("reader.Cursor = ref " + memory + ".Add(ref reader.Cursor, unchecked((nint)payloadBytes));");
+                        w.Line(w.A("LuminPackMarshal") + ".CopyBlockUnaligned(ref " + memory + ".As<" + scalar + ", byte>(ref first), ref source, payloadBytes);");
+                    }
+                    else
+                        w.Line("reader.Read(ref " + memory + ".As<" + scalar + ", byte>(ref first), checked(length * " + memory + ".SizeOf<" + scalar + ">()));");
                     w.Close();
                     w.Blank();
                     w.Line(preserve);

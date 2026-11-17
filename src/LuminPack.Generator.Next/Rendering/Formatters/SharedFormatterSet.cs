@@ -362,6 +362,11 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
         bool text = false;
         for (int index = 0; index < model.Members.Length; index++)
             WalkMember(model.Members[index], options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited, ref text);
+        // A list-derived payload writes and reads the closed list owner of its base; the owner writes each element through
+        // the payload's own generated owner.
+        if (model is RecordModel { SequenceBase: not null, SequenceElement: not null } sequence &&
+            SequenceFamily(sequence.SequenceBase) is { } family)
+            facts.Add(SequenceOwnerFact.ForForwarding(family, sequence.SequenceBase, sequence.SequenceElement));
         // A circle reference read and a version-tolerant record read call the shared string formatter owner.
         if (text && (model is CircleReferenceModel || model is RecordModel { Version: not null }))
             owners.Add(FormatterRegistry.String);
@@ -370,6 +375,16 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
                 if (union.Cases[index].Model is { } item)
                     Walk(item, options, facts, scalars, owners, dictionaries,
                         ref cultureInfoReuse, visited);
+    }
+
+    /// <summary>Finds the registered sequence family of a closed declared type.</summary>
+    /// <param name="declaredType">The closed generic spelling.</param>
+    /// <returns>The family, or null when the type is not a registered sequence.</returns>
+    private static SequenceFormatter? SequenceFamily(string declaredType)
+    {
+        string key = GeneratedNames.PayloadKey(declaredType);
+        int generic = key.IndexOf('<');
+        return generic < 0 ? null : FormatterRegistry.FindSequence(key.Substring(0, generic));
     }
 
     /// <summary>Records the owners one member requires.</summary>

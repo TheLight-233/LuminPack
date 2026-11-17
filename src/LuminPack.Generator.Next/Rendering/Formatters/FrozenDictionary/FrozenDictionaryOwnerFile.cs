@@ -23,7 +23,7 @@ internal static class FrozenDictionaryOwnerFile
     private static void Write(PairedDictionaryContext c)
     {
         var w = c.W;
-        if (c.RawPairs && c.Supports("FrozenRawPairs"))
+        if (c.RawPairStorage && c.Supports("FrozenRawPairs"))
         {
             w.Line("global::LuminPack.Utility.LuminFrozenConstruction.WritePairs<" + c.Key + ", " + c.Value + ">(ref operationState, value.Keys.AsSpan(), value.Values.AsSpan());");
             return;
@@ -37,9 +37,14 @@ internal static class FrozenDictionaryOwnerFile
         w.Open();
         w.Line("if (values.Length < pairCount)");
         w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();"));
-        w.Line("ref var firstKey = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(keys);");
-        w.Line("ref var firstValue = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(values);");
-        ParallelDictionaryWrite.Emit(c, "pairCount");
+        if (c.UsesRawOrStringEntries && c.Key == "string" && c.Value == "string" && c.Supports("FrozenStringPairRuns"))
+            w.Line("operationState.WriteStringPairRuns<TLuminProfile>(keys, values);");
+        else
+        {
+            w.Line("ref var firstKey = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(keys);");
+            w.Line("ref var firstValue = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(values);");
+            ParallelDictionaryWrite.Emit(c, "pairCount");
+        }
         w.Close();
         w.Line("operationState.EndCollection(countPosition, count);");
         w.Line("operationState.CheckBuffer();");
@@ -66,6 +71,13 @@ internal static class FrozenDictionaryOwnerFile
             w.Line("try");
             w.Open();
         }
+        // A duplicate key can throw before the stashed reader is published.
+        bool bounded = c.UsesRawOrStringEntries && c.RawPairReadStorage && c.Supports("ReadBoundedRawDictionary");
+        if (bounded)
+        {
+            w.Line("if (!global::LuminPack.Utility.LuminFrozenConstruction.TryAddRawDictionaryPairs(ref operationState, dict, length))");
+            w.Open();
+        }
         w.Line("int remaining = length;");
         w.Line("do");
         w.Open();
@@ -76,6 +88,8 @@ internal static class FrozenDictionaryOwnerFile
         w.Line("dict.Add(k!, v);");
         w.Close();
         w.Line("while (--remaining != 0);");
+        if (bounded)
+            w.Close();
         w.Line("value = global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(dict);");
         if (rented)
         {

@@ -1016,6 +1016,39 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Writes parallel string slots in pair order with the original per-string capacity fallback.</summary>
+        /// <typeparam name="TOptions">The compiled binary string profile.</typeparam>
+        /// <param name="keys">The key slots in enumeration order.</param>
+        /// <param name="values">The corresponding value slots.</param>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void WriteStringPairRuns<TOptions>(scoped ReadOnlySpan<string?> keys, scoped ReadOnlySpan<string?> values)
+            where TOptions : struct, ILuminPackOptions
+        {
+            values = values.Slice(0, keys.Length);
+            int index = 0;
+#if NET8_0_OR_GREATER
+            if (ConstantStringProfile<TOptions>() && UsesUtf16LengthRecords<TOptions>())
+            {
+                while (index < keys.Length)
+                {
+                    AdvanceProven(WriteUtf16PairRun(ref Current, PrefixRoom(), keys, values, ref index));
+                    if (index >= keys.Length)
+                        return;
+
+                    Write<TOptions>(keys[index]);
+                    Write<TOptions>(values[index++]);
+                }
+                return;
+            }
+#endif
+            for (; index < keys.Length; index++)
+            {
+                Write<TOptions>(keys[index]);
+                Write<TOptions>(values[index]);
+            }
+        }
+
         /// <summary>Writes the leading string records that fit the default profile's current window.</summary>
         /// <param name="values">The source slots in wire order.</param>
         /// <returns>The number of complete records written.</returns>

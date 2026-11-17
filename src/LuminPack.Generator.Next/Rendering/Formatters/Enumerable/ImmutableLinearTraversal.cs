@@ -20,6 +20,12 @@ internal static class ImmutableLinearTraversal
         w.Line(w.MethodImpl("NoInlining"));
         w.Line("static int WriteStack(scoped ref " + Writer + " operationState, " + stack + " stack)");
         w.Open();
+        if ((c.RawTreeElements || c.Scalar == "bool") && c.Supports("BoundedImmutableRawStack"))
+        {
+            w.Line("if (!stack.IsEmpty && !stack.Pop().IsEmpty)");
+            w.Indented(() => w.Line("return " + CoreAccess + ".WriteImmutableRawStack(ref operationState, stack, " +
+                (c.Forwarded ? "true" : "false") + ");"));
+        }
         w.Line("int count = 0;");
         w.Line("foreach (var item in stack)");
         w.Open();

@@ -5,6 +5,26 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Selects compatible mutable construction rentals and scalar pair output.</summary>
 internal static class FormatterFrozenTraits
 {
+    /// <summary>Checks the public aligned item span used by a frozen set.</summary>
+    /// <param name="compilation">The consumer's framework references.</param>
+    /// <param name="set">The closed frozen set storage.</param>
+    /// <returns>Whether the scalar span can be emitted for this framework.</returns>
+    internal static bool CanReadSetItems(Compilation compilation, INamedTypeSymbol set)
+    {
+        var array = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableArray`1");
+        var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
+        if (array is null || span is null)
+            return false;
+        var element = set.TypeArguments[0];
+        var closed = array.Construct(element);
+        var expected = span.Construct(element);
+        return set.GetMembers("Items").OfType<IPropertySymbol>().Any(property => !property.IsStatic &&
+            property.GetMethod?.DeclaredAccessibility == Accessibility.Public && SymbolEqualityComparer.Default.Equals(property.Type, closed)) &&
+            closed.GetMembers("AsSpan").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 0, Parameters.Length: 0 } &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, expected));
+    }
+
     /// <summary>Checks both exact methods needed to rent and return the existing result family's builder.</summary>
     /// <param name = "compilation">The consumer's actual runtime and framework metadata.</param>
     /// <param name = "family">The mutable Dictionary or Set construction family.</param>
@@ -73,5 +93,25 @@ internal static class FormatterFrozenTraits
         if (owner is null || owner.DeclaredAccessibility != Accessibility.Public || !owner.IsStatic || span is null || writer is null)
             return false;
         return owner.GetMembers("WritePairs").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.DeclaredAccessibility == Accessibility.Public && method.Arity == 2 && method.ReturnsVoid && method.TypeParameters.All(parameter => parameter.HasUnmanagedTypeConstraint && parameter.ConstraintTypes.IsEmpty) && method.Parameters.Length == 3 && method.Parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, writer) && method.Parameters[1].RefKind == RefKind.None && method.Parameters[2].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, span.Construct(method.TypeParameters[0])) && SymbolEqualityComparer.Default.Equals(method.Parameters[2].Type, span.Construct(method.TypeParameters[1])));
+    }
+    /// <summary>Checks the optional writer of aligned key and value string spans.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>Whether the existing string profile can be passed to the span writer.</returns>
+    internal static bool CanWriteStringPairRuns(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
+        var profile = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        if (owner is null || span is null || profile is null)
+            return false;
+
+        var text = span.Construct(compilation.GetSpecialType(SpecialType.System_String));
+        return owner.GetMembers("WriteStringPairRuns").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } &&
+            method.TypeParameters[0].HasValueTypeConstraint &&
+            method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+            SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], profile) &&
+            method.Parameters.Length == 2 && method.Parameters.All(parameter =>
+                parameter.RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(parameter.Type, text)));
     }
 }
