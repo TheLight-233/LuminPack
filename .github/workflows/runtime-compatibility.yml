@@ -77,7 +77,7 @@ jobs:
         env:
           LUMINPACK_REQUIRE_AVX512: '1'
           DOTNET_PreferredVectorBitWidth: '512'
-        run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 -p:PublishAot=false --filter 'FullyQualifiedName~Latin1VectorTranscoderTest|FullyQualifiedName~ConsecutiveMediumRecordsMatchIndividualWrites|FullyQualifiedName~Utf8BmpTranscoderTest|FullyQualifiedName~StringSerializerFallback|FullyQualifiedName~StringSerializerOptionsTest|FullyQualifiedName~ShortAsciiTranscoderTest|FullyQualifiedName~AuditSafetyRegressionTest|FullyQualifiedName~CompressionSafetyPerf|FullyQualifiedName~LuminLayoutConverterTest|FullyQualifiedName~LuminStorageTagTest|FullyQualifiedName~PortableTransferTest|FullyQualifiedName~MarshalCopyBlockTest'
+        run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 -p:PublishAot=false --filter 'FullyQualifiedName~Latin1VectorTranscoderTest|FullyQualifiedName~ConsecutiveMediumRecordsMatchIndividualWrites|FullyQualifiedName~Utf8BmpTranscoderTest|FullyQualifiedName~StringSerializerFallback|FullyQualifiedName~StringSerializerOptionsTest|FullyQualifiedName~ShortAsciiTranscoderTest|FullyQualifiedName~AuditSafetyRegressionTest|FullyQualifiedName~CompressionSafetyPerf|FullyQualifiedName~LuminLayoutConverterTest|FullyQualifiedName~LuminStorageTagTest|FullyQualifiedName~PortableTransferTest|FullyQualifiedName~MarshalCopyBlockTest|FullyQualifiedName~RawScalarSpanSafetyTest|FullyQualifiedName~TruncatedFixedHeaderTest'
 
 
       - name: Record successful hardware execution
