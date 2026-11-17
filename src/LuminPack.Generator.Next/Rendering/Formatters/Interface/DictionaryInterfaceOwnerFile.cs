@@ -77,12 +77,40 @@ internal static class DictionaryInterfaceOwnerFile
         bool denseText = textKernel && textPair && c.Supports("DenseDictionaryView");
         bool denseCompound = c.Key == "string" && c.Supports("DenseDictionaryView") && c.DenseCompoundValue;
         bool dense = denseText || denseCompound;
+        bool frozenTraversal = c.Supports("FrozenDictionaryTraversal");
         const string runtimeWriter = "global::LuminPack.Core.LuminPackWriter";
         const string marshal = "global::LuminPack.Code.LuminPackMarshal";
         const string textPairFits = "operationState.RecordRoom() >= 2 * sizeof(int) + ((long)(key?.Length ?? 0) + (itemValue?.Length ?? 0)) * sizeof(char)";
         string keyWidth = c.Memory + ".SizeOf<" + c.Key + ">()";
         string width = keyWidth + " + " + c.Memory + ".SizeOf<" + c.Value + ">()";
         string rawWidth = c.Memory + ".SizeOf<" + (c.Key == "string" ? c.Value : c.Key) + ">()";
+        string frozen = "global::System.Collections.Frozen.FrozenDictionary<" + c.Key + ", " + c.Value + ">";
+        if (rawKernel && c.Supports("FrozenRawPairs"))
+        {
+            w.Line("if (value is " + frozen + " frozen &&");
+            w.Line("    sizeof(int) + (long)frozen.Count * (" + width + ") <= operationState.RecordRoom())");
+            w.Open();
+            w.Line("global::LuminPack.Utility.LuminFrozenConstruction.WritePairs<" + c.Key + ", " + c.Value +
+                ">(ref operationState, frozen.Keys.AsSpan(), frozen.Values.AsSpan());");
+            w.Line("goto operationComplete_RootWrite;");
+            w.Close();
+        }
+        if (c.UsesRawOrStringEntries && textPair && c.Supports("FrozenStringPairRuns"))
+        {
+            w.Line("if (value is " + frozen + " frozen)");
+            w.Open();
+            w.Line("var keys = frozen.Keys.AsSpan();");
+            w.Line("var values = frozen.Values.AsSpan();");
+            w.Line("if (keys.Length == values.Length && keys.Length == frozen.Count)");
+            w.Open();
+            w.Line("int header = operationState.BeginCollection();");
+            w.Line("operationState.WriteStringPairRuns<TLuminProfile>(keys, values);");
+            w.Line("operationState.EndCollection(header, keys.Length);");
+            w.Line("operationState.CheckBuffer();");
+            w.Line("goto operationComplete_RootWrite;");
+            w.Close();
+            w.Close();
+        }
         if (dense)
         {
             w.Line("var dictionary = value.GetType() == typeof(" + concrete + ") ? " + c.Memory + ".As<" + concrete + ">(value) : null;");
@@ -101,6 +129,11 @@ internal static class DictionaryInterfaceOwnerFile
                 w.Line(": value is " + wrapper + " readOnly && global::LuminPack.Code.LuminPackCollectionAccess.GetReadOnlyDictionaryStorage(readOnly) is { } backing");
                 w.Line("? WriteKnown(ref operationState, backing)");
             }
+            if (frozenTraversal)
+            {
+                w.Line(": value is " + frozen + " frozenItems");
+                w.Line("? WriteFrozen(ref operationState, frozenItems)");
+            }
             w.Line(": WriteInterface(ref operationState, value);");
         });
         w.Line("operationState.EndCollection(countPosition, count);");
@@ -109,6 +142,8 @@ internal static class DictionaryInterfaceOwnerFile
         if (dense)
             EmitDense();
         EmitLoop("WriteKnown", concrete);
+        if (frozenTraversal)
+            EmitLoop("WriteFrozen", frozen);
         EmitLoop("WriteInterface", c.Dictionary);
         if (rawKernel || textKernel)
         {

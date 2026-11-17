@@ -74,4 +74,24 @@ internal static class FormatterFrozenTraits
             return false;
         return owner.GetMembers("WritePairs").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.DeclaredAccessibility == Accessibility.Public && method.Arity == 2 && method.ReturnsVoid && method.TypeParameters.All(parameter => parameter.HasUnmanagedTypeConstraint && parameter.ConstraintTypes.IsEmpty) && method.Parameters.Length == 3 && method.Parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, writer) && method.Parameters[1].RefKind == RefKind.None && method.Parameters[2].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, span.Construct(method.TypeParameters[0])) && SymbolEqualityComparer.Default.Equals(method.Parameters[2].Type, span.Construct(method.TypeParameters[1])));
     }
+    /// <summary>Checks the optional writer of aligned key and value string spans.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>Whether the existing string profile can be passed to the span writer.</returns>
+    internal static bool CanWriteStringPairRuns(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
+        var profile = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        if (owner is null || span is null || profile is null)
+            return false;
+
+        var text = span.Construct(compilation.GetSpecialType(SpecialType.System_String));
+        return owner.GetMembers("WriteStringPairRuns").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } &&
+            method.TypeParameters[0].HasValueTypeConstraint &&
+            method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+            SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], profile) &&
+            method.Parameters.Length == 2 && method.Parameters.All(parameter =>
+                parameter.RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(parameter.Type, text)));
+    }
 }

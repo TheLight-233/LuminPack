@@ -431,8 +431,21 @@ internal static class FormatterCapabilities
         {
             if (FormatterFrozenTraits.Available(compilation, "Dictionary", 2))
                 result.Add("RentFrozenDictionary");
-            if (named.TypeArguments.All(argument => argument.IsUnmanagedType) && FormatterFrozenTraits.CanWritePairs(compilation))
+        }
+        bool concreteFrozenDictionary = definition == "System.Collections.Frozen.FrozenDictionary";
+        if (concreteFrozenDictionary || ((definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary") &&
+            modern && !unity && compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenDictionary`2") is { } frozenDictionary &&
+            frozenDictionary.Construct(named.TypeArguments[0], named.TypeArguments[1]).AllInterfaces.Any(candidate =>
+                SymbolEqualityComparer.Default.Equals(candidate, named))))
+        {
+            if (!concreteFrozenDictionary)
+                result.Add("FrozenDictionaryTraversal");
+            if (named.TypeArguments.All(argument => argument.IsUnmanagedType) && FormatterFrozenTraits.CanWritePairs(compilation) &&
+                (concreteFrozenDictionary || FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation)))
                 result.Add("FrozenRawPairs");
+            if (modern && !unity && named.TypeArguments.All(argument => argument.SpecialType == SpecialType.System_String) &&
+                FormatterFrozenTraits.CanWriteStringPairRuns(compilation))
+                result.Add("FrozenStringPairRuns");
         }
 
         return result.ToArray();

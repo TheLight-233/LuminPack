@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.ObjectModel;
 using LuminPack;
 using LuminPack.Attribute;
@@ -8,6 +9,19 @@ namespace LuminPackUnitTest;
 /// <summary>Checks that fixed header blocks are validated before their unchecked loads.</summary>
 public sealed partial class TruncatedFixedHeaderTest
 {
+    /// <summary>Checks the frozen value enumerator preserves framed reference values routed through a dictionary interface.</summary>
+    [Fact]
+    public void FrozenInterfaceDictionaryKeepsPackableValuesInOrder()
+    {
+        var frozen = Enumerable.Range(0, 67).ToFrozenDictionary(i => $"key-{i}",
+            i => i % 7 == 0 ? null : new FixedCaseContainer { Child = new FixedCase { First = i, Second = ~i } });
+        IReadOnlyDictionary<string, FixedCaseContainer?> readOnly = frozen;
+        IDictionary<string, FixedCaseContainer?> dictionary = frozen;
+        byte[] expected = LuminPackSerializer.Serialize(frozen);
+        Assert.Equal(expected, LuminPackSerializer.Serialize(readOnly));
+        Assert.Equal(expected, LuminPackSerializer.Serialize(dictionary));
+    }
+
     /// <summary>Checks exact wrapper writers when keys require their own generated formatter.</summary>
     [Fact]
     public void ReadOnlyDictionaryKeepsPackableKeysAndStringValuesInOrder()

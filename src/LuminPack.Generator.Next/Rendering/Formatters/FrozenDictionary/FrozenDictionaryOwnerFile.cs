@@ -37,9 +37,14 @@ internal static class FrozenDictionaryOwnerFile
         w.Open();
         w.Line("if (values.Length < pairCount)");
         w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();"));
-        w.Line("ref var firstKey = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(keys);");
-        w.Line("ref var firstValue = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(values);");
-        ParallelDictionaryWrite.Emit(c, "pairCount");
+        if (c.UsesRawOrStringEntries && c.Key == "string" && c.Value == "string" && c.Supports("FrozenStringPairRuns"))
+            w.Line("operationState.WriteStringPairRuns<TLuminProfile>(keys, values);");
+        else
+        {
+            w.Line("ref var firstKey = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(keys);");
+            w.Line("ref var firstValue = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(values);");
+            ParallelDictionaryWrite.Emit(c, "pairCount");
+        }
         w.Close();
         w.Line("operationState.EndCollection(countPosition, count);");
         w.Line("operationState.CheckBuffer();");

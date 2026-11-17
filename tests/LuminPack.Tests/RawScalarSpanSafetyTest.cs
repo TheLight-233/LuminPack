@@ -15,6 +15,39 @@ using Xunit;
 /// <summary>Protects bounded scalar facades independently of unchecked address-only storage kernels.</summary>
 public sealed class RawScalarSpanSafetyTest
 {
+    /// <summary>Checks frozen dictionary spans in concrete and interface writers with both string encodings.</summary>
+    [Fact]
+    public void FrozenPairRunsKeepTheOriginalRecordSequence()
+    {
+        var frozen = Enumerable.Range(0, 69).ToFrozenDictionary(i => $"key-{i}",
+            i => i % 7 == 0 ? null : i % 5 == 0 ? string.Empty : $"\u4F60-{i}");
+        IReadOnlyDictionary<string, string?> view = frozen;
+        IDictionary<string, string?> writableView = frozen;
+
+        byte[] expected = WriteRecords<LuminPackUtf16LengthOptions>(frozen);
+        Assert.Equal(expected, LuminPackSerializer.Serialize(frozen));
+        Assert.Equal(expected, LuminPackSerializer.Serialize(view));
+        Assert.Equal(expected, LuminPackSerializer.Serialize(writableView));
+
+        expected = WriteRecords<LuminPackUtf8LengthOptions>(frozen);
+        Assert.Equal(expected, LuminPackSerializer.Serialize<FrozenDictionary<string, string?>, LuminPackUtf8LengthOptions>(frozen));
+        Assert.Equal(expected, LuminPackSerializer.Serialize<IReadOnlyDictionary<string, string?>, LuminPackUtf8LengthOptions>(view));
+
+        static byte[] WriteRecords<TOptions>(FrozenDictionary<string, string?> dictionary) where TOptions : struct, ILuminPackOptions
+        {
+            byte[] destination = new byte[8192];
+            Span<byte> span = destination;
+            var writer = new LuminPackWriter(ref span);
+            writer.WriteCollectionHeader(dictionary.Count);
+            foreach (var pair in dictionary)
+            {
+                writer.Write<TOptions>(pair.Key);
+                writer.Write<TOptions>(pair.Value);
+            }
+            return destination.AsSpan(0, writer.Position).ToArray();
+        }
+    }
+
     /// <summary>Checks that ordered concurrent reuse observes a key through the existing comparer before loading its value.</summary>
     [Fact]
     public void ConcurrentRawRefillKeepsComparerBeforeValueRead()
