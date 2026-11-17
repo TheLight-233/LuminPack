@@ -5,6 +5,8 @@ using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
 using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Option;
@@ -190,6 +192,64 @@ public sealed class RawScalarSpanSafetyTest
                 payload[index++] = pair.Value;
             }
             Assert.Equal(expected, serialized);
+        }
+    }
+
+    /// <summary>Checks padded pairs, exact windows, overlap rejection and unaligned vector tails.</summary>
+    [Fact]
+    public void PaddedTreePairsTransferOnlyWireFields()
+    {
+        bool lanes = IntPtr.Size == 8 && (Ssse3.IsSupported || AdvSimd.Arm64.IsSupported);
+        bool wide = lanes && (Avx2.IsSupported || Avx512BW.IsSupported);
+        foreach (int count in new[] { 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 255, 256, 257, 513 })
+        {
+            Check(Enumerable.Range(0, count).Select(index => KeyValuePair.Create((ushort)(index * 127), (byte)(index * 7))).ToArray(), lanes);
+            Check(Enumerable.Range(0, count).Select(index => KeyValuePair.Create((ulong)index * 0xAABBCCDD, unchecked((uint)(index * -62101)))).ToArray(),
+                wide && count >= 256);
+        }
+
+        static void Check<TKey, TValue>(KeyValuePair<TKey, TValue>[] pairs, bool expectedTransfer)
+            where TKey : unmanaged where TValue : unmanaged
+        {
+            int keyWidth = System.Runtime.CompilerServices.Unsafe.SizeOf<TKey>();
+            int width = keyWidth + System.Runtime.CompilerServices.Unsafe.SizeOf<TValue>();
+            int bytes = pairs.Length * width;
+            var buffer = new byte[bytes + 2];
+            buffer[0] = 0x13;
+            buffer[^1] = 0x31;
+            Span<byte> output = buffer.AsSpan(1, bytes);
+            var writer = new LuminPackWriter(ref output);
+            Assert.Equal(expectedTransfer, LuminTreeStorage.TryWritePackedPairs(ref writer, pairs, pairs.Length));
+            Assert.Equal(expectedTransfer ? bytes : 0, writer.Position);
+            Assert.Equal(0x13, buffer[0]);
+            Assert.Equal(0x31, buffer[^1]);
+            if (expectedTransfer)
+            {
+                for (int i = 0; i < pairs.Length; i++)
+                {
+                    Assert.Equal(pairs[i].Key, MemoryMarshal.Read<TKey>(output.Slice(i * width)));
+                    Assert.Equal(pairs[i].Value, MemoryMarshal.Read<TValue>(output.Slice(i * width + keyWidth)));
+                }
+            }
+
+            var destination = new KeyValuePair<TKey, TValue>[pairs.Length];
+            ReadOnlySpan<byte> truncated = output.Slice(0, bytes - 1);
+            var shortReader = new LuminPackReader(ref truncated);
+            Assert.False(LuminTreeStorage.TryReadPackedPairs(ref shortReader, destination, pairs.Length));
+            Assert.Equal(0, shortReader.Position);
+            Assert.All(destination, pair => Assert.Equal(default, pair));
+
+            ReadOnlySpan<byte> input = output;
+            var reader = new LuminPackReader(ref input);
+            Assert.Equal(expectedTransfer, LuminTreeStorage.TryReadPackedPairs(ref reader, destination, pairs.Length));
+            Assert.Equal(expectedTransfer ? bytes : 0, reader.Position);
+            if (expectedTransfer)
+                Assert.Equal(pairs, destination);
+
+            ReadOnlySpan<byte> alias = MemoryMarshal.AsBytes(pairs.AsSpan());
+            var aliasedReader = new LuminPackReader(ref alias);
+            Assert.False(LuminTreeStorage.TryReadPackedPairs(ref aliasedReader, pairs, pairs.Length));
+            Assert.Equal(0, aliasedReader.Position);
         }
     }
 

@@ -38,8 +38,17 @@ public static partial class LuminTreeStorage
         if (IntPtr.Size != 8 || count < 64 || count > pairs.Length)
             return false;
         long bytes = (long)count * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>());
-        if (bytes > writer.RecordRoom() || !PackedPairLayout<TKey, TValue>.CanCopy)
+        if (bytes > writer.RecordRoom())
             return false;
+        if (!PackedPairLayout<TKey, TValue>.CanCopy)
+        {
+#if NET8_0_OR_GREATER
+            return PaddedPairLayout<TKey, TValue>.CanTransfer(count) &&
+                PaddedPairLayout<TKey, TValue>.TryPack(ref writer, pairs, count, (int)bytes);
+#else
+            return false;
+#endif
+        }
         var source = MemoryMarshal.AsBytes(pairs.AsSpan(0, count));
         var payload = writer.Buffer.Slice(writer.Position, (int)bytes);
         if (source.Overlaps(payload))
@@ -49,7 +58,7 @@ public static partial class LuminTreeStorage
         return true;
     }
 
-    /// <summary>Reads complete raw pairs into an existing staged snapshot when its storage matches the wire.</summary>
+    /// <summary>Reads complete raw pairs into an existing staged snapshot with a verified pair layout.</summary>
     /// <typeparam name="TKey">The raw key type.</typeparam>
     /// <typeparam name="TValue">The raw value type.</typeparam>
     /// <param name="reader">The reader positioned after the collection header.</param>
@@ -65,8 +74,17 @@ public static partial class LuminTreeStorage
         long bytes = (long)count * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>());
         var input = reader.Buffer;
         int position = reader.Position;
-        if ((uint)position > (uint)input.Length || bytes > input.Length - position || !PackedPairLayout<TKey, TValue>.CanCopy)
+        if ((uint)position > (uint)input.Length || bytes > input.Length - position)
             return false;
+        if (!PackedPairLayout<TKey, TValue>.CanCopy)
+        {
+#if NET8_0_OR_GREATER
+            return PaddedPairLayout<TKey, TValue>.CanTransfer(count) &&
+                PaddedPairLayout<TKey, TValue>.TryUnpack(ref reader, pairs, count, (int)bytes);
+#else
+            return false;
+#endif
+        }
         var destination = pairs.AsSpan(0, count);
         if (MemoryMarshal.AsBytes(destination).Overlaps(input))
             return false;
