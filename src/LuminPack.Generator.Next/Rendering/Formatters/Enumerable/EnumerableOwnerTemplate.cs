@@ -550,6 +550,8 @@ internal static class EnumerableOwnerTemplate
         string scalar = fact.ForwardedType ?? (payload != null ? payload.GlobalName : fact.Scalar!);
         string readable = ReadableTypeName.Of(scalar);
         string sequence = fact.DeclaredType;
+        // Collection roots traverse every element, so they request full optimization where the runtime supports it.
+        bool optimized = set.OptimizedRoots;
         // The closed owner identity derives from the declared sequence, so the nested static calls agree with the model.
         string type = ReadableTypeName.Of(GeneratedNames.PayloadKey(sequence));
         string roots = "LuminRoots_" + type;
@@ -628,7 +630,7 @@ internal static class EnumerableOwnerTemplate
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    w.Line(measureRaw ? inline : w.MethodImpl("NoInlining"));
+                    w.Line(w.MethodImpl(measureRaw ? "AggressiveInlining" : "NoInlining", optimized));
                     w.Line("internal static void RootWrite" + (text ? "<TLuminProfile>" : "") + "(");
                     w.Line("    scoped ref " + writer + " writer,");
                     w.Line("    " + sequence + " input)" + (text ? "" : ""));
@@ -641,7 +643,7 @@ internal static class EnumerableOwnerTemplate
                         w.Line("WriteFallback(ref writer, input);");
                         w.Close();
                         w.Blank();
-                        w.Line(w.MethodImpl("NoInlining"));
+                        w.Line(w.MethodImpl("NoInlining", optimized));
                         w.Line("private static void WriteFallback(scoped ref " + writer + " writer, " + sequence + " input)");
                         w.Open();
                     }
@@ -722,9 +724,9 @@ internal static class EnumerableOwnerTemplate
                     w.Line(preserve);
                     // The original scalar sequence interfaces leave the allocating read to the JIT's default budget.
                     if (inlineRawRead && !text)
-                        w.Line(inline);
+                        w.Line(w.MethodImpl("AggressiveInlining", optimized));
                     else if (spec.ReadInlining != null && (text || !spec.InterfaceListReuse))
-                        w.Line(w.MethodImpl(spec.ReadInlining));
+                        w.Line(w.MethodImpl(spec.ReadInlining, optimized));
                     w.Line("internal static void RootRead" + (text ? "<TLuminProfile>" : "") + "(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");
@@ -797,7 +799,7 @@ internal static class EnumerableOwnerTemplate
                     w.Line(preserve);
                     if (spec.OutlineJson && (fact.Family.Kind != CollectionKind.Frozen ||
                         !JsonIntegerRunWriter.Supports(set, sequence, scalar)))
-                        w.Line(w.MethodImpl("NoInlining"));
+                        w.Line(w.MethodImpl("NoInlining", optimized));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + sequence + " input)");
@@ -975,7 +977,7 @@ internal static class EnumerableOwnerTemplate
                 case FormatterSection.Roots:
                     w.Line(preserve);
                     if (spec.OutlineJson)
-                        w.Line(w.MethodImpl("NoInlining"));
+                        w.Line(w.MethodImpl("NoInlining", optimized));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");

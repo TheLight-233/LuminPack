@@ -74,7 +74,7 @@ internal static class ContiguousOwnerFile
         }, compressedEntries: shape is ContiguousShape.Array or ContiguousShape.List, outlineJson: true,
             outlineBinaryWrite: scalarElements || (!raw && layout == null && element.Type != "string"),
             binaryWriteEntries: measure ? MeasureRecord : null,
-            jsonWriteRun: !scalarElements && JsonIntegerRunWriter.Supports(set, model.Type, element.Type));
+            jsonWriteRun: !scalarElements && JsonIntegerRunWriter.Supports(set, model.Type, element.Type), optimizedRoots: true);
 
         void MeasureRecord(CodeWriter w)
         {

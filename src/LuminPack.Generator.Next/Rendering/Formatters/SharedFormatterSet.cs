@@ -133,6 +133,11 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
     /// <summary>The compilation facts that affect shared owner declarations.</summary>
     internal readonly GeneratorOptions Options;
 
+    /// <summary>Whether element traversal roots request full optimization on their first call.</summary>
+    /// <remarks>.NET 8 and later reference assemblies expose <c>MethodImplOptions.AggressiveOptimization</c>; Unity's
+    /// runtimes ignore it, so Unity output keeps its attributes unchanged.</remarks>
+    internal bool OptimizedRoots => Options is { Net8: true, Unity: false };
+
     /// <summary>Processes the current formatter contract.</summary>
     /// <param name="extension">The extension used by this operation.</param>
     /// <param name="owners">The owners used by this operation.</param>

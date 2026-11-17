@@ -53,6 +53,9 @@ internal sealed partial class PairedDictionaryContext
     /// <returns>Whether the input satisfies the supports check.</returns>
     internal bool Supports(string capability) => _set.FindFormatter(Dictionary)?.Supports(capability) == true;
 
+    /// <summary>Gets whether element traversal methods request full optimization on their first call.</summary>
+    internal bool OptimizedRoots => _set.OptimizedRoots;
+
     /// <summary>Gets whether the referenced Core can fill a fresh concurrent dictionary while pairs are decoded.</summary>
     internal bool ConcurrentDictionaryBuilder => _set.Options?.ConcurrentDictionaryBuilder == true;
 

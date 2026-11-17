@@ -58,11 +58,13 @@ internal static class SpecialOwnerFile
     /// <param name="outlineBinaryWrite">Whether the binary write root is kept out of its callers.</param>
     /// <param name="binaryWriteEntries">The optional measurement declarations that accompany the write entries.</param>
     /// <param name="jsonWriteRun">Whether the JSON writer only frames a complete out-of-line element run.</param>
+    /// <param name="optimizedRoots">Whether the outlined roots traverse elements and request full optimization where the
+    /// runtime supports it.</param>
     internal static string Render(SharedFormatterSet set, GeneratedOperations operations, string shortName, string typeName,
         bool referenceType, Action<CodeWriter, SpecialOwnerContext> binaryWrite, Action<CodeWriter, SpecialOwnerContext> binaryRead,
         Action<CodeWriter, SpecialOwnerContext> jsonWrite, Action<CodeWriter, SpecialOwnerContext> jsonRead, Action<CodeWriter>? support = null,
         bool compressedEntries = false, bool outlineJson = false, bool outlineBinaryWrite = false,
-        Action<CodeWriter>? binaryWriteEntries = null, bool jsonWriteRun = false)
+        Action<CodeWriter>? binaryWriteEntries = null, bool jsonWriteRun = false, bool optimizedRoots = false)
     {
         using var w = new CodeWriter(set.AvailableAliases) { Scoped = set.Options == null || set.Options.CSharpVersion >= 1100 };
         string serializer = w.A("LuminPackSerializer");
@@ -77,6 +79,8 @@ internal static class SpecialOwnerFile
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
         string roots = "LuminRoots_" + shortName;
+        // Only element traversals opt in; scalar framework types keep the JIT's tiering.
+        bool optimized = optimizedRoots && set.OptimizedRoots;
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots,
             "internal static partial class Binary_" + extension + "_" + shortName, null, EmitBinaryWrite, EmitBinaryRead,
@@ -113,7 +117,7 @@ internal static class SpecialOwnerFile
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    w.Line(outlineBinaryWrite ? w.MethodImpl("NoInlining") : inline);
+                    w.Line(outlineBinaryWrite ? w.MethodImpl("NoInlining", optimized) : inline);
                     w.Line("internal static void RootWrite<TLuminProfile>(scoped ref " + writer + " writer, " + Input() + ")");
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
@@ -213,7 +217,7 @@ internal static class SpecialOwnerFile
                 case FormatterSection.Roots:
                     w.Line(preserve);
                     if (!jsonWriteRun)
-                        w.Line(outlineJson ? w.MethodImpl("NoInlining") : inline);
+                        w.Line(outlineJson ? w.MethodImpl("NoInlining", optimized) : inline);
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + Input() + ")");
@@ -261,7 +265,7 @@ internal static class SpecialOwnerFile
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    w.Line(outlineJson ? w.MethodImpl("NoInlining") : inline);
+                    w.Line(outlineJson ? w.MethodImpl("NoInlining", optimized) : inline);
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + typeName + " value)");

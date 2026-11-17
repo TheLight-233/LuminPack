@@ -245,6 +245,18 @@ internal sealed class CodeWriter : IDisposable
     /// <returns>The attribute line.</returns>
     internal string MethodImpl(string option) => "[" + Attribute("MethodImpl") + "(" + A("MethodImplOptions") + "." + option + ")]";
 
+    /// <summary>The <c>[MethodImpl(option)]</c> attribute line of a loop-bearing root, optionally compiled fully optimized on
+    /// its first call.</summary>
+    /// <param name="option">The method implementation option.</param>
+    /// <param name="optimized">Whether the consuming runtime supports the <c>OptimizedRoots</c> capability.</param>
+    /// <returns>The attribute line.</returns>
+    /// <remarks><c>AggressiveOptimization</c> keeps a collection traversal out of tier-0 code, which neither inlines the
+    /// element helpers nor reaches on-stack replacement within one long traversal. It does not prevent inlining.</remarks>
+    internal string MethodImpl(string option, bool optimized) => optimized
+        ? "[" + Attribute("MethodImpl") + "(" + A("MethodImplOptions") + "." + option + " | " + A("MethodImplOptions") +
+          ".AggressiveOptimization)]"
+        : MethodImpl(option);
+
     /// <summary>Appends one line at the current indentation.</summary>
     /// <param name="text">The line.</param>
     internal void Line(string text)
