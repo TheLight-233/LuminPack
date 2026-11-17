@@ -32,8 +32,6 @@ jobs:
   matrix:
     runs-on: ubuntu-latest
     timeout-minutes: 75
-    env:
-      DOTNET_TieredCompilation: '0'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -50,6 +48,10 @@ jobs:
         shell: bash
         env:
           TIMING: ${{ github.event_name == 'workflow_dispatch' }}
+          DOTNET_TieredCompilation: '1'
+          DOTNET_TieredPGO: '1'
+          DOTNET_TC_QuickJit: '1'
+          DOTNET_TC_QuickJitForLoops: '1'
         run: |
           set -euo pipefail
           mkdir -p .tmp/matrix-artifacts

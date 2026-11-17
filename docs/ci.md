@@ -51,6 +51,6 @@ Benchmarks run only on manual dispatch of `ci.yml` with `run_benchmarks` enabled
 
 ### Serialization matrix
 
-`benchmark-matrix.yml` validates round trips for relevant pushes and pull requests without timing. Manual dispatch, or a `ci.yml` run with `run_benchmarks`, samples every format and scenario in three processes of nine rounds on one runner, with Server GC and tiered compilation disabled. The `benchmark-matrix` artifact contains the JSONL samples, the machine information and `REPORT.md`.
+`benchmark-matrix.yml` validates round trips for relevant pushes and pull requests without timing. Manual dispatch, or a `ci.yml` run with `run_benchmarks`, samples every format and scenario in three processes of nine rounds on one runner. The matrix enables Server GC, tiered compilation, dynamic PGO and Quick JIT for loops. Each fixture, library and operation warms up for at least 64 calls and 15 milliseconds before calibrating its sample size. The `benchmark-matrix` artifact contains the JSONL samples, the machine information and `REPORT.md`.
 
 Chart generation from these artifacts is described in [Contributing](../CONTRIBUTING.md#benchmarks).
