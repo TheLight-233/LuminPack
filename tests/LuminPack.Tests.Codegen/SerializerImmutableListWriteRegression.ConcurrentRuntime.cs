@@ -11,6 +11,7 @@ internal static partial class SerializerImmutableListWriteRegression
     private static void VerifyConcurrentRuntime()
     {
         VerifyConcurrentBags();
+        VerifyConcurrentDictionaryConstruction();
         foreach (int count in new[] { 0, 1, 2, 17, 257 })
         {
             var stack = new ConcurrentStack<int>(Enumerable.Range(0, count));
@@ -44,6 +45,22 @@ internal static partial class SerializerImmutableListWriteRegression
                     if (pair.Value.A != pair.Value.B || pair.Value.B != pair.Value.C) throw new Exception("Torn published value");
         }
         finally { Volatile.Write(ref stop, 1); if (!worker.Join(5000)) throw new Exception("Dictionary worker did not stop"); }
+    }
+
+    /// <summary>Checks duplicate callbacks across direct insertion and the framework's long-chain fallback.</summary>
+    private static void VerifyConcurrentDictionaryConstruction()
+    {
+        const int count = 1000;
+        var builder = LuminPackCollectionAccess.BeginConcurrentDictionary<ConcurrentCollisionKey, int>(count);
+        ConcurrentCollisionKey.Comparisons = 0;
+        for (int i = 0; i < count; i++)
+            builder.Add(new ConcurrentCollisionKey(i), i);
+        builder.Add(new ConcurrentCollisionKey(count - 1), -1);
+        var map = builder.Complete();
+        if (ConcurrentCollisionKey.Comparisons != count * (count - 1) / 2 + 1 ||
+            map.Count != count || map[new ConcurrentCollisionKey(count - 1)] != count - 1 ||
+            !map.TryAdd(new ConcurrentCollisionKey(count), count))
+            throw new Exception("Concurrent dictionary collision insertion changed.");
     }
 
     /// <summary>Checks foreign queues, ring wrap, reference contents and freeze cleanup under contention.</summary>
@@ -152,6 +169,26 @@ internal static partial class SerializerImmutableListWriteRegression
         /// <param name="value">The key.</param>
         /// <returns>The fixed collision hash.</returns>
         public int GetHashCode(int value) => 0;
+    }
+
+    /// <summary>Records equality calls while placing every key in one bucket.</summary>
+    private readonly struct ConcurrentCollisionKey(int id) : IEquatable<ConcurrentCollisionKey>
+    {
+        internal static int Comparisons;
+        private readonly int _id = id;
+
+        /// <inheritdoc/>
+        public bool Equals(ConcurrentCollisionKey other)
+        {
+            Comparisons++;
+            return _id == other._id;
+        }
+
+        /// <inheritdoc/>
+        public override bool Equals(object? obj) => obj is ConcurrentCollisionKey key && Equals(key);
+
+        /// <inheritdoc/>
+        public override int GetHashCode() => 0;
     }
 
     /// <summary>Detects torn publication and exercises 32-bit aggregate copies.</summary>
