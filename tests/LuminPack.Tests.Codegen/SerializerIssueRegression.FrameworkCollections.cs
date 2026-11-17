@@ -9,6 +9,7 @@ internal static partial class SerializerIssueRegression
         const string source = """
             using System;
             using System.Collections.Generic;
+            using System.Collections.Immutable;
             using System.Numerics;
             using LuminPack;
             using LuminPack.Attribute;
@@ -50,6 +51,26 @@ internal static partial class SerializerIssueRegression
                     Holder holderCopy = null;
                     LuminPackSerializer.DeserializeJson(holderJson, ref holderCopy);
                     if (!holderCopy.Values.AsSpan().SequenceEqual(vectors)) throw new Exception("Nested vector JSON");
+
+                    var integers = ImmutableArray.Create(31, -19, 7);
+                    var integersCopy = ImmutableArray<int>.Empty;
+                    var integerBytes = LuminPackSerializer.Serialize(integers);
+                    if (LuminPackSerializer.Deserialize(integerBytes, ref integersCopy) != integerBytes.Length ||
+                        !integersCopy.AsSpan().SequenceEqual(integers.AsSpan())) throw new Exception("Immutable raw array wire");
+                    var wide = ImmutableArray.Create(long.MinValue, long.MaxValue);
+                    var wideCopy = default(ImmutableArray<long>);
+                    LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(wide), ref wideCopy);
+                    if (!wideCopy.AsSpan().SequenceEqual(wide.AsSpan())) throw new Exception("Immutable wide raw array wire");
+
+                    var previous = integersCopy;
+                    bool rejected = false;
+                    try { LuminPackSerializer.Deserialize(integerBytes.AsSpan(0, integerBytes.Length - 1), ref integersCopy); }
+                    catch (Exception error) when (error.GetType().Name == "LuminPackException") { rejected = true; }
+                    if (!rejected || integersCopy != previous) throw new Exception("Truncated immutable raw array was published");
+                    LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(default(ImmutableArray<int>)), ref integersCopy);
+                    if (!integersCopy.IsDefault) throw new Exception("Immutable raw array null marker");
+                    LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(ImmutableArray<int>.Empty), ref integersCopy);
+                    if (integersCopy.IsDefault || integersCopy.Length != 0) throw new Exception("Immutable raw array empty marker");
                 }
             }
             """;

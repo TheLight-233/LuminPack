@@ -5,6 +5,20 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Checks optional immutable storage operations in the consumer's runtime.</summary>
 internal static class FormatterImmutableTraits
 {
+    /// <summary>Checks for the direct raw array reader in the referenced runtime.</summary>
+    /// <param name="compilation">The consumer's actual framework and runtime references.</param>
+    /// <returns>Whether the reader can return a new immutable raw array.</returns>
+    internal static bool HasRawArrayReader(Compilation compilation)
+    {
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader");
+        var array = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableArray`1");
+        return reader is not null && array is not null && reader.GetMembers("ReadRawImmutableArray").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 1, Parameters.Length: 0,
+                ReturnsByRef: false, ReturnsByRefReadonly: false } && method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+            method.TypeParameters[0].ConstraintTypes.Length == 0 &&
+            SymbolEqualityComparer.Default.Equals(method.ReturnType, array.Construct(method.TypeParameters[0])));
+    }
+
     /// <summary>Checks that a sealed framework dictionary can replace a boxed interface enumerator.</summary>
     /// <param name="compilation">The consumer's actual BCL references.</param>
     /// <param name="target">The closed dictionary interface used by the owner.</param>

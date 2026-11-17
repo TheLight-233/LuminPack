@@ -153,6 +153,12 @@ internal static class ImmutableArrayOwnerFile
                     w.Line("    scoped ref " + sequence + " value)");
                     if (ownerRead)
                         w.Line("    where TLuminProfile : struct, " + options);
+                    if (!ownerRead && set.FindFormatter(sequence)?.Supports("ReadRawImmutableArray") == true)
+                    {
+                        w.Line("    => value = reader.ReadRawImmutableArray<" + scalar + ">();");
+                        w.Blank();
+                        break;
+                    }
                     w.Open();
                     w.Line(reader + " operationState = default;");
                     w.Line("reader.CopyTo(ref operationState);");
