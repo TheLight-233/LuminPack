@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using LuminPack.Core;
 
 namespace LuminPack.Code;
 
@@ -33,6 +34,66 @@ public static partial class LuminPackCollectionAccess
     /// <returns>A value traversal, or the public traversal on an unsupported layout.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static ConcurrentStackTraversal<T> EnumerateConcurrentStack<T>(ConcurrentStack<T> stack) => new(stack);
+
+    /// <summary>Writes the raw record of a nonnull concurrent stack: its count, then its items bottom first.</summary>
+    /// <typeparam name="T">The raw element storage.</typeparam>
+    /// <param name="writer">The binary writer.</param>
+    /// <param name="stack">The nonnull source stack.</param>
+    /// <remarks>The record is the one a reversed snapshot writes. The head is read once, as the public enumerator reads it,
+    /// and the captured chain never changes: pushes link a node before publishing it, and pops and <c>Clear</c> only replace
+    /// the head. One pass stores the items top first in the room the writer already proves for an unchecked record, then
+    /// reverses them in place, with no pooled snapshot or second copy. A chain longer than that room, a larger-than-four-byte
+    /// element on a 32-bit process (whose in-place reversal would use typed unaligned access) and an unsupported layout write
+    /// the reversed public snapshot with the original reservation.</remarks>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static void WriteConcurrentStack<T>(ref LuminPackWriter writer, ConcurrentStack<T> stack) where T : unmanaged
+    {
+        if (ConcurrentStackStorage<T>.Available && (IntPtr.Size == 8 || Unsafe.SizeOf<T>() <= 4))
+        {
+            int room = writer.RecordRoom() - sizeof(int);
+            if (room >= 0)
+            {
+                int capacity = room / Unsafe.SizeOf<T>();
+                int next = ConcurrentStackStorage<T>.Next, value = ConcurrentStackStorage<T>.Value;
+                ref T items = ref Unsafe.As<byte, T>(ref Unsafe.Add(ref writer.CurrentReference, sizeof(int)));
+                object? node = Volatile.Read(ref LuminFieldLayout.Field<object?>(stack, ConcurrentStackStorage<T>.Head));
+                int count = 0;
+                while (node is not null && count < capacity)
+                {
+                    LuminPackWriter.Write(ref Unsafe.As<T, byte>(ref Unsafe.Add(ref items, count++)), LuminFieldLayout.Field<T>(node, value));
+                    node = LuminFieldLayout.Field<object?>(node, next);
+                }
+                if (node is null)
+                {
+                    MemoryExtensions.Reverse(LuminPackMarshal.CreateSpan(ref items, count));
+                    LuminPackWriter.Write(ref writer.CurrentReference, count);
+                    writer.CompleteRun(sizeof(int) + count * Unsafe.SizeOf<T>());
+                    return;
+                }
+            }
+        }
+        WriteConcurrentStackSnapshot(ref writer, stack);
+    }
+
+    /// <summary>Writes the reversed snapshot of a stack, reserving its record as the contiguous writer does.</summary>
+    /// <typeparam name="T">The raw element storage.</typeparam>
+    /// <param name="writer">The binary writer.</param>
+    /// <param name="stack">The nonnull source stack.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void WriteConcurrentStackSnapshot<T>(ref LuminPackWriter writer, ConcurrentStack<T> stack) where T : unmanaged
+    {
+        T[] snapshot = RentSnapshot(stack, out int count);
+        try
+        {
+            var items = snapshot.AsSpan(0, count);
+            items.Reverse();
+            writer.Write<T>(items, count);
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<T>.Shared.Return(snapshot, false);
+        }
+    }
 
     /// <summary>Traverses concurrent buckets with the runtime's original capture and link-read timing.</summary>
     /// <typeparam name="TKey">The key type.</typeparam>

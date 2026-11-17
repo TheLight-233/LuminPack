@@ -488,6 +488,23 @@ internal static class FormatterConcurrentTraits
         return owner.GetMembers("PublishConcurrentStack").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.DeclaredAccessibility == Accessibility.Public && method.Arity == 1 && method.ReturnsVoid && method.Parameters.Length == 4 && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) && method.TypeParameters[0].ConstraintTypes.IsEmpty && !method.TypeParameters[0].HasReferenceTypeConstraint && !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint && !method.TypeParameters[0].HasConstructorConstraint && !method.TypeParameters[0].HasNotNullConstraint && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, stack.Construct(method.TypeParameters[0])) && method.Parameters[1].Type is IArrayTypeSymbol { Rank: 1 } array && SymbolEqualityComparer.Default.Equals(array.ElementType, method.TypeParameters[0]) && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32 && method.Parameters[3].Type.SpecialType == SpecialType.System_Boolean);
     }
 
+    /// <summary>Checks the optional raw concurrent stack record write.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <param name="stack">The exact closed framework stack.</param>
+    /// <returns>Whether the referenced helper has the expected public signature.</returns>
+    internal static bool HasStackRawWrite(Compilation compilation, INamedTypeSymbol stack)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        return owner is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } && writer is not null &&
+            owner.GetMembers("WriteConcurrentStack").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } &&
+                method.Parameters.Length == 2 && method.Parameters[0].RefKind == RefKind.Ref &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, writer) &&
+                method.Parameters[1].RefKind == RefKind.None && method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, stack.OriginalDefinition.Construct(method.TypeParameters[0])));
+    }
+
     /// <summary>Checks the optional detached range push operation.</summary>
     /// <param name="compilation">The consumer's Core and framework references.</param>
     /// <param name="stack">The exact closed framework stack.</param>

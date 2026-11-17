@@ -301,6 +301,9 @@ internal static class FormatterCapabilities
             result.Add("StageConcurrentStack");
         if (definition == "System.Collections.Concurrent.ConcurrentStack" && FormatterConcurrentTraits.HasStackRangePush(compilation, named))
             result.Add("PushConcurrentStackRange");
+        if (definition == "System.Collections.Concurrent.ConcurrentStack" && named.TypeArguments[0].IsUnmanagedType &&
+            FormatterConcurrentTraits.HasStackRawWrite(compilation, named))
+            result.Add("WriteConcurrentStack");
         if (definition is "System.Collections.Generic.ISet" or "System.Collections.Generic.IReadOnlySet" && modern)
         {
             var element = named.TypeArguments[0];

@@ -4,9 +4,9 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared binary and JSON formatter owner of one closed <c>ConcurrentStack&lt;T&gt;</c> of raw scalars.</summary>
 /// <remarks>The members mirror the legacy formatter generator's concurrent-stack roots and extension methods. The binary write
-/// reverses one snapshot into the bottom-up order the record stores, the binary read pushes one pooled block, and the JSON read
-/// pushes the parsed elements and then restores their original order with one snapshot. Both JSON directions transfer their
-/// elements through the shared scalar owner.</remarks>
+/// fills the bottom-up record from one captured chain through Core when Core provides it, and otherwise reverses one snapshot;
+/// the binary read pushes one pooled block, and the JSON read pushes the parsed elements and then restores their original order
+/// with one snapshot. Both JSON directions transfer their elements through the shared scalar owner.</remarks>
 internal static class ConcurrentStackOwnerFile
 {
     /// <summary>Renders the file.</summary>
@@ -78,6 +78,13 @@ internal static class ConcurrentStackOwnerFile
                     w.Line("return;");
                     w.Close();
                     w.Blank();
+                    if (set.FindFormatter(stack)?.Supports("WriteConcurrentStack") == true)
+                    {
+                        w.Line("global::LuminPack.Code.LuminPackCollectionAccess.WriteConcurrentStack(ref writer, value);");
+                        w.Close();
+                        w.Blank();
+                        break;
+                    }
                     w.Line("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentSnapshot(value, out var count);");
                     w.Line("try");
                     w.Open();
