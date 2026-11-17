@@ -1,0 +1,316 @@
+name: CI 57 targeted round 2 matrix
+
+on:
+  push:
+    branches: [codex/ci57-round2]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci57-round2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  paired-matrix:
+    runs-on: ${{ vars.LUMINPACK_AVX512_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    env:
+      STOCK_SHA: 83abe5dbcd78e4a4b1f536efbc3be688d8b5a5ae
+      DOTNET_PROCESSOR_COUNT: '4'
+      DOTNET_TieredCompilation: '0'
+      DOTNET_TieredPGO: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+      - name: Prepare same-run revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/ci57-artifacts
+          uname -a > .tmp/ci57-artifacts/uname.txt
+          LC_ALL=C lscpu > .tmp/ci57-artifacts/cpu.txt
+          flags=$(sed -n 's/^Flags:[[:space:]]*//p' .tmp/ci57-artifacts/cpu.txt)
+          for flag in avx512f avx512bw; do
+            status=absent
+            if [[ " $flags " == *" $flag "* ]]; then
+              status=available
+            fi
+            printf '%s=%s\n' "$flag" "$status"
+          done | tee .tmp/ci57-artifacts/hardware.txt
+          dotnet --info > .tmp/ci57-artifacts/dotnet-info.txt
+          git merge-base --is-ancestor "$STOCK_SHA" "$GITHUB_SHA"
+          git worktree add --detach "$RUNNER_TEMP/ci57-stock" "$STOCK_SHA"
+          printf 'stock %s\ncandidate %s\n' "$STOCK_SHA" "$GITHUB_SHA" > .tmp/ci57-artifacts/revisions.txt
+          python3 - "$RUNNER_TEMP/ci57-stock" "$GITHUB_WORKSPACE" <<'PY'
+          from pathlib import Path
+          import sys
+
+          filter_code = '''        string? filter = Environment.GetEnvironmentVariable("MATRIX_CASES");
+                  if (string.IsNullOrWhiteSpace(filter))
+                      throw new InvalidOperationException("A case and operation filter is required.");
+                  var selected = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+                  foreach (string selection in filter.Split(','))
+                  {
+                      string[] parts = selection.Split('=');
+                      if (parts.Length != 2 || string.IsNullOrEmpty(parts[0]))
+                          throw new InvalidOperationException("Invalid matrix selection: " + selection);
+                      string[] operations = parts[1].Split('+');
+                      if (operations.Any(operation => operation is not ("write" or "fresh" or "reuse")) ||
+                          !selected.TryAdd(parts[0], new HashSet<string>(operations, StringComparer.Ordinal)))
+                          throw new InvalidOperationException("Invalid or duplicate matrix selection: " + selection);
+                  }
+                  fixtures = fixtures.Where(fixture => selected.ContainsKey(fixture.Name)).ToArray();
+                  var missing = selected.Keys.Except(fixtures.Select(fixture => fixture.Name), StringComparer.Ordinal);
+                  if (missing.Any())
+                      throw new InvalidOperationException("Unknown cases: " + string.Join(", ", missing));
+          '''
+          changes = [
+              ('            : Fixtures.CollectionCases();\n', '            : Fixtures.CollectionCases();\n' + filter_code),
+              ('            Rounds = rounds,', '            Rounds = rounds,\n            CaseOperations = filter,'),
+              ('                    void Add(string name, Action action) => work.Add((codec.Library, new(name, action), Calibrate(action)));',
+               '''                    void Add(string name, Action action)
+                              {
+                                  if (selected[fixture.Name].Contains(name))
+                                      work.Add((codec.Library, new(name, action), Calibrate(action)));
+                              }'''),
+          ]
+          for root in sys.argv[1:]:
+              path = Path(root) / 'benchmarks/LuminPack.MatrixBenchmark/Program.cs'
+              source = path.read_text(encoding='utf-8-sig')
+              for before, after in changes:
+                  if source.count(before) != 1:
+                      raise SystemExit(f'Unexpected matrix source in {path}: {before!r}')
+                  source = source.replace(before, after)
+              path.write_text(source, encoding='utf-8')
+          PY
+      - name: Build the two filtered benchmark runners
+        shell: bash
+        run: |
+          set -euo pipefail
+          results="$GITHUB_WORKSPACE/.tmp/ci57-artifacts"
+          for variant in stock candidate; do
+            root="$GITHUB_WORKSPACE"
+            if [[ "$variant" == stock ]]; then
+              root="$RUNNER_TEMP/ci57-stock"
+            fi
+            (
+              cd "$root"
+              dotnet build benchmarks/LuminPack.MatrixBenchmark -c Release -f net10.0 \
+                -p:LuminPackLegacyGeneratorReference=false -p:LuminPackUseSatori=false -p:GeneratePackageOnBuild=false
+            ) 2>&1 | tee "$results/build-$variant.log"
+          done
+      - name: Sample the targeted binary cases and summarize paired processes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv
+          import json
+          import os
+          import subprocess
+          from collections import defaultdict
+          from pathlib import Path
+          from statistics import median
+
+          # Previous commits are rechecked against the in-process references. The two revisions isolate round 2.
+          cases = {
+              'main': (
+                  'ConcurrentDictionaryInt32String=fresh', 'ConcurrentQueueInt32=reuse',
+                  'ImmutableArrayInt32=reuse', 'Reference_ImmutableQueueString=fresh',
+                  'Reference_SortedSetString=fresh+reuse', 'Reference_HashSetClass=write',
+                  'DictionaryInt32String=fresh+reuse',
+              ),
+              'small': (
+                  'ConcurrentDictionary_Value=reuse', 'ConcurrentDictionary_String=reuse',
+                  'ConcurrentDictionary_Object=reuse', 'ConcurrentStack_Value=write', 'ConcurrentQueue_Value=fresh',
+                  'ImmutableDictionary_Object=fresh+reuse', 'ImmutableDictionary_String=fresh+reuse',
+                  'ImmutableHashSet_Object=fresh+reuse', 'ImmutableHashSet_String=fresh+reuse',
+                  'ImmutableQueue_Value=fresh+reuse', 'LinkedList_Value=fresh', 'Array_String=fresh',
+                  'SortedSet_String=fresh+reuse', 'HashSet_Object=write', 'Queue_Object=write',
+                  'LinkedList_Object=write', 'SortedList_Object=write', 'IReadOnlySet_Object=write',
+              ),
+              'regular': (
+                  'ConcurrentDictionary_Object=reuse', 'ConcurrentDictionary_String=reuse',
+                  'ConcurrentDictionary_Value=fresh', 'ConcurrentStack_Value=write', 'ConcurrentQueue_Value=reuse',
+                  'ImmutableArray_Value=fresh+reuse', 'SortedSet_String=fresh+reuse',
+              ),
+              'changing': (
+                  'ConcurrentDictionary_Object=reuse', 'ConcurrentDictionary_Value=fresh+reuse',
+                  'ConcurrentDictionary_String=reuse', 'ConcurrentQueue_Value=reuse',
+                  'ImmutableArray_Value=fresh+reuse', 'SortedSet_String=fresh+reuse',
+                  'ArraySegment_String=reuse', 'ReadOnlyCollection_String=reuse', 'ImmutableArray_String=reuse',
+                  'Queue_String=reuse', 'Stack_String=reuse',
+              ),
+              'large': (
+                  'ConcurrentDictionary_Object=fresh+reuse', 'ConcurrentDictionary_Value=reuse',
+                  'ConcurrentDictionary_String=reuse', 'Array2D_Value=reuse',
+                  'ConcurrentStack_Value=write', 'ConcurrentQueue_Value=reuse', 'SortedSet_String=fresh+reuse',
+                  'HashSet_Object=write', 'Queue_Object=write', 'LinkedList_Object=write',
+                  'SortedList_Object=write', 'IReadOnlySet_Object=write',
+              ),
+          }
+          workspace = Path(os.environ['GITHUB_WORKSPACE'])
+          results = workspace / '.tmp/ci57-artifacts'
+          roots = {'stock': Path(os.environ['RUNNER_TEMP']) / 'ci57-stock', 'candidate': workspace}
+          dll = Path('benchmarks/LuminPack.MatrixBenchmark/bin/Release/net10.0/LuminPack.MatrixBenchmark.dll')
+          references = ('Nino', 'MemoryPack')
+          (results / 'cases.json').write_text(json.dumps(cases, indent=2) + '\n', encoding='utf-8')
+
+          def read_process(path, rounds, required):
+              records = [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines()]
+              environment = records[0]
+              if (environment['ProcessorCount'] != 4 or not environment['ServerGC'] or
+                      environment['Architecture'] != 'X64' or environment['TieredCompilation'] != '0'):
+                  raise RuntimeError(f'Unexpected execution environment in {path}: {environment}')
+              samples = defaultdict(list)
+              payload = {}
+              for row in records[1:]:
+                  if row['Kind'] == 'Sample':
+                      pair = row['Case'], row['Operation']
+                      if pair not in required:
+                          raise RuntimeError(f'Unrequested measurement {pair} in {path}')
+                      samples[(*pair, row['Library'])].append(row)
+                  elif row['Kind'] == 'Validated':
+                      payload[row['Case'], row['Library']] = row['Bytes']
+              actual = {(case, operation) for case, operation, library in samples if library == 'LuminPack'}
+              if actual != required:
+                  raise RuntimeError(f'Missing LuminPack measurements in {path}: {required - actual}')
+              for key, rows in samples.items():
+                  if len(rows) != rounds or {row['Round'] for row in rows} != set(range(rounds)):
+                      raise RuntimeError(f'Incomplete samples for {key} in {path}')
+              return environment, samples, payload
+
+          def medians(runs, key, field):
+              return [median(row[field] for row in samples[key]) for _, samples, _ in runs]
+
+          def spread(values):
+              return median(values), min(values), max(values)
+
+          with (results / 'paired.csv').open('w', newline='', encoding='utf-8') as output:
+              writer = csv.writer(output)
+              writer.writerow([
+                  'scene', 'case', 'operation', 'reference', 'pairs', 'rounds',
+                  'stock_ns', 'candidate_ns', 'stock_B_per_op', 'candidate_B_per_op',
+                  'stock_payload_bytes', 'candidate_payload_bytes',
+                  'candidate_over_stock_median', 'candidate_over_stock_min', 'candidate_over_stock_max',
+                  'stock_over_reference_median', 'stock_over_reference_min', 'stock_over_reference_max',
+                  'candidate_over_reference_median', 'candidate_over_reference_min', 'candidate_over_reference_max',
+              ])
+              for scene, selection in cases.items():
+                  pairs, rounds = (5, 9) if scene == 'large' else (3, 5) if scene == 'main' else (5, 5)
+                  required = {(case, operation) for entry in selection for case, operations in [entry.split('=')]
+                              for operation in operations.split('+')}
+                  runs = {variant: [] for variant in roots}
+                  for index in range(1, pairs + 1):
+                      order = tuple(roots) if index % 2 else tuple(reversed(roots))
+                      for variant in order:
+                          path = results / f'{variant}-binary-{scene}-{index}.jsonl'
+                          subprocess.run(['dotnet', str(roots[variant] / dll), 'binary', scene, str(rounds), str(path)],
+                                         env={**os.environ, 'MATRIX_CASES': ','.join(selection)}, check=True)
+                          runs[variant].append(read_process(path, rounds, required))
+                  stock, candidate = runs['stock'], runs['candidate']
+                  environments = {(env['Runtime'], json.dumps(env['References'], sort_keys=True))
+                                  for env, _, _ in stock + candidate}
+                  if len(environments) != 1:
+                      raise RuntimeError(f'Mismatched runtimes or references in {scene}: {environments}')
+                  for case, operation in sorted(required):
+                      key = case, operation, 'LuminPack'
+                      stock_ns = medians(stock, key, 'Nanoseconds')
+                      candidate_ns = medians(candidate, key, 'Nanoseconds')
+                      paired = spread([new / old for old, new in zip(stock_ns, candidate_ns)])
+                      sizes = []
+                      for version in (stock, candidate):
+                          sizes.append({payload[case, 'LuminPack'] for _, _, payload in version})
+                      if sizes[0] != sizes[1] or len(sizes[0]) != 1:
+                          raise RuntimeError(f'Unexpected LuminPack payload size for {case}: {sizes}')
+                      for reference in references:
+                          other = case, operation, reference
+                          ratios = []
+                          for version, lumin in ((stock, stock_ns), (candidate, candidate_ns)):
+                              if all(other in samples for _, samples, _ in version):
+                                  timings = medians(version, other, 'Nanoseconds')
+                                  ratios.extend(spread([elapsed / ref for elapsed, ref in zip(lumin, timings)]))
+                              else:
+                                  ratios.extend(['', '', ''])
+                          writer.writerow([
+                              scene, case, operation, reference, pairs, rounds,
+                              median(stock_ns), median(candidate_ns),
+                              median(medians(stock, key, 'AllocatedBytes')),
+                              median(medians(candidate, key, 'AllocatedBytes')),
+                              *(next(iter(size)) for size in sizes), *paired, *ratios,
+                          ])
+                  output.flush()
+          PY
+      - name: Capture targeted A3, C2 and E3 disassembly
+        shell: bash
+        run: |
+          set -euo pipefail
+          results="$GITHUB_WORKSPACE/.tmp/ci57-artifacts"
+          capture() {
+            local probe="$1" scene="$2"
+            export MATRIX_CASES="$3" DOTNET_JitDisasm="$4 *<CollectionCases>b__*"
+            for variant in stock candidate; do
+              local root="$GITHUB_WORKSPACE"
+              if [[ "$variant" == stock ]]; then
+                root="$RUNNER_TEMP/ci57-stock"
+              fi
+              export DOTNET_JitStdOutFile="$results/$probe-$variant.asm"
+              dotnet "$root/benchmarks/LuminPack.MatrixBenchmark/bin/Release/net10.0/LuminPack.MatrixBenchmark.dll" \
+                binary "$scene" 0 "$results/$probe-$variant-validation.jsonl"
+              if [[ ! -s "$DOTNET_JitStdOutFile" ]]; then
+                echo "::warning::No $probe JIT disassembly emitted for $variant. See cpu.txt and the validation JSONL."
+              fi
+            done
+          }
+          capture a3 small \
+            'ConcurrentDictionary_Value=reuse,ConcurrentDictionary_String=reuse,ConcurrentDictionary_Object=reuse' \
+            '*ConcurrentDictionary*:*'
+          capture c2 small 'SortedSet_String=fresh+reuse' \
+            '*SortedSet*:* *IsStrictlyAscending* *ReadStrings* *ReadLatin1PayloadSlow* *ReadOtherUtf16Payload*'
+          capture e3 changing \
+            'ArraySegment_String=reuse,ReadOnlyCollection_String=reuse,ImmutableArray_String=reuse,Queue_String=reuse,Stack_String=reuse' \
+            '*ReadStrings* *ReadLatin1PayloadSlow* *ReadOtherUtf16Payload* *MatchesLatin1* *MatchesUtf16*'
+      - name: Probe N6 source alignment on AVX-512
+        shell: bash
+        run: |
+          set -euo pipefail
+          results="$GITHUB_WORKSPACE/.tmp/ci57-artifacts"
+          if ! grep -qx 'avx512f=available' "$results/hardware.txt" || \
+             ! grep -qx 'avx512bw=available' "$results/hardware.txt"; then
+            echo '::notice::N6 alignment probe skipped because AVX-512F or AVX-512BW is absent.'
+            echo '{"Kind":"Skipped","Reason":"lscpu lacks AVX-512F or AVX-512BW."}' > "$results/n6-alignment.jsonl"
+            exit 0
+          fi
+          probe="$RUNNER_TEMP/ci57-copy-probe"
+          mkdir -p "$probe"
+          cp "$GITHUB_WORKSPACE/.github/scripts/ci57-copy-probe.cs" "$probe/Program.cs"
+          cat > "$probe/CopyProbe.csproj" <<'XML'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <OutputType>Exe</OutputType>
+              <TargetFramework>net10.0</TargetFramework>
+              <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+              <ServerGarbageCollection>true</ServerGarbageCollection>
+            </PropertyGroup>
+            <ItemGroup>
+              <Reference Include="LuminPack.Core" HintPath="$(CI57_PROBE_CORE)" />
+            </ItemGroup>
+          </Project>
+          XML
+          export CI57_PROBE_CORE="$GITHUB_WORKSPACE/benchmarks/LuminPack.MatrixBenchmark/bin/Release/net10.0/LuminPack.Core.dll"
+          dotnet build "$probe/CopyProbe.csproj" -c Release > "$results/build-n6-probe.log" 2>&1
+          dotnet "$probe/bin/Release/net10.0/CopyProbe.dll" | tee "$results/n6-alignment.jsonl"
+      - name: Upload targeted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci57-round2-fullopts-linux-x64
+          path: .tmp/ci57-artifacts
