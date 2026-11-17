@@ -5,6 +5,26 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Selects compatible mutable construction rentals and scalar pair output.</summary>
 internal static class FormatterFrozenTraits
 {
+    /// <summary>Checks the public aligned item span used by a frozen set.</summary>
+    /// <param name="compilation">The consumer's framework references.</param>
+    /// <param name="set">The closed frozen set storage.</param>
+    /// <returns>Whether the scalar span can be emitted for this framework.</returns>
+    internal static bool CanReadSetItems(Compilation compilation, INamedTypeSymbol set)
+    {
+        var array = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableArray`1");
+        var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
+        if (array is null || span is null)
+            return false;
+        var element = set.TypeArguments[0];
+        var closed = array.Construct(element);
+        var expected = span.Construct(element);
+        return set.GetMembers("Items").OfType<IPropertySymbol>().Any(property => !property.IsStatic &&
+            property.GetMethod?.DeclaredAccessibility == Accessibility.Public && SymbolEqualityComparer.Default.Equals(property.Type, closed)) &&
+            closed.GetMembers("AsSpan").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 0, Parameters.Length: 0 } &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, expected));
+    }
+
     /// <summary>Checks both exact methods needed to rent and return the existing result family's builder.</summary>
     /// <param name = "compilation">The consumer's actual runtime and framework metadata.</param>
     /// <param name = "family">The mutable Dictionary or Set construction family.</param>

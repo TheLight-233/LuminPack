@@ -36,6 +36,19 @@ public sealed partial class TruncatedFixedHeaderTest
         Assert.Equal(LuminPackSerializer.Serialize(sorted), LuminPackSerializer.Serialize<IDictionary<string, FixedCaseContainer?>>(sorted));
     }
 
+    /// <summary>Checks that the typed immutable set traversal keeps the normal managed element formatter.</summary>
+    [Fact]
+    public void ImmutableSetInterfaceKeepsPackableValuesInOrder()
+    {
+        var set = Enumerable.Range(0, 41)
+            .Select(index => new FixedCaseContainer { Child = new FixedCase { First = index, Second = ~index } })
+            .ToImmutableHashSet();
+        Assert.Equal(LuminPackSerializer.Serialize(set.ToArray()),
+            LuminPackSerializer.Serialize<IReadOnlySet<FixedCaseContainer>>(set));
+        Assert.Equal(LuminPackSerializer.Serialize(set.ToArray()),
+            LuminPackSerializer.Serialize<ISet<FixedCaseContainer>>(set));
+    }
+
     /// <summary>Checks exact wrapper writers when keys require their own generated formatter.</summary>
     [Fact]
     public void ReadOnlyDictionaryKeepsPackableKeysAndStringValuesInOrder()

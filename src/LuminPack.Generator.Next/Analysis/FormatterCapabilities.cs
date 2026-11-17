@@ -301,10 +301,41 @@ internal static class FormatterCapabilities
             result.Add("StageConcurrentStack");
         if (definition == "System.Collections.Concurrent.ConcurrentStack" && FormatterConcurrentTraits.HasStackRangePush(compilation, named))
             result.Add("PushConcurrentStackRange");
-        if (definition == "System.Collections.Generic.IReadOnlySet" && modern &&
-            compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenSet`1") is { } frozenSet &&
-            frozenSet.Construct(named.TypeArguments[0]).AllInterfaces.Any(candidate => SymbolEqualityComparer.Default.Equals(candidate, named)))
-            result.Add("FrozenSetInterfaceTraversal");
+        if (definition is "System.Collections.Generic.ISet" or "System.Collections.Generic.IReadOnlySet" && modern)
+        {
+            var element = named.TypeArguments[0];
+            bool raw = !unity && element.IsUnmanagedType && element.SpecialType != SpecialType.System_Boolean &&
+                FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation);
+            bool text = !unity && element.SpecialType == SpecialType.System_String &&
+                FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteStrings", element);
+            if (raw && compilation.GetTypeByMetadataName("System.Collections.Generic.SortedSet`1") is { } sorted &&
+                FormatterImmutableTraits.HasRawTreeWriter(compilation, sorted))
+                result.Add("WriteSetInterfaceRawSorted");
+            foreach (string family in new[] { "ImmutableHashSet", "ImmutableSortedSet" })
+            {
+                if (unity || compilation.GetTypeByMetadataName("System.Collections.Immutable." + family + "`1") is not { } tree ||
+                    !FormatterImmutableTraits.CanEnumerateSet(tree, named))
+                    continue;
+                result.Add(family + "InterfaceTraversal");
+                if (raw && FormatterImmutableTraits.HasRawTreeWriter(compilation, tree))
+                    result.Add("WriteSetInterfaceRaw" + family);
+                if (text && FormatterImmutableTraits.HasTreeCopy(compilation, family, 1))
+                    result.Add("WriteSetInterfaceStrings" + family);
+            }
+            if (definition == "System.Collections.Generic.IReadOnlySet" &&
+                compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenSet`1")?.Construct(element) is { } frozen &&
+                frozen.AllInterfaces.Any(candidate => SymbolEqualityComparer.Default.Equals(candidate, named)))
+            {
+                result.Add("FrozenSetInterfaceTraversal");
+                if (FormatterFrozenTraits.CanReadSetItems(compilation, frozen))
+                {
+                    if (raw)
+                        result.Add("WriteSetInterfaceRawFrozen");
+                    if (text)
+                        result.Add("WriteSetInterfaceStringsFrozen");
+                }
+            }
+        }
         if (definition is "System.Collections.Generic.HashSet" or "System.Collections.Generic.ISet" or "System.Collections.Generic.IReadOnlySet" &&
             modern && !unity && named.TypeArguments[0].SpecialType == SpecialType.System_String &&
             FormatterConcurrentTraits.HasStringSetWriter(compilation))

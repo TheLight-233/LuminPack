@@ -56,6 +56,52 @@ public sealed class RawScalarSpanSafetyTest
         }
     }
 
+    /// <summary>Checks exact sorted, frozen, and immutable set traversal through the set interfaces.</summary>
+    [Fact]
+    public void SetInterfacesKeepTheConcreteEnumerationOrder()
+    {
+        var values = Enumerable.Range(0, 67).Select(index => unchecked((ulong)(index * -37199L))).ToArray();
+        var reverse = Comparer<ulong>.Create((left, right) => right.CompareTo(left));
+        var frozen = values.ToFrozenSet();
+        var sorted = new SortedSet<ulong>(values, reverse);
+        var immutable = values.ToImmutableHashSet();
+        var ordered = values.ToImmutableSortedSet(reverse);
+        CheckRaw(frozen, LuminPackSerializer.Serialize<IReadOnlySet<ulong>>(frozen));
+        CheckRaw(sorted, LuminPackSerializer.Serialize<ISet<ulong>>(sorted));
+        CheckRaw(immutable, LuminPackSerializer.Serialize<IReadOnlySet<ulong>>(immutable));
+        CheckRaw(ordered, LuminPackSerializer.Serialize<ISet<ulong>>(ordered));
+
+        var text = Enumerable.Range(0, 67).Select(index => index == 0 ? null : index == 1 ? string.Empty : $"\u4F60-{index}");
+        var frozenText = text.ToFrozenSet();
+        var orderedText = text.ToImmutableSortedSet(StringComparer.Ordinal);
+        CheckText(frozenText);
+        CheckText(orderedText);
+
+        static void CheckRaw(IReadOnlySet<ulong> expected, byte[] record)
+        {
+            Assert.Equal(expected.Count, BinaryPrimitives.ReadInt32LittleEndian(record));
+            Assert.Equal(expected.ToArray(), MemoryMarshal.Cast<byte, ulong>(record.AsSpan(sizeof(int))).ToArray());
+        }
+
+        static void CheckText(IReadOnlySet<string?> set)
+        {
+            Assert.Equal(WriteText<LuminPackUtf16LengthOptions>(set), LuminPackSerializer.Serialize(set));
+            Assert.Equal(WriteText<LuminPackUtf8LengthOptions>(set),
+                LuminPackSerializer.Serialize<IReadOnlySet<string?>, LuminPackUtf8LengthOptions>(set));
+        }
+
+        static byte[] WriteText<TOptions>(IReadOnlySet<string?> set) where TOptions : struct, ILuminPackOptions
+        {
+            var bytes = new byte[2048];
+            Span<byte> destination = bytes;
+            var writer = new LuminPackWriter(ref destination);
+            writer.WriteCollectionHeader(set.Count);
+            foreach (var item in set)
+                writer.Write<TOptions>(item);
+            return bytes.AsSpan(0, writer.Position).ToArray();
+        }
+    }
+
     /// <summary>Checks that ordered concurrent reuse observes a key through the existing comparer before loading its value.</summary>
     [Fact]
     public void ConcurrentRawRefillKeepsComparerBeforeValueRead()

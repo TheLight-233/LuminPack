@@ -67,6 +67,8 @@ internal static class InterfaceOwnerFile
         string sorted = "global::System.Collections.Generic.SortedSet<" + scalar + ">";
         string frozen = "global::System.Collections.Frozen.FrozenSet<" + scalar + ">";
         bool frozenSet = setInterface && c.Supports("FrozenSetInterfaceTraversal");
+        const string immutable = "global::System.Collections.Immutable.";
+        var immutableSets = new[] { "ImmutableHashSet", "ImmutableSortedSet" };
         bool outlineFallback = c.Counted || setInterface;
         bool stringSpan = !setInterface && c.Text && c.Supports("WriteInterfaceStrings");
         var reservedElement = setInterface ? null : c.ReservableListElement();
@@ -142,6 +144,14 @@ internal static class InterfaceOwnerFile
                 w.Indented(() => w.Line("WriteFrozen(ref operationState, frozen);"));
                 w.Line("#endif");
             }
+            foreach (string family in immutableSets)
+            {
+                if (!c.Supports(family + "InterfaceTraversal"))
+                    continue;
+                string profile = c.Text ? ParallelDictionaryWrite.FixedUtf16LengthProfile + " && " : string.Empty;
+                w.Line("else if (" + profile + "value is " + immutable + family + "<" + scalar + "> " + family + "Items)");
+                w.Indented(() => w.Line("Write" + family + "(ref operationState, " + family + "Items);"));
+            }
         }
         w.Line("else");
         if (outlineFallback)
@@ -183,11 +193,18 @@ internal static class InterfaceOwnerFile
         if (outlineFallback)
             WriteCounted("WriteInterface", c.Sequence);
         if (setInterface)
-            WriteCounted("WriteSorted", sorted);
+        {
+            WriteCounted("WriteSorted", sorted, "Sorted");
+            foreach (string family in immutableSets)
+            {
+                if (c.Supports(family + "InterfaceTraversal"))
+                    WriteCounted("Write" + family, immutable + family + "<" + scalar + ">", family);
+            }
+        }
         if (frozenSet)
         {
             w.Line("#if NET8_0_OR_GREATER");
-            WriteCounted("WriteFrozen", frozen);
+            WriteCounted("WriteFrozen", frozen, "Frozen");
             w.Line("#endif");
         }
         if (c.Text && !c.Forwarded)
@@ -199,14 +216,59 @@ internal static class InterfaceOwnerFile
 
         string ConcreteSequence(string name) => collections + name + "<" + scalar + ">";
 
-        void WriteCounted(string method, string input)
+        void WriteCounted(string method, string input, string? setFamily = null)
         {
             w.Line(w.MethodImpl("NoInlining"));
             w.Line("static void " + method + "(scoped ref " + writer + " operationState, " + input + " items)");
             w.Open();
-            c.CountedWrite("items", outlineText: c.Text && (!setInterface || method == "WriteInterface"));
+            if (setFamily != null)
+                WriteSetRun(setFamily);
+            c.CountedWrite("items", outlineText: c.Text && (!setInterface || method == "WriteInterface" ||
+                setFamily is "ImmutableHashSet" or "ImmutableSortedSet"));
             w.Close();
             w.Blank();
+        }
+
+        void WriteSetRun(string family)
+        {
+            bool isFrozen = family == "Frozen";
+            if (c.RawTreeElements && c.Supports("WriteSetInterfaceRaw" + family))
+            {
+                w.Line("if (items.Count >= " + (isFrozen ? "4" : "16") + " && sizeof(int) + (long)items.Count * " +
+                    c.Memory + ".SizeOf<" + scalar + ">() <= operationState.RecordRoom())");
+                w.Open();
+                if (isFrozen)
+                {
+                    w.Line("var frozenItems = items.Items.AsSpan();");
+                    w.Line("if (!global::System.MemoryExtensions.Overlaps(global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(frozenItems), operationState.Buffer))");
+                    w.Open();
+                    w.Line("operationState.Write<" + scalar + ">(frozenItems, frozenItems.Length);");
+                    w.Line("operationState.CheckBuffer();");
+                    w.Line("return;");
+                    w.Close();
+                }
+                else
+                {
+                    w.Line("global::LuminPack.Utility.LuminTreeStorage.WriteRaw(ref operationState, items);");
+                    w.Line("return;");
+                }
+                w.Close();
+            }
+            if (!c.Text || !c.Supports("WriteSetInterfaceStrings" + family))
+                return;
+
+            w.Line("if (items.Count >= " + (isFrozen ? "1" : "16") + " && " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ")");
+            w.Open();
+            w.Line("int capturedHeader = operationState.BeginCollection();");
+            if (isFrozen)
+                w.Line("operationState.WriteStrings<TLuminProfile>(items.Items.AsSpan());");
+            else
+                ImmutableTreeTraversal.Lease(w, "items", "string", () =>
+                    w.Line("operationState.WriteStrings<TLuminProfile>(" + ImmutableTreeTraversal.CapturedSpan + ");"));
+            w.Line("operationState.EndCollection(capturedHeader, items.Count);");
+            w.Line("operationState.CheckBuffer();");
+            w.Line("return;");
+            w.Close();
         }
     }
 
