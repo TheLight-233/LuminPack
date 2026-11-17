@@ -187,27 +187,36 @@ internal static class ImmutableSortedSetOwnerFile
                         ">.Default) &&");
                     w.Line("    (!fromCache || CandidateHasFirst(candidate, pooled[0])))");
                     w.Open();
-                    w.Line("var prior = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
-                    w.Line("try");
-                    w.Open();
-                    w.Line(tree + ".CopyTo(candidate, prior);");
-                    w.Line("var previousItems = new global::System.ReadOnlySpan<" + scalar + ">(prior, 0, length);");
-                    w.Line("var currentItems = new global::System.ReadOnlySpan<" + scalar + ">(pooled, 0, length);");
-                    w.Line("if (global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(previousItems).SequenceEqual(");
-                    w.Indented(() =>
+                    bool directMatch = GenericIdentity.IsRaw(scalar) && set.FindFormatter(sequence)?.Supports("MatchRawSet") == true;
+                    if (directMatch)
+                        w.Line("if (" + tree + ".MatchesRaw(candidate, new global::System.ReadOnlySpan<" + scalar + ">(pooled, 0, length)))");
+                    else
                     {
-                        w.Line("global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(currentItems)))");
-                    });
+                        w.Line("var prior = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
+                        w.Line("try");
+                        w.Open();
+                        w.Line(tree + ".CopyTo(candidate, prior);");
+                        w.Line("var previousItems = new global::System.ReadOnlySpan<" + scalar + ">(prior, 0, length);");
+                        w.Line("var currentItems = new global::System.ReadOnlySpan<" + scalar + ">(pooled, 0, length);");
+                        w.Line("if (global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(previousItems).SequenceEqual(");
+                        w.Indented(() =>
+                        {
+                            w.Line("global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(currentItems)))");
+                        });
+                    }
                     w.Open();
                     w.Line(candidate + ".Last.SetTarget(candidate);");
                     w.Line("value = candidate;");
                     w.Line("return;");
                     w.Close();
-                    w.Close();
-                    w.Line("finally");
-                    w.Open();
-                    w.Line("global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(prior, false);");
-                    w.Close();
+                    if (!directMatch)
+                    {
+                        w.Close();
+                        w.Line("finally");
+                        w.Open();
+                        w.Line("global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(prior, false);");
+                        w.Close();
+                    }
                     w.Close();
                     w.Blank();
                     w.Line("var completed = " + tree + ".CreateImmutableSortedSet(pooled, length);");

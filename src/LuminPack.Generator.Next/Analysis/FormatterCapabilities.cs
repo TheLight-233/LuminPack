@@ -156,6 +156,11 @@ internal static class FormatterCapabilities
                     result.Add("BinaryStringPairPrefix");
                 if (named.Arity == 1)
                 {
+                    if (concrete == "ImmutableHashSet" && named.TypeArguments[0].SpecialType == SpecialType.System_String &&
+                        FormatterRuntimeTraits.HasStringSpanReader(compilation, named.TypeArguments[0]))
+                        result.Add("ReadSetStringTail");
+                    if (concrete == "ImmutableSortedSet" && named.TypeArguments[0].IsUnmanagedType && FormatterImmutableTraits.HasRawSetMatch(compilation, named))
+                        result.Add("MatchRawSet");
                     ContiguousCapabilities(compilation, named.TypeArguments[0], result);
                     foreach (string family in new[] { hash, sorted })
                         if (compilation.GetTypeByMetadataName("System.Collections.Immutable." + family + "`1") is { } tree &&

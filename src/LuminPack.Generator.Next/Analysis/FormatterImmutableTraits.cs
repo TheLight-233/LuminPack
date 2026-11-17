@@ -92,6 +92,23 @@ internal static class FormatterImmutableTraits
             SymbolEqualityComparer.Default.Equals(method.Parameters[index].Type, type.Construct(method.TypeParameters[0]));
     }
 
+    /// <summary>Checks the wire-order comparison for an immutable set of raw elements.</summary>
+    /// <param name="compilation">The consumer compilation.</param>
+    /// <param name="set">The immutable set being formatted.</param>
+    /// <returns>Whether the checked comparison can be emitted.</returns>
+    internal static bool HasRawSetMatch(Compilation compilation, INamedTypeSymbol set)
+    {
+        var storage = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage");
+        var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
+        return span != null && storage?.GetMembers("MatchesRaw").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, Parameters.Length: 2,
+                ReturnsByRef: false, ReturnsByRefReadonly: false, ReturnType.SpecialType: SpecialType.System_Boolean } &&
+            method.TypeParameters[0].HasUnmanagedTypeConstraint && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+            method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, set.OriginalDefinition.Construct(method.TypeParameters[0])) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, span.Construct(method.TypeParameters[0]))) == true;
+    }
+
     /// <summary>Checks for tree copy.</summary>
     /// <param name="compilation">The compilation that supplies source symbols and references.</param>
     /// <param name="family">The family supplied to <c>HasTreeCopy</c>.</param>

@@ -190,14 +190,20 @@ internal static class ImmutableHashSetOwnerFile
                     w.Line("var pooled = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
                     w.Line("try");
                     w.Open();
-                    w.Line("reader.Read(");
-                    w.Indented(() =>
+                    // Other raw elements may execute user code in the default hash comparer.
+                    bool wireComparison = GenericIdentity.IsRaw(scalar);
+                    if (wireComparison)
                     {
-                        w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled)),");
-                        w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
-                    });
-                    w.Blank();
-                    w.Line("bool fromCache = value is null;");
+                        w.Line("int byteCount = checked(length * " + memory + ".SizeOf<" + scalar + ">());");
+                        w.Line("int start = reader.Position;");
+                        w.Line("reader.Advance(byteCount);");
+                        w.Line("var input = reader.Buffer.Slice(start, byteCount);");
+                    }
+                    else
+                    {
+                        w.Line("reader.Read(ref " + memory + ".As<" + scalar + ", byte>(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled)), checked(length * " + memory + ".SizeOf<" + scalar + ">()));");
+                        w.Line("var input = " + marshal + ".AsBytes(new global::System.ReadOnlySpan<" + scalar + ">(pooled, 0, length));");
+                    }
                     w.Line("var candidate = value;");
                     w.Line("if (candidate is null)");
                     w.Line("    " + candidate + ".Last.TryGetTarget(out candidate);");
@@ -205,31 +211,38 @@ internal static class ImmutableHashSetOwnerFile
                     w.Line("    candidate.Count == length &&");
                     w.Line("    object.ReferenceEquals(candidate.KeyComparer, global::System.Collections.Generic.EqualityComparer<" + scalar +
                         ">.Default) &&");
-                    w.Line("    (!fromCache || CandidateHasFirst(candidate, pooled[0])))");
+                    w.Line(wireComparison
+                        ? "    CandidateHasFirst(candidate, " + reader + ".Read<" + scalar + ">(ref " + marshal + ".GetReference(input))))"
+                        : "    (value is not null || CandidateHasFirst(candidate, pooled[0])))");
                     w.Open();
-                    w.Line("var prior = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
-                    w.Line("try");
-                    w.Open();
-                    w.Line(tree + ".CopyTo(candidate, prior);");
-                    w.Line("var previousItems = new global::System.ReadOnlySpan<" + scalar + ">(prior, 0, length);");
-                    w.Line("var currentItems = new global::System.ReadOnlySpan<" + scalar + ">(pooled, 0, length);");
-                    w.Line("if (global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(previousItems).SequenceEqual(");
-                    w.Indented(() =>
+                    if (!wireComparison)
                     {
-                        w.Line("global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(currentItems)))");
-                    });
+                        w.Line("var prior = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
+                        w.Line("try");
+                        w.Open();
+                    }
+                    string prior = wireComparison ? "pooled" : "prior";
+                    w.Line(tree + ".CopyTo(candidate, " + prior + ");");
+                    w.Line("var previousItems = new global::System.ReadOnlySpan<" + scalar + ">(" + prior + ", 0, length);");
+                    w.Line("if (" + marshal + ".AsBytes(previousItems).SequenceEqual(input))");
                     w.Open();
                     w.Line(candidate + ".Last.SetTarget(candidate);");
                     w.Line("value = candidate;");
                     w.Line("return;");
                     w.Close();
-                    w.Close();
-                    w.Line("finally");
-                    w.Open();
-                    w.Line("global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(prior, false);");
-                    w.Close();
+                    if (!wireComparison)
+                    {
+                        w.Close();
+                        w.Line("finally");
+                        w.Open();
+                        w.Line("global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(prior, false);");
+                        w.Close();
+                    }
                     w.Close();
                     w.Blank();
+                    if (wireComparison)
+                        w.Line("global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref " + memory + ".As<" + scalar + ", byte>(ref " +
+                            "global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled)), ref " + marshal + ".GetReference(input), (uint)byteCount);");
                     w.Line("var completed = " + tree + ".CreateFrameworkImmutableHashSet(pooled, length);");
                     w.Line(candidate + ".Last.SetTarget(completed);");
                     w.Line("value = completed;");

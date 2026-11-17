@@ -427,6 +427,16 @@ internal static class ImmutableInterfaceOwnerFile
         w.Line("if (!object.ReferenceEquals(prior, selected))");
         w.Open();
         w.Line("same = false;");
+        if (c.Supports("ReadSetStringTail"))
+        {
+            // The copied suffix still owns the old string seeds even after the set identity cannot be retained.
+            w.Line("if (hasPrior && !fromCache)");
+            w.Open();
+            w.Line("slot = selected;");
+            w.Line("operationState.ReadStrings<TLuminProfile>(new global::System.Span<string>(items, i + 1, length - i - 1));");
+            w.Line("break;");
+            w.Close();
+        }
         w.Line("if (fromCache)");
         w.Line("    hasPrior = false;");
         w.Close();

@@ -442,6 +442,54 @@ public static partial class LuminTreeStorage
             destination[position++] = item;
     }
 
+    /// <summary>Compares the raw representations in the set's wire order, stopping at the first mismatch.</summary>
+    /// <typeparam name="T">The raw element type.</typeparam>
+    /// <param name="set">The candidate sorted set.</param>
+    /// <param name="items">The decoded wire values.</param>
+    /// <returns>Whether every item has the same representation.</returns>
+    public static bool MatchesRaw<T>(ImmutableSortedSet<T> set, ReadOnlySpan<T> items) where T : unmanaged
+    {
+        if (set.Count != items.Length)
+            return false;
+        int index = 0;
+        if (ImmutableSortedSetLayout<T>.Available)
+            return MatchAvl(Field<object>(set, ImmutableSortedSetLayout<T>.Root), in ImmutableSortedSetLayout<T>.Nodes, items, ref index);
+        foreach (var item in set)
+            if (!RawEqual(item, items[index++]))
+                return false;
+        return true;
+    }
+
+    /// <summary>Compares an in-order subtree with the remaining input prefix.</summary>
+    /// <typeparam name="T">The raw key type.</typeparam>
+    /// <param name="node">The subtree root.</param>
+    /// <param name="offsets">The validated node field offsets.</param>
+    /// <param name="items">The wire values in enumeration order.</param>
+    /// <param name="index">The next wire value to compare.</param>
+    /// <returns>Whether the visited keys match the input prefix.</returns>
+    private static bool MatchAvl<T>(object node, in NodeOffsets offsets, ReadOnlySpan<T> items, ref int index) where T : unmanaged
+    {
+        while (Field<object?>(node, offsets.Left) is { } left)
+        {
+            if (Field<object?>(left, offsets.Left) is not null && !MatchAvl(left, in offsets, items, ref index))
+                return false;
+            if (!RawEqual(Field<T>(node, offsets.Key), items[index++]))
+                return false;
+            node = Field<object>(node, offsets.Right);
+        }
+        return true;
+    }
+
+    /// <summary>Compares every storage bit, including signed zero and NaN payloads.</summary>
+    /// <typeparam name="T">The unmanaged value type.</typeparam>
+    /// <param name="left">The stored value.</param>
+    /// <param name="right">The wire value.</param>
+    /// <returns>Whether the two raw representations match.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool RawEqual<T>(T left, T right) where T : unmanaged =>
+        MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref left, 1)).SequenceEqual(
+            MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref right, 1)));
+
     /// <summary>Copies an immutable dictionary's pairs in its enumeration order.</summary>
     /// <typeparam name="TKey">The key type.</typeparam>
     /// <typeparam name="TValue">The value type.</typeparam>
