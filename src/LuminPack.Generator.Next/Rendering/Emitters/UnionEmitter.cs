@@ -937,6 +937,11 @@ internal static class UnionEmitter
     /// <returns>The hexadecimal C# constant.</returns>
     private static string NameHash(UnionRenderCase item) => "0x" + item.NameHash.ToString("X8", CultureInfo.InvariantCulture) + "u";
 
+    /// <summary>Spells the name hash as a signed constant for the cached generic write dispatch.</summary>
+    /// <param name="item">The declared case.</param>
+    /// <returns>The signed constant with the same four bytes as the name hash.</returns>
+    private static string GenericDispatchId(UnionRenderCase item) => "unchecked((int)" + NameHash(item) + ")";
+
     /// <summary>Emits compact exact-type branches to the concrete case writers.</summary>
     /// <param name="model">The normalized Union contract.</param>
     /// <param name="w">The generated source writer.</param>
@@ -1200,11 +1205,7 @@ internal static class UnionEmitter
     private static string Assign(PayloadRenderModel model, UnionRenderCase item, string member) =>
         item.Definition != null || model.TypeParameters.Length != 0 ? "(" + model.GlobalName + ")(object)" + member : member;
 
-    /// <summary>Emits the slots of the cases one generic definition supplies.</summary>
-    /// <remarks>An open case writes through its definition's generic entries directly. Closed cases select their tag through a
-    /// dispatch slot resolved once per closed definition, then reinterpret the instance as the closed case, as the original
-    /// pipeline does.</remarks>
-    /// <summary>Emits the runtime slot that selects a generic definition's closed case, which both formats' slots read.</summary>
+    /// <summary>Emits the case-name hash cached once per closed generic definition and used by both write formats.</summary>
     /// <param name="group">The group supplied to <c>GenericSlotField</c>.</param>
     /// <param name="w">The generated source writer.</param>
     /// <param name="slotField">The slot field supplied to <c>GenericSlotField</c>.</param>
@@ -1221,9 +1222,8 @@ internal static class UnionEmitter
         w.Line("// Union cases");
         w.Line("switch (typeof(" + open + "))");
         w.Open();
-        for (int index = 0; index < group.Length; index++)
-            w.Line("case var runtimeType when runtimeType == typeof(" + group[index].Type + "): return " +
-                index.ToString(CultureInfo.InvariantCulture) + ";");
+        foreach (UnionRenderCase item in group)
+            w.Line("case var runtimeType when runtimeType == typeof(" + item.Type + "): return " + GenericDispatchId(item) + ";");
         w.Line("default:");
         w.Indented(() => w.Line("return -1;"));
         w.Close();
@@ -1259,13 +1259,13 @@ internal static class UnionEmitter
                 w.Line("// Union cases");
                 w.Line("switch (" + slotField + ")");
                 w.Open();
-                for (int index = 0; index < group.Length; index++)
+                foreach (UnionRenderCase item in group)
                 {
-                    w.Line("case " + index.ToString(CultureInfo.InvariantCulture) + ":");
+                    w.Line("case " + GenericDispatchId(item) + ":");
                     w.Open();
                     w.Line("var genericValue = this;");
-                    w.Line("ref var concreteValue = ref " + w.A("LuminPackMarshal") + ".As<" + open + ", " + group[index].Type + ">(ref genericValue);");
-                    GenericCaseWrite(model, group[index], w, json, profile, "concreteValue");
+                    w.Line("ref var concreteValue = ref " + w.A("LuminPackMarshal") + ".As<" + open + ", " + item.Type + ">(ref genericValue);");
+                    GenericCaseWrite(model, item, w, json, profile, "concreteValue");
                     w.Line("return;");
                     w.Close();
                     w.Blank();

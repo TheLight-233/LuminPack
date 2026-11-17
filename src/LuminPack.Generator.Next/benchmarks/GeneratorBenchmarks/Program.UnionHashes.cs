@@ -14,10 +14,14 @@ internal static partial class Program
     /// <returns>Zero after all checks pass.</returns>
     private static int VerifyUnionHashes(MetadataReference[] references, CSharpParseOptions parse, string coreDll)
     {
+        const string integerCase = "LuminPackUnion(101, typeof(Large32<int>))";
+        const string stringCase = "LuminPackUnion(102, typeof(Large32<string>))";
+        string closedCases = integerCase + ", " + stringCase;
         string source = """
             using System;
             using System.Buffers.Binary;
             using System.Collections.Generic;
+            using System.Reflection;
             using LuminPack;
             using LuminPack.Attribute;
             using LuminPack.Core;
@@ -28,7 +32,7 @@ internal static partial class Program
             [LuminPackable] public sealed class OpenCase<T> : OpenRoot<T> { public T Value = default!; }
             public sealed class Registered : Root<int> { public int Value; }
             [LuminPackable] public abstract class Small { }
-            [LuminPackable] public abstract partial class Large<T> { }
+            [LuminPackable, CLOSED_CASES] public abstract partial class Large<T> { }
             public static class Entry
             {
                 public static void Run()
@@ -63,7 +67,20 @@ internal static partial class Program
                     Small s = new Small31 { Value = 31 };
                     Require(LuminPackSerializer.Deserialize<Small>(LuminPackSerializer.Serialize(s)) is Small31 { Value: 31 });
                     Large<int> l = new Large32<int> { Value = 32 };
-                    Require(LuminPackSerializer.Deserialize<Large<int>>(LuminPackSerializer.Serialize(l)) is Large32<int> { Value: 32 });
+                    Large<string> other = new Large32<string> { Value = 33 };
+                    byte[] largeInteger = LuminPackSerializer.Serialize(l);
+                    byte[] largeString = LuminPackSerializer.Serialize(other);
+                    int integerHash = unchecked((int)Hash("Large32<System.Int32>"u8));
+                    int stringHash = unchecked((int)Hash("Large32<System.String>"u8));
+                    Require(CachedDispatchId(typeof(Large32<int>)) == integerHash);
+                    Require(CachedDispatchId(typeof(Large32<string>)) == stringHash);
+                    Require(CachedDispatchId(typeof(Large32<>).MakeGenericType(typeof(double))) == -1);
+                    Require(BinaryPrimitives.ReadInt32LittleEndian(largeInteger) == integerHash);
+                    Require(BinaryPrimitives.ReadInt32LittleEndian(largeString) == stringHash);
+                    Require(LuminPackSerializer.Deserialize<Large<int>>(largeInteger) is Large32<int> { Value: 32 });
+                    Require(LuminPackSerializer.Deserialize<Large<string>>(largeString) is Large32<string> { Value: 33 });
+                    Require(LuminPackSerializer.SerializeJson(l).Contains("\"$type\":101", StringComparison.Ordinal));
+                    Require(LuminPackSerializer.SerializeJson(other).Contains("\"$type\":102", StringComparison.Ordinal));
                     Require(LuminPackSerializer.SerializeJson(integer).Contains("\"$type\":7", StringComparison.Ordinal));
                     bool reserved = false;
                     try { LuminPackSerializer.Register<Root<int>, Registered>(7, Write, Read, WriteJson, ReadJson); }
@@ -94,12 +111,23 @@ internal static partial class Program
                     return hash;
                 }
 
+                private static int CachedDispatchId(Type type)
+                {
+                    foreach (FieldInfo field in type.GetFields(BindingFlags.NonPublic | BindingFlags.Static))
+                    {
+                        if (!field.Name.StartsWith("LuminPackUnionDispatchSlot_", StringComparison.Ordinal)) continue;
+                        Require(field.FieldType == typeof(int) && field.IsInitOnly);
+                        return (int)field.GetValue(null)!;
+                    }
+                    throw new Exception("A virtual generic Union has no cached case ID.");
+                }
+
                 private static void Require(bool condition)
                 {
                     if (!condition) throw new Exception("Union wire or dispatch check failed.");
                 }
             }
-            """;
+            """.Replace("CLOSED_CASES", closedCases, StringComparison.Ordinal);
         for (int index = 0; index < 33; index++)
         {
             if (index < 32)
@@ -119,16 +147,25 @@ internal static partial class Program
             "[LuminPackable] public sealed class HashCase112789 : HashRoot { public int Value; }\n" +
             "[LuminPackable] public sealed class HashCase349192 : HashRoot { public int Value; }", out _, out invalid);
         RequireIncremental(invalid.Any(item => item.Id == "LuminPack036"), "A known name hash collision did not report LuminPack036.");
-        using var image = new MemoryStream();
-        var emit = assembly.Emit(image);
-        RequireIncremental(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics));
-        Assembly.Load(image.ToArray()).GetType("Entry")!.GetMethod("Run")!.Invoke(null, null);
-        Console.WriteLine("Passed binary Union hashes, non-partial exact cases, generic identities, truncation and the 32/33 boundary.");
+        Execute(assembly);
+        var reordered = Generate(source.Replace(closedCases, stringCase + ", " + integerCase, StringComparison.Ordinal),
+            out _, out diagnostics, "ReorderedUnionHashes");
+        RequireIncremental(diagnostics.All(item => item.Severity != DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+        Execute(reordered);
+        Console.WriteLine("Passed binary Union hashes, non-partial exact cases, order-independent generic cache IDs, truncation and the 32/33 boundary.");
         return 0;
 
-        Compilation Generate(string input, out string generatedSource, out Diagnostic[] allDiagnostics)
+        static void Execute(Compilation compilation)
         {
-            var compilation = CSharpCompilation.Create("NextUnionHashes", [CSharpSyntaxTree.ParseText(input, parse, "UnionHashes.cs")], references,
+            using var image = new MemoryStream();
+            var emit = compilation.Emit(image);
+            RequireIncremental(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics));
+            Assembly.Load(image.ToArray()).GetType("Entry")!.GetMethod("Run")!.Invoke(null, null);
+        }
+
+        Compilation Generate(string input, out string generatedSource, out Diagnostic[] allDiagnostics, string name = "NextUnionHashes")
+        {
+            var compilation = CSharpCompilation.Create(name, [CSharpSyntaxTree.ParseText(input, parse, "UnionHashes.cs")], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
             var driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator()], parseOptions: parse)
                 .RunGeneratorsAndUpdateCompilation(compilation, out var output, out var generatorDiagnostics);
