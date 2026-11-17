@@ -909,12 +909,7 @@ public static partial class LuminTreeStorage
             try
             {
                 if (TrySortHashes(items, count, keys))
-                {
-                    var result = ImmutableHashSet.Create(items[0]);
-                    BuildHash<T>(Field<object>(result, ImmutableHashSetLayout<T>.Root), in ImmutableHashSetLayout<T>.Hash, items, keys, count);
-                    Field<int>(result, ImmutableHashSetLayout<T>.Count) = count;
-                    return result;
-                }
+                    return BuildDistinctHashSet(items, count, keys, preserveFirstHashCallback: true);
             }
             finally
             {

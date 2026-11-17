@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LuminPack.Code;
 using static LuminPack.Code.LuminFieldLayout;
@@ -102,24 +103,83 @@ public static partial class LuminTreeStorage
             LuminImmutableBuilders.ReturnHashSet(builder); }
     }
 
-    /// <summary>Completes a fresh singleton with at most one additional hash or collision node.</summary>
+    /// <summary>Links a nonempty set whose sorted hashes are distinct, with the singleton fallback for unavailable constructors.</summary>
+    /// <typeparam name="T">The set element type.</typeparam>
+    /// <param name="items">The decoded items in their original order.</param>
+    /// <param name="count">The positive number of items.</param>
+    /// <param name="keys">The sorted packed hashes and original item indices.</param>
+    /// <param name="preserveFirstHashCallback">Whether the original singleton construction could run user code.</param>
+    /// <returns>The complete default-comparer set.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ImmutableHashSet<T> BuildDistinctHashSet<T>(T[] items, int count, long[] keys, bool preserveFirstHashCallback)
+    {
+#if NET10_0_OR_GREATER
+        if (!typeof(T).IsValueType && ImmutableHashSetConstructors<T>.Wrap is { } wrap && ImmutableHashSetConstructorLayout.Available)
+        {
+            var comparer = ImmutableHashSetConstructors<T>.Comparer;
+            if (preserveFirstHashCallback && items[0] is { } first)
+                _ = comparer.GetHashCode(first);
+            object root = LinkHash(ImmutableHashSetConstructors<T>.EmptyTree!, ImmutableHashSetConstructors<T>.EmptyList!,
+                in ImmutableHashSetLayout<T>.Hash, items, keys, 0, count - 1);
+            return wrap(root, comparer, count);
+        }
+#endif
+        var result = ImmutableHashSet.Create(items[0]);
+        BuildHash<T>(Field<object>(result, ImmutableHashSetLayout<T>.Root), in ImmutableHashSetLayout<T>.Hash, items, keys, count);
+        Field<int>(result, ImmutableHashSetLayout<T>.Count) = count;
+        return result;
+    }
+
+    /// <summary>Builds a set with at most two hash nodes or one additional collision node.</summary>
     /// <typeparam name="T">The validated framework element type.</typeparam>
-    /// <param name="first">The element used by the singleton factory.</param>
+    /// <param name="first">The first decoded element, retained when both elements compare equal.</param>
     /// <param name="second">The element to add when distinct.</param>
     /// <returns>The completed result without modifying any published collection or empty node.</returns>
     private static ImmutableHashSet<T> BuildFrameworkHashPair<T>(T first, T second)
     {
-        var result = ImmutableHashSet.Create(first);
         var offsets = ImmutableHashSetLayout<T>.Hash;
+        var comparer = EqualityComparer<T>.Default;
+#if NET10_0_OR_GREATER
+        if (!typeof(T).IsValueType && ImmutableHashSetConstructors<T>.Wrap is { } wrap && ImmutableHashSetConstructorLayout.Available)
+        {
+            object emptyTree = ImmutableHashSetConstructors<T>.EmptyTree!;
+            object emptyList = ImmutableHashSetConstructors<T>.EmptyList!;
+            object firstNode = offsets.Tree.New(emptyTree);
+            int hash = first is null ? 0 : comparer.GetHashCode(first);
+            Field<int>(firstNode, offsets.Tree.Key) = hash;
+            ref byte bucket = ref Field<byte>(firstNode, offsets.Tree.Value);
+            Field<T>(ref bucket, offsets.First) = first;
+            Field<object>(ref bucket, offsets.Additional) = emptyList;
+            Seal(firstNode, emptyTree, emptyTree, in offsets.Tree);
+            int count = CompleteHashPair(firstNode, in offsets, comparer, first, second);
+            return wrap(firstNode, ImmutableHashSetConstructors<T>.Comparer, count);
+        }
+#endif
+        var result = ImmutableHashSet.Create(first);
         object root = Field<object>(result, ImmutableHashSetLayout<T>.Root);
+        Field<int>(result, ImmutableHashSetLayout<T>.Count) = CompleteHashPair(root, in offsets, comparer, first, second);
+        return result;
+    }
+
+    /// <summary>Completes the second element of an exclusively owned singleton tree.</summary>
+    /// <typeparam name="T">The validated framework element type.</typeparam>
+    /// <param name="root">The unpublished first element's tree node.</param>
+    /// <param name="offsets">The validated hash node and collision list offsets.</param>
+    /// <param name="comparer">The set's default element comparer.</param>
+    /// <param name="first">The first decoded element.</param>
+    /// <param name="second">The second decoded element.</param>
+    /// <returns>The resulting set's element count.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int CompleteHashPair<T>(object root, in HashOffsets offsets, EqualityComparer<T> comparer, T first, T second)
+    {
         int firstHash = Field<int>(root, offsets.Tree.Key);
-        int secondHash = second is null ? 0 : EqualityComparer<T>.Default.GetHashCode(second);
+        int secondHash = second is null ? 0 : comparer.GetHashCode(second);
         ref byte rootBucket = ref Field<byte>(root, offsets.Tree.Value);
         object emptyList = Field<object>(ref rootBucket, offsets.Additional);
         if (firstHash == secondHash)
         {
-            if (EqualityComparer<T>.Default.Equals(first, second))
-                return result;
+            if (comparer.Equals(first, second))
+                return 1;
             object tail = offsets.List.New(emptyList);
             Field<T>(tail, offsets.List.Key) = second;
             Seal(tail, emptyList, emptyList, in offsets.List);
@@ -136,8 +196,7 @@ public static partial class LuminTreeStorage
             Seal(child, empty, empty, in offsets.Tree);
             Seal(root, secondHash < firstHash ? child : empty, secondHash < firstHash ? empty : child, in offsets.Tree);
         }
-        Field<int>(result, ImmutableHashSetLayout<T>.Count) = 2;
-        return result;
+        return 2;
     }
 
     /// <summary>Orders hashes and constructs only the final nodes, preserving the first element of each equality class.</summary>
@@ -151,12 +210,7 @@ public static partial class LuminTreeStorage
         try
         {
             if (TrySortHashes(items, count, keys))
-            {
-                var result = ImmutableHashSet.Create(items[0]);
-                BuildHash<T>(Field<object>(result, ImmutableHashSetLayout<T>.Root), in ImmutableHashSetLayout<T>.Hash, items, keys, count);
-                Field<int>(result, ImmutableHashSetLayout<T>.Count) = count;
-                return result;
-            }
+                return BuildDistinctHashSet(items, count, keys, preserveFirstHashCallback: false);
 
             // TrySortHashes leaves all packed hash/index keys ordered even when hashes collide.
             int[] groups = ArrayPool<int>.Shared.Rent(count);
