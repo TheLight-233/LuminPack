@@ -42,7 +42,7 @@ jobs:
       - name: Build the matrix
         run: >
           dotnet build benchmarks/LuminPack.MatrixBenchmark -c Release
-          -p:LuminPackLegacyGeneratorReference=false -p:LuminPackUseSatori=false
+          -p:LuminPackUseSatori=false
           -p:GeneratePackageOnBuild=false
       - name: Validate fixtures and sample the matrix
         shell: bash

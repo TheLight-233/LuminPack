@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <LuminPackUseInterceptors Condition="'$(LuminPackUseInterceptors)' == ''">true</LuminPackUseInterceptors>
+    <LuminPackUseIlRewriting Condition="'$(LuminPackUseIlRewriting)' == ''">true</LuminPackUseIlRewriting>
+  </PropertyGroup>
+</Project>

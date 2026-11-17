@@ -12,7 +12,7 @@ Pushes to `main` and `refactor`, and pull requests, trigger the hosted checks. T
 | `unity.yml`, `unity-extensions.yml` | Unity Editor tests, IL2CPP and WebGL players, Unity object and Burst contracts. |
 | `benchmark-matrix.yml` | Round-trip validation of the serialization matrix; timing on manual runs. |
 | `fuzz.yml` | Bounded SharpFuzz/libFuzzer campaigns; see [fuzzing](fuzzing.md). |
-| `release.yml` | Unpublished release candidates and API comparison; see [releasing](releasing.md). |
+| `release.yml` | Release candidate builds, API comparison and NuGet publishing from the configured version tag. See [releasing](releasing.md). |
 
 ## Tests and platforms
 

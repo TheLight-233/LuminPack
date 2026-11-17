@@ -11,15 +11,15 @@ LuminPack supports `netstandard2.1`, `net8.0`, `net9.0`, `net10.0` and `net11.0`
 > [!IMPORTANT]
 > LuminPack 2.0 is not on NuGet yet; the [`LuminPack`](https://www.nuget.org/packages/LuminPack) package there is the 1.x line with a different API. Until 2.0 is published, use the [source references](#from-source) below, or build local candidate packages as described in [Releasing](releasing.md#build-a-candidate-locally).
 
-Once 2.0 is published, install the `LuminPack` package; NuGet adds the matching `LuminPack.Generator` automatically.
+Once 2.0 RC1 is published, add the single `LuminPack` package. It includes the runtime, Next source generator, IDE fixes and IL rewriting tools.
 
 ```shell
-dotnet add package LuminPack
+dotnet add package LuminPack --version 2.0.0-rc.1
 ```
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="LuminPack" Version="2.0.0" />
+  <PackageReference Include="LuminPack" Version="2.0.0-rc.1" />
 </ItemGroup>
 ```
 
@@ -32,7 +32,7 @@ See [Unity, IL2CPP and NativeAOT](unity.md).
 ```xml
 <ItemGroup>
   <ProjectReference Include="path/to/LuminPack/src/LuminPack.Core/LuminPack.Core.csproj" />
-  <ProjectReference Include="path/to/LuminPack/src/LuminPack.Generator/LuminPack.Generator.csproj"
+  <ProjectReference Include="path/to/LuminPack/src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj"
                     OutputItemType="Analyzer"
                     ReferenceOutputAssembly="false" />
 </ItemGroup>

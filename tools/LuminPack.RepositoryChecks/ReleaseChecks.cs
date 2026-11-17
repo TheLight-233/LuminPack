@@ -88,37 +88,37 @@ internal static class ReleaseChecks
     internal static int Verify(string packages, string version, string revision)
     {
         int pdbs = 0;
-        foreach (string id in new[] { "LuminPack", "LuminPack.Generator" })
+        string packagePath = Path.Combine(packages, $"LuminPack.{version}.nupkg");
+        string symbolsPath = Path.Combine(packages, $"LuminPack.{version}.snupkg");
+        Require(Directory.GetFiles(packages, "*.nupkg").Length == 1 &&
+                Directory.GetFiles(packages, "*.snupkg").Length == 1, "Expected one LuminPack package and its runtime symbols.");
+        using (var archive = ZipFile.OpenRead(packagePath))
         {
-            using var archive = ZipFile.OpenRead(Path.Combine(packages, $"{id}.{version}.nupkg"));
             using var specification = archive.Entries.Single(entry => entry.FullName.EndsWith(".nuspec", StringComparison.Ordinal)).Open();
             var document = XDocument.Load(specification);
             var metadata = document.Root!.Elements().Single(element => element.Name.LocalName == "metadata");
-            Require(metadata.Elements().Single(element => element.Name.LocalName == "id").Value == id, "Unexpected package identity.");
+            Require(metadata.Elements().Single(element => element.Name.LocalName == "id").Value == "LuminPack", "Unexpected package identity.");
             Require(metadata.Elements().Single(element => element.Name.LocalName == "version").Value == version, "Unexpected package version.");
             var repository = metadata.Elements().Single(element => element.Name.LocalName == "repository");
             Require((string?)repository.Attribute("commit") == revision, "Package repository commit does not match the candidate.");
-            if (id == "LuminPack")
+            Require(!metadata.Descendants().Any(element => element.Name.LocalName == "dependency" &&
+                ((string?)element.Attribute("id"))?.StartsWith("LuminPack", StringComparison.OrdinalIgnoreCase) == true),
+                "The package must not require a separate LuminPack package.");
+            using var symbols = ZipFile.OpenRead(symbolsPath);
+            foreach (string framework in new[] { "netstandard2.1", "net8.0", "net9.0", "net10.0", "net11.0" })
             {
-                using var symbols = ZipFile.OpenRead(Path.Combine(packages, $"{id}.{version}.snupkg"));
-                foreach (string framework in new[] { "netstandard2.1", "net8.0", "net9.0", "net10.0", "net11.0" })
-                {
-                    Require(archive.GetEntry($"lib/{framework}/LuminPack.Core.dll") != null, $"Missing Core asset: {framework}.");
-                    Require(symbols.GetEntry($"lib/{framework}/LuminPack.Core.pdb") != null, $"Missing Core symbols: {framework}.");
-                }
-                var dependency = metadata.Descendants().Where(element => element.Name.LocalName == "dependency" && (string?)element.Attribute("id") == "LuminPack.Generator").ToArray();
-                Require(dependency.Length != 0 && dependency.All(element => ((string?)element.Attribute("version"))?.TrimStart('[').Split(',')[0].Trim() == version), "Generator dependency version is not aligned.");
+                Require(archive.GetEntry($"lib/{framework}/LuminPack.Core.dll") != null, $"Missing Core asset: {framework}.");
+                Require(symbols.GetEntry($"lib/{framework}/LuminPack.Core.pdb") != null, $"Missing Core symbols: {framework}.");
             }
-            else
+            foreach (string assembly in new[] { "LuminPack.SourceGenerator", "LuminPack.CodeFixes" })
             {
-                foreach (string assembly in new[] { "LuminPack.Generator", "LuminPack.CodeFixes" })
-                {
-                    Require(archive.GetEntry($"analyzers/dotnet/cs/{assembly}.dll") != null, $"Missing analyzer: {assembly}.");
-                    Require(archive.GetEntry($"analyzers/dotnet/cs/{assembly}.pdb") != null, $"Missing analyzer symbols: {assembly}.");
-                }
+                Require(archive.GetEntry($"analyzers/dotnet/cs/{assembly}.dll") != null, $"Missing analyzer: {assembly}.");
+                Require(archive.GetEntry($"analyzers/dotnet/cs/{assembly}.pdb") != null, $"Missing analyzer symbols: {assembly}.");
             }
+            foreach (string path in new[] { "buildTransitive/LuminPack.props", "buildTransitive/LuminPack.targets", "tools/LuminPack.ILPostProcessor.dll", "tools/Mono.Cecil.dll" })
+                Require(archive.GetEntry(path) != null, $"Missing build asset: {path}.");
         }
-        foreach (string path in Directory.GetFiles(packages).Where(path => path.EndsWith(".nupkg", StringComparison.Ordinal) || path.EndsWith(".snupkg", StringComparison.Ordinal)))
+        foreach (string path in new[] { packagePath, symbolsPath })
         {
             using var archive = ZipFile.OpenRead(path);
             foreach (var entry in archive.Entries.Where(entry => entry.FullName.EndsWith(".pdb", StringComparison.Ordinal)))
@@ -139,7 +139,7 @@ internal static class ReleaseChecks
             }
         }
         Require(pdbs >= 7, "Core framework symbols or analyzer symbols are missing.");
-        Console.WriteLine($"Verified package identities, dependency versions, framework assets and {pdbs} SourceLink PDBs at {revision}.");
+        Console.WriteLine($"Verified LuminPack package identity, framework and build assets, and {pdbs} SourceLink PDBs at {revision}.");
         return 0;
     }
 

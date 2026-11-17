@@ -1,11 +1,12 @@
 param(
     [Parameter(Mandatory = $true)][string]$Version,
     [Parameter(Mandatory = $true)][string]$Config,
-    [Parameter(Mandatory = $true)][string]$Cache
+    [Parameter(Mandatory = $true)][string]$Cache,
+    [string]$Output = ''
 )
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
-$consumer = Join-Path $root '.tmp/next-package-consumer'
+$consumer = if ($Output) { $Output } else { Join-Path $root '.tmp/next-package-consumer' }
 New-Item -ItemType Directory -Force -Path $consumer | Out-Null
 '<Project />' | Set-Content -LiteralPath (Join-Path $consumer 'Directory.Build.props')
 '<Project />' | Set-Content -LiteralPath (Join-Path $consumer 'Directory.Build.targets')
@@ -15,8 +16,9 @@ New-Item -ItemType Directory -Force -Path $consumer | Out-Null
     <TargetFramework>net11.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <LangVersion>13</LangVersion>
-    <LuminPackGenerator>Next</LuminPackGenerator>
-    <DefineConstants Condition="'`$(CheckStaticBinding)' == 'true'">`$(DefineConstants);STATIC_BINDING</DefineConstants>
+    <LuminPackUseInterceptors Condition="'`$(BindingMode)' != 'compiler'">false</LuminPackUseInterceptors>
+    <LuminPackUseIlRewriting Condition="'`$(BindingMode)' == 'registration'">false</LuminPackUseIlRewriting>
+    <DefineConstants Condition="'`$(BindingMode)' != 'registration'">`$(DefineConstants);STATIC_BINDING</DefineConstants>
   </PropertyGroup>
   <ItemGroup><PackageReference Include="LuminPack" Version="$Version" /></ItemGroup>
 </Project>
@@ -51,14 +53,15 @@ $project = Join-Path $consumer 'Consumer.csproj'
 dotnet restore $project --configfile $Config --packages $Cache
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 foreach ($mode in @('compiler', 'il', 'registration')) {
-    $interceptors = $mode -eq 'compiler'
-    $rewrite = $mode -eq 'il'
-    $static = $mode -ne 'registration'
     $output = Join-Path $consumer "bin/$mode"
-    dotnet build $project -c Release --no-restore -t:Rebuild -o $output "-p:LuminPackUseInterceptors=$interceptors" `
-        "-p:LuminPackUseIlRewriting=$rewrite" "-p:CheckStaticBinding=$static"
+    dotnet build $project -c Release --no-restore -t:Rebuild -o $output "-p:BindingMode=$mode"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     dotnet (Join-Path $output 'Consumer.dll')
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    foreach ($assembly in @('LuminPack.SourceGenerator', 'LuminPack.CodeFixes', 'LuminPack.ILPostProcessor', 'Mono.Cecil')) {
+        if (Test-Path -LiteralPath (Join-Path $output "$assembly.dll")) {
+            throw "Build-only assembly leaked into the consumer output: $assembly."
+        }
+    }
     Write-Host "Installed Next package passed $mode binding."
 }

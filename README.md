@@ -127,13 +127,13 @@ Automatic generation retains declared model graphs and the concrete entries requ
 ```xml
 <ItemGroup>
   <ProjectReference Include="path/to/LuminPack/src/LuminPack.Core/LuminPack.Core.csproj" />
-  <ProjectReference Include="path/to/LuminPack/src/LuminPack.Generator/LuminPack.Generator.csproj"
+  <ProjectReference Include="path/to/LuminPack/src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj"
                     OutputItemType="Analyzer"
                     ReferenceOutputAssembly="false" />
 </ItemGroup>
 ```
 
-Once 2.0 is released, `dotnet add package LuminPack` installs the runtime and brings the matching source generator with it. Targets `netstandard2.1` and `net8.0` – `net11.0`. To try the packages locally, build release candidates as described in [Releasing](docs/releasing.md#build-a-candidate-locally).
+The `LuminPack` 2.0 package bundles the runtime, Next source generator, IDE fixes and IL rewriting tools. It targets `netstandard2.1` and `net8.0` – `net11.0`. See [Getting started](docs/getting-started.md#installation) for installation.
 
 > 🎮 **Unity?** Set the API compatibility level to .NET Standard 2.1 and follow the [Unity guide](docs/unity.md).
 

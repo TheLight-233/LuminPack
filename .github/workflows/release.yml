@@ -1,14 +1,14 @@
-name: Release validation (build only)
+name: NuGet release
 
 on:
   pull_request:
-    paths: ['src/**', 'eng/**', 'tools/LuminPack.RepositoryChecks/**', '.github/scripts/release.ps1', '.github/workflows/release.yml']
+    paths: ['src/**', 'eng/**', 'tests/LuminPack.Tests.Aot/**', 'tests/LuminPack.Tests.CodeFixes/**', 'tools/LuminPack.RepositoryChecks/**', '.github/scripts/release.ps1', '.github/scripts/verify-next-package.ps1', '.github/workflows/release.yml']
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
-        description: Candidate SemVer (blank uses the development version and commit)
+        description: Candidate SemVer (blank uses Versions.props and the commit)
         type: string
         default: ''
       baseline_version:
@@ -29,16 +29,20 @@ permissions:
 
 concurrency:
   group: release-validation-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      publish-version: ${{ steps.candidate.outputs.publish-version }}
+      artifact-id: ${{ steps.artifact.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -49,6 +53,7 @@ jobs:
         with:
           dotnet-version: 11.0.x
       - name: Build packages, validate compatibility and SourceLink, and report public APIs
+        id: candidate
         shell: pwsh
         env:
           CANDIDATE_VERSION: ${{ inputs.version }}
@@ -57,20 +62,82 @@ jobs:
           REQUIRE_UNCHANGED_API: ${{ inputs.require_unchanged_api }}
         run: |
           $version = $env:CANDIDATE_VERSION
-          if ($env:GITHUB_REF_TYPE -eq 'tag') { $version = $env:GITHUB_REF_NAME -replace '^v', '' }
+          if ($env:GITHUB_REF_TYPE -eq 'tag') { $version = $env:GITHUB_REF_NAME.Substring(1) }
           $strict = $env:REQUIRE_UNCHANGED_API -eq 'true'
-          ./.github/scripts/release.ps1 -Version $version -BaselineVersion $env:BASELINE_VERSION -ApiBaseRef $env:API_BASE_REF -RequireUnchangedApi:$strict
+          $output = Join-Path $env:RUNNER_TEMP 'release-validation'
+          try {
+            ./.github/scripts/release.ps1 -Version $version -BaselineVersion $env:BASELINE_VERSION -ApiBaseRef $env:API_BASE_REF -RequireUnchangedApi:$strict -Output $output
+          }
+          finally {
+            if (Test-Path -LiteralPath $output) {
+              $run = Get-ChildItem -LiteralPath $output -Directory -Filter 'run-*' | Select-Object -First 1
+              if ($run) { "path=$($run.FullName)" >> $env:GITHUB_OUTPUT }
+            }
+          }
+          $settings = [xml](Get-Content -Raw eng/Versions.props)
+          $publishVersion = [string]$settings.Project.PropertyGroup.LuminPackNuGetPublishVersion
+          if ($publishVersion -and $env:GITHUB_REF -ceq "refs/tags/v$publishVersion") {
+            "publish-version=$version" >> $env:GITHUB_OUTPUT
+          }
       - name: Retain candidate packages and governance evidence
-        if: always()
+        id: artifact
+        if: always() && steps.candidate.outputs.path != ''
         uses: actions/upload-artifact@v4
         with:
-          name: release-validation-${{ github.run_id }}
+          name: release-validation-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            .tmp/release-validation/run-*/packages
-            .tmp/release-validation/run-*/api
-            .tmp/release-validation/run-*/api-base
-            .tmp/release-validation/run-*/public-api.diff
-            .tmp/release-validation/run-*/CHANGELOG.md
-            .tmp/release-validation/run-*/SHA256SUMS
-            .tmp/release-validation/run-*/release-manifest.json
-          if-no-files-found: warn
+            ${{ steps.candidate.outputs.path }}/packages
+            ${{ steps.candidate.outputs.path }}/api
+            ${{ steps.candidate.outputs.path }}/api-base
+            ${{ steps.candidate.outputs.path }}/public-api.diff
+            ${{ steps.candidate.outputs.path }}/CHANGELOG.md
+            ${{ steps.candidate.outputs.path }}/SHA256SUMS
+            ${{ steps.candidate.outputs.path }}/release-manifest.json
+          if-no-files-found: error
+
+  publish:
+    needs: validate
+    if: >-
+      github.repository == 'TheLight-233/LuminPack' &&
+      github.event_name == 'push' && !github.event.deleted &&
+      github.ref_type == 'tag' && needs.validate.outputs.publish-version != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: nuget
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.validate.outputs.artifact-id }}
+          path: candidate
+          merge-multiple: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+      - name: Verify the validated candidate
+        shell: bash
+        working-directory: candidate
+        env:
+          VERSION: ${{ needs.validate.outputs.publish-version }}
+        run: |
+          jq -e --arg version "$VERSION" \
+            '.version == $version and .dirty == false and .installationChecked and .packageValidation == "passed"' \
+            release-manifest.json >/dev/null
+          cd packages
+          sha256sum --strict --check ../SHA256SUMS
+      - name: Sign in to NuGet.org
+        id: nuget
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+      - name: Push LuminPack and its runtime symbols
+        shell: bash
+        working-directory: candidate/packages
+        env:
+          VERSION: ${{ needs.validate.outputs.publish-version }}
+          NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
+        run: |
+          source=https://api.nuget.org/v3/index.json
+          dotnet nuget push "LuminPack.$VERSION.nupkg" --source "$source" --api-key "$NUGET_API_KEY" --no-symbols --skip-duplicate
+          dotnet nuget push "LuminPack.$VERSION.snupkg" --source "$source" --symbol-api-key "$NUGET_API_KEY" --skip-duplicate
