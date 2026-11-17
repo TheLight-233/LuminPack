@@ -175,7 +175,11 @@ internal static partial class TypeModelFactory
             // the closed root directly. Both forms use the defining assembly's Union slots.
             bool genericUnion = named.IsGenericType &&
                 (HasAttribute(named, UnionAttribute) || IsLocal(named) && (named.IsAbstract || named.TypeKind == TypeKind.Interface));
-            if (genericUnion && !ContainsTypeParameter(named) && IsPackable(named.OriginalDefinition) &&
+            // A local abstract base without a usable Union body has no generated slots to forward to; the member falls back to
+            // runtime registration instead of a call to a generic entry the definition never published.
+            bool unionDefinitionReady = !genericUnion || HasAttribute(named, UnionAttribute) ||
+                Analyze(named.OriginalDefinition, depth + 1, path) is { IsComplete: true, Model: UnionModel };
+            if (genericUnion && !ContainsTypeParameter(named) && IsPackable(named.OriginalDefinition) && unionDefinitionReady &&
                 (IsLocal(named) || !ExplicitMarker(named) && ExplicitMarker(named.OriginalDefinition) &&
                     Analyze(named.OriginalDefinition, depth + 1, path) is { IsComplete: true, Model: UnionModel }))
                 return new FormatterModel(spelling, FormatterDefinitions.GenericUnion,
