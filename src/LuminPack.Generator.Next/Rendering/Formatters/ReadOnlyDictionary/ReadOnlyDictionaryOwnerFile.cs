@@ -16,7 +16,9 @@ internal static class ReadOnlyDictionaryOwnerFile
     /// <returns>The complete dictionary formatter specification.</returns>
     private static PairedDictionarySpec CreateSpec(System.Action<PairedDictionaryContext> read) =>
         new PairedDictionarySpec(c => c.CountedWrite(allowMixedPairs: true,
-            unwrapReferenceDictionary: c.Supports("ReadOnlyStringDictionaryStorage")), read, "staged.Add(key!, itemValue);",
+            unwrapReferenceDictionary: c.Supports("ReadOnlyStringDictionaryStorage"),
+            unwrapRawDictionary: c.Supports("BoundedReadOnlyRawPairs"),
+            unwrapTypedDictionary: c.Supports("ReadOnlyTypedDictionaryStorage")), read, "staged.Add(key!, itemValue);",
         c => c.W.Line("var staged = new global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">();"),
         c => c.W.Line("value = new " + c.Dictionary + "(staged);"), readsHeader: true);
 

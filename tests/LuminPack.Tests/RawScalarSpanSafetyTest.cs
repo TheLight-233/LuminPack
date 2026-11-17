@@ -1,8 +1,12 @@
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Collections.Frozen;
+using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using LuminPack;
+using LuminPack.Attribute;
 using LuminPack.Option;
 using LuminPack.Core;
 using LuminPack.Utility;
@@ -11,6 +15,216 @@ using Xunit;
 /// <summary>Protects bounded scalar facades independently of unchecked address-only storage kernels.</summary>
 public sealed class RawScalarSpanSafetyTest
 {
+    /// <summary>Checks counted writes from the same concurrent dictionary after removals and reinsertions.</summary>
+    [Fact]
+    public void ConcurrentRawPairsKeepCapturedOrder()
+    {
+        var dictionary = new ConcurrentDictionary<int, int>();
+        for (int i = 0; i < 101; i++)
+            dictionary[i * 11] = ~i;
+        for (int i = 3; i < 101; i += 7)
+            dictionary.TryRemove(i * 11, out _);
+
+        int[] expected = dictionary.SelectMany(pair => new[] { pair.Key, pair.Value }).ToArray();
+        byte[] bytes = LuminPackSerializer.Serialize(dictionary);
+        Assert.Equal(expected.Length / 2, BinaryPrimitives.ReadInt32LittleEndian(bytes));
+        Assert.Equal(expected, MemoryMarshal.Cast<byte, int>(bytes.AsSpan(sizeof(int))).ToArray());
+    }
+
+    /// <summary>Checks both cached and uncached immutable queue runs and the concrete stack's wire order.</summary>
+    [Fact]
+    public void ImmutableInt32RunsKeepStackAndQueueOrder()
+    {
+        int[] items = Enumerable.Range(0, 4097).Select(i => unchecked(i * -1640531527)).ToArray();
+        var stack = ImmutableStack.CreateRange(items);
+        IImmutableStack<int> stackInterface = stack;
+        int[] popOrder = items.Reverse().ToArray();
+        Check(popOrder, LuminPackSerializer.Serialize(stack));
+        Check(popOrder, LuminPackSerializer.Serialize(stackInterface));
+
+        var queue = ImmutableQueue<int>.Empty;
+        foreach (var item in items)
+            queue = queue.Enqueue(item);
+        IImmutableQueue<int> queueInterface = queue;
+        Check(items, LuminPackSerializer.Serialize(queueInterface));
+        int index = 0;
+        foreach (var item in queue)
+            Assert.Equal(items[index++], item);
+        Check(items, LuminPackSerializer.Serialize(queueInterface));
+
+        static void Check(int[] expected, byte[] bytes)
+        {
+            Assert.Equal(expected.Length, BinaryPrimitives.ReadInt32LittleEndian(bytes));
+            Assert.Equal(expected, MemoryMarshal.Cast<byte, int>(bytes.AsSpan(sizeof(int))).ToArray());
+        }
+    }
+
+    /// <summary>Checks explicit pair order across SIMD tails, removed entries and immutable tree staging.</summary>
+    [Fact]
+    public void CapturedRawDictionariesKeepTheirEnumerationOrder()
+    {
+        foreach (int count in new[] { 0, 1, 15, 16, 17, 31, 32, 33, 63, 64, 65, 101 })
+        {
+            var reverse = Comparer<int>.Create((left, right) => right.CompareTo(left));
+            var list = new SortedList<int, int>(reverse);
+            var dictionary = new Dictionary<int, int>();
+            for (int i = 0; i < count; i++)
+            {
+                list.Add(i, unchecked(i * -1640531527));
+                dictionary.Add(i, list[i]);
+            }
+
+            var dense = new ReadOnlyDictionary<int, int>(dictionary);
+            Check(dense, LuminPackSerializer.Serialize(dense));
+            if (count > 2)
+                dictionary.Remove(count / 2);
+            Check(dense, LuminPackSerializer.Serialize(dense));
+            Check(list, LuminPackSerializer.Serialize(list));
+
+            var tree = new SortedDictionary<int, int>(list, reverse);
+            var immutable = dictionary.ToImmutableDictionary();
+            var ordered = list.ToImmutableSortedDictionary(reverse);
+            IImmutableDictionary<int, int> map = immutable;
+            IImmutableDictionary<int, int> sorted = ordered;
+            Check(tree, LuminPackSerializer.Serialize(tree));
+            Check(immutable, LuminPackSerializer.Serialize(immutable));
+            Check(ordered, LuminPackSerializer.Serialize(ordered));
+            Check(map, LuminPackSerializer.Serialize(map));
+            Check(sorted, LuminPackSerializer.Serialize(sorted));
+        }
+
+        static void Check(IReadOnlyDictionary<int, int> pairs, byte[] serialized)
+        {
+            byte[] expected = new byte[sizeof(int) + pairs.Count * 2 * sizeof(int)];
+            BinaryPrimitives.WriteInt32LittleEndian(expected, pairs.Count);
+            var payload = MemoryMarshal.Cast<byte, int>(expected.AsSpan(sizeof(int)));
+            int index = 0;
+            foreach (var pair in pairs)
+            {
+                payload[index++] = pair.Key;
+                payload[index++] = pair.Value;
+            }
+            Assert.Equal(expected, serialized);
+        }
+    }
+
+    /// <summary>Checks both bounded pair helpers before they write into a short output window.</summary>
+    [Fact]
+    public void CapturedRawPairsLeaveShortOutputUntouched()
+    {
+        const int count = 65;
+        var keys = Enumerable.Range(0, count).Select(i => i * 5L).ToArray();
+        var values = Enumerable.Range(0, count).Select(i => ~i * 13L).ToArray();
+        var pairs = keys.Zip(values, (key, value) => KeyValuePair.Create(key, value)).ToArray();
+        var buffer = Enumerable.Repeat((byte)0xAC, count * 2 * sizeof(long)).ToArray();
+        Span<byte> shortOutput = buffer.AsSpan(1);
+        var writer = new LuminPackWriter(ref shortOutput);
+        Assert.False(LuminFrozenConstruction.TryWriteInterleavedPairs(ref writer, keys, values, count));
+        Assert.False(LuminTreeStorage.TryWritePackedPairs(ref writer, pairs, count));
+        Assert.Equal(0, writer.Position);
+        Assert.All(buffer, value => Assert.Equal(0xAC, value));
+    }
+
+    /// <summary>Checks generic raw paths with unsigned, narrow, wide and unequal entry widths.</summary>
+    [Fact]
+    public void RawCollectionRunsUseStorageWidths()
+    {
+        var narrow = new SortedList<byte, sbyte>();
+        var medium = new SortedList<ushort, short>();
+        var packed = new SortedList<RawPairKey, ulong>();
+        var concurrent = new ConcurrentDictionary<uint, ulong>();
+        for (int i = 0; i < 101; i++)
+        {
+            narrow.Add((byte)i, unchecked((sbyte)(i * -5)));
+            medium.Add((ushort)(i * 307), unchecked((short)(i * -431)));
+            packed.Add(new RawPairKey { Major = (uint)i, Minor = ~(uint)i }, (ulong)i * 0xF0000001);
+            concurrent.TryAdd((uint)i * 7919, (ulong)i * 0xF0000001);
+        }
+        var wrapper = new ReadOnlyDictionary<uint, ulong>(concurrent.ToDictionary(pair => pair.Key, pair => pair.Value));
+        var immutable = concurrent.ToImmutableDictionary();
+        IImmutableDictionary<uint, ulong> map = immutable;
+        var narrowBytes = LuminPackSerializer.Serialize(narrow);
+        var mediumBytes = LuminPackSerializer.Serialize(medium);
+        var packedBytes = LuminPackSerializer.Serialize(packed);
+        Check(narrow, narrowBytes);
+        Check(medium, mediumBytes);
+        Check(packed, packedBytes);
+        var frozen = packed.ToFrozenDictionary();
+        Check(frozen, LuminPackSerializer.Serialize(frozen));
+        Check(concurrent, LuminPackSerializer.Serialize(concurrent));
+        Check(wrapper, LuminPackSerializer.Serialize(wrapper));
+        Check(immutable, LuminPackSerializer.Serialize(immutable));
+        Check(map, LuminPackSerializer.Serialize(map));
+        SortedList<byte, sbyte>? narrowResult = null;
+        SortedList<ushort, short>? mediumResult = null;
+        SortedList<RawPairKey, ulong>? packedResult = null;
+        Assert.Equal(narrowBytes.Length, LuminPackSerializer.Deserialize(narrowBytes, ref narrowResult));
+        Assert.Equal(mediumBytes.Length, LuminPackSerializer.Deserialize(mediumBytes, ref mediumResult));
+        Assert.Equal(packedBytes.Length, LuminPackSerializer.Deserialize(packedBytes, ref packedResult));
+        Assert.Equal(narrow.ToArray(), narrowResult!.ToArray());
+        Assert.Equal(medium.ToArray(), mediumResult!.ToArray());
+        Assert.Equal(packed.ToArray(), packedResult!.ToArray());
+
+        static void Check<TKey, TValue>(IReadOnlyDictionary<TKey, TValue> expected, byte[] bytes)
+            where TKey : unmanaged where TValue : unmanaged
+        {
+            Assert.Equal(expected.Count, BinaryPrimitives.ReadInt32LittleEndian(bytes));
+            var payload = bytes.AsSpan(sizeof(int));
+            foreach (var pair in expected)
+            {
+                Assert.Equal(pair.Key, MemoryMarshal.Read<TKey>(payload));
+                payload = payload.Slice(Marshal.SizeOf<TKey>());
+                Assert.Equal(pair.Value, MemoryMarshal.Read<TValue>(payload));
+                payload = payload.Slice(Marshal.SizeOf<TValue>());
+            }
+            Assert.True(payload.IsEmpty);
+        }
+    }
+
+    /// <summary>Checks each reuse policy when a raw pair payload reaches the end of a bounded input.</summary>
+    [Fact]
+    public void StagedRawPairReadsPreserveFailurePublication()
+    {
+        var source = new Dictionary<uint, uint>();
+        for (uint i = 0; i < 101; i++)
+            source.Add(i, unchecked(i * 2654435761));
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        Dictionary<uint, uint>? fresh = null;
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref fresh));
+        Assert.Equal(source.ToArray(), fresh!.ToArray());
+
+        var target = new Dictionary<uint, uint> { [2049] = 8193 };
+        Dictionary<uint, uint>? reused = target;
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(bytes.AsSpan(0, bytes.Length - 1), ref reused));
+        Assert.Same(target, reused);
+        Assert.Equal(8193U, Assert.Single(target).Value);
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref reused));
+        Assert.Same(target, reused);
+        Assert.Equal(source.ToArray(), target.ToArray());
+
+        var ordered = new SortedDictionary<uint, uint> { [2049] = 8193 };
+        SortedDictionary<uint, uint>? reusedTree = ordered;
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(bytes.AsSpan(0, bytes.Length - 1), ref reusedTree));
+        Assert.Same(ordered, reusedTree);
+        Assert.Empty(ordered);
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref reusedTree));
+        Assert.Same(ordered, reusedTree);
+        Assert.Equal(source.ToArray(), ordered.ToArray());
+    }
+
+    /// <summary>Provides an ordinary user-defined unmanaged key with the complete native wire layout.</summary>
+    [LuminPackable]
+    public partial struct RawPairKey : IComparable<RawPairKey>
+    {
+        public uint Major;
+        public uint Minor;
+
+        /// <summary>Compares both unsigned fields in key order.</summary>
+        /// <param name="other">The other key.</param>
+        /// <returns>The comparison result.</returns>
+        public readonly int CompareTo(RawPairKey other) => Major == other.Major ? Minor.CompareTo(other.Minor) : Major.CompareTo(other.Major);
+    }
+
     /// <summary>Compares generated frozen writers and unaligned reservations with explicit key/value wire order.</summary>
     [Fact]
     public void FrozenRawPairsKeepOrderAcrossVectorTails()

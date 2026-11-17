@@ -76,6 +76,83 @@ internal static class FormatterConcurrentTraits
                 method.Parameters[2].RefKind == RefKind.Out && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32);
     }
 
+    /// <summary>Checks the expansion helper that consumes a validated byte span and a fresh dictionary view.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <returns>Whether generated code can call the expansion before the bucket builder.</returns>
+    internal static bool HasRawDictionaryExpansion(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackMarshal");
+        var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
+        var view = owner?.GetTypeMembers("DictionaryView", 2).SingleOrDefault();
+        if (owner is not { IsStatic: true, DeclaredAccessibility: Accessibility.Public } || span is null ||
+            view is not { IsValueType: true, DeclaredAccessibility: Accessibility.Public })
+            return false;
+        var bytes = span.Construct(compilation.GetSpecialType(SpecialType.System_Byte));
+        return owner.GetMembers("TryExpandDenseRawPairs").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 2, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+            method.TypeParameters.All(parameter => parameter.HasUnmanagedTypeConstraint) &&
+            method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 3 &&
+            method.Parameters[0].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, bytes) &&
+            method.Parameters[1].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type,
+                view.Construct(method.TypeParameters[0], method.TypeParameters[1])) &&
+            method.Parameters[2] is { RefKind: RefKind.None, Type.SpecialType: SpecialType.System_Int32 });
+    }
+
+    /// <summary>Checks an optional runtime transfer of staged raw pair arrays.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <param name="interleave">Whether keys and values are stored in separate arrays.</param>
+    /// <param name="read">Whether the operation reads staged pairs.</param>
+    /// <returns>Whether generated code can call the corresponding bounded transfer.</returns>
+    internal static bool HasCapturedRawPairTransfer(Compilation compilation, bool interleave, bool read = false)
+    {
+        var owner = compilation.GetTypeByMetadataName(interleave ? "LuminPack.Utility.LuminFrozenConstruction" : "LuminPack.Utility.LuminTreeStorage");
+        var state = compilation.GetTypeByMetadataName(read ? "LuminPack.Core.LuminPackReader" : "LuminPack.Core.LuminPackWriter");
+        var pair = compilation.GetTypeByMetadataName("System.Collections.Generic.KeyValuePair`2");
+        if (owner is not { IsStatic: true, DeclaredAccessibility: Accessibility.Public } || state is null || pair is null)
+            return false;
+        string name = interleave
+            ? (read ? "TryReadInterleavedPairs" : "TryWriteInterleavedPairs")
+            : (read ? "TryReadPackedPairs" : "TryWritePackedPairs");
+        return owner.GetMembers(name).OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+            method.Arity == 2 && method.Parameters.Length == (interleave ? 4 : 3) &&
+            method.TypeParameters.All(parameter => parameter.HasUnmanagedTypeConstraint) &&
+            method.ReturnType.SpecialType == SpecialType.System_Boolean &&
+            method.Parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, state) &&
+            method.Parameters.Last() is { RefKind: RefKind.None, Type.SpecialType: SpecialType.System_Int32 } &&
+            (interleave
+                ? MatchesArray(method.Parameters[1], method.TypeParameters[0]) && MatchesArray(method.Parameters[2], method.TypeParameters[1])
+                : MatchesArray(method.Parameters[1], pair.Construct(method.TypeParameters[0], method.TypeParameters[1]))));
+
+        static bool MatchesArray(IParameterSymbol parameter, ITypeSymbol element) =>
+            parameter is { RefKind: RefKind.None, Type: IArrayTypeSymbol { IsSZArray: true } array } &&
+            SymbolEqualityComparer.Default.Equals(array.ElementType, element);
+    }
+
+    /// <summary>Checks a raw collection writer against its exact framework signature.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <param name="member">The Core entry point.</param>
+    /// <param name="collectionName">The framework collection metadata name.</param>
+    /// <param name="result">The entry point's return type.</param>
+    /// <param name="checksCapacity">Whether the operation can retain checked scalar fallback writes.</param>
+    /// <returns>Whether generated code can call the writer.</returns>
+    internal static bool HasRawCollectionWriter(Compilation compilation, string member, string collectionName, SpecialType result, bool checksCapacity = false)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        var collection = compilation.GetTypeByMetadataName(collectionName);
+        if (owner is not { IsStatic: true, DeclaredAccessibility: Accessibility.Public } || writer is null || collection is null)
+            return false;
+        return owner.GetMembers(member).OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+            method.Arity == collection.Arity && method.TypeParameters.All(parameter => parameter.HasUnmanagedTypeConstraint) &&
+            method.ReturnType.SpecialType == result && method.Parameters.Length == (checksCapacity ? 3 : 2) &&
+            method.Parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, writer) &&
+            method.Parameters[1].RefKind == RefKind.None &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, collection.Construct(method.TypeParameters.Cast<ITypeSymbol>().ToArray())) &&
+            (!checksCapacity || method.Parameters[2] is { RefKind: RefKind.None, Type.SpecialType: SpecialType.System_Boolean }));
+    }
+
     /// <summary>Checks a non-generic binary writer operation against its expected signature.</summary>
     /// <param name="owner">The binary writer type.</param>
     /// <param name="name">The operation name.</param>

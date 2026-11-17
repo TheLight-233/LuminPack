@@ -296,11 +296,20 @@ internal static class ImmutableInterfaceOwnerFile
     private static void StackWrite(EnumerableOwnerContext c)
     {
         bool isInterface = c.Sequence.StartsWith(Namespace + "IImmutableStack<", System.StringComparison.Ordinal);
+        bool bounded = (c.RawTreeElements || c.Scalar == "bool") && c.Supports("BoundedImmutableRawStack");
+        if (!isInterface && bounded)
+        {
+            WriteRaw("value");
+            return;
+        }
         if (isInterface)
         {
             ImmutableTreeTraversal.Select(c.W, c.Sequence, c.Scalar, "ImmutableStack", source =>
             {
-                c.CountedWrite(source);
+                if (bounded)
+                    WriteRaw(source);
+                else
+                    c.CountedWrite(source);
                 c.W.Line("goto operationComplete_RootWrite;");
             });
         }
@@ -309,6 +318,15 @@ internal static class ImmutableInterfaceOwnerFile
         c.CountedWrite("value");
         if (isInterface)
             c.W.Close();
+
+        void WriteRaw(string source)
+        {
+            c.W.Line("int countPosition = operationState.BeginCollection();");
+            c.W.Line("int count = global::LuminPack.Code.LuminPackCollectionAccess.WriteImmutableRawStack(ref operationState, " +
+                source + ", " + (c.Forwarded ? "true" : "false") + ");");
+            c.W.Line("operationState.EndCollection(countPosition, count);");
+            c.W.Line("operationState.CheckBuffer();");
+        }
     }
 
     /// <summary>Handles read for <c>ImmutableInterfaceOwnerFile</c>.</summary>

@@ -78,7 +78,21 @@ internal sealed partial class PairedDictionaryContext
     /// <summary>Whether the value can run in a dense traversal without invoking user code.</summary>
     internal bool DenseCompoundValue => FormatterElementEmitter.ReservableCollectionElement(_set, _contract?.Arguments[1] ?? _set.FindFormatter(Value)) != null;
 
+    /// <summary>Whether the owner uses the direct scalar pair path.</summary>
     internal bool RawPairs => UsesRawOrStringEntries && Key != "string" && Value != "string";
+
+    /// <summary>Whether both entries already write exactly their native unmanaged representations.</summary>
+    internal bool RawPairStorage => RawPairs || _nativeEntries || _contract?.Arguments.All(IsRawEntry) == true;
+
+    /// <summary>Whether a bulk read can preserve each original raw entry operation and its domain checks.</summary>
+    internal bool RawPairReadStorage => RawPairStorage && Key != "bool" && Value != "bool" &&
+        (_contract == null || _contract.Arguments.All(entry => entry.Layout == null &&
+            entry.Payload is null or StructModel { Storage: StructStorage.RawUnmanaged, Versioned: false, Rejection: null }));
+
+    /// <summary>Checks whether a forwarded entry uses the same complete storage copy as its scalar owner.</summary>
+    /// <param name="entry">The entry's formatter contract.</param>
+    /// <returns>Whether the entry is written as unmanaged storage.</returns>
+    private static bool IsRawEntry(FormatterModel entry) => entry.Raw && (entry.Payload == null || entry.RawStorage);
 
     /// <summary>Whether both members use the direct scalar or string operations.</summary>
     internal bool UsesRawOrStringEntries => _contract == null && Payload == null && !_forwardedValue;
@@ -260,6 +274,12 @@ internal sealed partial class PairedDictionaryContext
             W.Line("if (length != 0)");
             W.Open();
         }
+        bool packed = RawPairReadStorage && Supports("ReadPackedRawPairs");
+        if (packed)
+        {
+            W.Line("if (!global::LuminPack.Utility.LuminTreeStorage.TryReadPackedPairs(ref operationState, pairs, length))");
+            W.Open();
+        }
         // Rent guarantees at least length slots. Each field is still checked before storing its pair.
         W.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pairs);");
         W.Line("int index = 0;");
@@ -272,6 +292,8 @@ internal sealed partial class PairedDictionaryContext
         W.Line(Memory + ".Add(ref first, (nint)(uint)index) = new " + Pair + "(k!, v);");
         W.Close();
         W.Line("while (++index < length);");
+        if (packed)
+            W.Close();
         if (!knownNonEmpty)
             W.Close();
         consume();
@@ -286,31 +308,51 @@ internal sealed partial class PairedDictionaryContext
     /// <summary>Emits the counted enumeration write of a nonnull dictionary named <c>value</c>.</summary>
     /// <param name="allowMixedPairs">Whether the exact wrapper can write a captured native and string pair in one reservation.</param>
     /// <param name="unwrapReferenceDictionary">Whether a typed wrapper backing can enumerate the same pairs.</param>
-    internal void CountedWrite(bool allowMixedPairs = false, bool unwrapReferenceDictionary = false)
+    /// <param name="unwrapRawDictionary">Whether the exact wrapper can write its raw backing dictionary.</param>
+    /// <param name="unwrapTypedDictionary">Whether an exact wrapper can enumerate its typed dictionary backing.</param>
+    internal void CountedWrite(bool allowMixedPairs = false, bool unwrapReferenceDictionary = false, bool unwrapRawDictionary = false,
+        bool unwrapTypedDictionary = false)
     {
         bool mixed = allowMixedPairs && ParallelDictionaryWrite.SupportsMixed(this) && Key != "bool" && Value != "bool";
-        bool unwrapMixedDictionary = unwrapReferenceDictionary && mixed && Key == "string";
+        bool existingStringBacking = unwrapReferenceDictionary && Key == "string";
+        bool unwrapMixedDictionary = mixed && (unwrapTypedDictionary || unwrapReferenceDictionary && Key == "string");
         unwrapReferenceDictionary &= Value == "string" || _contract?.Arguments[1].OrdinaryObject == true;
-        bool useTypedBacking = unwrapReferenceDictionary || unwrapMixedDictionary;
+        bool useTypedBacking = unwrapTypedDictionary || unwrapReferenceDictionary || unwrapMixedDictionary;
+        unwrapRawDictionary &= RawPairStorage;
         bool outlineKey = allowMixedPairs && Key == "string" && Value == "string";
         W.Line("int countPosition = operationState.BeginCollection();");
         W.Line("int count = 0;");
         if (mixed)
             W.Line("bool utf16Length = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + " && value.GetType() == typeof(" + Dictionary + ");");
-        if (useTypedBacking)
+        if (unwrapRawDictionary)
         {
-            string profileGuard = unwrapMixedDictionary ? "utf16Length && " : "";
-            W.Line("if (" + profileGuard + "global::LuminPack.Code.LuminPackCollectionAccess.GetReadOnlyStringDictionaryStorage(value) is { Count: > 0 } stored)");
+            W.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.GetReadOnlyDictionaryStorage(value) is { } rawBacking)");
+            W.Open();
+            W.Line("if (!global::LuminPack.Code.LuminPackMarshal.TryWriteBoundedDenseRawPairs(ref operationState, rawBacking, out count))");
+            W.Open();
+            W.Line("count = 0;");
+            Entries("rawBacking");
+            W.Close();
+            W.Close();
+            W.Line("else");
+            W.Open();
+        }
+        else if (useTypedBacking)
+        {
+            string profileGuard = unwrapMixedDictionary && existingStringBacking ? "utf16Length && " : "";
+            string accessor = unwrapTypedDictionary ? "GetReadOnlyDictionaryStorage" : "GetReadOnlyStringDictionaryStorage";
+            string match = existingStringBacking ? " is { Count: > 0 } stored)" : " is { } stored)";
+            W.Line("if (" + profileGuard + "global::LuminPack.Code.LuminPackCollectionAccess." + accessor + "(value)" + match);
             W.Open();
             if (unwrapReferenceDictionary)
                 W.Line("bool writeUtf16Pairs = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ";");
-            Entries("stored", combineText: true);
+            Entries("stored", combineText: unwrapReferenceDictionary || unwrapMixedDictionary);
             W.Close();
             W.Line("else");
             W.Open();
         }
         Entries(Source);
-        if (useTypedBacking)
+        if (useTypedBacking || unwrapRawDictionary)
             W.Close();
         W.Line("operationState.EndCollection(countPosition, count);");
         W.Line("operationState.CheckBuffer();");
@@ -513,6 +555,12 @@ internal sealed partial class PairedDictionaryContext
         const string marshal = "global::LuminPack.Code.LuminPackMarshal";
         W.Line("ref var firstPair = ref " + marshal + ".GetNotNullArrayReference(pairs);");
         W.Line("global::LuminPack.Utility.LuminTreeStorage.CopyTo(" + source + ", " + marshal + ".CreateSpan(ref firstPair, count));");
+        bool packed = RawPairStorage && Supports("PackedTreeRawPairs");
+        if (packed)
+        {
+            W.Line("if (!global::LuminPack.Utility.LuminTreeStorage.TryWritePackedPairs(ref operationState, pairs, count))");
+            W.Open();
+        }
         bool fused = batchRaw && BeginRawRun("pair.Key", "pair.Value",
             "ref var pair = ref " + Memory + ".Add(ref firstPair, (nint)(uint)index);");
         bool mixed = ParallelDictionaryWrite.SupportsMixed(this);
@@ -546,6 +594,8 @@ internal sealed partial class PairedDictionaryContext
         W.Line("while (++index < count);");
         if (fused)
             W.Close();
+        if (packed)
+            W.Close();
         W.Close();
         W.Line("finally");
         W.Open();
@@ -565,7 +615,7 @@ internal sealed partial class PairedDictionaryContext
     /// <param name="setup">The optional statement selecting the current record.</param>
     internal bool BeginRawRun(string key, string value, string? setup = null)
     {
-        if (!RawPairs || !Supports("BinaryRawPairs"))
+        if (!RawPairStorage || !Supports("BinaryRawPairs"))
             return false;
         string keyWidth = Memory + ".SizeOf<" + Key + ">()";
         string pairWidth = "(" + keyWidth + " + " + Memory + ".SizeOf<" + Value + ">())";

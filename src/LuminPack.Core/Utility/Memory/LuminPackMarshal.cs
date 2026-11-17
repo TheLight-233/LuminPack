@@ -677,6 +677,18 @@ public static partial class LuminPackMarshal
             {
                 ref ulong entries = ref Unsafe.As<DictionaryView<TKey, TValue>.Entry, ulong>(ref entry);
                 ref ulong target = ref Unsafe.As<byte, ulong>(ref destination);
+                if (System.Runtime.Intrinsics.X86.Avx512F.IsSupported)
+                {
+                    var indices = System.Runtime.Intrinsics.Vector512.Create(1UL, 3UL, 5UL, 7UL, 9UL, 11UL, 13UL, 15UL);
+                    for (; i <= count - 8; i += 8)
+                    {
+                        nuint offset = (nuint)i * 2;
+                        var first = System.Runtime.Intrinsics.Vector512.LoadUnsafe(ref entries, offset);
+                        var second = System.Runtime.Intrinsics.Vector512.LoadUnsafe(ref entries, offset + 8);
+                        var pairs = System.Runtime.Intrinsics.X86.Avx512F.PermuteVar8x64x2(first, indices, second);
+                        System.Runtime.Intrinsics.Vector512.StoreUnsafe(pairs, ref target, (nuint)i);
+                    }
+                }
                 if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
                 {
                     for (; i <= count - 4; i += 4)

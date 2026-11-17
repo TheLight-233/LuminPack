@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using LuminPack;
 using LuminPack.Attribute;
 using Xunit;
@@ -7,6 +8,24 @@ namespace LuminPackUnitTest;
 /// <summary>Checks that fixed header blocks are validated before their unchecked loads.</summary>
 public sealed partial class TruncatedFixedHeaderTest
 {
+    /// <summary>Checks exact wrapper writers when keys require their own generated formatter.</summary>
+    [Fact]
+    public void ReadOnlyDictionaryKeepsPackableKeysAndStringValuesInOrder()
+    {
+        var source = new Dictionary<FixedCaseContainer, string>();
+        for (int i = 0; i < 73; i++)
+            source.Add(new FixedCaseContainer { Child = new FixedCase { First = i, Second = ~i } }, i % 3 == 0 ? "\u6F22\u5B57" : i.ToString());
+        source.Remove(source.Keys.ElementAt(17));
+
+        var wrapper = new ReadOnlyDictionary<FixedCaseContainer, string>(source);
+        IReadOnlyDictionary<FixedCaseContainer, string> readOnly = wrapper;
+        IDictionary<FixedCaseContainer, string> writableContract = wrapper;
+        byte[] expected = LuminPackSerializer.Serialize(source);
+        Assert.Equal(expected, LuminPackSerializer.Serialize(wrapper));
+        Assert.Equal(expected, LuminPackSerializer.Serialize(readOnly));
+        Assert.Equal(expected, LuminPackSerializer.Serialize(writableContract));
+    }
+
     /// <summary>Reads every truncated prefix from the start of a larger buffer whose remaining bytes are garbage.</summary>
     /// <typeparam name="T">The value type.</typeparam>
     /// <param name="bytes">The complete payload.</param>

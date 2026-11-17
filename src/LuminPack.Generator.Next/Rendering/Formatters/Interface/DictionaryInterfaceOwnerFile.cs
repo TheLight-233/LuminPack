@@ -71,7 +71,7 @@ internal static class DictionaryInterfaceOwnerFile
         var w = c.W;
         string concrete = "global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">";
         string writer = w.A("LuminPackWriter");
-        bool rawKernel = c.RawPairs && c.Supports("BinaryRawPairs");
+        bool rawKernel = c.RawPairStorage && c.Supports("BinaryRawPairs");
         bool textKernel = c.UsesRawOrStringEntries && (c.Key == "string" || c.Value == "string") && c.Supports("BinaryTextPair");
         bool textPair = c.Key == "string" && c.Value == "string";
         bool denseText = textKernel && textPair && c.Supports("DenseDictionaryView");
@@ -95,6 +95,12 @@ internal static class DictionaryInterfaceOwnerFile
         w.Indented(() =>
         {
             w.Line("? WriteKnown(ref operationState, " + (dense ? "dictionary" : c.Memory + ".As<" + concrete + ">(value)") + ")");
+            if (c.Supports("ReadOnlyTypedDictionaryStorage"))
+            {
+                string wrapper = "global::System.Collections.ObjectModel.ReadOnlyDictionary<" + c.Key + ", " + c.Value + ">";
+                w.Line(": value is " + wrapper + " readOnly && global::LuminPack.Code.LuminPackCollectionAccess.GetReadOnlyDictionaryStorage(readOnly) is { } backing");
+                w.Line("? WriteKnown(ref operationState, backing)");
+            }
             w.Line(": WriteInterface(ref operationState, value);");
         });
         w.Line("operationState.EndCollection(countPosition, count);");

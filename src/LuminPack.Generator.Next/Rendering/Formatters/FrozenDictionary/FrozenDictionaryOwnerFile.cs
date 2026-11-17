@@ -23,7 +23,7 @@ internal static class FrozenDictionaryOwnerFile
     private static void Write(PairedDictionaryContext c)
     {
         var w = c.W;
-        if (c.RawPairs && c.Supports("FrozenRawPairs"))
+        if (c.RawPairStorage && c.Supports("FrozenRawPairs"))
         {
             w.Line("global::LuminPack.Utility.LuminFrozenConstruction.WritePairs<" + c.Key + ", " + c.Value + ">(ref operationState, value.Keys.AsSpan(), value.Values.AsSpan());");
             return;

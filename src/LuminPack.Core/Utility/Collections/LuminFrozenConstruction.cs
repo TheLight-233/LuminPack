@@ -7,7 +7,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
-using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 #endif
 using LuminPack.Code;
@@ -17,7 +17,7 @@ namespace LuminPack.Utility;
 
 /// <summary>Owns temporary mutable construction storage and fixed scalar writes for frozen collections.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public static class LuminFrozenConstruction
+public static partial class LuminFrozenConstruction
 {
     private const int MaximumRetainedCapacity = 4096;
     private const int LastTablePrimeBelowLimit = 4049;
@@ -230,15 +230,9 @@ public static class LuminFrozenConstruction
             ref TValue firstValue = ref MemoryMarshal.GetReference(values);
             int index = 0;
 #if NET8_0_OR_GREATER
-            if (IntPtr.Size == 8 && Sse2.IsSupported && keyWidth == valueWidth &&
-                ((keyWidth == 4 && keys.Length >= 16) || (keyWidth == 8 && keys.Length >= 32)) &&
-                !MemoryMarshal.AsBytes(keys).Overlaps(payload) && !MemoryMarshal.AsBytes(values).Overlaps(payload))
+            if (CanInterleave<TKey, TValue>(keys.Length))
             {
-                index = keyWidth == 4
-                    ? WriteInterleaved(ref Unsafe.As<byte, uint>(ref destination), ref Unsafe.As<TKey, uint>(ref firstKey),
-                        ref Unsafe.As<TValue, uint>(ref firstValue), keys.Length)
-                    : WriteInterleaved(ref Unsafe.As<byte, ulong>(ref destination), ref Unsafe.As<TKey, ulong>(ref firstKey),
-                        ref Unsafe.As<TValue, ulong>(ref firstValue), keys.Length);
+                index = WriteInterleavedPrefix(payload, keys, values);
                 destination = ref Unsafe.Add(ref destination, (nint)index * (keyWidth + valueWidth));
             }
 #endif
@@ -253,56 +247,43 @@ public static class LuminFrozenConstruction
         writer.CheckBuffer();
     }
 
-#if NET8_0_OR_GREATER
-    /// <summary>Interleaves complete vectors of equal-width raw keys and values into a disjoint output range.</summary>
-    /// <typeparam name="T">The unsigned 32-bit or 64-bit storage lane.</typeparam>
-    /// <param name="destination">The already reserved packed output.</param>
-    /// <param name="keys">The first lane of the validated key span.</param>
-    /// <param name="values">The first lane of the validated value span.</param>
-    /// <param name="count">The number of complete pairs in the spans.</param>
-    /// <returns>The number of pairs written before the scalar tail.</returns>
+    /// <summary>Writes already captured sorted-list arrays when the complete interleaved payload fits.</summary>
+    /// <typeparam name="TKey">The raw key type.</typeparam>
+    /// <typeparam name="TValue">The raw value type.</typeparam>
+    /// <param name="writer">The writer positioned after the header.</param>
+    /// <param name="keys">The captured key array.</param>
+    /// <param name="values">The captured value array.</param>
+    /// <param name="count">The number of pairs to write.</param>
+    /// <returns>Whether the entire payload was written.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int WriteInterleaved<T>(ref T destination, ref T keys, ref T values, int count) where T : unmanaged
+    public static bool TryWriteInterleavedPairs<TKey, TValue>(ref LuminPackWriter writer, TKey[] keys, TValue[] values, int count)
+        where TKey : unmanaged where TValue : unmanaged
     {
-        int index = 0;
-        if (Avx2.IsSupported)
-        {
-            int width = Vector256<T>.Count;
-            for (; index <= count - width; index += width)
-            {
-                nuint offset = (nuint)index;
-                var key = Vector256.LoadUnsafe(ref keys, offset);
-                var value = Vector256.LoadUnsafe(ref values, offset);
-                var low = Unsafe.SizeOf<T>() == 4
-                    ? Avx2.UnpackLow(key.AsUInt32(), value.AsUInt32()).AsUInt64()
-                    : Avx2.UnpackLow(key.AsUInt64(), value.AsUInt64());
-                var high = Unsafe.SizeOf<T>() == 4
-                    ? Avx2.UnpackHigh(key.AsUInt32(), value.AsUInt32()).AsUInt64()
-                    : Avx2.UnpackHigh(key.AsUInt64(), value.AsUInt64());
-                // Unpack works within each 128-bit lane. Join the corresponding halves in wire order.
-                Vector256.StoreUnsafe(Avx2.Permute2x128(low, high, 0x20).As<ulong, T>(), ref destination, offset * 2);
-                Vector256.StoreUnsafe(Avx2.Permute2x128(low, high, 0x31).As<ulong, T>(), ref destination, offset * 2 + (nuint)width);
-            }
-        }
-
-        int tailWidth = Vector128<T>.Count;
-        for (; index <= count - tailWidth; index += tailWidth)
-        {
-            nuint offset = (nuint)index;
-            var key = Vector128.LoadUnsafe(ref keys, offset);
-            var value = Vector128.LoadUnsafe(ref values, offset);
-            var low = Unsafe.SizeOf<T>() == 4
-                ? Sse2.UnpackLow(key.AsUInt32(), value.AsUInt32()).As<uint, T>()
-                : Sse2.UnpackLow(key.AsUInt64(), value.AsUInt64()).As<ulong, T>();
-            var high = Unsafe.SizeOf<T>() == 4
-                ? Sse2.UnpackHigh(key.AsUInt32(), value.AsUInt32()).As<uint, T>()
-                : Sse2.UnpackHigh(key.AsUInt64(), value.AsUInt64()).As<ulong, T>();
-            Vector128.StoreUnsafe(low, ref destination, offset * 2);
-            Vector128.StoreUnsafe(high, ref destination, offset * 2 + (nuint)tailWidth);
-        }
-        return index;
-    }
+#if NET8_0_OR_GREATER
+        if (CanInterleave<TKey, TValue>(count))
+            return TryWriteInterleavedPayload(ref writer, keys, values, count);
 #endif
+        return false;
+    }
+
+    /// <summary>Splits a complete wire pair payload into the two already rented sorted-list arrays.</summary>
+    /// <typeparam name="TKey">The raw key type.</typeparam>
+    /// <typeparam name="TValue">The raw value type.</typeparam>
+    /// <param name="reader">The reader positioned after the count.</param>
+    /// <param name="keys">The key staging array.</param>
+    /// <param name="values">The value staging array.</param>
+    /// <param name="count">The number of pairs in the payload.</param>
+    /// <returns>Whether the complete payload was consumed.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryReadInterleavedPairs<TKey, TValue>(ref LuminPackReader reader, TKey[] keys, TValue[] values, int count)
+        where TKey : unmanaged where TValue : unmanaged
+    {
+#if NET8_0_OR_GREATER
+        if ((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) && CanInterleave<TKey, TValue>(count))
+            return TryReadInterleavedPayload(ref reader, keys, values, count);
+#endif
+        return false;
+    }
 
     /// <summary>Stores one scalar with the existing architecture-specific fixed-access contract.</summary>
     /// <typeparam name="T">The complete unmanaged scalar representation.</typeparam>

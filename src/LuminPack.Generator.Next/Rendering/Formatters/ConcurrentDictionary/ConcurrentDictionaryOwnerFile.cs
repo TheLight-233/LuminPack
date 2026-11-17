@@ -21,13 +21,21 @@ internal static class ConcurrentDictionaryOwnerFile
     /// <param name="c">The generated dictionary write context.</param>
     private static void Write(PairedDictionaryContext c)
     {
+        var w = c.W;
+        if (c.RawPairStorage && c.Supports("ConcurrentRawPairs") && c.Supports("ConcurrentTraversal"))
+        {
+            w.Line("int countPosition = operationState.BeginCollection();");
+            w.Line("int count = global::LuminPack.Code.LuminPackCollectionAccess.WriteConcurrentRawPairs(ref operationState, value);");
+            w.Line("operationState.EndCollection(countPosition, count);");
+            w.Line("operationState.CheckBuffer();");
+            return;
+        }
         if (!c.UsesRawOrStringEntries || !c.Supports("ConcurrentBinaryTextPair"))
         {
             c.CountedWrite();
             return;
         }
 
-        var w = c.W;
         const string writer = "global::LuminPack.Core.LuminPackWriter";
         string width = c.Memory + ".SizeOf<" + c.Value + ">()";
         w.Line("if (!" + ParallelDictionaryWrite.FixedUtf16LengthProfile + ")");

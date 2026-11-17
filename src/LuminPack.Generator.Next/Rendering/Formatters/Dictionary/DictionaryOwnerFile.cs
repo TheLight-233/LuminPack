@@ -71,12 +71,12 @@ internal static class DictionaryOwnerFile
         string dictionary = fact.DeclaredType;
         var contractModel = set.FindFormatter(dictionary);
         bool rawPairWrite = pair && contractModel?.Supports("BinaryRawPairs") == true;
+        bool packedPairRead = pair && contractModel?.Supports("ReadPackedRawPairs") == true;
+        bool expandPairs = pair && contractModel?.Supports("ExpandDenseRawPairs") == true;
         bool textPairWrite = !sparse && rawKey != rawValue && contractModel?.Supports("BinaryTextPair") == true;
         bool enumeratedStringKey = key == "string" && contractModel?.Supports("EnumeratedStringKey") == true;
         bool completeRawValue = enumeratedStringKey && rawValue && !sparse && CallbackFree(value);
         string rawWidth = memory + ".SizeOf<" + (rawKey ? key : value) + ">()";
-        bool readRawPair = pair && GenericFormatterReuse.Real(key) == "int" &&
-            (GenericFormatterReuse.Real(value) is "int" or "long");
         string keyWidth = memory + ".SizeOf<" + key + ">()";
         string pairWidth = "(" + keyWidth + " + " + memory + ".SizeOf<" + value + ">())";
         const string runtimeWriter = "global::LuminPack.Core.LuminPackWriter";
@@ -422,7 +422,7 @@ internal static class DictionaryOwnerFile
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
                     w.Blank();
-                    if (readRawPair)
+                    if (pair)
                     {
                         // An oversized claim cannot fit after the collection header, so Advance rejects the saturated width.
                         w.Line("long required = (long)length * " + pairWidth + ";");
@@ -434,9 +434,16 @@ internal static class DictionaryOwnerFile
                     w.Line("var result = new " + dictionary + "(length);");
                     w.Line("var dictionaryView = global::LuminPack.Code.LuminPackMarshal.GetDictionaryView(result);");
                     w.Line("ref var firstEntry = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(dictionaryView._entries!);");
-                    if (readRawPair)
+                    if (pair)
                     {
                         const string read = "global::LuminPack.Core.LuminPackReader.Read";
+                        if (expandPairs)
+                        {
+                            const string marshal = "global::LuminPack.Code.LuminPackMarshal";
+                            w.Line("if (!" + marshal + ".TryExpandDenseRawPairs(" + marshal +
+                                ".CreateReadOnlySpan(ref source, byteCount), dictionaryView, length))");
+                            w.Open();
+                        }
                         w.Line("ref var entry = ref firstEntry;");
                         // The storage was allocated for length entries, and the payload check dominates this loop.
                         w.Line("int remaining = length;");
@@ -448,6 +455,8 @@ internal static class DictionaryOwnerFile
                         w.Line("source = ref " + memory + ".Add(ref source, " + pairWidth + ");");
                         w.Close();
                         w.Line("while (--remaining != 0);");
+                        if (expandPairs)
+                            w.Close();
                     }
                     else
                     {
@@ -455,21 +464,13 @@ internal static class DictionaryOwnerFile
                         w.Line("int remaining = length;");
                         w.Line("do");
                         w.Open();
-                        if (pair)
-                        {
-                            ReadMember("operationState", key, "entry.Key");
-                            ReadMember("operationState", value, "entry.Value");
-                        }
-                        else
-                        {
-                            // A fresh entry starts with default values; read into locals, then store.
-                            w.Line(key + " key = default !;");
-                            w.Line(value + " itemValue = default !;");
-                            ReadMember("operationState", key, "key");
-                            ReadMember("operationState", value, "itemValue");
-                            w.Line("entry.Key = key;");
-                            w.Line("entry.Value = itemValue;");
-                        }
+                        // A fresh entry starts with default values; read into locals, then store.
+                        w.Line(key + " key = default !;");
+                        w.Line(value + " itemValue = default !;");
+                        ReadMember("operationState", key, "key");
+                        ReadMember("operationState", value, "itemValue");
+                        w.Line("entry.Key = key;");
+                        w.Line("entry.Value = itemValue;");
                         w.Line("entry = ref " + memory + ".Add(ref entry, 1);");
                         w.Close();
                         w.Line("while (--remaining != 0);");
@@ -519,6 +520,12 @@ internal static class DictionaryOwnerFile
                     w.Line("ref var firstPair = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items);");
                     w.Line("ref var slot = ref firstPair;");
                     w.Line("int remaining = count;");
+                    if (packedPairRead)
+                    {
+                        string observedLookup = observeRawLookup ? "observeLookup || " : "";
+                        w.Line("if (" + observedLookup + "!global::LuminPack.Utility.LuminTreeStorage.TryReadPackedPairs(ref operationState, items, count))");
+                        w.Open();
+                    }
                     w.Line("do");
                     w.Open();
                     if (key == "string")
@@ -548,6 +555,8 @@ internal static class DictionaryOwnerFile
                     w.Line("slot = ref " + memory + ".Add(ref slot, 1);");
                     w.Close();
                     w.Line("while (--remaining != 0);");
+                    if (packedPairRead)
+                        w.Close();
                     w.Line("destination.Clear();");
                     w.Line("slot = ref firstPair;");
                     w.Line("remaining = count;");
