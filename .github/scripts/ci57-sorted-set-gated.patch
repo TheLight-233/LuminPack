@@ -1,0 +1,15 @@
+diff --git a/src/LuminPack.Core/Utility/Collections/Trees/LuminTreeStorage.cs b/src/LuminPack.Core/Utility/Collections/Trees/LuminTreeStorage.cs
+index 0aad376..851da9d 100644
+--- a/src/LuminPack.Core/Utility/Collections/Trees/LuminTreeStorage.cs
++++ b/src/LuminPack.Core/Utility/Collections/Trees/LuminTreeStorage.cs
+@@ -1303,7 +1303,9 @@ public static partial class LuminTreeStorage
+ #if NET10_0_OR_GREATER
+         if (BclTrees.SortedSet<T>.Available)
+         {
+-            if (typeof(T).IsClass && typeof(T) != typeof(string) && count > 1 &&
++            // Larger string sets retain the framework constructor.
++            const int typedStringLimit = 256;
++            if (typeof(T).IsClass && (typeof(T) != typeof(string) || count <= typedStringLimit) && count > 1 &&
+                 count <= int.MaxValue / 2 && (uint)count <= (uint)items.Length &&
+                 TypedSortedSetNodes<T>.Factory is { } construct)
+                 return construct(ref MemoryMarshal.GetArrayDataReference(items), 0, count - 1, null);
