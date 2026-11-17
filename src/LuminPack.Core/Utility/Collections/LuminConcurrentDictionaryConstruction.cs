@@ -211,6 +211,7 @@ public static partial class LuminPackCollectionAccess
         /// <summary>Exposes the single managed node reference proved by the traversal layout.</summary>
         /// <param name="tables">The dictionary's current tables.</param>
         /// <returns>The node slots of its buckets.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Span<object?> Buckets(object tables)
         {
             var array = LuminFieldLayout.Field<Array>(tables, ConcurrentBucketStorage<TKey, TValue>.Buckets);
@@ -354,6 +355,7 @@ public struct ConcurrentDictionaryBuilder<TKey, TValue> where TKey : notnull
     /// <summary>Adds one decoded pair, keeping the first value of a repeated key.</summary>
     /// <param name="key">The decoded key; a null key throws.</param>
     /// <param name="value">The decoded value.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Add(TKey key, TValue value)
     {
         if (key is null)
@@ -374,14 +376,28 @@ public struct ConcurrentDictionaryBuilder<TKey, TValue> where TKey : notnull
                 stripe++;
                 return;
             }
-            if (LuminPackCollectionAccess.AddOccupiedConcurrentDictionaryBucket(_map, _tables!, key, hash, value, _comparer, ref slot, ref stripe) &&
-                !ReferenceEquals(_tables, LuminPackCollectionAccess.ConcurrentDictionaryTables(_map)))
-                Refresh();
+            AddOccupied(key, hash, value, ref slot, ref stripe);
             return;
         }
 #endif
         _map.TryAdd(key, value);
     }
+
+#if NET10_0_OR_GREATER
+    /// <summary>Resolves a collision and refreshes the captured table after framework growth.</summary>
+    /// <param name="key">The incoming key.</param>
+    /// <param name="hash">Its hash under the active comparer.</param>
+    /// <param name="value">The incoming value.</param>
+    /// <param name="slot">The head of the occupied bucket.</param>
+    /// <param name="stripe">The count owned by the corresponding lock.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void AddOccupied(TKey key, int hash, TValue value, ref object? slot, ref int stripe)
+    {
+        if (LuminPackCollectionAccess.AddOccupiedConcurrentDictionaryBucket(_map, _tables!, key, hash, value, _comparer, ref slot, ref stripe) &&
+            !ReferenceEquals(_tables, LuminPackCollectionAccess.ConcurrentDictionaryTables(_map)))
+            Refresh();
+    }
+#endif
 
     /// <summary>Returns the completed dictionary.</summary>
     /// <returns>The filled dictionary.</returns>
