@@ -453,6 +453,24 @@ internal static class FormatterConcurrentTraits
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, queue.OriginalDefinition.Construct(method.TypeParameters[0])));
     }
 
+    /// <summary>Checks the optional reused-queue refill operation.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <param name="queue">The exact closed framework queue.</param>
+    /// <returns>Whether the referenced helper has the expected public signature.</returns>
+    internal static bool HasQueueRefill(Compilation compilation, INamedTypeSymbol queue)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        return owner is { DeclaredAccessibility: Accessibility.Public, IsStatic: true } &&
+            owner.GetMembers("RefillConcurrentQueue").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } &&
+                method.Parameters.Length == 3 && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+                method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, queue.OriginalDefinition.Construct(method.TypeParameters[0])) &&
+                method.Parameters[1].Type is IArrayTypeSymbol { Rank: 1 } array &&
+                SymbolEqualityComparer.Default.Equals(array.ElementType, method.TypeParameters[0]) &&
+                method.Parameters[2].Type.SpecialType == SpecialType.System_Int32);
+    }
+
     /// <summary>Checks the optional exact concurrent queue reset in the referenced Core.</summary>
     /// <param name="compilation">The actual consumer metadata.</param>
     /// <param name="queue">The declared concurrent queue.</param>

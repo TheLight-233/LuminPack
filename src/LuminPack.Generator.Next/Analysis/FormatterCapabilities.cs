@@ -291,6 +291,9 @@ internal static class FormatterCapabilities
             result.Add("ClearConcurrentQueue");
         if (definition == "System.Collections.Concurrent.ConcurrentQueue" && FormatterConcurrentTraits.HasQueueDrain(compilation, named))
             result.Add("DrainConcurrentQueue");
+        if (definition == "System.Collections.Concurrent.ConcurrentQueue" && named.TypeArguments[0].IsUnmanagedType &&
+            FormatterConcurrentTraits.HasQueueRefill(compilation, named))
+            result.Add("RefillConcurrentQueue");
 
         if (definition is "System.Collections.Concurrent.ConcurrentBag" or "System.Collections.Concurrent.ConcurrentStack" &&
             named.TypeArguments[0].SpecialType == SpecialType.System_String &&

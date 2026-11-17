@@ -226,6 +226,36 @@ internal static class ConcurrentQueueOwnerFile
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
                     w.Blank();
+                    if (!ownerRead && set.FindFormatter(queue)?.Supports("RefillConcurrentQueue") == true)
+                    {
+                        // The complete raw payload is decoded before the queue is drained and refilled in bulk.
+                        w.Line("var refill = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
+                        w.Line("try");
+                        w.Open();
+                        w.Line("if (length != 0)");
+                        w.Indented(() =>
+                        {
+                            w.Line("operationState.Read(");
+                            w.Indented(() =>
+                            {
+                                w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetNotNullArrayReference(refill)),");
+                                w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
+                            });
+                        });
+                        w.Line("global::LuminPack.Code.LuminPackCollectionAccess.RefillConcurrentQueue(value, refill, length);");
+                        w.Close();
+                        w.Line("finally");
+                        w.Open();
+                        w.Line("global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(refill, false);");
+                        w.Close();
+                        w.Blank();
+                        w.Line("operationComplete_RootRead:");
+                        w.Indented(() => w.Line(";"));
+                        w.Line("operationState.CopyTo(ref reader);");
+                        w.Close();
+                        w.Blank();
+                        break;
+                    }
                     if (set.FindFormatter(queue)?.Supports("DrainConcurrentQueue") == true)
                         w.Line(ResetLine(set, queue));
                     else if (!ownerRead && set.FindFormatter(queue)?.Supports("ClearConcurrentQueue") == true)
