@@ -19,7 +19,18 @@ on:
       - 'global.json'
       - '.github/workflows/benchmark-matrix.yml'
   workflow_dispatch:
+    inputs:
+      jit:
+        description: JIT configurations to time
+        type: choice
+        options: [both, tiered, fullopts]
+        default: both
   workflow_call:
+    inputs:
+      jit:
+        description: JIT configurations to time
+        type: string
+        default: both
 
 permissions:
   contents: read
@@ -30,8 +41,13 @@ concurrency:
 
 jobs:
   matrix:
+    name: Matrix (${{ matrix.jit }})
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 225
+    strategy:
+      fail-fast: false
+      matrix:
+        jit: ${{ fromJSON(github.event_name != 'workflow_dispatch' && '["Validation"]' || inputs.jit == 'tiered' && '["TieredPGO"]' || inputs.jit == 'fullopts' && '["FullOpts"]' || '["TieredPGO","FullOpts"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -47,11 +63,12 @@ jobs:
       - name: Validate fixtures and sample the matrix
         shell: bash
         env:
-          TIMING: ${{ github.event_name == 'workflow_dispatch' }}
-          DOTNET_TieredCompilation: '1'
-          DOTNET_TieredPGO: '1'
-          DOTNET_TC_QuickJit: '1'
-          DOTNET_TC_QuickJitForLoops: '1'
+          TIMING: ${{ matrix.jit != 'Validation' }}
+          DOTNET_TieredCompilation: ${{ matrix.jit == 'TieredPGO' && '1' || '0' }}
+          DOTNET_TieredPGO: ${{ matrix.jit == 'TieredPGO' && '1' || '0' }}
+          DOTNET_TC_QuickJit: ${{ matrix.jit == 'TieredPGO' && '1' || '0' }}
+          DOTNET_TC_QuickJitForLoops: ${{ matrix.jit == 'TieredPGO' && '1' || '0' }}
+          DOTNET_TC_CallCountingDelayMs: '0'
         run: |
           set -euo pipefail
           mkdir -p .tmp/matrix-artifacts
@@ -67,6 +84,7 @@ jobs:
           for format in binary json; do
             for scene in main small regular large changing; do
               for ((process=1; process<=processes; process++)); do
+                echo "Sampling $format/$scene, process $process of $processes ($rounds rounds)"
                 dotnet "$dll" "$format" "$scene" "$rounds" ".tmp/matrix-artifacts/$format-$scene-$process.jsonl"
               done
             done
@@ -79,5 +97,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-matrix
+          name: ${{ matrix.jit == 'FullOpts' && 'benchmark-matrix-fullopts' || 'benchmark-matrix' }}
           path: .tmp/matrix-artifacts

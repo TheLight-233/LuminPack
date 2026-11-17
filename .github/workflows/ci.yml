@@ -167,6 +167,8 @@ jobs:
     name: Full serialization matrix
     if: github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
     uses: ./.github/workflows/benchmark-matrix.yml
+    with:
+      jit: ${{ inputs.benchmark_jit }}
 
   benchmark:
     name: Benchmark (${{ matrix.host }})

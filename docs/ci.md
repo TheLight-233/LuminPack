@@ -34,7 +34,7 @@ Unity 2022.3.51f1 and 6000.0.43f1 run Editor tests, an IL2CPP smoke player, the 
 
 ## Benchmarks
 
-Benchmarks run only on manual dispatch of `ci.yml` with `run_benchmarks` enabled. That run times both the BenchmarkDotNet suites and the [serialization matrix](../benchmarks/LuminPack.MatrixBenchmark).
+Manually dispatching `ci.yml` with `run_benchmarks` enabled times both the BenchmarkDotNet suites and the [serialization matrix](../benchmarks/LuminPack.MatrixBenchmark).
 
 | Input | Default | Effect |
 | --- | --- | --- |
@@ -51,6 +51,10 @@ Benchmarks run only on manual dispatch of `ci.yml` with `run_benchmarks` enabled
 
 ### Serialization matrix
 
-`benchmark-matrix.yml` validates round trips for relevant pushes and pull requests without timing. Manual dispatch, or a `ci.yml` run with `run_benchmarks`, samples every format and scenario in three processes of nine rounds on one runner. The matrix enables Server GC, tiered compilation, dynamic PGO and Quick JIT for loops. Each fixture, library and operation warms up for at least 64 calls and 15 milliseconds before calibrating its sample size. The `benchmark-matrix` artifact contains the JSONL samples, the machine information and `REPORT.md`.
+`benchmark-matrix.yml` validates round trips on relevant pushes and pull requests. Manual runs of that workflow, or `ci.yml` with `run_benchmarks`, time both JIT configurations by default. The standalone workflow uses the `jit` input and CI forwards `benchmark_jit` to the matrix. Each JIT job measures all formats and scenarios on its own runner with Server GC, three processes per scenario and nine rounds per process.
+
+For TieredPGO, enable tiered compilation, dynamic PGO and Quick JIT for loops, and set the call-counting delay to zero. Before calibrating final sample sizes, interleave shuffled warmup batches across libraries for the same operation. Each library and operation accumulates at least 300 ms of active time and 256 calls. FullOpts disables tiered compilation and dynamic PGO and uses at least 15 ms and 256 calls. The report flags process observations whose first and last three sample medians differ by at least 20%. It retains all samples, and the flag does not diagnose why the times moved.
+
+The `benchmark-matrix` artifact contains TieredPGO results and `benchmark-matrix-fullopts` contains the separate control. Each includes the raw JSONL with warmup observations, the machine information, `stability.csv` and `REPORT.md`. Compare library ratios within a JIT job.
 
 Chart generation from these artifacts is described in [Contributing](../CONTRIBUTING.md#benchmarks).

@@ -34,7 +34,7 @@ Unity 2022.3.51f1 和 6000.0.43f1 依次运行 Editor 测试、IL2CPP smoke Play
 
 ## 基准测试
 
-只有手动触发 `ci.yml` 并开启 `run_benchmarks` 时才会运行基准测试。这次运行会同时为 BenchmarkDotNet 套件和[序列化矩阵](../benchmarks/LuminPack.MatrixBenchmark)计时。
+手动触发 `ci.yml` 并开启 `run_benchmarks` 后，会同时为 BenchmarkDotNet 套件和[序列化矩阵](../benchmarks/LuminPack.MatrixBenchmark)计时。
 
 | 输入 | 默认值 | 作用 |
 | --- | --- | --- |
@@ -51,6 +51,10 @@ Unity 2022.3.51f1 和 6000.0.43f1 依次运行 Editor 测试、IL2CPP smoke Play
 
 ### 序列化矩阵
 
-`benchmark-matrix.yml` 在相关推送和拉取请求上只做往返校验，不计时。手动触发它，或在 `ci.yml` 中开启 `run_benchmarks`，会在同一台机器上对每种格式和场景运行三个进程、每个进程九轮。矩阵启用 Server GC、分层编译、动态 PGO 和循环的 Quick JIT。每个 fixture、库和操作在校准采样次数前至少预热 64 次且达到 15 毫秒。`benchmark-matrix` 产物包含 JSONL 样本、机器信息和 `REPORT.md`。
+`benchmark-matrix.yml` 在相关推送和拉取请求上做往返校验。手动触发该工作流，或在 `ci.yml` 中开启 `run_benchmarks`，默认会分别为两种 JIT 配置计时。独立工作流通过 `jit` 选择配置，CI 则把 `benchmark_jit` 传给矩阵。每种配置使用独立的 runner 和 Server GC，覆盖所有格式和场景，每个场景跑三个进程，每个进程九轮。
+
+TieredPGO 启用分层编译、动态 PGO 和循环 Quick JIT，并将调用计数延迟设为零。最终校准采样次数前，对同一个操作的各库打乱顺序、交错预热。每个库的每项操作至少累计 300 毫秒的实际运行时间和 256 次调用。FullOpts 关闭分层编译与动态 PGO，最低预热为 15 毫秒和 256 次调用。若同一进程的前三轮和最后三轮中位数相差至少 20%，报告会标记该项。所有样本都保留，漂移标记本身不能确定原因。
+
+`benchmark-matrix` 产物保存 TieredPGO 结果，`benchmark-matrix-fullopts` 保存单独的对照结果。两者均包含记录了预热数据的原始 JSONL、机器信息、`stability.csv` 和 `REPORT.md`。库之间的比值在同一 JIT 任务内比较。
 
 如何用这些产物生成图表，见[贡献指南](CONTRIBUTING.cn.md#基准测试)。
