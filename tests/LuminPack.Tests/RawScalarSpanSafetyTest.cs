@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using LuminPack;
@@ -8,6 +9,39 @@ using Xunit;
 /// <summary>Protects bounded scalar facades independently of unchecked address-only storage kernels.</summary>
 public sealed class RawScalarSpanSafetyTest
 {
+    /// <summary>Checks raw dictionary pairs across vector widths, tails, and unaligned output positions.</summary>
+    [Fact]
+    public void DenseRawDictionaryKeepsPackedKeyValueOrder()
+    {
+        for (int count = 0; count <= 19; count++)
+        {
+            var values = new Dictionary<int, int>(count);
+            for (int index = 0; index < count; index++)
+                values.Add(-index - 19, index * 787 + 41);
+
+            byte[] expected = new byte[sizeof(int) + count * 2 * sizeof(int)];
+            BinaryPrimitives.WriteInt32LittleEndian(expected, count);
+            int offset = sizeof(int);
+            foreach (var pair in values)
+            {
+                BinaryPrimitives.WriteInt32LittleEndian(expected.AsSpan(offset), pair.Key);
+                BinaryPrimitives.WriteInt32LittleEndian(expected.AsSpan(offset + sizeof(int)), pair.Value);
+                offset += 2 * sizeof(int);
+            }
+
+            Assert.Equal(expected, LuminPackSerializer.Serialize(values));
+            byte[] storage = Enumerable.Repeat((byte)0xB9, expected.Length + 2).ToArray();
+            Span<byte> buffer = storage.AsSpan(1, expected.Length);
+            var writer = new LuminPackWriter(ref buffer);
+            writer.WriteCollectionHeader(count);
+            LuminPack.Code.LuminPackMarshal.WriteDenseRawPairs(ref writer, values, count);
+            Assert.Equal(expected.Length, writer.Position);
+            Assert.Equal(expected, buffer.ToArray());
+            Assert.Equal((byte)0xB9, storage[0]);
+            Assert.Equal((byte)0xB9, storage[^1]);
+        }
+    }
+
     /// <summary>Preserves optional framing, compressed bytes, raw storage and exact write boundaries.</summary>
     [Fact]
     public void RawCollectionWritesKeepCompressionAndHeaderContracts()
