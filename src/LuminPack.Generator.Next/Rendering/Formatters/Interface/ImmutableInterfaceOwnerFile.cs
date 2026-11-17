@@ -527,7 +527,9 @@ internal static class ImmutableInterfaceOwnerFile
     {
         var w = c.W;
         w.Blank();
-        w.Line(c.Supports("ImmutableSpan") ?
+        w.Line(c.Supports("ImmutableQueueConstruction") ?
+            "value = global::LuminPack.Code.LuminPackCollectionAccess.CreateImmutableQueue(pooled, length);" :
+            c.Supports("ImmutableSpan") ?
             "value = global::System.Collections.Immutable.ImmutableQueue.Create(new global::System.ReadOnlySpan<" + c.Scalar + ">(pooled, 0, length));" :
             "value = global::System.Collections.Immutable.ImmutableQueue.CreateRange(length == pooled.Length ? " +
             "(global::System.Collections.Generic.IEnumerable<" + c.Scalar + ">)pooled : " +

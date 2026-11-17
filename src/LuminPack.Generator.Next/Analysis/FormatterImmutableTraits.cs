@@ -137,14 +137,15 @@ internal static class FormatterImmutableTraits
             SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, pairs));
     }
 
-    /// <summary>Checks for set factory.</summary>
+    /// <summary>Checks for a collection factory that accepts a staging array and its valid length.</summary>
     /// <param name="compilation">The compilation that supplies source symbols and references.</param>
-    /// <param name="family">The family supplied to <c>HasSetFactory</c>.</param>
+    /// <param name="family">The exact framework collection family returned by the factory.</param>
     /// <param name="name">The name to look up or emit.</param>
-    /// <returns>Whether the input has set factory.</returns>
-    internal static bool HasSetFactory(Compilation compilation, string family, string name)
+    /// <param name="storageType">The runtime helper type declaring the factory.</param>
+    /// <returns>Whether the referenced runtime offers the collection factory.</returns>
+    internal static bool HasStagedFactory(Compilation compilation, string family, string name, string storageType = "LuminPack.Utility.LuminTreeStorage")
     {
-        var storage = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage");
+        var storage = compilation.GetTypeByMetadataName(storageType);
         var set = compilation.GetTypeByMetadataName("System.Collections.Immutable." + family + "`1");
         return storage is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } && set != null &&
             storage.GetMembers(name).OfType<IMethodSymbol>().Any(method =>

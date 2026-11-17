@@ -112,7 +112,12 @@ internal static class FormatterCapabilities
             if (concrete.StartsWith("Immutable", StringComparison.Ordinal) && FormatterImmutableTraits.Available(compilation, concrete.Substring(9), named.Arity))
                 result.Add("ImmutableBuilder");
             if (concrete is "ImmutableQueue" or "ImmutableList" && FormatterRuntimeTraits.CanCreateImmutableSequenceFromSpan(compilation, concrete))
+            {
                 result.Add("ImmutableSpan");
+                if (concrete == "ImmutableQueue" && modern && !unity && FormatterImmutableTraits.HasStagedFactory(compilation,
+                    concrete, "CreateImmutableQueue", "LuminPack.Code.LuminPackCollectionAccess"))
+                    result.Add("ImmutableQueueConstruction");
+            }
             if (concrete == "ImmutableQueue" && FormatterImmutableTraits.HasQueueTraversal(compilation))
             {
                 result.Add("ImmutableQueueTraversal");
@@ -165,17 +170,17 @@ internal static class FormatterCapabilities
             if (frameworkElement && (concrete is "ImmutableHashSet" or "ImmutableSortedSet"))
             {
                 if (concrete == "ImmutableHashSet" &&
-                    FormatterImmutableTraits.HasSetFactory(compilation, concrete, "CreateFrameworkImmutableHashSet"))
+                    FormatterImmutableTraits.HasStagedFactory(compilation, concrete, "CreateFrameworkImmutableHashSet"))
                     result.Add("BuildFrameworkImmutableHashSet");
                 if (concrete == "ImmutableSortedSet" &&
-                    FormatterImmutableTraits.HasSetFactory(compilation, concrete, "CreateOrderedSetIfSupported"))
+                    FormatterImmutableTraits.HasStagedFactory(compilation, concrete, "CreateOrderedSetIfSupported"))
                     result.Add("BuildOrderedImmutableSortedSet");
             }
             if (definition == "System.Collections.Immutable.ImmutableSortedSet" &&
-                FormatterImmutableTraits.HasSetFactory(compilation, concrete, "CreateImmutableSortedSet"))
+                FormatterImmutableTraits.HasStagedFactory(compilation, concrete, "CreateImmutableSortedSet"))
                 result.Add("BuildBinaryImmutableSortedSet");
             if (definition == "System.Collections.Immutable.ImmutableHashSet" &&
-                FormatterImmutableTraits.HasSetFactory(compilation, concrete, "CreateImmutableHashSet"))
+                FormatterImmutableTraits.HasStagedFactory(compilation, concrete, "CreateImmutableHashSet"))
                 result.Add("BuildBinaryImmutableHashSet");
             if (modern && !unity && definition == "System.Collections.Immutable.ImmutableHashSet" &&
                 FormatterImmutableTraits.IsIdentityHashElement(compilation, element) &&

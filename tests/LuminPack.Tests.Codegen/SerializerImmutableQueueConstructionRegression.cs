@@ -1,7 +1,10 @@
+extern alias ModelBasedAnalyzer;
+
 using System.Reflection;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 /// <summary>Protects span-based queue construction and the older enumerable fallback.</summary>
 internal static partial class SerializerImmutableQueueConstructionRegression
@@ -136,7 +139,25 @@ internal static partial class SerializerImmutableQueueConstructionRegression
             var (restored, _) = Generate(initial, modern);
             Require(Trees(driver).SequenceEqual(Trees(restored)), "Restoring target symbols retained a stale queue fallback.");
         }
+        VerifyNextConstruction(references, source);
         Console.WriteLine("Passed immutable binary/JSON sequences, allocations, boundaries, four tiers and retained/fresh factory changes.");
+    }
+
+    /// <summary>Exercises the Next binary queue factory on the existing order and failure fixture.</summary>
+    /// <param name="references">The platform and runtime compilation references.</param>
+    /// <param name="source">The binary and JSON queue fixture.</param>
+    private static void VerifyNextConstruction(MetadataReference[] references, string source)
+    {
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        string binary = source.Replace("MODE", "Full", StringComparison.Ordinal).Replace("SequenceJsonCases.Check();", "", StringComparison.Ordinal);
+        var compilation = TestCompilation.Create("NextQueueConstruction", [CSharpSyntaxTree.ParseText(binary, parse, "QueueCases.cs")],
+            references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+        Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+        Require(Trees(driver).Any(text => text.Contains(".CreateImmutableQueue(", StringComparison.Ordinal)),
+            "Next binary queues did not select the runtime factory.");
+        Execute(output);
     }
 
     /// <summary>Runs both production generators for an isolated queue consumer.</summary>

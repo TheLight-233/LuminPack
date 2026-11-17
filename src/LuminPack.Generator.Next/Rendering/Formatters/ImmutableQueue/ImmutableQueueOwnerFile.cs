@@ -160,7 +160,9 @@ internal static class ImmutableQueueOwnerFile
                     w.Open();
                     w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
                     w.Line("reader.Read(ref " + memory + ".As<" + scalar + ", byte>(ref first), checked(length * " + memory + ".SizeOf<" + scalar + ">()));");
-                    w.Line(set.FindFormatter(queue)?.Supports("ImmutableSpan") == true ?
+                    w.Line(set.FindFormatter(queue)?.Supports("ImmutableQueueConstruction") == true ?
+                        "value = global::LuminPack.Code.LuminPackCollectionAccess.CreateImmutableQueue(pooled, length);" :
+                        set.FindFormatter(queue)?.Supports("ImmutableSpan") == true ?
                         "value = " + factory + ".Create(new global::System.ReadOnlySpan<" + scalar + ">(pooled, 0, length));" :
                         "value = " + factory + ".CreateRange(length == pooled.Length ? " +
                         "(global::System.Collections.Generic.IEnumerable<" + scalar + ">)pooled : " +
