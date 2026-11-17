@@ -951,6 +951,15 @@ public static partial class LuminTreeStorage
             {
                 if (TrySortHashes(pairs, count, keys))
                 {
+#if NET10_0_OR_GREATER
+                    if (ImmutableDictionaryConstructors<TKey, TValue>.Wrap is { } wrap)
+                    {
+                        // Every node is new, so the tree is linked whole and handed to the dictionary's own constructor.
+                        object root = LinkHash(ImmutableDictionaryConstructors<TKey, TValue>.EmptyTree!, ImmutableDictionaryConstructors<TKey, TValue>.EmptyList!,
+                            in ImmutableDictionaryLayout<TKey, TValue>.Hash, pairs, keys, 0, count - 1);
+                        return wrap(root, ImmutableDictionaryConstructors<TKey, TValue>.Comparers!, count);
+                    }
+#endif
                     var result = ImmutableDictionary<TKey, TValue>.Empty.Add(pairs[0].Key, pairs[0].Value);
                     BuildHash<KeyValuePair<TKey, TValue>>(Field<object>(result, ImmutableDictionaryLayout<TKey, TValue>.Root),
                         in ImmutableDictionaryLayout<TKey, TValue>.Hash, pairs, keys, count);
@@ -2052,9 +2061,9 @@ public static partial class LuminTreeStorage
         internal static readonly int Root = ObjectField(typeof(ImmutableDictionary<TKey, TValue>), "_root");
         internal static readonly int Count = ObjectField(typeof(ImmutableDictionary<TKey, TValue>), "_count");
 #if NET10_0_OR_GREATER
-        // The runtime cannot bind a type-name accessor for this two-parameter bucket node, so its tree nodes keep the
-        // uninitialized-object request.
-        internal static readonly HashOffsets Hash = new(typeof(ImmutableDictionary<TKey, TValue>), null,
+        // The runtime cannot bind a type-name accessor for this two-parameter bucket node, so its tree nodes use the
+        // emitted constructor call where dynamic code is compiled and the uninitialized-object request elsewhere.
+        internal static readonly HashOffsets Hash = new(typeof(ImmutableDictionary<TKey, TValue>), ImmutableDictionaryConstructors<TKey, TValue>.Node,
             NodeAllocators.ImmutableListNode<KeyValuePair<TKey, TValue>>.New);
 #else
         internal static readonly HashOffsets Hash = new(typeof(ImmutableDictionary<TKey, TValue>), null, null);
@@ -2085,13 +2094,33 @@ public static partial class LuminTreeStorage
                 var built = Unsafe.As<ImmutableDictionary<int, int>>(Clone(template));
                 Field<object>(built, ImmutableDictionaryLayout<int, int>.Root) = root;
                 Field<int>(built, ImmutableDictionaryLayout<int, int>.Count) = pairs.Length;
-                var modified = built.Remove(3).SetItem(4, -1).Add(99, 0);
-                return built.Count == 31 && built[-15] == -75 && built[15] == 75 && !built.ContainsKey(16) &&
-                    built.SequenceEqual(ImmutableDictionary.CreateRange(pairs)) && modified.Count == 31 && modified[4] == -1 && built[4] == 20 && !modified.ContainsKey(3);
+                if (!Behaves(built, pairs))
+                    return false;
+#if NET10_0_OR_GREATER
+                if (ImmutableDictionaryConstructors<int, int>.Wrap is { } wrap)
+                {
+                    object linked = LinkHash(ImmutableDictionaryConstructors<int, int>.EmptyTree!, ImmutableDictionaryConstructors<int, int>.EmptyList!,
+                        in ImmutableDictionaryLayout<int, int>.Hash, pairs, keys, 0, pairs.Length - 1);
+                    if (!Behaves(wrap(linked, ImmutableDictionaryConstructors<int, int>.Comparers!, pairs.Length), pairs))
+                        return false;
+                }
+#endif
+                return true;
             }
             finally
             {
                 System.Buffers.ArrayPool<long>.Shared.Return(keys); }
+        }
+
+        /// <summary>Checks a built dictionary against the builder's result and its own persistent operations.</summary>
+        /// <param name="built">The built dictionary.</param>
+        /// <param name="pairs">The 31 distinct pairs it was built from.</param>
+        /// <returns>Whether the dictionary behaves as the public construction does.</returns>
+        private static bool Behaves(ImmutableDictionary<int, int> built, KeyValuePair<int, int>[] pairs)
+        {
+            var modified = built.Remove(3).SetItem(4, -1).Add(99, 0);
+            return built.Count == 31 && built[-15] == -75 && built[15] == 75 && !built.ContainsKey(16) &&
+                built.SequenceEqual(ImmutableDictionary.CreateRange(pairs)) && modified.Count == 31 && modified[4] == -1 && built[4] == 20 && !modified.ContainsKey(3);
         }
     }
 
