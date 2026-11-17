@@ -4,8 +4,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared binary and JSON formatter owner of one closed <c>LinkedList&lt;T&gt;</c> of raw scalars.</summary>
 /// <remarks>The members mirror the legacy linked-list operations. The binary write walks the nodes directly instead of through
-/// the version-checked enumerator and counts them; the binary read takes one pooled block and links its nodes in one pass
-/// through the collection-access helper, reusing a non-null destination after clearing it.</remarks>
+/// the version-checked enumerator and counts them. The binary read can link each decoded element directly or stage elements
+/// before filling the list when the layout is unavailable. A nonempty destination refills its existing nodes first.</remarks>
 internal static class LinkedListOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.AddLast(item);",
@@ -123,18 +123,32 @@ internal static class LinkedListOwnerFile
         w.Line("if (length == 0)");
         w.Indented(() => w.Line("goto operationComplete_RootRead;"));
         w.Blank();
-        if (c.LinkedListAppender && (c.Scalar == "string" || c.Payload != null))
+        if (c.LinkedListAppender)
         {
             // Decode and link in one pass; the list publishes its nodes once, after the last element.
             w.Line("var appender = global::LuminPack.Code.LuminPackCollectionAccess.BeginLinkedList(value);");
             w.Line("if (appender.Direct)");
             w.Open();
+            if (!c.Counted)
+            {
+                w.Line("int width = " + c.Memory + ".SizeOf<" + c.Scalar + ">();");
+                w.Line("ref byte input = ref operationState.PeekInput(0, out _);");
+                w.Line("operationState.Advance(checked(length * width));");
+            }
             w.Line("int remaining = length;");
             w.Line("do");
             w.Open();
-            w.Line(c.Scalar + " current = default!;");
-            c.ReadElement("current", fresh: true);
-            w.Line("appender.Append(current);");
+            if (c.Counted)
+            {
+                w.Line(c.Scalar + " current = default!;");
+                c.ReadElement("current", fresh: true);
+                w.Line("appender.Append(current);");
+            }
+            else
+            {
+                w.Line("appender.Append(global::LuminPack.Core.LuminPackReader.Read<" + c.Scalar + ">(ref input));");
+                w.Line("input = ref " + c.Memory + ".Add(ref input, (nint)(uint)width);");
+            }
             w.Close();
             w.Line("while (--remaining != 0);");
             w.Line("appender.Publish(length);");
