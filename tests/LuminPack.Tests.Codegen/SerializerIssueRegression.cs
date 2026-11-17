@@ -5,8 +5,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
-/// <summary>Exercises discovered closed Union cases in the model-based generator.</summary>
-internal static class SerializerIssueRegression
+/// <summary>Exercises reported model-based generator regressions.</summary>
+internal static partial class SerializerIssueRegression
 {
     /// <summary>Compiles and executes the reported generic Union cases.</summary>
     /// <param name="references">Platform and runtime references.</param>

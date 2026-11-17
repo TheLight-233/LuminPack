@@ -14,6 +14,11 @@ try
         SerializerIssueRegression.RunUnion(references);
         return 0;
     }
+    if (args is ["--verify-framework-scalar-collections"])
+    {
+        SerializerIssueRegression.RunFrameworkCollections(references);
+        return 0;
+    }
     if (args is ["--verify-frozen-collections"])
     {
         SerializerImmutableListWriteRegression.RunFrozen(references);
@@ -405,6 +410,8 @@ try
         SerializerOperationCacheRegression.Run(references);
         return 0;
     }
+    SerializerIssueRegression.RunUnion(references);
+    SerializerIssueRegression.RunFrameworkCollections(references);
     SerializerImportedLayoutRegression.Run(references);
     SerializerDocumentationRegression.Run(references);
     SerializerRootApiRegression.Run(references);

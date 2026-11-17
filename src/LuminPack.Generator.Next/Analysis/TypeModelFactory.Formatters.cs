@@ -67,7 +67,11 @@ internal static partial class TypeModelFactory
         /// <summary>Retains complete argument contracts when a specialized collection cannot publish all dependent owners.</summary>
         /// <param name = "model">The normalized formatter or storage contract.</param>
         /// <returns>Whether the requested contract or capability is available.</returns>
+        // The specialized scalar owner handles only these four framework types. Other framework scalars need their full
+        // formatter graph retained so collections publish the element's JSON owner as well as their raw binary path.
         private static bool RequiresDefault(FormatterModel model) => model.Layout != null || model.Capabilities.Length != 0 ||
+            model.Definition == FormatterDefinitions.FrameworkScalar && model.Type is not
+                ("global::System.DateTime" or "global::System.Guid" or "global::System.DateTimeOffset" or "global::System.TimeSpan") ||
             model.PublishPayload || model.Definition is FormatterDefinitions.GenericUnion or FormatterDefinitions.CompilerUnion || FormatterDefinitions.HasGeneric(model.Definition) ||
             model.Arguments.Any(RequiresDefault);
         /// <summary>Analyzes one closed formatter graph independently of its containing collection.</summary>
