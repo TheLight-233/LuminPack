@@ -345,6 +345,14 @@ internal sealed class RecordModel : TypeModel
     /// <summary>The static pool rent call of a pooled record, such as <c>global::N.T.Rent()</c>, or null.</summary>
     internal readonly string? Rent;
 
+    /// <summary>The declared list base whose contents are this record's entire payload, or null.</summary>
+    /// <remarks>A list-derived class with no serialized members would otherwise publish a memberless object and drop its
+    /// elements. When this is set, the record writes and reads the list base body instead of member framing.</remarks>
+    internal readonly string? SequenceBase;
+
+    /// <summary>The list base's element spelling, which is the record itself, or null.</summary>
+    internal readonly string? SequenceElement;
+
     /// <summary>Captures a record.</summary>
     /// <param name="identity">The identity supplied to <c>RecordModel</c>.</param>
     /// <param name="accessibility">The accessibility supplied to <c>RecordModel</c>.</param>
@@ -369,14 +377,19 @@ internal sealed class RecordModel : TypeModel
     /// <param name="rejection">The rejection supplied to <c>RecordModel</c>.</param>
     /// <param name="recursive">Whether to enable recursive for this operation.</param>
     /// <param name="implicitPayload">Whether to enable implicit payload for this operation.</param>
+    /// <param name="sequenceBase">The list base whose contents are the record's payload.</param>
+    /// <param name="sequenceElement">The list base's element spelling.</param>
     internal RecordModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
         bool versioned, bool fixedUnionCase, bool derived, bool proven, bool recordWidth, bool freshResult, string? mirror,
         string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, VersionSchemaModel? version,
         ConstructorModel? constructor = null, CallbackModel? callbacks = null, string? rent = null, StorageMirrorModel[]? mirrors = null,
-        string? rejection = null, bool recursive = false, bool implicitPayload = false)
+        string? rejection = null, bool recursive = false, bool implicitPayload = false,
+        string? sequenceBase = null, string? sequenceElement = null)
         : base(identity, accessibility, PayloadKind.Record, members, policy, constraints)
     {
         Implicit = implicitPayload;
+        SequenceBase = sequenceBase;
+        SequenceElement = sequenceElement;
         Recursive = recursive;
         Rejection = rejection;
         Rent = rent;
@@ -402,6 +415,7 @@ internal sealed class RecordModel : TypeModel
         FixedUnionCase == record.FixedUnionCase && Derived == record.Derived &&
         Proven == record.Proven && RecordWidth == record.RecordWidth && FreshResult == record.FreshResult &&
         Mirror == record.Mirror && Rent == record.Rent && Rejection == record.Rejection && Recursive == record.Recursive && Implicit == record.Implicit &&
+        SequenceBase == record.SequenceBase && SequenceElement == record.SequenceElement &&
         Equals(Constructor, record.Constructor) &&
         Equals(Callbacks, record.Callbacks) &&
         MirrorLayout == record.MirrorLayout && Equals(Version, record.Version) &&

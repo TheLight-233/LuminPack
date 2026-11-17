@@ -96,7 +96,7 @@ internal static class RenderModelFactory
             uniqueEntries: options.Interceptors, members, proven, mirror: mirror!, mirrorFields: record?.MirrorFields ?? structure?.MirrorFields ?? null!,
             derived: model is RecordModel { Derived: true },
             isStruct, view: view!, viewElided, fixedUnionCase: record?.FixedUnionCase ?? false,
-            measureRecord: members.All(item => item.IsFixed) && model switch
+            measureRecord: model is not RecordModel { SequenceBase: not null } && members.All(item => item.IsFixed) && model switch
             {
                 StructModel structModel => structModel.RecordWidth,
                 RecordModel recordModel => recordModel.RecordWidth,
@@ -116,7 +116,8 @@ internal static class RenderModelFactory
             declaredProfile: model.Policy.Declared ? ProfileNames.Type(model.Policy.Strings) : null,
             constantSpans: options.Net8 && options.CSharpVersion >= 1200, mirrors: record?.Mirrors!, rejection: record?.Rejection ?? structure?.Rejection,
             limits: model.Policy.Input == InputPolicy.Untrusted ? model.Policy.Limits : null, recursive: record?.Recursive ?? false,
-            generatedInt32Runs: json && options.GeneratedJsonInt32Reader && options.CSharpVersion >= 1100);
+            generatedInt32Runs: json && options.GeneratedJsonInt32Reader && options.CSharpVersion >= 1100,
+            sequenceBase: record?.SequenceBase!, sequenceElement: record?.SequenceElement!);
     }
 
     /// <summary>Projects the modeled schema onto the emitter's schema contract.</summary>

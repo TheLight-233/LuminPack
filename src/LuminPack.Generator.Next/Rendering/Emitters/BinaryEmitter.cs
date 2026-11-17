@@ -27,14 +27,14 @@ internal static partial class BinaryEmitter
     /// <returns>True when the write root is generic over the operation profile.</returns>
     private static bool HasWriteProfile(PayloadRenderModel model) =>
         !(model.DeclaredProfile != null && model.MemberWrite) &&
-        (model.Version != null || model.ProfilePayload || model.InlineArray);
+        (model.SequenceBase != null || model.Version != null || model.ProfilePayload || model.InlineArray);
 
     /// <summary>Determines whether the generated binary read root takes a profile type parameter.</summary>
     /// <param name="model">The payload being read.</param>
     /// <returns>True when the read root is generic over the operation profile.</returns>
     private static bool HasReadProfile(PayloadRenderModel model) =>
         !(model.DeclaredProfile != null && model.MemberWrite) &&
-        (model.Version != null || model.ProfilePayload || model.InlineArray || model.InlineList ||
+        (model.SequenceBase != null || model.Version != null || model.ProfilePayload || model.InlineArray || model.InlineList ||
             model.Members.Any(member => member.Kind is not (RenderMemberKind.Fixed or RenderMemberKind.Object)));
 
     /// <summary>Emits the complete binary file body.</summary>
@@ -744,6 +744,8 @@ internal static partial class BinaryEmitter
     /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, bool union, bool structValue = false)
     {
+        if (model.SequenceBase != null)
+            return SequenceWriteBody(model, w, union);
         var members = model.Members;
         var body = new List<string>();
         string count = members.Length.ToString(CultureInfo.InvariantCulture);
@@ -931,6 +933,43 @@ internal static partial class BinaryEmitter
             body.Add("");
         AddBoundExit(body, model, union);
         return body;
+    }
+
+    /// <summary>Builds the write body of a list-derived payload by forwarding to the closed list owner.</summary>
+    /// <param name="model">The record whose payload is its list base.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="union">Whether the body writes a Union payload.</param>
+    /// <returns>The body lines.</returns>
+    /// <remarks>The list owner writes the null header, length and elements, so a Union payload is byte-identical to a root.</remarks>
+    private static List<string> SequenceWriteBody(PayloadRenderModel model, CodeWriter w, bool union)
+    {
+        string roots = w.A("LuminPackSerializer") + ".LuminRoots_" +
+            ReadableTypeName.Of(GeneratedNames.PayloadKey(model.SequenceBase!));
+        var body = new List<string>
+        {
+            "var value = input;",
+            roots + ".RootWrite<" + Profile + ">(ref writer, in " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName +
+                ", " + model.SequenceBase + ">(ref value));",
+        };
+        AddBoundExit(body, model, union);
+        return body;
+    }
+
+    /// <summary>Builds the read body of a list-derived payload by forwarding to the closed list owner.</summary>
+    /// <param name="model">The record whose payload is its list base.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <returns>The body lines.</returns>
+    /// <remarks>The incoming instance keeps its derived type, so the list owner fills that storage instead of a plain list.</remarks>
+    private static List<string> SequenceReadBody(PayloadRenderModel model, CodeWriter w)
+    {
+        string roots = w.A("LuminPackSerializer") + ".LuminRoots_" +
+            ReadableTypeName.Of(GeneratedNames.PayloadKey(model.SequenceBase!));
+        return new List<string>
+        {
+            "value ??= new " + model.GlobalName + "();",
+            roots + ".RootRead<" + Profile + ">(ref reader, ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName +
+                ", " + model.SequenceBase + ">(ref value));",
+        };
     }
 
     /// <summary>Closes a bounded write root: the null exit label, the completed-length assertion and the commit.</summary>
@@ -2529,6 +2568,9 @@ internal static partial class BinaryEmitter
     /// <returns>The body.</returns>
     private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, bool freshUnion = false)
     {
+        // A list-derived payload reads the list base body; the list owner's own length framing replaces the record marker.
+        if (model.SequenceBase != null)
+            return SequenceReadBody(model, w);
         // A selected constructor builds the instance from temporary locals; a raw struct's arguments only reach its JSON
         // read, so the binary body keeps the struct paths.
         if (!model.IsStruct && model.ConstructorArguments != null)

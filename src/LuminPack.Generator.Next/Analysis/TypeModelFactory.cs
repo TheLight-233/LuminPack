@@ -428,6 +428,9 @@ internal static partial class TypeModelFactory
                 {
                     MemberModel[] members = Members(symbol, policy, depth, issues, out bool derived, path);
                     bool versioned = generatorType == "VersionTolerant";
+                    // A class whose serialized content is only a supported List<T> base publishes that list's body. Modeling it
+                    // as an empty record would write the object marker alone and silently drop every element on read.
+                    INamedTypeSymbol? sequenceBase = members.Length == 0 && !versioned ? SequenceBase(symbol) : null;
                     // A selected constructor, a pool rent and the serialization callbacks shape the record roots the same way
                     // the legacy model computes them; a rent supplies the instance instead of the constructor.
                     ConstructorModel? constructor = SelectedConstructorModel(symbol, members, issues);
@@ -464,8 +467,11 @@ internal static partial class TypeModelFactory
                         mirror, mirrorFields, mirrorOffsets, mirrorLayout, version,
                         constructor, callbacks, rent, (mirror != null || versioned) ? CaptureMirrors(symbol, identity, issues) : Array.Empty<StorageMirrorModel>(),
                         // A declared depth limit counts nesting only on recursive records, including a trusted record read under
-                        // a bounded root; without one, recursion keeps only its stack guard.
-                        recursive: IsRecursive(symbol), implicitPayload: attribute == null);
+                        // a bounded root; without one, recursion keeps only its stack guard. A list-derived payload nests through
+                        // its own elements, so it keeps the guard as well.
+                        recursive: sequenceBase != null || IsRecursive(symbol), implicitPayload: attribute == null,
+                        sequenceBase: sequenceBase?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        sequenceElement: sequenceBase?.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
                 }
             }
         }
@@ -514,6 +520,25 @@ internal static partial class TypeModelFactory
             }
             members.Sort((left, right) => left.Order.CompareTo(right.Order));
             return members.Select(item => item.Model).ToArray();
+        }
+
+        /// <summary>Finds the declared list base whose contents are a payload's entire body.</summary>
+        /// <param name="symbol">The declared payload type.</param>
+        /// <returns>The closed list base whose element is the payload itself, or null when the shape is not supported.</returns>
+        private INamedTypeSymbol? SequenceBase(INamedTypeSymbol symbol)
+        {
+            if (symbol.IsGenericType || symbol.IsAbstract || symbol.TypeKind != TypeKind.Class ||
+                !symbol.InstanceConstructors.Any(constructor => constructor.Parameters.Length == 0 &&
+                    _compilation.IsSymbolAccessibleWithin(constructor, _compilation.Assembly)))
+                return null;
+            INamedTypeSymbol? baseType = symbol.BaseType;
+            // Only a self-referential list keeps the element formatter reachable: the payload's own owner writes each element.
+            if (baseType is not { IsGenericType: true } || baseType.TypeArguments.Length != 1 ||
+                !SymbolEqualityComparer.Default.Equals(baseType.TypeArguments[0], symbol))
+                return null;
+            INamedTypeSymbol definition = baseType.OriginalDefinition;
+            return FormatterRegistry.FindSequence(definition.ContainingNamespace.ToDisplayString() + "." + definition.Name) is
+                { Kind: CollectionKind.List } ? baseType : null;
         }
 
         /// <summary>Decides whether a declared member has serialized instance storage and how it is reached.</summary>

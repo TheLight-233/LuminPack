@@ -565,6 +565,12 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <summary>The reason every operation of an explicitly untrusted payload fails closed, or null.</summary>
     internal readonly string Rejection;
 
+    /// <summary>The declared list base whose contents are this payload's entire body, or null.</summary>
+    internal readonly string SequenceBase;
+
+    /// <summary>The element spelling of <see cref="SequenceBase"/>, or null.</summary>
+    internal readonly string SequenceElement;
+
     /// <summary>The frozen limits of an untrusted root, or null for a trusted one.</summary>
     internal InputLimits Limits { get; private set; }
 
@@ -670,6 +676,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <param name="registration">Whether to enable registration for this operation.</param>
     /// <param name="generatedPropertyHeads">Whether to write bounded static heads for reference-tracked JSON.</param>
     /// <param name="generatedInt32Runs">Whether the runtime supports bounded integer runs.</param>
+    /// <param name="sequenceBase">The list base whose contents are the payload's body.</param>
+    /// <param name="sequenceElement">The list base's element spelling.</param>
     internal PayloadRenderModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         RenderMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
@@ -683,8 +691,11 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         PortableView portableView = null, bool unionWide = false, int[] mirrorOffsets = null, string[] typeParameters = null,
         string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, int[] circleSlots = null, int[] circleWidths = null, StorageMirrorModel[] mirrors = null,
         string rejection = null, InputLimits limits = null, bool recursive = false, bool registration = true,
-        bool generatedPropertyHeads = false, bool generatedInt32Runs = false)
+        bool generatedPropertyHeads = false, bool generatedInt32Runs = false,
+        string sequenceBase = null, string sequenceElement = null)
     {
+        SequenceBase = sequenceBase;
+        SequenceElement = sequenceElement;
         GeneratedPropertyHeads = generatedPropertyHeads;
         GeneratedInt32Runs = generatedInt32Runs;
         Registration = registration;
@@ -789,6 +800,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         Same(UnionCases, other.UnionCases) && Same(TypeParameters, other.TypeParameters) && Same(TypeConstraints, other.TypeConstraints) &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Same(MirrorOffsets, other.MirrorOffsets) &&
+        SequenceBase == other.SequenceBase && SequenceElement == other.SequenceElement &&
         Members.SequenceEqual(other.Members);
 
     /// <inheritdoc/>
