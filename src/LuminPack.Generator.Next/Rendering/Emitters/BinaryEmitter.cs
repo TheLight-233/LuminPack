@@ -492,8 +492,8 @@ internal static partial class BinaryEmitter
             }
             w.Blank();
             w.Suppressed = !reads;
-            var read = AddReadCallbacks(model, Mirrored(model, w, ReadBody(model, w, union: false), writes: false, union: false));
-            var payloadRead = AddReadCallbacks(model, Mirrored(model, w, ReadBody(model, w, union: true), writes: false, union: true));
+            var read = AddReadCallbacks(model, Mirrored(model, w, ReadBody(model, w, union: false, freshPayload: true), writes: false, union: false));
+            var payloadRead = AddReadCallbacks(model, Mirrored(model, w, ReadBody(model, w, union: true, freshPayload: true), writes: false, union: true));
             string readParameters = "(scoped ref " + reader + " reader, scoped ref " + type + "? value)";
             Method(FramingMerger.Share(Prepare(read, "RootRead", readParameters), Prepare(payloadRead, "RootReadUnion", readParameters)),
                 "Read", genericRead, readParameters, ReadHint(read), framing: true, prepared: true);
@@ -2560,13 +2560,39 @@ internal static partial class BinaryEmitter
     /// <returns>The resulting text.</returns>
     private static string Camel(string name) => PayloadEmitter.LocalName(name);
 
+    /// <summary>Whether a record without callbacks or pooled rentals has a fixed run that its payload body can read into a new
+    /// instance through the proven checked batch.</summary>
+    /// <param name="model">The record.</param>
+    /// <returns>Whether such a run exists.</returns>
+    private static bool HasFreshPayloadRun(PayloadRenderModel model)
+    {
+        if (model.HasCallbacks || model.Rent != null || model.IsStruct)
+            return false;
+        var members = model.Members;
+        for (int index = 0; index < members.Length; index++)
+        {
+            if (!members[index].IsFixed)
+                continue;
+            int last = RunEnd(members, index);
+            bool plain = last > index;
+            for (int item = index; plain && item <= last; item++)
+                plain = !members[item].Mirrored && !members[item].Property;
+            if (plain)
+                return true;
+            index = last;
+        }
+        return false;
+    }
+
     /// <summary>Builds a root read body.</summary>
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
     /// <param name="union">Whether to enable union for this operation.</param>
     /// <param name="freshUnion">Whether a Union case reads into a new destination.</param>
+    /// <param name="freshPayload">Whether the payload body of a record root may read a fixed run of a newly created instance
+    /// through the object body's proven checked batch; both framing bodies then declare the freshness test.</param>
     /// <returns>The body.</returns>
-    private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, bool freshUnion = false)
+    private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, bool freshUnion = false, bool freshPayload = false)
     {
         // A list-derived payload reads the list base body; the list owner's own length framing replaces the record marker.
         if (model.SequenceBase != null)
@@ -2592,6 +2618,10 @@ internal static partial class BinaryEmitter
                 members.Length.ToString(CultureInfo.InvariantCulture) + "))");
             body.Add("\treturn;");
         }
+        // Both framing bodies declare the test so the shared body keeps it outside the framing branch.
+        bool freshInstance = freshPayload && HasFreshPayloadRun(model);
+        if (freshInstance)
+            body.Add("bool freshInstance = value is null;");
         body.Add("var instance = value ??= " + NewInstance(model) + ";");
         int cursors = 0, strings = 0;
         for (int index = 0; index < members.Length; index++)
@@ -2616,7 +2646,13 @@ internal static partial class BinaryEmitter
                 bool fixedUnionBlock = model.ManagedFixedUnionCase && !model.HasCallbacks && model.Rent == null;
                 for (int item = index; fixedUnionBlock && item <= last; item++)
                     fixedUnionBlock = !members[item].Mirrored && !members[item].Property && !members[item].IsBoolean;
-                bool useFieldProof = !union || fixedUnionBlock;
+                // A payload read into an instance it has just created publishes nothing before it returns, so the object body's
+                // proven batch, whose Boolean check follows its copy, leaves no observable partial state there. A callback could
+                // observe the instance and a pooled rental is not new; both keep the field-wise read, as a reused instance does.
+                bool freshBlock = !fixedUnionBlock && union && freshInstance;
+                for (int item = index; freshBlock && item <= last; item++)
+                    freshBlock = !members[item].Mirrored && !members[item].Property;
+                bool useFieldProof = !union || fixedUnionBlock || freshBlock;
                 int width = 0;
                 var offsets = new List<int>();
                 for (int item = index; item <= last; item++)
@@ -2632,7 +2668,7 @@ internal static partial class BinaryEmitter
                     : "unchecked((nint)(uint)((" + widthText + ")))";
                 if (useFieldProof)
                 {
-                    body.Add("if (" + Proof(w, members, index, last, "instance", readOnly: false) + ")");
+                    body.Add("if (" + (freshBlock ? "freshInstance && " : string.Empty) + Proof(w, members, index, last, "instance", readOnly: false) + ")");
                     string block = Bytes(w, member, "instance", readOnly: false, plain: true);
                     if (offsets.Count == 0 || trusted)
                         body.Add("\treader.Read(ref " + block + ", " + widthText + ");");
