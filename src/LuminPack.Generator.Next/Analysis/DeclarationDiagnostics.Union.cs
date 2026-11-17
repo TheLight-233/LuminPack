@@ -215,7 +215,8 @@ internal static partial class TypeModelFactory
                         item.Tag.ToString(CultureInfo.InvariantCulture));
                 else
                 {
-                    int arity = member.OriginalDefinition.TypeParameters.Length;
+                    // A case closed over concrete arguments leaves no parameter open, so only its free positions count.
+                    int arity = member.IsDefinition ? member.TypeParameters.Length : member.TypeArguments.Count(ContainsTypeParameter);
                     if (arity > type.TypeParameters.Length)
                         diagnostics.Add(DiagnosticDescriptors.UnionMemberGenericCountExceed, member, member.Name,
                             type.TypeParameters.Length.ToString(CultureInfo.InvariantCulture), arity.ToString(CultureInfo.InvariantCulture));
