@@ -10,7 +10,7 @@ namespace LuminPack.Code;
 
 public static partial class LuminPackMarshal
 {
-    /// <summary>Uses the checked dense entry layout to transfer four 32-bit values per output store.</summary>
+    /// <summary>Uses the checked dense entry layout to transfer groups of 32-bit values.</summary>
     /// <typeparam name="T">The raw hash-set element storage.</typeparam>
     /// <param name="destination">The first byte of the reserved payload.</param>
     /// <param name="entry">The first entry of the probed framework array.</param>
@@ -58,20 +58,29 @@ public static partial class LuminPackMarshal
         }
     }
 
-    /// <summary>Gathers the ordered values from groups of four 12-byte entries and writes the scalar tail.</summary>
+    /// <summary>Extracts ordered values in groups of eight or four 12-byte entries and writes the scalar tail.</summary>
     /// <param name="destination">The first byte in the reserved payload.</param>
     /// <param name="source">The first entry in the validated dense range.</param>
     /// <param name="count">The number of values to transfer.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void WriteDenseHashSetInt32(scoped ref byte destination, scoped ref byte source, int count)
     {
+        if (Avx2.IsSupported)
+        {
+            while (count >= 8)
+            {
+                var low = ReadFourDenseHashSetInt32(ref source);
+                var high = ReadFourDenseHashSetInt32(ref Unsafe.Add(ref source, 48));
+                Vector256.StoreUnsafe(Vector256.Create(low, high), ref Unsafe.As<byte, uint>(ref destination));
+                source = ref Unsafe.Add(ref source, 96);
+                destination = ref Unsafe.Add(ref destination, 8 * sizeof(uint));
+                count -= 8;
+            }
+        }
+
         while (count >= 4)
         {
-            // Each load starts at a value and ends at the next value, in a complete pair of entries.
-            var first = Vector128.LoadUnsafe(ref Unsafe.Add(ref source, 8)).AsSingle();
-            var second = Vector128.LoadUnsafe(ref Unsafe.Add(ref source, 32)).AsSingle();
-            var packed = Sse.Shuffle(first, second, 0xCC).AsUInt32();
-            Vector128.StoreUnsafe(packed, ref Unsafe.As<byte, uint>(ref destination));
+            Vector128.StoreUnsafe(ReadFourDenseHashSetInt32(ref source), ref Unsafe.As<byte, uint>(ref destination));
             source = ref Unsafe.Add(ref source, 48);
             destination = ref Unsafe.Add(ref destination, 4 * sizeof(uint));
             count -= 4;
@@ -84,6 +93,18 @@ public static partial class LuminPackMarshal
             destination = ref Unsafe.Add(ref destination, sizeof(uint));
             count--;
         }
+    }
+
+    /// <summary>Extracts four ordered values from four complete 12-byte entries.</summary>
+    /// <param name="source">The first byte of the four entries.</param>
+    /// <returns>The packed 32-bit values.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector128<uint> ReadFourDenseHashSetInt32(scoped ref byte source)
+    {
+        // Each load starts at a value and ends at the next value, in a complete pair of entries.
+        var first = Vector128.LoadUnsafe(ref Unsafe.Add(ref source, 8)).AsSingle();
+        var second = Vector128.LoadUnsafe(ref Unsafe.Add(ref source, 32)).AsSingle();
+        return Sse.Shuffle(first, second, 0xCC).AsUInt32();
     }
 }
 #endif

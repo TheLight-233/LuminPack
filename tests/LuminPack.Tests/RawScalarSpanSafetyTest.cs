@@ -49,6 +49,7 @@ public sealed class RawScalarSpanSafetyTest
     }
 
     /// <summary>Retains the scalar key-before-value load order for an overlapping caller-supplied span.</summary>
+    /// <param name="overlapValues">Whether the values span overlaps the destination instead of the keys span.</param>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -76,6 +77,49 @@ public sealed class RawScalarSpanSafetyTest
         var writer = new LuminPackWriter(ref output);
         LuminFrozenConstruction.WritePairs<int, int>(ref writer, overlapValues ? other : aliased, overlapValues ? aliased : other);
         Assert.Equal(expected, storage);
+    }
+
+    /// <summary>Checks dense and sparse set wire order through the concrete and both set interface writers.</summary>
+    [Fact]
+    public void DenseRawHashSetKeepsWireOrderThroughInterfaces()
+    {
+        foreach (int count in new[] { 0, 15, 16, 17, 19, 23, 24, 25, 33, 100 })
+        {
+            var set = new HashSet<int>(count);
+            for (int index = 0; index < count; index++)
+                set.Add(unchecked(index * -1640531527));
+            Check(set);
+            if (count > 4)
+            {
+                set.Remove(0);
+                set.Remove(unchecked(3 * -1640531527));
+                Check(set);
+            }
+        }
+
+        static void Check(HashSet<int> set)
+        {
+            byte[] expected = new byte[sizeof(int) * (set.Count + 1)];
+            BinaryPrimitives.WriteInt32LittleEndian(expected, set.Count);
+            int offset = sizeof(int);
+            foreach (int item in set)
+            {
+                BinaryPrimitives.WriteInt32LittleEndian(expected.AsSpan(offset), item);
+                offset += sizeof(int);
+            }
+
+            Assert.Equal(expected, LuminPackSerializer.Serialize(set));
+            Assert.Equal(expected, LuminPackSerializer.Serialize<ISet<int>>(set));
+            Assert.Equal(expected, LuminPackSerializer.Serialize<IReadOnlySet<int>>(set));
+            byte[] guarded = Enumerable.Repeat((byte)0xD7, expected.Length + 2).ToArray();
+            Span<byte> output = guarded.AsSpan(1, expected.Length);
+            var writer = new LuminPackWriter(ref output);
+            LuminPack.Code.LuminPackMarshal.WriteHashSetRaw(ref writer, set);
+            Assert.Equal(expected.Length, writer.Position);
+            Assert.Equal(expected, output.ToArray());
+            Assert.Equal((byte)0xD7, guarded[0]);
+            Assert.Equal((byte)0xD7, guarded[^1]);
+        }
     }
 
     /// <summary>Checks raw dictionary pairs across vector widths, tails, and unaligned output positions.</summary>
