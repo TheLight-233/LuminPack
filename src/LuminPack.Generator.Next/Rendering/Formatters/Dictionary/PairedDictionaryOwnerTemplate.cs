@@ -368,7 +368,7 @@ internal sealed partial class PairedDictionaryContext
         if (unwrapMixedDictionary)
         {
             W.Line(W.MethodImpl("NoInlining"));
-            W.Line("static void WriteMixedPairSlow(scoped ref global::LuminPack.Core.LuminPackWriter operationState, string key, " + Value + " itemValue)");
+            W.Line("static void WriteMixedPairSlow(scoped ref global::LuminPack.Core.LuminPackWriter operationState, " + Key + " key, " + Value + " itemValue)");
             W.Open();
             WriteMember(Key, "key");
             WriteMember(Value, "itemValue");
