@@ -318,9 +318,15 @@ public struct ConcurrentDictionaryBuilder<TKey, TValue> where TKey : notnull
     /// <summary>Creates the unpublished dictionary.</summary>
     /// <param name="count">The validated pair count.</param>
     internal ConcurrentDictionaryBuilder(int count)
+        : this(new ConcurrentDictionary<TKey, TValue>(Environment.ProcessorCount, Math.Max(count, 31)))
     {
-        // The collection constructor never sizes below the framework's default capacity of 31.
-        _map = new ConcurrentDictionary<TKey, TValue>(Environment.ProcessorCount, Math.Max(count, 31));
+    }
+
+    /// <summary>Fills a prepared, empty and unpublished dictionary.</summary>
+    /// <param name="map">The prepared dictionary with its final comparer and concurrency level.</param>
+    internal ConcurrentDictionaryBuilder(ConcurrentDictionary<TKey, TValue> map)
+    {
+        _map = map;
 #if NET10_0_OR_GREATER
         _direct = LuminPackCollectionAccess.ConcurrentDictionaryDirect<TKey, TValue>();
         _tables = null;

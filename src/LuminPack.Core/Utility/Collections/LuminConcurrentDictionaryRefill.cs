@@ -20,7 +20,7 @@ public static partial class LuminPackCollectionAccess
         ConcurrentDictionary<TKey, TValue> map, int count, bool reuseValues) where TKey : notnull => new(map, count, reuseValues);
 }
 
-/// <summary>Reads pairs over an existing concurrent dictionary through its public, thread-safe operations.</summary>
+/// <summary>Reads pairs over an existing concurrent dictionary with the framework’s synchronization.</summary>
 /// <typeparam name="TKey">The key type.</typeparam>
 /// <typeparam name="TValue">The value type.</typeparam>
 /// <remarks>When the record has the dictionary's count (and, for string keys, at most 64 pairs), each pair is first matched
@@ -28,7 +28,7 @@ public static partial class LuminPackCollectionAccess
 /// the value read, and an unchanged pair needs no lookup or store. A changed value is stored with the indexer, which keeps
 /// the node of an atomically written value. At the first mismatch, or with a different count, values that are worth
 /// reusing stage the matched pairs and every following pair, looking up existing values so they are still read in place;
-/// <see cref="Complete"/> then clears the dictionary and adds the staged pairs in record order. Other values clear the
+/// <see cref="Complete"/> then publishes the staged pairs in record order. Other values clear the
 /// dictionary right away, add back the matched pairs and add the following pairs as they are read, as a fresh refill does.
 /// Either way a repeated key keeps its first value. A failed read leaves the pairs updated so far.</remarks>
 [EditorBrowsable(EditorBrowsableState.Never)]
@@ -135,6 +135,9 @@ public struct ConcurrentDictionaryRefill<TKey, TValue> where TKey : notnull
             return;
         try
         {
+            if (LuminPackCollectionAccess.TryRefillStagedConcurrentDictionary(_map, staged, _stagedCount))
+                return;
+
             _map.Clear();
             for (int i = 0; i < _stagedCount; i++)
                 _map.TryAdd(staged[i].Key, staged[i].Value);
