@@ -58,7 +58,7 @@ internal static class DictionaryInterfaceOwnerFile
                 return;
             ImmutableTreeTraversal.Select(c.W, c.Dictionary, c.Key + ", " + c.Value, family, source =>
             {
-                c.TreeWrite(batchRaw: true, source: source);
+                c.TreeWrite(source: source);
                 c.W.Line("goto operationComplete_RootWrite;");
             });
         }
@@ -134,6 +134,8 @@ internal static class DictionaryInterfaceOwnerFile
                 w.Line(": value is " + frozen + " frozenItems");
                 w.Line("? WriteFrozen(ref operationState, frozenItems)");
             }
+            EmitImmutableDispatch("ImmutableDictionary", "immutableItems");
+            EmitImmutableDispatch("ImmutableSortedDictionary", "immutableSortedItems");
             w.Line(": WriteInterface(ref operationState, value);");
         });
         w.Line("operationState.EndCollection(countPosition, count);");
@@ -144,6 +146,8 @@ internal static class DictionaryInterfaceOwnerFile
         EmitLoop("WriteKnown", concrete);
         if (frozenTraversal)
             EmitLoop("WriteFrozen", frozen);
+        EmitImmutableLoop("ImmutableDictionary");
+        EmitImmutableLoop("ImmutableSortedDictionary");
         EmitLoop("WriteInterface", c.Dictionary);
         if (rawKernel || textKernel)
         {
@@ -153,6 +157,22 @@ internal static class DictionaryInterfaceOwnerFile
             c.WriteMember(c.Key, "key");
             c.WriteMember(c.Value, "itemValue");
             w.Close();
+        }
+
+        string ImmutableType(string family) => "global::System.Collections.Immutable." + family + "<" + c.Key + ", " + c.Value + ">";
+
+        void EmitImmutableDispatch(string family, string local)
+        {
+            if (!c.Supports(family + "Traversal"))
+                return;
+            w.Line(": value is " + ImmutableType(family) + " " + local);
+            w.Line("? Write" + family + "(ref operationState, " + local + ")");
+        }
+
+        void EmitImmutableLoop(string family)
+        {
+            if (c.Supports(family + "Traversal"))
+                EmitLoop("Write" + family, ImmutableType(family), captureTree: rawKernel && c.Supports(family + "RawTraversal"));
         }
 
         void EmitDense()
@@ -224,7 +244,7 @@ internal static class DictionaryInterfaceOwnerFile
             w.Line("operationState.CompleteRun(written);");
         }
 
-        void EmitLoop(string method, string input)
+        void EmitLoop(string method, string input, bool captureTree = false)
         {
             w.Line(w.MethodImpl("NoInlining"));
             w.Line("static int " + method + "(scoped ref " + writer + " operationState, " + input + " items)");
@@ -234,10 +254,17 @@ internal static class DictionaryInterfaceOwnerFile
                 w.Line("if (" + marshal + ".TryWriteBoundedDenseRawPairs(ref operationState, items, out int denseCount))");
                 w.Indented(() => w.Line("return denseCount;"));
             }
-            w.Line("int count = 0;");
+            if (captureTree)
+            {
+                w.Line("if (items.Count >= 16 && (long)items.Count * (" + width + ") <= operationState.RecordRoom())");
+                w.Open();
+                c.TreeWrite(source: "items", writeHeader: false);
+                w.Close();
+            }
+            w.Line("int observed = 0;");
             w.Line("foreach (var item in items)");
             w.Open();
-            w.Line("count++;");
+            w.Line("observed++;");
             w.Line("var key = item.Key;");
             if (!rawKernel && !textKernel)
                 c.WriteMember(c.Key, "key");
@@ -254,7 +281,7 @@ internal static class DictionaryInterfaceOwnerFile
                 w.Line("else");
                 w.Indented(() => w.Line("WritePairSlow(ref operationState, key, itemValue);"));
             }
-            else if (textKernel && method == "WriteKnown")
+            else if (textKernel && method != "WriteInterface" && method != "WriteFrozen")
             {
                 string text = c.Key == "string" ? "key" : "itemValue";
                 w.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
@@ -288,7 +315,7 @@ internal static class DictionaryInterfaceOwnerFile
             else
                 c.WriteMember(c.Value, "itemValue");
             w.Close();
-            w.Line("return count;");
+            w.Line("return observed;");
             w.Close();
             w.Blank();
         }

@@ -323,12 +323,28 @@ internal static class FormatterCapabilities
             FormatterConcurrentTraits.HasJsonIntegerPairs(compilation))
             result.Add("JsonIntegerPair");
         if (definition is "System.Collections.Generic.Dictionary" or "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" or
-            "System.Collections.Generic.SortedList" or "System.Collections.Generic.SortedDictionary" &&
+            "System.Collections.Generic.SortedList" or "System.Collections.Generic.SortedDictionary" or
+            "System.Collections.Immutable.ImmutableDictionary" or "System.Collections.Immutable.ImmutableSortedDictionary" or
+            "System.Collections.Immutable.IImmutableDictionary" &&
             FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation))
             result.Add("BinaryRawPairs");
         if (definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" &&
             modern && !unity && FormatterConcurrentTraits.HasBoundedDenseRawPairs(compilation))
             result.Add("BoundedDenseRawPairs");
+        if (definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" && modern && !unity)
+        {
+            bool raw = named.TypeArguments.All(argument => argument.IsUnmanagedType);
+            foreach (string family in new[] { "ImmutableDictionary", "ImmutableSortedDictionary" })
+            {
+                if (!FormatterImmutableTraits.CanEnumerateDictionary(compilation, named, family))
+                    continue;
+                result.Add(family + "Traversal");
+                if (raw && FormatterImmutableTraits.HasTreeCopy(compilation, family, 2))
+                    result.Add(family + "RawTraversal");
+            }
+            if (raw && FormatterConcurrentTraits.HasCapturedRawPairTransfer(compilation, interleave: false))
+                result.Add("PackedTreeRawPairs");
+        }
         if (definition == "System.Collections.Generic.Dictionary" && modern && !unity &&
             named.TypeArguments.All(argument => argument.IsUnmanagedType && argument.SpecialType != SpecialType.System_Boolean) &&
             FormatterConcurrentTraits.HasRawDictionaryExpansion(compilation))

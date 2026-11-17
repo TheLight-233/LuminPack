@@ -5,6 +5,33 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Checks optional immutable storage operations in the consumer's runtime.</summary>
 internal static class FormatterImmutableTraits
 {
+    /// <summary>Checks that a sealed framework dictionary can replace a boxed interface enumerator.</summary>
+    /// <param name="compilation">The consumer's actual BCL references.</param>
+    /// <param name="target">The closed dictionary interface used by the owner.</param>
+    /// <param name="family">The immutable dictionary family.</param>
+    /// <returns>Whether the implementation provides a public value enumerator.</returns>
+    internal static bool CanEnumerateDictionary(Compilation compilation, INamedTypeSymbol target, string family)
+    {
+        var type = compilation.GetTypeByMetadataName("System.Collections.Immutable." + family + "`2");
+        var pair = compilation.GetTypeByMetadataName("System.Collections.Generic.KeyValuePair`2");
+        if (type is not { IsSealed: true, DeclaredAccessibility: Accessibility.Public } || pair is null)
+            return false;
+
+        var arguments = target.TypeArguments.ToArray();
+        var closed = type.Construct(arguments);
+        var closedPair = pair.Construct(arguments);
+        return closed.AllInterfaces.Any(candidate => SymbolEqualityComparer.Default.Equals(candidate, target)) &&
+            closed.GetMembers("GetEnumerator").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 0, Parameters.Length: 0,
+                    ReturnType: INamedTypeSymbol { IsValueType: true, DeclaredAccessibility: Accessibility.Public } enumerator } &&
+                enumerator.GetMembers("MoveNext").OfType<IMethodSymbol>().Any(move =>
+                    move is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 0, Parameters.Length: 0,
+                        ReturnType.SpecialType: SpecialType.System_Boolean }) &&
+                enumerator.GetMembers("Current").OfType<IPropertySymbol>().Any(current =>
+                    !current.IsStatic && current.GetMethod?.DeclaredAccessibility == Accessibility.Public &&
+                    SymbolEqualityComparer.Default.Equals(current.Type, closedPair)));
+    }
+
     /// <summary>Checks the two runtime operations used to traverse a queue without populating its reversal cache.</summary>
     /// <param name="compilation">The consuming compilation and its framework and runtime references.</param>
     /// <returns>Whether both operations accept the framework's closed queue and stack types.</returns>

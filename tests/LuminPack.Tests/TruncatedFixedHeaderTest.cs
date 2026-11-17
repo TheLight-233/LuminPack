@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using LuminPack;
 using LuminPack.Attribute;
@@ -20,6 +21,19 @@ public sealed partial class TruncatedFixedHeaderTest
         byte[] expected = LuminPackSerializer.Serialize(frozen);
         Assert.Equal(expected, LuminPackSerializer.Serialize(readOnly));
         Assert.Equal(expected, LuminPackSerializer.Serialize(dictionary));
+    }
+
+    /// <summary>Checks the immutable value enumerators preserve managed child framing and dictionary order.</summary>
+    [Fact]
+    public void ImmutableInterfaceDictionariesKeepPackableValuesInOrder()
+    {
+        var entries = Enumerable.Range(0, 71).ToDictionary(index => $"key-{index}",
+            index => index % 7 == 0 ? null : new FixedCaseContainer { Child = new FixedCase { First = index, Second = ~index } });
+        var hash = entries.ToImmutableDictionary();
+        var sorted = entries.ToImmutableSortedDictionary(Comparer<string>.Create((left, right) => string.CompareOrdinal(right, left)));
+
+        Assert.Equal(LuminPackSerializer.Serialize(hash), LuminPackSerializer.Serialize<IReadOnlyDictionary<string, FixedCaseContainer?>>(hash));
+        Assert.Equal(LuminPackSerializer.Serialize(sorted), LuminPackSerializer.Serialize<IDictionary<string, FixedCaseContainer?>>(sorted));
     }
 
     /// <summary>Checks exact wrapper writers when keys require their own generated formatter.</summary>

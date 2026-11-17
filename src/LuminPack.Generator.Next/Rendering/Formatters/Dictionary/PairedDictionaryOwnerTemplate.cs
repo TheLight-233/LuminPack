@@ -540,13 +540,16 @@ internal sealed partial class PairedDictionaryContext
     }
 
     /// <summary>Emits the write that copies a tree-backed dictionary's pairs once before writing them in order.</summary>
-    /// <param name="batchRaw">Whether the family can fuse a complete staged raw payload.</param>
     /// <param name="source">The exact concrete tree expression.</param>
-    internal void TreeWrite(bool batchRaw = false, string source = "value")
+    /// <param name="writeHeader">Whether to write the count or leave it to the caller's counted frame.</param>
+    internal void TreeWrite(string source = "value", bool writeHeader = true)
     {
         W.Line("int count = " + source + ".Count;");
-        W.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
-        W.Line("operationState.WriteCollectionHeader(count);");
+        if (writeHeader)
+        {
+            W.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
+            W.Line("operationState.WriteCollectionHeader(count);");
+        }
         W.Line("if (count != 0)");
         W.Open();
         W.Line("var pairs = global::System.Buffers.ArrayPool<" + Pair + ">.Shared.Rent(count);");
@@ -561,7 +564,7 @@ internal sealed partial class PairedDictionaryContext
             W.Line("if (!global::LuminPack.Utility.LuminTreeStorage.TryWritePackedPairs(ref operationState, pairs, count))");
             W.Open();
         }
-        bool fused = batchRaw && BeginRawRun("pair.Key", "pair.Value",
+        bool fused = BeginRawRun("pair.Key", "pair.Value",
             "ref var pair = ref " + Memory + ".Add(ref firstPair, (nint)(uint)index);");
         bool mixed = ParallelDictionaryWrite.SupportsMixed(this);
         bool stringPairs = UsesRawOrStringEntries && Key == "string" && Value == "string" && Supports("BinaryStringPairPrefix");
@@ -603,7 +606,7 @@ internal sealed partial class PairedDictionaryContext
         W.Indented(() => W.Line("global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + Pair + ">());"));
         W.Close();
         W.Close();
-        W.Line("operationState.CheckBuffer();");
+        W.Line(writeHeader ? "operationState.CheckBuffer();" : "return count;");
         if (boundedKey)
             ParallelDictionaryWrite.WriteBoundedKeyFallback(this);
     }

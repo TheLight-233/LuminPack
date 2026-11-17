@@ -17,9 +17,9 @@ using Xunit;
 /// <summary>Protects bounded scalar facades independently of unchecked address-only storage kernels.</summary>
 public sealed class RawScalarSpanSafetyTest
 {
-    /// <summary>Checks frozen dictionary spans in concrete and interface writers with both string encodings.</summary>
+    /// <summary>Checks frozen and immutable dictionary interface writes with both string encodings.</summary>
     [Fact]
-    public void FrozenPairRunsKeepTheOriginalRecordSequence()
+    public void DictionaryPairRunsKeepTheOriginalRecordSequence()
     {
         var frozen = Enumerable.Range(0, 69).ToFrozenDictionary(i => $"key-{i}",
             i => i % 7 == 0 ? null : i % 5 == 0 ? string.Empty : $"\u4F60-{i}");
@@ -35,7 +35,13 @@ public sealed class RawScalarSpanSafetyTest
         Assert.Equal(expected, LuminPackSerializer.Serialize<FrozenDictionary<string, string?>, LuminPackUtf8LengthOptions>(frozen));
         Assert.Equal(expected, LuminPackSerializer.Serialize<IReadOnlyDictionary<string, string?>, LuminPackUtf8LengthOptions>(view));
 
-        static byte[] WriteRecords<TOptions>(FrozenDictionary<string, string?> dictionary) where TOptions : struct, ILuminPackOptions
+        var immutable = frozen.ToImmutableSortedDictionary(Comparer<string>.Create((left, right) => string.CompareOrdinal(right, left)));
+        IReadOnlyDictionary<string, string?> immutableView = immutable;
+        Assert.Equal(WriteRecords<LuminPackUtf16LengthOptions>(immutable), LuminPackSerializer.Serialize(immutableView));
+        Assert.Equal(WriteRecords<LuminPackUtf8LengthOptions>(immutable),
+            LuminPackSerializer.Serialize<IReadOnlyDictionary<string, string?>, LuminPackUtf8LengthOptions>(immutableView));
+
+        static byte[] WriteRecords<TOptions>(IReadOnlyDictionary<string, string?> dictionary) where TOptions : struct, ILuminPackOptions
         {
             byte[] destination = new byte[8192];
             Span<byte> span = destination;
@@ -178,6 +184,8 @@ public sealed class RawScalarSpanSafetyTest
             Check(ordered, LuminPackSerializer.Serialize(ordered));
             Check(map, LuminPackSerializer.Serialize(map));
             Check(sorted, LuminPackSerializer.Serialize(sorted));
+            Check(immutable, LuminPackSerializer.Serialize<IReadOnlyDictionary<int, int>>(immutable));
+            Check(ordered, LuminPackSerializer.Serialize<IDictionary<int, int>>(ordered));
         }
 
         static void Check(IReadOnlyDictionary<int, int> pairs, byte[] serialized)
