@@ -6,6 +6,10 @@ using System.Collections.Frozen;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+#if NET8_0_OR_GREATER
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
+#endif
 using LuminPack.Code;
 using LuminPack.Core;
 
@@ -220,20 +224,85 @@ public static class LuminFrozenConstruction
         writer.WriteCollectionHeader(keys.Length);
         if (!keys.IsEmpty)
         {
-            ref byte destination = ref MemoryMarshal.GetReference(writer.Buffer.Slice(writer.Position, bytes));
+            Span<byte> payload = writer.Buffer.Slice(writer.Position, bytes);
+            ref byte destination = ref MemoryMarshal.GetReference(payload);
             ref TKey firstKey = ref MemoryMarshal.GetReference(keys);
             ref TValue firstValue = ref MemoryMarshal.GetReference(values);
             int index = 0;
-            do
+#if NET8_0_OR_GREATER
+            if (IntPtr.Size == 8 && Sse2.IsSupported && keyWidth == valueWidth &&
+                ((keyWidth == 4 && keys.Length >= 16) || (keyWidth == 8 && keys.Length >= 32)) &&
+                !MemoryMarshal.AsBytes(keys).Overlaps(payload) && !MemoryMarshal.AsBytes(values).Overlaps(payload))
+            {
+                index = keyWidth == 4
+                    ? WriteInterleaved(ref Unsafe.As<byte, uint>(ref destination), ref Unsafe.As<TKey, uint>(ref firstKey),
+                        ref Unsafe.As<TValue, uint>(ref firstValue), keys.Length)
+                    : WriteInterleaved(ref Unsafe.As<byte, ulong>(ref destination), ref Unsafe.As<TKey, ulong>(ref firstKey),
+                        ref Unsafe.As<TValue, ulong>(ref firstValue), keys.Length);
+                destination = ref Unsafe.Add(ref destination, (nint)index * (keyWidth + valueWidth));
+            }
+#endif
+            for (; index < keys.Length; index++)
             {
                 WriteScalar(ref destination, ref Unsafe.Add(ref firstKey, (nint)(uint)index));
                 WriteScalar(ref Unsafe.Add(ref destination, (nint)(uint)keyWidth), ref Unsafe.Add(ref firstValue, (nint)(uint)index));
                 destination = ref Unsafe.Add(ref destination, (nint)(uint)(keyWidth + valueWidth));
-            } while (++index < keys.Length);
+            }
         }
         writer.Advance(bytes);
         writer.CheckBuffer();
     }
+
+#if NET8_0_OR_GREATER
+    /// <summary>Interleaves complete vectors of equal-width raw keys and values into a disjoint output range.</summary>
+    /// <typeparam name="T">The unsigned 32-bit or 64-bit storage lane.</typeparam>
+    /// <param name="destination">The already reserved packed output.</param>
+    /// <param name="keys">The first lane of the validated key span.</param>
+    /// <param name="values">The first lane of the validated value span.</param>
+    /// <param name="count">The number of complete pairs in the spans.</param>
+    /// <returns>The number of pairs written before the scalar tail.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int WriteInterleaved<T>(ref T destination, ref T keys, ref T values, int count) where T : unmanaged
+    {
+        int index = 0;
+        if (Avx2.IsSupported)
+        {
+            int width = Vector256<T>.Count;
+            for (; index <= count - width; index += width)
+            {
+                nuint offset = (nuint)index;
+                var key = Vector256.LoadUnsafe(ref keys, offset);
+                var value = Vector256.LoadUnsafe(ref values, offset);
+                var low = Unsafe.SizeOf<T>() == 4
+                    ? Avx2.UnpackLow(key.AsUInt32(), value.AsUInt32()).AsUInt64()
+                    : Avx2.UnpackLow(key.AsUInt64(), value.AsUInt64());
+                var high = Unsafe.SizeOf<T>() == 4
+                    ? Avx2.UnpackHigh(key.AsUInt32(), value.AsUInt32()).AsUInt64()
+                    : Avx2.UnpackHigh(key.AsUInt64(), value.AsUInt64());
+                // Unpack works within each 128-bit lane. Join the corresponding halves in wire order.
+                Vector256.StoreUnsafe(Avx2.Permute2x128(low, high, 0x20).As<ulong, T>(), ref destination, offset * 2);
+                Vector256.StoreUnsafe(Avx2.Permute2x128(low, high, 0x31).As<ulong, T>(), ref destination, offset * 2 + (nuint)width);
+            }
+        }
+
+        int tailWidth = Vector128<T>.Count;
+        for (; index <= count - tailWidth; index += tailWidth)
+        {
+            nuint offset = (nuint)index;
+            var key = Vector128.LoadUnsafe(ref keys, offset);
+            var value = Vector128.LoadUnsafe(ref values, offset);
+            var low = Unsafe.SizeOf<T>() == 4
+                ? Sse2.UnpackLow(key.AsUInt32(), value.AsUInt32()).As<uint, T>()
+                : Sse2.UnpackLow(key.AsUInt64(), value.AsUInt64()).As<ulong, T>();
+            var high = Unsafe.SizeOf<T>() == 4
+                ? Sse2.UnpackHigh(key.AsUInt32(), value.AsUInt32()).As<uint, T>()
+                : Sse2.UnpackHigh(key.AsUInt64(), value.AsUInt64()).As<ulong, T>();
+            Vector128.StoreUnsafe(low, ref destination, offset * 2);
+            Vector128.StoreUnsafe(high, ref destination, offset * 2 + (nuint)tailWidth);
+        }
+        return index;
+    }
+#endif
 
     /// <summary>Stores one scalar with the existing architecture-specific fixed-access contract.</summary>
     /// <typeparam name="T">The complete unmanaged scalar representation.</typeparam>

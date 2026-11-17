@@ -1,14 +1,83 @@
 using System.Buffers.Binary;
+using System.Collections.Frozen;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using LuminPack;
 using LuminPack.Option;
 using LuminPack.Core;
+using LuminPack.Utility;
 using Xunit;
 
 /// <summary>Protects bounded scalar facades independently of unchecked address-only storage kernels.</summary>
 public sealed class RawScalarSpanSafetyTest
 {
+    /// <summary>Compares generated frozen writers and unaligned reservations with explicit key/value wire order.</summary>
+    [Fact]
+    public void FrozenRawPairsKeepOrderAcrossVectorTails()
+    {
+        foreach (int count in new[] { 0, 1, 15, 16, 17, 31, 32, 33, 36, 39, 64, 65 })
+        {
+            var narrow = Enumerable.Range(0, count).ToFrozenDictionary(index => index * -7, index => index * 19 + 3);
+            var wide = Enumerable.Range(0, count).ToFrozenDictionary(index => index * -5000000007L, index => index * 9000000011L + 5);
+            Check(narrow, LuminPackSerializer.Serialize(narrow));
+            Check(wide, LuminPackSerializer.Serialize(wide));
+        }
+
+        static void Check<T>(FrozenDictionary<T, T> frozen, byte[] serialized) where T : unmanaged
+        {
+            int width = Marshal.SizeOf<T>();
+            byte[] expected = new byte[sizeof(int) + 2 * width * frozen.Count];
+            BinaryPrimitives.WriteInt32LittleEndian(expected, frozen.Count);
+            var pairs = MemoryMarshal.Cast<byte, T>(expected.AsSpan(sizeof(int)));
+            int index = 0;
+            foreach (var pair in frozen)
+            {
+                pairs[index++] = pair.Key;
+                pairs[index++] = pair.Value;
+            }
+            Assert.Equal(expected, serialized);
+
+            byte[] guarded = Enumerable.Repeat((byte)0xAC, expected.Length + 2).ToArray();
+            Span<byte> output = guarded.AsSpan(1, expected.Length);
+            var writer = new LuminPackWriter(ref output);
+            LuminFrozenConstruction.WritePairs(ref writer, frozen.Keys.AsSpan(), frozen.Values.AsSpan());
+            Assert.Equal(expected.Length, writer.Position);
+            Assert.Equal(expected, output.ToArray());
+            Assert.Equal((byte)0xAC, guarded[0]);
+            Assert.Equal((byte)0xAC, guarded[^1]);
+        }
+    }
+
+    /// <summary>Retains the scalar key-before-value load order for an overlapping caller-supplied span.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FrozenRawPairsKeepScalarOrderWhenInputOverlapsOutput(bool overlapValues)
+    {
+        const int count = 33;
+        const int outputStart = 3;
+        const int sourceStart = 29;
+        var source = Enumerable.Range(0, count).Select(index => index + 1000).ToArray();
+        var other = Enumerable.Range(0, count).Select(index => -index - 250).ToArray();
+        byte[] storage = new byte[sizeof(int) + 2 * count * sizeof(int) + outputStart + 1];
+        MemoryMarshal.AsBytes(source.AsSpan()).CopyTo(storage.AsSpan(sourceStart));
+        byte[] expected = (byte[])storage.Clone();
+        Span<int> prior = MemoryMarshal.Cast<byte, int>(expected.AsSpan(sourceStart, count * sizeof(int)));
+        Span<int> packed = MemoryMarshal.Cast<byte, int>(expected.AsSpan(outputStart, (1 + 2 * count) * sizeof(int)));
+        packed[0] = count;
+        for (int index = 0; index < count; index++)
+        {
+            packed[1 + 2 * index] = overlapValues ? other[index] : prior[index];
+            packed[2 + 2 * index] = overlapValues ? prior[index] : other[index];
+        }
+
+        Span<byte> output = storage.AsSpan(outputStart, (1 + 2 * count) * sizeof(int));
+        Span<int> aliased = MemoryMarshal.Cast<byte, int>(storage.AsSpan(sourceStart, count * sizeof(int)));
+        var writer = new LuminPackWriter(ref output);
+        LuminFrozenConstruction.WritePairs<int, int>(ref writer, overlapValues ? other : aliased, overlapValues ? aliased : other);
+        Assert.Equal(expected, storage);
+    }
+
     /// <summary>Checks raw dictionary pairs across vector widths, tails, and unaligned output positions.</summary>
     [Fact]
     public void DenseRawDictionaryKeepsPackedKeyValueOrder()
