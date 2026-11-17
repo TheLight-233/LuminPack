@@ -436,6 +436,10 @@ internal static class FormatterCapabilities
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
             result.Add("SortedListBinaryBoundedKey");
         if (definition == "System.Collections.Concurrent.ConcurrentDictionary" && modern && !unity &&
+            named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsReferenceType &&
+            FormatterConcurrentTraits.HasConcurrentDictionaryKeyRefill(compilation, named))
+            result.Add("ConcurrentDictionaryKeyRefill");
+        if (definition == "System.Collections.Concurrent.ConcurrentDictionary" && modern && !unity &&
             named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
             result.Add("ConcurrentBinaryTextPair");

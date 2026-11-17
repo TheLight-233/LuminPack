@@ -129,6 +129,9 @@ internal static class ConcurrentDictionaryOwnerFile
             w.Line("value.Clear();");
             w.Line("goto operationComplete_RootRead;");
             w.Close();
+            if (c.Key == "string" && (c.OrdinaryObjectValue || c.Payload is { IsStruct: false }) &&
+                c.Supports("ConcurrentDictionaryKeyRefill"))
+                ReadKeyRefill(c);
             // Only objects read in place are worth staging once the order no longer matches.
             bool reuseValues = c.ReferenceValue && c.Value != "string";
             w.Line("var refill = global::LuminPack.Code.LuminPackCollectionAccess.BeginConcurrentDictionaryRefill(value, length, " +
@@ -187,5 +190,41 @@ internal static class ConcurrentDictionaryOwnerFile
         w.Line("value.TryAdd(k!, v);");
         w.Close();
         w.Line("while (--remaining != 0);");
+    }
+
+    /// <summary>Refills a larger fixed-profile record by matching decoded keys against the target.</summary>
+    /// <param name="c">The generated dictionary read context.</param>
+    private static void ReadKeyRefill(PairedDictionaryContext c)
+    {
+        var w = c.W;
+        w.Line("if (length > 64 && " + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
+        w.Line("    TryRefillByKey(ref operationState, value, length))");
+        w.Indented(() => w.Line("goto operationComplete_RootRead;"));
+        w.Blank();
+        w.Line(w.MethodImpl("NoInlining"));
+        w.Line("static bool TryRefillByKey(scoped ref global::LuminPack.Core.LuminPackReader operationState, " + c.Dictionary + " value, int length)");
+        w.Open();
+        w.Line("if (!global::LuminPack.Code.LuminPackCollectionAccess.TryBeginConcurrentDictionaryKeyRefill(value, length, out var keyRefill))");
+        w.Indented(() => w.Line("return false;"));
+        w.Line("try");
+        w.Open();
+        w.Line("int keysRemaining = length;");
+        w.Line("do");
+        w.Open();
+        w.Line("string key = keyRefill.ReadKey(ref operationState, out var previousValue);");
+        w.Line("var updatedValue = previousValue;");
+        c.ReadMember(c.Value, "updatedValue");
+        w.Line("keyRefill.Store(key, updatedValue, previousValue);");
+        w.Close();
+        w.Line("while (--keysRemaining != 0);");
+        w.Line("keyRefill.Complete();");
+        w.Close();
+        w.Line("finally");
+        w.Open();
+        w.Line("keyRefill.Dispose();");
+        w.Close();
+        w.Line("return true;");
+        w.Close();
+        w.Blank();
     }
 }

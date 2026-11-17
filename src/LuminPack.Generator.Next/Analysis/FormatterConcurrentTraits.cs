@@ -6,6 +6,44 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Selects compatible value traversals without changing concurrent capture contracts.</summary>
 internal static class FormatterConcurrentTraits
 {
+    /// <summary>Checks the closed string-key refill factory and its generated call surface.</summary>
+    /// <param name="compilation">The consumer's compilation.</param>
+    /// <param name="dictionary">The closed concurrent dictionary type.</param>
+    /// <returns>Whether the referenced runtime can refill by decoded key.</returns>
+    internal static bool HasConcurrentDictionaryKeyRefill(Compilation compilation, INamedTypeSymbol dictionary)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var state = compilation.GetTypeByMetadataName("LuminPack.Code.ConcurrentDictionaryKeyRefill`1");
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader");
+        if (access is null || state is null || reader is null)
+            return false;
+
+        var value = dictionary.TypeArguments[1];
+        var closed = state.Construct(value);
+        var text = compilation.GetSpecialType(SpecialType.System_String);
+        bool factory = access.GetMembers("TryBeginConcurrentDictionaryKeyRefill").OfType<IMethodSymbol>().Any(method =>
+        {
+            if (!method.IsStatic || method.DeclaredAccessibility != Accessibility.Public || method.Arity != 1 ||
+                method.Parameters.Length != 3 || method.ReturnType.SpecialType != SpecialType.System_Boolean)
+                return false;
+            var bound = method.Construct(value);
+            return SymbolEqualityComparer.Default.Equals(bound.Parameters[0].Type, dictionary) &&
+                bound.Parameters[0].RefKind == RefKind.None &&
+                bound.Parameters[1].Type.SpecialType == SpecialType.System_Int32 && bound.Parameters[1].RefKind == RefKind.None &&
+                bound.Parameters[2].RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(bound.Parameters[2].Type, closed);
+        });
+        return factory && Instance("ReadKey", text, (reader, RefKind.Ref), (value, RefKind.Out)) &&
+            Instance("Store", compilation.GetSpecialType(SpecialType.System_Void), (text, RefKind.None), (value, RefKind.None), (value, RefKind.None)) &&
+            Instance("Complete", compilation.GetSpecialType(SpecialType.System_Void)) &&
+            Instance("Dispose", compilation.GetSpecialType(SpecialType.System_Void));
+
+        bool Instance(string name, ITypeSymbol result, params (ITypeSymbol Type, RefKind Ref)[] arguments) =>
+            closed.GetMembers(name).OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.Arity == 0 &&
+                method.DeclaredAccessibility == Accessibility.Public && SymbolEqualityComparer.Default.Equals(method.ReturnType, result) &&
+                method.Parameters.Length == arguments.Length && method.Parameters.Zip(arguments, (parameter, argument) =>
+                    parameter.RefKind == argument.Ref && SymbolEqualityComparer.Default.Equals(parameter.Type, argument.Type)).All(match => match));
+    }
+
     /// <summary>Recognizes the optional bounded raw reader of a rented or concurrent dictionary.</summary>
     /// <param name="compilation">The consumer's Core and framework references.</param>
     /// <param name="concurrent">Whether the helper owns the existing concurrent fresh or reuse operation.</param>
