@@ -757,6 +757,8 @@ internal static class PairedDictionaryOwnerTemplate
         const string generic = "    where TLuminProfile : struct, ";
         var context = new PairedDictionaryContext(w, dictionary, key, value, memory, extension, spec.Source, spec.KeyMember, spec.ValueMember,
             fact.Element, fact.ForwardedValue, fact.Contract, set, nativeEntries, checkedUnion);
+        bool optimizeTreeWrite = context.OptimizedRoots &&
+            (context.Supports("CopyImmutableHashTree") || context.Supports("CopyImmutableSortedTree"));
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -783,7 +785,7 @@ internal static class PairedDictionaryOwnerTemplate
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    w.Line(w.MethodImpl("NoInlining"));
+                    w.Line(w.MethodImpl("NoInlining", optimizeTreeWrite));
                     w.Line("internal static void RootWrite<TLuminProfile>(");
                     w.Line("    scoped ref " + writer + " writer,");
                     w.Line("    " + dictionary + " input)");

@@ -1043,6 +1043,7 @@ public static partial class LuminTreeStorage
     /// <param name="offsets">The field offsets of the collection's node type.</param>
     /// <param name="destination">Storage receiving the items in enumeration order.</param>
     /// <param name="index">The next destination index, advanced past each copied item.</param>
+    [MethodImpl(LuminPackJit.Optimized)]
     private static void WalkPairs<TKey, TValue>(object node, in NodeOffsets offsets, Span<KeyValuePair<TKey, TValue>> destination, ref int index)
     {
         int left = offsets.Left, right = offsets.Right, key = offsets.Key, value = offsets.Value;
@@ -1064,6 +1065,7 @@ public static partial class LuminTreeStorage
     /// <param name="length">The complete checked destination length.</param>
     /// <param name="index">The next destination index.</param>
     /// <returns>The next destination index after copying this subtree.</returns>
+    [MethodImpl(LuminPackJit.Optimized)]
     private static int WalkHash<T>(object node, in HashOffsets offsets, ref T destination, int length, int index)
     {
         int left = offsets.Tree.Left, right = offsets.Tree.Right;
