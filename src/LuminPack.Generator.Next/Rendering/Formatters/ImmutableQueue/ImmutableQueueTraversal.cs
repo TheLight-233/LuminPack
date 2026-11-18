@@ -25,11 +25,11 @@ internal static class ImmutableQueueTraversal
         body.Add("{");
         body.Add("int countPosition = operationState.BeginCollection();");
         body.Add("int count = 0;");
-        body.Add("foreach (var item in forwards!)");
+        body.Add("for (var node = forwards!; !node.IsEmpty; node = node.Pop())");
         body.Add("{");
+        body.Add("var v = node.Peek();");
         body.Add("operationState.CheckBuffer();");
         body.Add("count++;");
-        body.Add("var v = item;");
         body.Add(boolean
             ? "ref readonly bool " + firstAlias + " = ref v;"
             : "operationState.Write(in v);");
@@ -44,11 +44,11 @@ internal static class ImmutableQueueTraversal
         body.Add("}");
         body.Add("else");
         body.Add("{");
-        body.Add("foreach (var item2 in backwards!)");
+        body.Add("for (var node = backwards!; !node.IsEmpty; node = node.Pop())");
         body.Add("{");
+        body.Add("var v2 = node.Peek();");
         body.Add("operationState.CheckBuffer();");
         body.Add("count++;");
-        body.Add("var v2 = item2;");
         body.Add(boolean
             ? "ref readonly bool " + secondAlias + " = ref v2;"
             : "operationState.Write(in v2);");
