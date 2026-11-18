@@ -207,7 +207,7 @@ namespace LuminPack.Core
             bool fits = FitsRecord(length);
             if (!fits)
                 EnsureAdditionalCapacity(length);
-            WritePayload(ref source, count, bytes);
+            WritePayload(ref Current, ref source, count, bytes);
             if (fits)
                 Advance(length);
             else
@@ -215,13 +215,13 @@ namespace LuminPack.Core
         }
 
         /// <summary>Copies an already reserved contiguous record without repeating capacity or completion checks.</summary>
+        /// <param name="current">The complete reserved destination record.</param>
         /// <param name="source">The first byte of the complete source storage.</param>
         /// <param name="count">The logical count written in the header.</param>
         /// <param name="bytes">The checked payload width.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void WritePayload(ref byte source, int count, int bytes)
+        internal static void WritePayload(ref byte current, ref byte source, int count, int bytes)
         {
-            ref byte current = ref Current;
             LuminPackWriter.Write<int>(ref current, count);
             if (bytes != 0)
                 LuminPackMarshal.CopyCollectionPayload(ref Unsafe.Add(ref current, sizeof(int)),

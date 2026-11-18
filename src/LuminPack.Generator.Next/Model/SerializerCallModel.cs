@@ -138,6 +138,9 @@ internal enum EntryKind
     /// <summary>A sequence of known scalars, sized by its length.</summary>
     RawSequence,
 
+    /// <summary>A bit count and its word-rounded raw backing storage.</summary>
+    BitArray,
+
     /// <summary>A count-prefixed two's-complement big integer.</summary>
     BigInteger,
 

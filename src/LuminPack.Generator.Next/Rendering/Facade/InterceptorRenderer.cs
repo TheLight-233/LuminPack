@@ -481,7 +481,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             return RawWrite;
         if (FixedRoot(shape) is { } fixedRoot)
         {
-            if (shape.Kind is not (EntryKind.RawArray or EntryKind.BigInteger))
+            if (shape.Kind is not (EntryKind.RawArray or EntryKind.BigInteger or EntryKind.BitArray))
                 return fixedRoot.Prepare + "                var buffer = new byte[length];\n" +
                     "                ref byte destination = ref MemoryMarshal.GetArrayDataReference(buffer);\n" +
                     fixedRoot.Store + "                return buffer;\n";
@@ -557,6 +557,11 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                 return ("                var record = value;\n                int length = record is null ? 1 : " + width + ";\n",
                     "                if (record is null) destination = LuminPackCode.NullObject;\n" +
                     "                else " + owner + "." + write + "(ref destination, record);\n");
+            case EntryKind.BitArray:
+                return ("                var bits = value;\n" +
+                    "                int bitCount = bits?.Length ?? -1;\n" +
+                    "                int length = sizeof(int) + ((bitCount < 0 ? 0 : (int)(((uint)bitCount + 31) >> 5)) * sizeof(int));\n",
+                    "                global::LuminPack.Code.LuminPackCollectionAccess.WriteReservedBitArray(ref destination, bits, bitCount);\n");
             case EntryKind.BigInteger:
                 return ("                int byteCount = value.GetByteCount();\n" +
                     "                int length = checked(sizeof(int) + byteCount);\n",

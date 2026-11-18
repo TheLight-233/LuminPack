@@ -123,6 +123,17 @@ internal static partial class TypeModelFactory
                     method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
                     method.Parameters[0].Type.SpecialType == SpecialType.System_Int32) == true;
 
+        /// <summary>Checks the target Core's address-only bit storage writer.</summary>
+        /// <param name="bitArray">The resolved framework bit array.</param>
+        /// <returns>Whether the target can encode the modern word-rounded payload into reserved storage.</returns>
+        private bool CanWriteReservedBits(INamedTypeSymbol bitArray) =>
+            _compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess")?.GetMembers("WriteReservedBitArray")
+                .OfType<IMethodSymbol>().Any(method => method.IsStatic && method.DeclaredAccessibility == Accessibility.Public &&
+                    method.ReturnsVoid && method.Arity == 0 && method.Parameters.Length == 3 &&
+                    method.Parameters[0].RefKind == RefKind.Ref && method.Parameters[0].Type.SpecialType == SpecialType.System_Byte &&
+                    method.Parameters[1].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, bitArray) &&
+                    method.Parameters[2].RefKind == RefKind.None && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32) == true;
+
         /// <summary>Selects an allocating write only when its width matches the published writer's representation.</summary>
         /// <param name="type">The closed root type.</param>
         /// <param name="member">The normalized shared root, if one is published.</param>
@@ -194,6 +205,9 @@ internal static partial class TypeModelFactory
             {
                 if (fixedEnum)
                     return new EntryShape(EntryKind.FixedEnum);
+                if (name == "global::System.Collections.BitArray" && type is INamedTypeSymbol bitArray &&
+                    IsFrameworkCollection(bitArray, "System.Collections.BitArray") && CanWriteReservedBits(bitArray))
+                    return new EntryShape(EntryKind.BitArray);
                 if (name == "global::System.Numerics.BigInteger")
                     return new EntryShape(EntryKind.BigInteger);
                 if (!fixedRecord && type is INamedTypeSymbol compound)

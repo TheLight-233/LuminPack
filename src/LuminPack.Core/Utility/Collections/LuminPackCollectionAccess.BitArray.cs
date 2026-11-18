@@ -9,6 +9,28 @@ namespace LuminPack.Code;
 
 public static partial class LuminPackCollectionAccess
 {
+#if NET8_0_OR_GREATER
+    /// <summary>Writes a modern bit array into a completely reserved binary record.</summary>
+    /// <param name="destination">The start of the count header followed by the full word-rounded payload.</param>
+    /// <param name="value">The captured bit array, including null.</param>
+    /// <param name="bitCount">The captured length, or the null collection marker.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void WriteReservedBitArray(ref byte destination, BitArray? value, int bitCount)
+    {
+        if (value is null)
+        {
+            LuminPackWriter.Write(ref destination, LuminPackCode.NullCollection);
+            return;
+        }
+
+        int bytes = (int)(((uint)bitCount + 31) >> 5) * sizeof(int);
+        ref var view = ref LuminPackMarshal.As<BitArray, BitArrayView>(ref value);
+        var payload = MemoryMarshal.AsBytes(view.m_array.AsSpan()).Slice(0, bytes);
+        LuminPackWriter.WritePayload(ref destination, ref MemoryMarshal.GetReference(payload), bitCount, bytes);
+    }
+#endif
+
     /// <summary>Writes validated bit storage directly, preserving the portable CopyTo padding convention.</summary>
     /// <param name="writer">The destination writer.</param>
     /// <param name="value">The nonnull framework bit array.</param>

@@ -279,6 +279,15 @@ public class AdvancingBinaryApiTest
         var writer = new LuminPackWriter(ref bytes);
         writer.Write(value);
         Assert.Equal(4 + ((length + 31) / 32) * 4, writer.Position);
+        var record = bytes[..writer.Position].ToArray();
+        Assert.Equal(record, LuminPackSerializer.Serialize(value));
+        using var retained = new LuminBufferWriter(true);
+        LuminPackSerializer.Serialize(value, retained);
+        Assert.Equal(record, retained.GetSpan().ToArray());
+        LuminPackSerializer.Serialize(value, retained);
+        Assert.Equal(record.Length * 2, retained.GetSpan().Length);
+        Assert.Equal(record, retained.GetSpan()[..record.Length].ToArray());
+        Assert.Equal(record, retained.GetSpan()[record.Length..].ToArray());
         writer.Write(1729);
         ReadOnlySpan<byte> payload = bytes[..writer.Position];
         var reader = new LuminPackReader(ref payload);
