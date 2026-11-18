@@ -502,7 +502,10 @@ internal static class GenericFormatterReuse
                             ? new FormatterStorageModel(parameter, null, Array.Empty<FormatterStorageField>(), closedLayout.WireSize, closedLayout.Tagged,
                                 closedLayout.Volatile, Array.Empty<int>(), Array.Empty<int[]>())
                             : null;
-                        placeholders[index] = new FormatterModel(parameter, "$strategy", ordinaryObject: argument.OrdinaryObject, layout: layout);
+                        string[]? capabilities = BinaryTraversalTiering.PreferPgoForCompound(argument)
+                            ? new[] { BinaryTraversalTiering.TieredWriteStrategy } : null;
+                        placeholders[index] = new FormatterModel(parameter, "$strategy", ordinaryObject: argument.OrdinaryObject,
+                            layout: layout, capabilities: capabilities);
                         parameters.Add(parameter);
                         if (family.NotNull[index])
                             constraints.Add("where " + parameter + " : notnull");

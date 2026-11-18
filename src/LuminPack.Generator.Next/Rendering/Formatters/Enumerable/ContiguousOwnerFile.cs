@@ -79,7 +79,8 @@ internal static class ContiguousOwnerFile
             outlineBinaryWrite: scalarElements || (!raw && layout == null && element.Type != "string"),
             outlineBinaryRead: !raw && !rawSequence && layout == null && element.Type != "string",
             binaryWriteEntries: measure ? MeasureRecord : null,
-            jsonWriteRun: !scalarElements && JsonIntegerRunWriter.Supports(set, model.Type, element.Type), optimizedRoots: true);
+            jsonWriteRun: !scalarElements && JsonIntegerRunWriter.Supports(set, model.Type, element.Type), optimizedRoots: true,
+            tierBinaryWrite: fixedObject == null && BinaryTraversalTiering.PreferPgo(element.Type, element));
 
         void MeasureRecord(CodeWriter w)
         {

@@ -53,8 +53,10 @@ internal sealed partial class PairedDictionaryContext
     /// <returns>Whether the input satisfies the supports check.</returns>
     internal bool Supports(string capability) => _set.FindFormatter(Dictionary)?.Supports(capability) == true;
 
-    /// <summary>Gets whether element traversal methods request full optimization on their first call.</summary>
-    internal bool OptimizedRoots => _set.OptimizedRoots;
+    /// <summary>Whether the binary entry traversal requests full optimization on the first call.</summary>
+    internal bool OptimizeBinaryTraversal => _set.OptimizedRoots && (_checkedUnion != null || _nativeEntries ||
+        !BinaryTraversalTiering.PreferPgo(Key, _contract is { Arguments.Length: 2 } ? _contract.Arguments[0] : null,
+            Value, _contract is { Arguments.Length: 2 } ? _contract.Arguments[1] : null, Payload));
 
     /// <summary>Gets whether the referenced Core can fill a fresh concurrent dictionary while pairs are decoded.</summary>
     internal bool ConcurrentDictionaryBuilder => _set.Options?.ConcurrentDictionaryBuilder == true;
@@ -765,7 +767,7 @@ internal static class PairedDictionaryOwnerTemplate
         const string generic = "    where TLuminProfile : struct, ";
         var context = new PairedDictionaryContext(w, dictionary, key, value, memory, extension, spec.Source, spec.KeyMember, spec.ValueMember,
             fact.Element, fact.ForwardedValue, fact.Contract, set, nativeEntries, checkedUnion);
-        bool optimizeTreeWrite = context.OptimizedRoots &&
+        bool optimizeTreeWrite = context.OptimizeBinaryTraversal &&
             (context.Supports("CopyImmutableHashTree") || context.Supports("CopyImmutableSortedTree"));
         bool localReader = (fact.Element == null && !fact.ForwardedValue && fact.Contract == null) ||
             (set.Options?.Net8 == true &&

@@ -178,7 +178,7 @@ internal static class DictionaryInterfaceOwnerFile
 
         void EmitDense()
         {
-            w.Line(w.MethodImpl("NoInlining", c.OptimizedRoots));
+            w.Line(w.MethodImpl("NoInlining", c.OptimizeBinaryTraversal));
             w.Line("static bool TryWriteDense(scoped ref " + writer + " operationState, " + concrete + " items)");
             w.Open();
             w.Line("if (" + c.Memory + ".SizeOf<global::System.IntPtr>() != 8 ||");
@@ -273,7 +273,7 @@ internal static class DictionaryInterfaceOwnerFile
 
         void EmitLoop(string method, string input, bool captureTree = false)
         {
-            w.Line(w.MethodImpl("NoInlining", c.OptimizedRoots));
+            w.Line(w.MethodImpl("NoInlining", c.OptimizeBinaryTraversal));
             w.Line("static int " + method + "(scoped ref " + writer + " operationState, " + input + " items)");
             w.Open();
             if (rawKernel && method == "WriteKnown" && c.Supports("BoundedDenseRawPairs"))

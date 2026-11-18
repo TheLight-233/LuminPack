@@ -574,7 +574,6 @@ internal static class EnumerableOwnerTemplate
         string scalar = fact.ForwardedType ?? (payload != null ? payload.GlobalName : fact.Scalar!);
         string readable = ReadableTypeName.Of(scalar);
         string sequence = fact.DeclaredType;
-        // Collection roots traverse every element, so they request full optimization where the runtime supports it.
         bool optimized = set.OptimizedRoots;
         // The closed owner identity derives from the declared sequence, so the nested static calls agree with the model.
         string type = ReadableTypeName.Of(GeneratedNames.PayloadKey(sequence));
@@ -585,6 +584,8 @@ internal static class EnumerableOwnerTemplate
         bool text = scalar == "string" || payload != null || fact.ForwardedType != null;
         bool measureRaw = !text && nonEmptyRawHeaderBytes != 0;
         FormatterModel? element = fact.ForwardedType == null ? null : set.FindFormatter(scalar) ?? new FormatterModel(scalar, FormatterDefinitions.PayloadReference);
+        bool optimizeBinaryWrite = optimized &&
+            !BinaryTraversalTiering.PreferPgo(scalar, element, payload);
         string minimum = element != null ? (element.NativeNullableElement || fact.Family.ContiguousElements && element.RawCollection ?
             memory + ".SizeOf<" + scalar + ">()" : fact.Family.ContiguousElements && set.FindFormatter(scalar)?.Layout != null ? "0" :
             FormatterElementEmitter.Minimum(element)) :
@@ -654,7 +655,7 @@ internal static class EnumerableOwnerTemplate
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    w.Line(w.MethodImpl(measureRaw ? "AggressiveInlining" : "NoInlining", optimized));
+                    w.Line(w.MethodImpl(measureRaw ? "AggressiveInlining" : "NoInlining", optimizeBinaryWrite));
                     w.Line("internal static void RootWrite" + (text ? "<TLuminProfile>" : "") + "(");
                     w.Line("    scoped ref " + writer + " writer,");
                     w.Line("    " + sequence + " input)" + (text ? "" : ""));
@@ -667,7 +668,7 @@ internal static class EnumerableOwnerTemplate
                         w.Line("WriteFallback(ref writer, input);");
                         w.Close();
                         w.Blank();
-                        w.Line(w.MethodImpl("NoInlining", optimized));
+                        w.Line(w.MethodImpl("NoInlining", optimizeBinaryWrite));
                         w.Line("private static void WriteFallback(scoped ref " + writer + " writer, " + sequence + " input)");
                         w.Open();
                     }

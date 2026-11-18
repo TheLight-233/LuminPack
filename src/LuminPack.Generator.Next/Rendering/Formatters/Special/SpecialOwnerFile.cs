@@ -61,11 +61,13 @@ internal static class SpecialOwnerFile
     /// <param name="optimizedRoots">Whether the outlined roots traverse elements and request full optimization where the
     /// runtime supports it.</param>
     /// <param name="outlineBinaryRead">Whether the binary read root keeps an independent inlining budget.</param>
+    /// <param name="tierBinaryWrite">Whether the binary write traversal can benefit from dynamic PGO.</param>
     internal static string Render(SharedFormatterSet set, GeneratedOperations operations, string shortName, string typeName,
         bool referenceType, Action<CodeWriter, SpecialOwnerContext> binaryWrite, Action<CodeWriter, SpecialOwnerContext> binaryRead,
         Action<CodeWriter, SpecialOwnerContext> jsonWrite, Action<CodeWriter, SpecialOwnerContext> jsonRead, Action<CodeWriter>? support = null,
         bool compressedEntries = false, bool outlineJson = false, bool outlineBinaryWrite = false,
-        Action<CodeWriter>? binaryWriteEntries = null, bool jsonWriteRun = false, bool optimizedRoots = false, bool outlineBinaryRead = false)
+        Action<CodeWriter>? binaryWriteEntries = null, bool jsonWriteRun = false, bool optimizedRoots = false,
+        bool outlineBinaryRead = false, bool tierBinaryWrite = false)
     {
         using var w = new CodeWriter(set.AvailableAliases) { Scoped = set.Options == null || set.Options.CSharpVersion >= 1100 };
         string serializer = w.A("LuminPackSerializer");
@@ -118,7 +120,7 @@ internal static class SpecialOwnerFile
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    w.Line(outlineBinaryWrite ? w.MethodImpl("NoInlining", optimized) : inline);
+                    w.Line(outlineBinaryWrite ? w.MethodImpl("NoInlining", optimized && !tierBinaryWrite) : inline);
                     w.Line("internal static void RootWrite<TLuminProfile>(scoped ref " + writer + " writer, " + Input() + ")");
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
