@@ -88,6 +88,8 @@ internal static class FormatterCapabilities
         if (definition == "System.Collections.Generic.PriorityQueue" && FormatterOrderedCollectionTraits.HasPriorityTraversal(compilation, named))
         {
             result.Add("PriorityQueueTraversal");
+            if (named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].SpecialType == SpecialType.System_Int32)
+                result.Add("PriorityQueueStringReuse");
             if (FormatterOrderedCollectionTraits.HasPriorityReader(compilation, named))
                 result.Add("ReadPriorityQueueStorage");
             if (FormatterOrderedCollectionTraits.HasPriorityWriter(compilation, named))

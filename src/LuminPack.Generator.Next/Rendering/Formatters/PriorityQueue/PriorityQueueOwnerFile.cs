@@ -122,13 +122,55 @@ internal static class PriorityQueueOwnerFile
         w.Close();
     }
 
+    /// <summary>Seeds checked string reads from a same-sized framework heap before refilling it.</summary>
+    /// <param name="c">The priority queue formatter context.</param>
+    private static void ReadExistingStrings(PairedDictionaryContext c)
+    {
+        var w = c.W;
+        const string access = "global::LuminPack.Code.LuminPackCollectionAccess";
+        w.Line(w.MethodImpl("NoInlining"));
+        w.Line("static bool TryRefill(scoped ref global::LuminPack.Core.LuminPackReader operationState, " + c.Dictionary + " queue, int length)");
+        w.Open();
+        w.Line("if (!(length > 0 && queue.Count == length && queue.GetType() == typeof(" + c.Dictionary + ") &&");
+        w.Line("    " + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
+        w.Line("    global::System.Object.ReferenceEquals(queue.Comparer, global::System.Collections.Generic.Comparer<" + c.Value + ">.Default) &&");
+        w.Line("    " + access + ".TryGetPriorityQueueTraversal(queue, out var nodes, out _) && nodes.Length == length))");
+        w.Indented(() => w.Line("return false;"));
+        w.Line("var saved = global::System.Buffers.ArrayPool<string>.Shared.Rent(length);");
+        w.Line("try");
+        w.Open();
+        w.Line("for (int index = 0; index < length; index++) saved[index] = nodes[index].Element;");
+        w.Line("queue.Clear();");
+        w.Line("for (int index = 0; index < length; index++)");
+        w.Open();
+        w.Line("string element = saved[index];");
+        w.Line(c.Value + " priority = default!;");
+        c.ReadMember(c.Key, "element");
+        c.ReadMember(c.Value, "priority", readInt32: true);
+        w.Line("queue.Enqueue(element!, priority);");
+        w.Close();
+        w.Close();
+        w.Line("finally");
+        w.Open();
+        w.Line("global::System.Buffers.ArrayPool<string>.Shared.Return(saved, clearArray: true);");
+        w.Close();
+        w.Line("return true;");
+        w.Close();
+    }
+
     /// <summary>Handles read for <c>PriorityQueueOwnerFile</c>.</summary>
     /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(PairedDictionaryContext c)
     {
         var w = c.W;
+        bool seedStrings = c.Key == "string" && c.Supports("PriorityQueueStringReuse");
         w.Line("if (value is null)");
         w.Indented(() => w.Line("value = new " + c.Dictionary + "(length);"));
+        if (seedStrings)
+        {
+            w.Line("else if (TryRefill(ref operationState, value, length))");
+            w.Indented(() => w.Line("goto operationComplete_RootRead;"));
+        }
         w.Line("else");
         w.Indented(() => w.Line("value.Clear();"));
         w.Blank();
@@ -148,5 +190,7 @@ internal static class PriorityQueueOwnerFile
         w.Line("value.Enqueue(element!, priority);");
         w.Close();
         w.Line("while (--remaining != 0);");
+        if (seedStrings)
+            ReadExistingStrings(c);
     }
 }

@@ -414,6 +414,29 @@ public class CollectionStorageLayoutTest
         }
     }
 
+#if LUMINPACK_NEXT_GENERATOR
+    /// <summary>Retains equal strings, accepts changed elements and publishes only complete heap entries on failure.</summary>
+    [Fact]
+    public void PriorityQueueRetainsMatchingStringsAcrossRefills()
+    {
+        var first = new string('a', 8);
+        var second = new string('b', 8);
+        var target = new PriorityQueue<string, int>(new[] { (first, 1), (second, 2) });
+        var alias = target;
+        var incoming = new PriorityQueue<string, int>(new[] { (new string('a', 8), 3), ("changed", 4) });
+        byte[] bytes = LuminPackSerializer.Serialize(incoming);
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(bytes.AsSpan(0, bytes.Length - 1), ref target));
+        Assert.Same(alias, target);
+        Assert.Equal(1, target.Count);
+        Assert.Same(first, target.Peek());
+        target.Enqueue(second, 2);
+        LuminPackSerializer.Deserialize(bytes, ref target);
+        Assert.Same(alias, target);
+        Assert.Equal("aaaaaaaa", target.Dequeue());
+        Assert.Equal("changed", target.Dequeue());
+    }
+#endif
+
     /// <summary>Checks priority queues written from their heap array and rebuilt by one heapify, and the read-only wrappers.</summary>
     [Fact]
     public void HeapsAndReadOnlyWrappersRoundTrip()
