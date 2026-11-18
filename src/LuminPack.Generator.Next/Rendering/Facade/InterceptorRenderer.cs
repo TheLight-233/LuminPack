@@ -546,9 +546,10 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                 return ("                int length = Unsafe.SizeOf<%TYPE%>();\n",
                     "                LuminPackWriter.Write(ref destination, in value);\n");
             case EntryKind.NullableDirect when shape.Width == null && shape.RetainedDirect:
-                return ("                var record = value;\n" +
-                    "                int length = record.HasValue ? 1 + Unsafe.SizeOf<" + shape.Element + ">() : 1;\n",
-                    "                LuminPackWriter.WriteReservedNullable<" + shape.Element + ">(ref destination, record);\n");
+                return ("                bool present = value.HasValue;\n" +
+                    "                int length = present ? 1 + Unsafe.SizeOf<" + shape.Element + ">() : 1;\n",
+                    "                if (present) LuminPackWriter.Write(ref Unsafe.Add(ref destination, 1), in global::System.Nullable.GetValueRefOrDefaultRef(in value));\n" +
+                    "                destination = present ? (byte)0 : LuminPackCode.NullObject;\n");
             case EntryKind.FixedObject:
             case EntryKind.FixedVersion:
                 string owner = shape.Kind == EntryKind.FixedObject ? FixedObjectOwner(shape.Element!) : "LuminPackSerializer";

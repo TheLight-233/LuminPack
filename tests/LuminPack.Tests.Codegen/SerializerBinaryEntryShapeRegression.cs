@@ -16,6 +16,7 @@ internal static class SerializerBinaryEntryShapeRegression
         const string source = """
             using System;
             using System.Collections.Generic;
+            using System.Runtime.CompilerServices;
             using LuminPack;
             using LuminPack.Attribute;
             using LuminPack.Core;
@@ -150,6 +151,15 @@ internal static class SerializerBinaryEntryShapeRegression
                             LuminPackSerializer.Deserialize<NativeCell?>(buffer.GetSpan())?.Y != cell?.Y)
                             throw new Exception("Native nullable write or read changed its payload or marker.");
                     }
+
+                    buffer.ResetWrittenCount();
+                    byte[] expectedAlias = LuminPackSerializer.Serialize(nullable);
+                    ref byte start = ref buffer.TryBeginFixedRoot(64);
+                    Unsafe.WriteUnaligned(ref start, nullable);
+                    ref NativeCell? inputAlias = ref Unsafe.As<byte, NativeCell?>(ref start);
+                    LuminPackSerializer.Serialize(in inputAlias, buffer);
+                    if (!buffer.GetSpan().SequenceEqual(expectedAlias))
+                        throw new Exception("A native nullable root corrupted an input in its retained output window.");
 
                     PackedCell? packed = new PackedCell { X = 23, Y = -4096 };
                     byte[] packedBytes = LuminPackSerializer.Serialize(packed.Value);
@@ -407,6 +417,9 @@ internal static class SerializerBinaryEntryShapeRegression
         var methods = declarations.Where(method => method.Identifier.ValueText.StartsWith("LuminIntercept_", StringComparison.Ordinal)).ToArray();
         VerifyNullReadBoundaries(methods);
         var native = methods.Where(method => method.Identifier.ValueText.StartsWith("LuminIntercept_NativeCell_", StringComparison.Ordinal)).ToArray();
+        var nativeNullable = methods.Single(method => method.Identifier.ValueText.StartsWith("LuminIntercept_NullableOfNativeCell_", StringComparison.Ordinal) &&
+            method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "LuminBufferWriter") &&
+            method.ReturnType.ToString() == "void");
         var fixedArray = methods.Single(method => method.ReturnType.ToString() == "byte[]" &&
             method.ParameterList.Parameters[0].Type!.ToString().EndsWith("ReadBoundaryCell[]", StringComparison.Ordinal));
         var plain = methods.Single(method => method.Identifier.ValueText.StartsWith("LuminIntercept_PlainGraph_", StringComparison.Ordinal) &&
@@ -417,6 +430,9 @@ internal static class SerializerBinaryEntryShapeRegression
             !fixedArray.ToString().Contains("WriteFixedRoot(ref destination", StringComparison.Ordinal) ||
             !plain.ToString().Contains("new LuminPackReader(ref buffer)", StringComparison.Ordinal))
             throw new InvalidOperationException("A proven binary root did not select its direct entry.");
+        if (!nativeNullable.ToString().Contains("Nullable.GetValueRefOrDefaultRef(in value)", StringComparison.Ordinal) ||
+            nativeNullable.ToString().Contains("var record = value", StringComparison.Ordinal))
+            throw new InvalidOperationException("A native nullable root copied the wrapper before writing its payload.");
         foreach (string type in new[] { "VersionGraph", "CustomGraph" })
         {
             var stateful = methods.Single(method => method.Identifier.ValueText.StartsWith("LuminIntercept_" + type + "_", StringComparison.Ordinal) &&
