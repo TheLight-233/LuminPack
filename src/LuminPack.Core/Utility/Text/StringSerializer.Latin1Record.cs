@@ -700,10 +700,11 @@ public static partial class StringSerializer
             {
                 // The leading and trailing 16-byte loads both remain within the validated payload.
                 var first = Avx2.ConvertToVector256Int16(Vector128.LoadUnsafe(ref source)).AsUInt16();
+                if (compare && !Vector256.EqualsAll(first, Vector256.LoadUnsafe(ref chars)))
+                    return false;
                 var last = Avx2.ConvertToVector256Int16(Vector128.LoadUnsafe(ref source, back)).AsUInt16();
                 if (compare)
-                    return ((first ^ Vector256.LoadUnsafe(ref chars)) |
-                        (last ^ Vector256.LoadUnsafe(ref chars, back))) == Vector256<ushort>.Zero;
+                    return Vector256.EqualsAll(last, Vector256.LoadUnsafe(ref chars, back));
 
                 first.StoreUnsafe(ref chars);
                 last.StoreUnsafe(ref chars, back);

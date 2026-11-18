@@ -93,5 +93,24 @@ public sealed class Latin1KernelFallbackTest
             Assert.Equal(0, bytes[length + 3]);
         }
     }
+
+    /// <summary>Checks the first and trailing blocks of the medium record decoder for every mismatch position.</summary>
+    [Fact]
+    public void MediumRecordReuseChecksBothBlocks()
+    {
+        for (int length = 17; length <= 32; length++)
+        {
+            var payload = Enumerable.Repeat((byte)0xE9, length).ToArray();
+            var current = new string((char)0xE9, length);
+            Assert.Same(current, StringSerializer.ReadLatin1Payload(ref payload[0], length, current));
+            for (int index = 0; index < length; index++)
+            {
+                payload[index]++;
+                string decoded = StringSerializer.ReadLatin1Payload(ref payload[0], length, current);
+                Assert.Equal(System.Text.Encoding.Latin1.GetString(payload), decoded);
+                payload[index]--;
+            }
+        }
+    }
 }
 
