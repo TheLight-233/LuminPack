@@ -1832,9 +1832,11 @@ public static partial class LuminPackMarshal
         int index = 0;
         do
         {
-            CopyHashSetStorage(ref Unsafe.As<T, byte>(ref entry.Value), ref source, width);
-            uint hashCode = unchecked((uint)entry.Value!.GetHashCode());
+            // Hash the value from a register; storing it first and reloading it lengthens every element's dependency chain.
+            T item = LuminPackReader.Read<T>(ref source);
+            uint hashCode = unchecked((uint)item!.GetHashCode());
             ref int bucket = ref Unsafe.Add(ref firstBucket, (nint)(nuint)GetBucketIndex(hashCode, bucketCount, multiplier));
+            entry.Value = item;
             entry.HashCode = hashCode;
             entry.Next = bucket - 1;
             bucket = ++index;
