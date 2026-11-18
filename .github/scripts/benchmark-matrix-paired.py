@@ -8,20 +8,32 @@ import statistics
 import subprocess
 from collections import defaultdict
 from pathlib import Path
+from typing import NamedTuple
+
+
+class ProcessSample(NamedTuple):
+    lumin_ns: float
+    reference_ns: float
+    allocated: float
+    round_ratio: float
 
 
 def make_row(key, reference, pairs, variants):
     """Summarize process medians and their dispersion for one operation."""
-    baseline = statistics.median(value[0] for value in pairs[variants[0]])
-    reference_medians = [statistics.median(value[1] for value in pairs[variant]) for variant in variants]
+    baseline = statistics.median(value.lumin_ns for value in pairs[variants[0]])
+    baseline_ratio = statistics.median(value.round_ratio for value in pairs[variants[0]])
+    reference_medians = [statistics.median(value.reference_ns for value in pairs[variant]) for variant in variants]
     drift = max(reference_medians) / min(reference_medians)
     row = [*key, reference, drift]
     for variant in variants:
         samples = pairs[variant]
-        times = [value[0] for value in samples]
+        times = [value.lumin_ns for value in samples]
+        ratios = [value.round_ratio for value in samples]
         median = statistics.median(times)
-        row += [median, median / baseline, statistics.median(value[0] / value[1] for value in samples),
-                max(times) / min(times), statistics.median(value[2] for value in samples), len(samples)]
+        ratio = statistics.median(ratios)
+        row += [median, median / baseline, ratio, max(times) / min(times),
+                statistics.median(value.allocated for value in samples), len(samples),
+                ratio / baseline_ratio, max(ratios) / min(ratios)]
     return row
 
 
@@ -51,10 +63,11 @@ def read_pairs(path, kind="Sample"):
         other = samples[case, operation, reference]
         common = lumin.keys() & other.keys()
         if common:
-            yield (case, operation, reference), (
+            yield (case, operation, reference), ProcessSample(
                 statistics.median(lumin[index]["Nanoseconds"] for index in common),
                 statistics.median(other[index]["Nanoseconds"] for index in common),
-                statistics.median(lumin[index]["AllocatedBytes"] for index in common))
+                statistics.median(lumin[index]["AllocatedBytes"] for index in common),
+                statistics.median(lumin[index]["Nanoseconds"] / other[index]["Nanoseconds"] for index in common))
 
 
 def run(args):
@@ -94,7 +107,8 @@ def write_summary(path, stats, variants, processes):
     """Write complete paired observations for all variants to one metric CSV."""
     with path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.writer(stream)
-        fields = ["ns", "over_stock", "over_reference", "spread", "B_per_op", "processes"]
+        fields = ["ns", "over_stock", "over_reference", "spread", "B_per_op", "processes",
+                  "ratio_over_stock", "ratio_spread"]
         writer.writerow(["Format", "Scene", "Case", "Operation", "Reference", "Reference_drift"] +
                         [f"{variant}_{field}" for variant in variants for field in fields])
         for (fmt, scene, case, operation, reference), pairs in sorted(stats.items()):
