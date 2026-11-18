@@ -942,6 +942,49 @@ internal static class UnionEmitter
     /// <returns>The signed constant with the same four bytes as the name hash.</returns>
     private static string GenericDispatchId(UnionRenderCase item) => "unchecked((int)" + NameHash(item) + ")";
 
+    /// <summary>Dispatches a closed binary writer to concrete slots before trying the defining root's virtual slots.</summary>
+    /// <param name="model">The closed Union contract.</param>
+    /// <param name="w">The formatter's source writer.</param>
+    internal static void EmitClosedWriteDispatch(UnionModel model, CodeWriter w)
+    {
+        w.Line("if (value is null)");
+        w.Open();
+        w.Line("writer.EnsureAdditionalCapacity(4);");
+        w.Line("writer.Write(0u);");
+        w.Line("return;");
+        w.Close();
+        w.Line("bool useDefault = " + MatchesDeclaredBinaryProfile(w, model.StandardBinary) + ";");
+        w.Line("var runtimeType = value.GetType();");
+        foreach (UnionCaseModel item in model.Cases.OrderBy(item => item.Tag))
+        {
+            w.Line("if (runtimeType == typeof(" + item.Type.GlobalName + "))");
+            w.Open();
+            w.Line("var concreteValue = " + w.A("Unsafe") + ".As<" + item.Type.GlobalName + ">(value);");
+            Slots("concreteValue");
+            w.Line("return;");
+            w.Close();
+        }
+        Slots("value");
+
+        void Slots(string receiver)
+        {
+            string slot = receiver + ".Write_" + model.ClosedWriteSlot;
+            w.Line("if (useDefault) " + slot + "_Default(ref writer);");
+            w.Line("else " + slot + "<" + Profile + ">(ref writer);");
+        }
+    }
+
+    /// <summary>Spells the binary virtual slot's selection of the declared profile.</summary>
+    /// <param name="w">The source writer.</param>
+    /// <param name="alias">The declaring root's standard binary profile alias.</param>
+    /// <returns>The generated profile comparison.</returns>
+    private static string MatchesDeclaredBinaryProfile(CodeWriter w, string alias)
+    {
+        string standard = w.A(alias);
+        return "default(" + Profile + ").StringEncoding == default(" + standard + ").StringEncoding && default(" + Profile +
+            ").StringRecording == default(" + standard + ").StringRecording";
+    }
+
     /// <summary>Emits compact exact-type branches to the concrete case writers.</summary>
     /// <param name="model">The normalized Union contract.</param>
     /// <param name="w">The generated source writer.</param>
@@ -1034,9 +1077,7 @@ internal static class UnionEmitter
         Reject(model, w);
         if (!json)
         {
-            string standard = w.A(model.UnionStandardBinary);
-            w.Line("if (default(" + Profile + ").StringEncoding == default(" + standard + ").StringEncoding && default(" + Profile +
-                ").StringRecording == default(" + standard + ").StringRecording)");
+            w.Line("if (" + MatchesDeclaredBinaryProfile(w, model.UnionStandardBinary) + ")");
             w.Open();
             DispatchSlot(target + "_Default", generic: false);
             w.Line("return;");

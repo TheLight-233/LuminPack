@@ -931,6 +931,9 @@ internal sealed class UnionModel : TypeModel
     /// <summary>The compiled dispatch tier.</summary>
     internal readonly UnionDispatchTier Tier;
 
+    /// <summary>The original virtual slot suffix when a closed writer can dispatch directly to sealed cases.</summary>
+    internal readonly string? ClosedWriteSlot;
+
     /// <summary>Whether a fixed case gives the root the returning cursor protocol.</summary>
     internal readonly bool Cursor;
 
@@ -968,6 +971,7 @@ internal sealed class UnionModel : TypeModel
     /// <param name="wideTags">Whether to enable wide tags for this operation.</param>
     /// <param name="unionSuffix">The union suffix supplied to <c>UnionModel</c>.</param>
     /// <param name="tier">The tier supplied to <c>UnionModel</c>.</param>
+    /// <param name="closedWriteSlot">The defining root's virtual slot suffix for a closed exact-type writer.</param>
     /// <param name="cursor">Whether to enable cursor for this operation.</param>
     /// <param name="readGeneric">Whether to enable read generic for this operation.</param>
     /// <param name="chain">The chain supplied to <c>UnionModel</c>.</param>
@@ -982,7 +986,7 @@ internal sealed class UnionModel : TypeModel
     internal UnionModel(TypeIdentity identity, TypeAccessibility accessibility, WirePolicy policy, string[] constraints, UnionCaseModel[] cases,
         bool isInterface, bool wideTags, string unionSuffix, UnionDispatchTier tier, bool cursor,
         bool readGeneric, string[] chain, string? @namespace, UnionSlotModel[] binarySlots, UnionSlotModel[] jsonSlots, bool canonical,
-        string standardBinary, string standardJson, bool referenced = false, string? rejection = null)
+        string standardBinary, string standardJson, bool referenced = false, string? rejection = null, string? closedWriteSlot = null)
         : base(identity, accessibility, PayloadKind.Union, System.Array.Empty<MemberModel>(), policy, constraints)
     {
         Rejection = rejection;
@@ -997,6 +1001,7 @@ internal sealed class UnionModel : TypeModel
         ReadGeneric = readGeneric;
         Cursor = cursor;
         Tier = tier;
+        ClosedWriteSlot = closedWriteSlot;
         UnionSuffix = unionSuffix;
         WideTags = wideTags;
         IsInterface = isInterface;
@@ -1006,7 +1011,7 @@ internal sealed class UnionModel : TypeModel
     /// <inheritdoc/>
     public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
         other is UnionModel union && base.Equals(other) && IsInterface == union.IsInterface && WideTags == union.WideTags &&
-        UnionSuffix == union.UnionSuffix && Tier == union.Tier && Cursor == union.Cursor && ReadGeneric == union.ReadGeneric &&
+        UnionSuffix == union.UnionSuffix && Tier == union.Tier && ClosedWriteSlot == union.ClosedWriteSlot && Cursor == union.Cursor && ReadGeneric == union.ReadGeneric &&
         Canonical == union.Canonical && StandardBinary == union.StandardBinary && StandardJson == union.StandardJson &&
         Namespace == union.Namespace && Same(Cases, union.Cases) &&
         Same(Chain, union.Chain) && Same(BinarySlots, union.BinarySlots) &&

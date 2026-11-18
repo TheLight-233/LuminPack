@@ -394,6 +394,13 @@ internal static partial class TypeModelFactory
                     if (referenced && tier == UnionDispatchTier.Virtual)
                         ReferencedDispatch(symbol, suffix, issues);
                     string? unionRejection = policy.Input == InputPolicy.Untrusted && policy.Limits.Explicit ? Rejection(symbol) : null;
+                    // The open definition keeps its virtual slots, including registered and user-supplied overrides.
+                    // A closed class writer can call those same slots directly for exact sealed cases.
+                    string? closedWriteSlot = !referenced && tier == UnionDispatchTier.Virtual && unionRejection == null &&
+                        symbol is { TypeKind: TypeKind.Class, IsGenericType: true, IsDefinition: false } &&
+                        !ContainsTypeParameter(symbol) && cases.Length is > 0 and <= 32 &&
+                        declared.All(item => item.Type is { TypeKind: TypeKind.Class, IsSealed: true })
+                        ? SlotSuffix(Identity(symbol.OriginalDefinition)) : null;
                     return new UnionModel(identity, accessibility, policy, constraints, cases,
                         isInterface: symbol.TypeKind == TypeKind.Interface, wideTags: wide, unionSuffix: suffix,
                         tier: tier,
@@ -401,7 +408,7 @@ internal static partial class TypeModelFactory
                         binarySlots: UnionSlots(json: false, encoding, recording), jsonSlots: UnionSlots(json: true, encoding, 0),
                         canonical: CanonicalUnionProfiles(),
                         standardBinary: UnionProfileAlias(encoding, recording),
-                        standardJson: UnionProfileAlias(encoding, recording), referenced: referenced, rejection: unionRejection);
+                        standardJson: UnionProfileAlias(encoding, recording), referenced: referenced, rejection: unionRejection, closedWriteSlot: closedWriteSlot);
                 }
                 case PayloadKind.CircleReference:
                 {
