@@ -114,7 +114,7 @@ internal static partial class BinaryEmitter
         var members = model.Members;
         var terms = new List<string>();
         if (prefix)
-            terms.Add(model.Version.Schema + ".Prefix.Length");
+            terms.Add(VersionPrefixLength(model));
         for (int index = first; index < end; index++)
         {
             RenderMember member = members[index];
@@ -519,6 +519,13 @@ internal static partial class BinaryEmitter
     internal static void EmitVersionStruct(PayloadRenderModel model, CodeWriter w, GeneratedOperations operations)
         => EmitStruct(model, w, operations);
 
+    /// <summary>Spells the complete prefix length as a literal when the schema is statically known.</summary>
+    /// <param name="model">The normalized versioned payload.</param>
+    /// <returns>The length expression used by the existing reservations and measurement.</returns>
+    private static string VersionPrefixLength(PayloadRenderModel model) => model.Version.Dynamic
+        ? model.Version.Schema + ".Prefix.Length"
+        : model.Version.Prefix.Length.ToString(CultureInfo.InvariantCulture);
+
     /// <summary>Writes the schema class: the field table, the constant metadata and prefixes, the fingerprint, the short-record
     /// state and the prefix match, write and store, with constant prefixes compared and stored as disjoint words.</summary>
     /// <param name="model">The render model.</param>
@@ -531,6 +538,9 @@ internal static partial class BinaryEmitter
         string inline = w.MethodImpl("AggressiveInlining");
         string length = prefix.Length.ToString(CultureInfo.InvariantCulture);
         string profile = "(ulong)" + writerName + ".BinaryProfile<TOptions>() << 16";
+        // Keep eight or more full-prefix word operations out of the compact short-prefix entry.
+        bool outlineFullPrefix = prefix.Length >= 64;
+        bool shortens = schema.Dynamic || prefix.Length > 12;
         w.Line("internal static class " + schema.Name);
         if (model.TypeConstraintText.Length != 0)
             w.Indented(() => w.Line(model.TypeConstraintText));
@@ -565,20 +575,30 @@ internal static partial class BinaryEmitter
         }
         w.Blank();
         w.Line("internal const byte Count = " + model.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
-        w.Line("internal static bool Shortens => " + (schema.Dynamic ? "Prefix.Length > 12" : prefix.Length > 12 ? "true" : "false") + ";");
+        w.Line(schema.Dynamic ? "internal static bool Shortens => Prefix.Length > 12;" :
+            "internal const bool Shortens = " + (prefix.Length > 12 ? "true;" : "false;"));
         w.Blank();
-        w.Line("[global::System.ThreadStatic]");
-        w.Line("private static int t_written;");
-        w.Blank();
+        if (shortens)
+        {
+            w.Line("[global::System.ThreadStatic]");
+            w.Line("private static int t_written;");
+            w.Blank();
+        }
         w.Line(inline);
         w.Line("private static bool WrittenBefore(ref " + writerName + " writer)");
         w.Open();
-        w.Line("if (!Shortens)");
-        w.Indented(() => w.Line("return false;"));
-        w.Line("int operation = writer.GetSchemaOperation();");
-        w.Line("if (t_written == operation)");
-        w.Indented(() => w.Line("return true;"));
-        w.Line("t_written = operation;");
+        if (shortens)
+        {
+            if (schema.Dynamic)
+            {
+                w.Line("if (!Shortens)");
+                w.Indented(() => w.Line("return false;"));
+            }
+            w.Line("int operation = writer.GetSchemaOperation();");
+            w.Line("if (t_written == operation)");
+            w.Indented(() => w.Line("return true;"));
+            w.Line("t_written = operation;");
+        }
         w.Line("return false;");
         w.Close();
         w.Blank();
@@ -588,8 +608,22 @@ internal static partial class BinaryEmitter
         w.Line("internal static bool TryReadPrefix<TOptions>(ref " + readerName + " reader)");
         w.Indented(() => w.Line("where TOptions : struct, " + options));
         w.Open();
-        w.Line("if (Shortens && reader.TryReadVersionShort<TOptions>(Count, Fingerprint))");
-        w.Indented(() => w.Line("return true;"));
+        if (shortens)
+        {
+            string shortCheck = schema.Dynamic ? "Shortens && " : string.Empty;
+            w.Line("if (" + shortCheck + "reader.TryReadVersionShort<TOptions>(Count, Fingerprint))");
+            w.Indented(() => w.Line("return true;"));
+        }
+        if (outlineFullPrefix)
+        {
+            w.Line("return TryReadFullPrefix<TOptions>(ref reader);");
+            w.Close();
+            w.Blank();
+            w.Line(w.MethodImpl("NoInlining"));
+            w.Line("private static bool TryReadFullPrefix<TOptions>(ref " + readerName + " reader)");
+            w.Indented(() => w.Line("where TOptions : struct, " + options));
+            w.Open();
+        }
         if (prefix.Length < 8)
             w.Line("return reader.TryReadVersionPrefix<TOptions>(Prefix);");
         else
@@ -667,17 +701,27 @@ internal static partial class BinaryEmitter
         w.Line("return 12;");
         w.Close();
         w.Blank();
+        if (outlineFullPrefix)
+        {
+            w.Line("return StoreFullPrefix<TOptions>(ref target);");
+            w.Close();
+            w.Blank();
+            w.Line(w.MethodImpl("NoInlining"));
+            w.Line("private static int StoreFullPrefix<TOptions>(ref byte target)");
+            w.Indented(() => w.Line("where TOptions : struct, " + options));
+            w.Open();
+        }
         if (prefix.Length < 8)
         {
             w.Line(writerName + ".StoreVersionPrefix<TOptions>(ref target, Prefix);");
-            w.Line("return Prefix.Length;");
+            w.Line("return " + VersionPrefixLength(model) + ";");
         }
         else
         {
             w.Line("if (" + unsafeName + ".SizeOf<nint>() != 8)");
             w.Open();
             w.Line(writerName + ".StoreVersionPrefix<TOptions>(ref target, Prefix);");
-            w.Line("return Prefix.Length;");
+            w.Line("return " + VersionPrefixLength(model) + ";");
             w.Close();
             w.Blank();
             PrefixWords(w, prefix, unsafeName, profile);

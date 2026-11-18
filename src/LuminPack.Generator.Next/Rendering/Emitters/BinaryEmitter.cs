@@ -230,7 +230,7 @@ internal static partial class BinaryEmitter
             w.Close();
             w.Blank();
             if (model.Version != null)
-                w.Line("evaluator.Add(" + model.Version.Schema + ".Prefix.Length + " + members.Sum(member => member.Size).ToString(CultureInfo.InvariantCulture) + ");");
+                w.Line("evaluator.Add(" + VersionPrefixLength(model) + " + " + members.Sum(member => member.Size).ToString(CultureInfo.InvariantCulture) + ");");
             else
             {
                 w.Line("int totalLength = 1;");
