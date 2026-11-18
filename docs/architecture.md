@@ -9,9 +9,10 @@ All changes are subject to the [mechanism contract](mechanism-contract.md).
 | Path | Contents |
 | --- | --- |
 | `src/LuminPack.Core` | Runtime (NuGet package `LuminPack`, assembly `LuminPack.Core`): binary and JSON readers/writers, the exact-width evaluator behind direct allocating writes, buffers, collections, layout conversion, text kernels, compression, ChaCha20-Poly1305, security policy. Targets `netstandard2.1`, `net8.0` to `net11.0`. |
-| `src/LuminPack.Generator` | Incremental source generator and analyzer (`netstandard2.0`, Roslyn 4.3). Shipped as its own package; the runtime package `LuminPack` depends on it. |
+| `src/LuminPack.Generator.Next` | Model-based incremental source generator (`netstandard2.0`, Roslyn 4.3), bundled in `LuminPack`. |
+| `src/LuminPack.Generator` | Frozen legacy generator, retained in source for existing comparisons. |
 | `src/LuminPack.ILPostProcessor` | Shared Cecil static-call rewriter, packaged MSBuild task and Unity editor adapter. It runs only during builds and is not referenced by Core or generated serialization code. |
-| `src/LuminPack.CodeFixes` | IDE quick actions (`netstandard2.0`, C# Workspaces 4.3), bundled in `LuminPack.Generator`. The generator has a build dependency without an assembly reference; neither runtime nor generator references Workspaces. See [code fixes](code-fixes.md). |
+| `src/LuminPack.CodeFixes` | IDE quick actions (`netstandard2.0`, C# Workspaces 4.3), bundled in `LuminPack`. The runtime and generator load independently of Workspaces. See [code fixes](code-fixes.md). |
 | `src/LuminPack.Unity`, `src/LuminPack.Burst` | Optional Unity value codecs and the Burst backend for the native hook table. |
 | `src/LuminPack.Platforms` and adapters | Shared adapter plus ASP.NET Core, Avalonia, Drawing, MAUI, MonoGame, SkiaSharp and WPF codecs. |
 | `tests/` | See [Tests](#tests). |

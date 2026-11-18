@@ -127,13 +127,13 @@ string json = LuminPackSerializer.SerializeJson(player);     // 📜 同一个�
 ```xml
 <ItemGroup>
   <ProjectReference Include="path/to/LuminPack/src/LuminPack.Core/LuminPack.Core.csproj" />
-  <ProjectReference Include="path/to/LuminPack/src/LuminPack.Generator/LuminPack.Generator.csproj"
+  <ProjectReference Include="path/to/LuminPack/src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj"
                     OutputItemType="Analyzer"
                     ReferenceOutputAssembly="false" />
 </ItemGroup>
 ```
 
-2.0 发布后，`dotnet add package LuminPack` 会安装运行时，并自动带上匹配版本的源代码生成器。支持 `netstandard2.1` 以及 `net8.0` – `net11.0`。如果想在本地试用 NuGet 包，可以按[发布文档](releasing.cn.md#本地构建候选包)构建候选包。
+`LuminPack` 2.0 包包含运行时、Next 源代码生成器、IDE 快速修复和 IL 重写工具。支持 `netstandard2.1` 以及 `net8.0` – `net11.0`，安装方法见[快速开始](getting-started.cn.md#安装)。
 
 > 🎮 **使用 Unity？** 把 API 兼容级别设为 .NET Standard 2.1，然后参阅 [Unity 指南](unity.cn.md)。
 

@@ -90,8 +90,6 @@ public class BenchmarkConfig : ManualConfig
         var arguments = new List<MsBuildArgument> { new($"/p:LuminPackGenerator={generator}") };
         if (analyzer != null)
             arguments.Add(new MsBuildArgument($"/p:LuminPackLegacyAnalyzer={analyzer}"));
-        if (generator == "Next" || analyzer != null)
-            arguments.Add(new MsBuildArgument("/p:LuminPackLegacyGeneratorReference=false"));
         return arguments.ToArray();
     }
 }

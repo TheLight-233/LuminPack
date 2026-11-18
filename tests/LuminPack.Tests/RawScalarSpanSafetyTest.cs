@@ -177,7 +177,7 @@ public sealed class RawScalarSpanSafetyTest
         int[] items = Enumerable.Range(0, 4097).Select(i => unchecked(i * -1640531527)).ToArray();
         var stack = ImmutableStack.CreateRange(items);
         IImmutableStack<int> stackInterface = stack;
-        int[] popOrder = items.Reverse().ToArray();
+        int[] popOrder = Enumerable.Reverse(items).ToArray();
         Check(popOrder, LuminPackSerializer.Serialize(stack));
         Check(popOrder, LuminPackSerializer.Serialize(stackInterface));
 

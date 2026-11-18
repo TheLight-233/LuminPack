@@ -7,7 +7,19 @@ using System.Text.Json;
 
 internal static class Program
 {
-    private sealed record Operation(string Name, Action Invoke);
+    private const int WarmupMinCalls = 256;
+    private const int TieredWarmupMilliseconds = 300;
+    private const int FullOptsWarmupMilliseconds = 15;
+
+    private sealed record Operation(string Library, string Name, Action Invoke);
+
+    private sealed class WarmupState(Operation operation, int batchSize)
+    {
+        internal readonly Operation Operation = operation;
+        internal readonly int BatchSize = batchSize;
+        internal long Calls;
+        internal double Milliseconds;
+    }
     private sealed record Measurement(string Operation, string Library, int Round, double Nanoseconds, double AllocatedBytes);
 
     /// <summary>Runs the command-line program with the supplied arguments.</summary>
@@ -27,6 +39,8 @@ internal static class Program
         CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
         int concreteCalls = EntryAudit.Check();
         bool json = args[0] == "json";
+        string? tiering = Environment.GetEnvironmentVariable("DOTNET_TieredCompilation");
+        int warmupMilliseconds = tiering == "0" ? FullOptsWarmupMilliseconds : TieredWarmupMilliseconds;
         string scene = args[1];
         Config.Count = scene switch { "small" => 8, "large" => 4096, _ => 256 };
         var fixtures = scene == "main"
@@ -46,7 +60,14 @@ internal static class Program
             ServerGC = GCSettings.IsServerGC,
             ProcessorCount = Environment.ProcessorCount,
             Rounds = rounds,
-            TieredCompilation = Environment.GetEnvironmentVariable("DOTNET_TieredCompilation"),
+            TieredCompilation = tiering,
+            TieredPGO = Environment.GetEnvironmentVariable("DOTNET_TieredPGO"),
+            QuickJit = Environment.GetEnvironmentVariable("DOTNET_TC_QuickJit"),
+            QuickJitForLoops = Environment.GetEnvironmentVariable("DOTNET_TC_QuickJitForLoops"),
+            CallCountingDelayMilliseconds = Environment.GetEnvironmentVariable("DOTNET_TC_CallCountingDelayMs"),
+            WarmupStrategy = rounds == 0 ? null : "interleaved-active-time",
+            WarmupMinCalls = rounds == 0 ? 0 : WarmupMinCalls,
+            WarmupMinMilliseconds = rounds == 0 ? 0 : warmupMilliseconds,
             References = json
                 ? new Dictionary<string, string?> { ["System.Text.Json"] = VersionOf(typeof(JsonSerializer)) }
                 : new Dictionary<string, string?>
@@ -60,7 +81,7 @@ internal static class Program
         var random = new Random(1729);
         foreach (var fixture in fixtures)
         {
-            var work = new List<(string Library, Operation Operation, int Count)>();
+            var work = new List<Operation>();
             foreach (Codec codec in fixture.Prepare(json, scene == "changing"))
             {
                 try
@@ -77,7 +98,7 @@ internal static class Program
                     if (codec.SupportsReuse)
                         Add("reuse", codec.Reuse);
 
-                    void Add(string name, Action action) => work.Add((codec.Library, new(name, action), Calibrate(action)));
+                    void Add(string name, Action action) => work.Add(new(codec.Library, name, action));
                 }
                 catch (Exception exception) when (codec.Library == "LuminPack" ||
                     exception is NotSupportedException or InvalidOperationException or JsonException or MemoryPack.MemoryPackSerializationException)
@@ -90,9 +111,16 @@ internal static class Program
             }
 
             var measurements = new List<Measurement>();
-            foreach (var group in work.GroupBy(item => item.Operation.Name))
+            foreach (var group in work.GroupBy(item => item.Name))
             {
-                var operations = group.ToArray();
+                var warmup = WarmUp(group, random, warmupMilliseconds);
+                foreach (var state in warmup)
+                {
+                    var operation = state.Operation;
+                    Emit(new { Kind = "Warmup", Case = fixture.Name, Operation = operation.Name, operation.Library, state.Calls, state.Milliseconds });
+                }
+
+                var operations = warmup.Select(state => (state.Operation, Count: Calibrate(state.Operation.Invoke))).ToArray();
                 for (int round = 0; round < rounds; round++)
                 {
                     random.Shuffle(operations.AsSpan());
@@ -101,7 +129,7 @@ internal static class Program
                         long allocated = GC.GetAllocatedBytesForCurrentThread();
                         double elapsed = Measure(entry.Operation.Invoke, entry.Count);
                         long bytes = GC.GetAllocatedBytesForCurrentThread() - allocated;
-                        measurements.Add(new(entry.Operation.Name, entry.Library, round, elapsed, (double)bytes / entry.Count));
+                        measurements.Add(new(entry.Operation.Name, entry.Operation.Library, round, elapsed, (double)bytes / entry.Count));
                     }
                 }
             }
@@ -119,17 +147,43 @@ internal static class Program
     private static string? VersionOf(Type type)
         => type.Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
 
+    /// <summary>Warms each library on the same operation in shuffled batches before final calibration.</summary>
+    /// <param name="operations">The supported library operations in this comparison.</param>
+    /// <param name="random">The instance that shuffles execution order.</param>
+    /// <param name="minimumMilliseconds">The minimum active time per library, excluding other libraries.</param>
+    /// <returns>The warmup observations for the comparison.</returns>
+    private static WarmupState[] WarmUp(IEnumerable<Operation> operations, Random random, int minimumMilliseconds)
+    {
+        var states = operations.Select(operation => new WarmupState(operation, Calibrate(operation.Invoke))).ToArray();
+        int remaining = states.Length;
+        do
+        {
+            random.Shuffle(states.AsSpan());
+            foreach (var state in states)
+            {
+                if (state.Calls >= WarmupMinCalls && state.Milliseconds >= minimumMilliseconds)
+                    continue;
+                state.Milliseconds += Measure(state.Operation.Invoke, state.BatchSize) * state.BatchSize / 1_000_000;
+                state.Calls += state.BatchSize;
+                if (state.Calls >= WarmupMinCalls && state.Milliseconds >= minimumMilliseconds)
+                    remaining--;
+            }
+        }
+        while (remaining != 0);
+        return states;
+    }
+
     /// <summary>Chooses a repetition count for an approximately five-millisecond sample.</summary>
     /// <param name="action">The benchmark operation to calibrate.</param>
     /// <returns>The number of calls per timing sample.</returns>
     private static int Calibrate(Action action)
     {
-        int count = 16;
+        int count = 1;
         while (count < 1_048_576)
         {
             double nanoseconds = Measure(action, count);
             if (nanoseconds * count >= 3_000_000)
-                return Math.Clamp((int)(5_000_000 / nanoseconds), 16, 1_048_576);
+                return Math.Clamp((int)(5_000_000 / nanoseconds), 1, 1_048_576);
             count *= 2;
         }
 

@@ -25,12 +25,13 @@
     <Compile Include="../LuminPack.Tests/ConcreteReads.cs" Link="TestSupport/ConcreteReads.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackPackageVersion)' == '' And '$(LuminPackGenerator)' != 'Next'">
-    <ProjectReference Include="../../src/LuminPack.Core/LuminPack.Core.csproj" />
     <ProjectReference Include="../../src/LuminPack.Generator/LuminPack.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackPackageVersion)' == '' And '$(LuminPackGenerator)' == 'Next'">
-    <ProjectReference Include="../../src/LuminPack.Core/LuminPack.Core.csproj" AdditionalProperties="LuminPackLegacyGeneratorReference=false" />
     <ProjectReference Include="../../src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackPackageVersion)' == ''">
+    <ProjectReference Include="../../src/LuminPack.Core/LuminPack.Core.csproj" />
   </ItemGroup>
   <!-- Installation check: -p:LuminPackPackageVersion=<version> builds the same program against the packed NuGet packages. -->
   <ItemGroup Condition="'$(LuminPackPackageVersion)' != ''">

@@ -11,6 +11,7 @@ from pathlib import Path
 def load_process(path):
     timing = defaultdict(list)
     validated = {}
+    warmups = {}
     issues = []
     with path.open(encoding="utf-8") as stream:
         environment = json.loads(next(stream))
@@ -22,6 +23,11 @@ def load_process(path):
                 validated[row["Case"], row["Library"]] = row["Bytes"]
             elif row["Kind"] == "Sample":
                 timing[row["Case"], row["Operation"], row["Library"]].append(row)
+            elif row["Kind"] == "Warmup":
+                key = row["Case"], row["Operation"], row["Library"]
+                if key in warmups:
+                    raise ValueError(f"{path}: duplicate warmup for {key}")
+                warmups[key] = row
             else:
                 issues.append(row)
 
@@ -48,6 +54,13 @@ def load_process(path):
     for key, samples in timing.items():
         if len(samples) != rounds or {r["Round"] for r in samples} != set(range(rounds)):
             raise ValueError(f"{path}: incomplete samples for {key}")
+    if environment.get("WarmupStrategy"):
+        if warmups.keys() != timing.keys():
+            raise ValueError(f"{path}: incomplete operation warmup")
+        for key, warmup in warmups.items():
+            if (warmup["Calls"] < environment["WarmupMinCalls"]
+                    or warmup["Milliseconds"] < environment["WarmupMinMilliseconds"]):
+                raise ValueError(f"{path}: incomplete warmup for {key}")
     return environment, timing, validated, issues
 
 
@@ -55,13 +68,21 @@ def main(directory):
     processes = defaultdict(list)
     for path in sorted(directory.glob("*.jsonl")):
         environment, timing, validated, issues = load_process(path)
-        processes[environment["Format"], environment["Scene"]].append((environment, timing, validated, issues))
+        processes[environment["Format"], environment["Scene"]].append((path.stem, environment, timing, validated, issues))
     expected = {(fmt, scene) for fmt in ("binary", "json")
                 for scene in ("main", "small", "regular", "large", "changing")}
     if processes.keys() != expected:
         raise ValueError("Expected every format and scenario")
 
+    configs = {(env.get("TieredCompilation"), env.get("TieredPGO"), env.get("CallCountingDelayMilliseconds"),
+                env.get("WarmupMinCalls"), env.get("WarmupMinMilliseconds")) for runs in processes.values()
+               for _, env, _, _, _ in runs}
+    if len(configs) != 1:
+        raise ValueError("The matrix contains mixed JIT or warmup configurations")
+    tiered, pgo, delay, warmup_calls, warmup_ms = next(iter(configs))
     report = ["# Serialization benchmark matrix", "",
+              f"Tiered compilation: {tiered}; dynamic PGO: {pgo}; call-counting delay (ms): {delay}.",
+              f"Minimum warmup per library and operation: {warmup_ms} ms and {warmup_calls} calls.", "",
               "Ratios are LuminPack time divided by reference time. Lower is faster.",
               "Counts include only operations with valid results from both libraries in every process.", "",
               "| Format | Scenario | Reference | Operation | Paired operations | Geometric mean | Arithmetic mean |",
@@ -70,12 +91,13 @@ def main(directory):
     operations = []
     pairs = []
     unsupported = []
+    drift = []
     for (fmt, scene), runs in sorted(processes.items()):
-        environment, first, validated, issues = runs[0]
+        _, environment, first, validated, issues = runs[0]
         if len(runs) != (3 if environment["Rounds"] else 1):
             raise ValueError(f"{fmt}/{scene}: incomplete process set")
         if any((env, set(timing), set(checks)) != (environment, set(first), set(validated))
-               for env, timing, checks, _ in runs):
+               for _, env, timing, checks, _ in runs):
             raise ValueError(f"{fmt}/{scene}: inconsistent process results")
         references = environment["References"]
         primary_count = sum(lib == "LuminPack" for _, lib in validated)
@@ -86,8 +108,18 @@ def main(directory):
             unsupported.append((fmt, scene, issue["Case"], issue["Library"],
                                 issue.get("Operation", "all"), issue["Reason"]))
 
+        for process, _, timing, _, _ in runs:
+            for (case, operation, library), samples in timing.items():
+                if len(samples) < 6:
+                    continue
+                times = [sample["Nanoseconds"] for sample in sorted(samples, key=lambda sample: sample["Round"])]
+                early, late = statistics.median(times[:3]), statistics.median(times[-3:])
+                change = (late / early - 1) * 100
+                if abs(change) >= 20:
+                    drift.append((fmt, scene, process, case, operation, library, early, late, change))
+
         def medians(key, field):
-            return [statistics.median(row[field] for row in timing[key]) for _, timing, _, _ in runs]
+            return [statistics.median(row[field] for row in timing[key]) for _, _, timing, _, _ in runs]
 
         for key in sorted(first):
             case, operation, library = key
@@ -114,6 +146,10 @@ def main(directory):
     if not operations:
         report = ["# Serialization benchmark matrix validation", "",
                   "This run validated fixtures without collecting timing samples."]
+    elif drift:
+        report += ["", f"**Stability warning:** {len(drift)} measurements shifted by at least 20% between "
+                         "the first and last three rounds of a process. See stability.csv. All rounds remain in the results.",
+                   "The drift detector flags observations for investigation and does not identify their cause."]
     report += ["", "| Format | Scenario | Reference | Validated LuminPack fixtures | Validated reference fixtures |",
                "|---|---|---|---:|---:|"]
     report += [f"| {fmt} | {scene} | {library} | {primary} | {reference} |"
@@ -132,6 +168,8 @@ def main(directory):
     write_csv("pairs.csv", ["Format", "Scenario", "Case", "Operation", "Reference", "Median_ratio",
                            "Min_process_ratio", "Max_process_ratio"], pairs)
     write_csv("unavailable.csv", ["Format", "Scenario", "Case", "Library", "Operation", "Reason"], unsupported)
+    write_csv("stability.csv", ["Format", "Scenario", "Process", "Case", "Operation", "Library",
+                                "First_three_median_ns", "Last_three_median_ns", "Change_pct"], drift)
     (directory / "REPORT.md").write_text("\n".join(report) + "\n", encoding="utf-8")
 
 

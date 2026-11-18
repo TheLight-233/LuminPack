@@ -12,7 +12,6 @@
   <PropertyGroup>
     <LuminPackGenerator Condition="'$(LuminPackGenerator)' == ''">Next</LuminPackGenerator>
     <DefineConstants Condition="'$(LuminPackGenerator)' == 'Next'">$(DefineConstants);LUMINPACK_GENERATOR_NEXT</DefineConstants>
-    <!-- Next and a prebuilt legacy analyzer do not build the legacy generator project that LuminPack.Core references for packing. -->
     <_LuminPackSkipLegacyProject Condition="'$(LuminPackGenerator)' == 'Next' or '$(LuminPackLegacyAnalyzer)' != ''">true</_LuminPackSkipLegacyProject>
     <DisableTransitiveProjectReferences Condition="'$(_LuminPackSkipLegacyProject)' == 'true'">true</DisableTransitiveProjectReferences>
   </PropertyGroup>
@@ -20,8 +19,7 @@
     <ProjectReference Include="..\..\src\LuminPack.Generator.Next\LuminPack.Generator.Next.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" Condition="'$(LuminPackGenerator)' == 'Next'" />
     <ProjectReference Include="..\..\src\LuminPack.Generator\LuminPack.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" Condition="'$(LuminPackGenerator)' == 'Legacy' and '$(LuminPackLegacyAnalyzer)' == ''" />
     <Analyzer Include="$(LuminPackLegacyAnalyzer)" Condition="'$(LuminPackGenerator)' == 'Legacy' and '$(LuminPackLegacyAnalyzer)' != ''" />
-    <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" AdditionalProperties="LuminPackLegacyGeneratorReference=false" Condition="'$(_LuminPackSkipLegacyProject)' == 'true'" />
-    <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" Condition="'$(_LuminPackSkipLegacyProject)' != 'true'" />
+    <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <AssemblyMetadata Include="LuminPack.Generator" Value="$(LuminPackGenerator)" />

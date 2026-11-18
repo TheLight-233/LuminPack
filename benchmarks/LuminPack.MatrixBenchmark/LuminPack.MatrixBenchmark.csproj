@@ -11,7 +11,7 @@
     <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/LuminPack.Core/LuminPack.Core.csproj" AdditionalProperties="LuminPackLegacyGeneratorReference=false" />
+    <ProjectReference Include="../../src/LuminPack.Core/LuminPack.Core.csproj" />
     <ProjectReference Include="../../src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <PackageReference Include="MemoryPack" Version="1.21.4" />
     <PackageReference Include="Nino" Version="4.0.0-rc.10" />

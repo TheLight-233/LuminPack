@@ -308,17 +308,18 @@ internal static class CodeFixChecks
     }
 
     /// <summary>Checks the actual distributable rather than project output directories.</summary>
-    /// <param name="path">The packed generator NuGet file.</param>
+    /// <param name="path">The LuminPack NuGet package.</param>
     private static void VerifyPackage(string path)
     {
         using var package = ZipFile.OpenRead(path);
         string[] assemblies = package.Entries.Where(entry => entry.FullName.EndsWith(".dll", StringComparison.Ordinal))
-            .Select(entry => entry.FullName).OrderBy(name => name, StringComparer.Ordinal).ToArray();
-        string[] requiredAssemblies = ["analyzers/dotnet/cs/LuminPack.CodeFixes.dll", "analyzers/dotnet/cs/LuminPack.Generator.dll",
+            .Select(entry => entry.FullName).Where(name => !name.StartsWith("lib/", StringComparison.Ordinal))
+            .OrderBy(name => name, StringComparer.Ordinal).ToArray();
+        string[] requiredAssemblies = ["analyzers/dotnet/cs/LuminPack.CodeFixes.dll", "analyzers/dotnet/cs/LuminPack.SourceGenerator.dll",
             "tools/LuminPack.ILPostProcessor.dll", "tools/Mono.Cecil.dll"];
-        Require(assemblies.Where(name => name != "tools/next/LuminPack.SourceGenerator.dll").SequenceEqual(requiredAssemblies),
-            "The generator package must contain the analyzer pair and the build-only IL rewriting tools in their own directories.");
-        foreach (string name in new[] { "LuminPack.Generator", "LuminPack.CodeFixes" })
+        Require(assemblies.SequenceEqual(requiredAssemblies),
+            "The package must contain the analyzer pair and the build-only IL rewriting tools in their own directories.");
+        foreach (string name in new[] { "LuminPack.SourceGenerator", "LuminPack.CodeFixes" })
         {
             Require(package.GetEntry($"analyzers/dotnet/cs/{name}.xml") != null, "Missing analyzer XML documentation.");
             using var stream = package.GetEntry($"analyzers/dotnet/cs/{name}.dll")!.Open();
@@ -326,11 +327,17 @@ internal static class CodeFixChecks
             stream.CopyTo(buffer);
             var assembly = Assembly.Load(buffer.ToArray());
             Require(assembly.GetName().Name == name, "The packed assembly identity is incorrect.");
+            if (name == "LuminPack.SourceGenerator")
+                Require(!assembly.GetReferencedAssemblies().Any(reference => reference.Name!.Contains("Workspaces", StringComparison.Ordinal)),
+                    "The bundled generator must load without IDE services.");
         }
         using var manifest = package.Entries.Single(entry => entry.FullName.EndsWith(".nuspec", StringComparison.Ordinal)).Open();
-        Require(!XDocument.Load(manifest).Descendants().Any(element => element.Name.LocalName == "dependency"),
-            "IDE service dependencies must not flow to consuming projects.");
-        Require(!package.Entries.Any(entry => entry.FullName.StartsWith("lib/", StringComparison.Ordinal)), "Analyzer assemblies must not become runtime references.");
+        Require(XDocument.Load(manifest).Descendants().Where(element => element.Name.LocalName == "dependency")
+                .All(element => (string?)element.Attribute("id") is "System.Collections.Immutable" or "System.Runtime.CompilerServices.Unsafe"),
+            "Only Core dependencies may flow to consumers.");
+        Require(package.Entries.Where(entry => entry.FullName.StartsWith("lib/", StringComparison.Ordinal) &&
+                    entry.FullName.EndsWith(".dll", StringComparison.Ordinal))
+                .All(entry => entry.Name == "LuminPack.Core.dll"), "Only Core may become a runtime reference.");
     }
 
     /// <summary>Fails a regression with a useful description.</summary>

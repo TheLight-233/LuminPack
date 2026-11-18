@@ -132,16 +132,14 @@ jobs:
         run: |
           dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release --no-build -- --wire verify tests/LuminPack.Tests.Aot/Fixtures
 
-      - name: Pack and verify installation from NuGet packages
+      - name: Pack and verify installation from NuGet
         shell: pwsh
         run: |
           $feed = Join-Path $env:GITHUB_WORKSPACE '.tmp/package-feed'
           $cache = Join-Path $env:GITHUB_WORKSPACE '.tmp/package-cache'
-          dotnet pack src/LuminPack.Generator/LuminPack.Generator.csproj -c Release --no-build --no-restore -p:Version=0.0.0-ci -o $feed
+          dotnet pack src/LuminPack.Core/LuminPack.Core.csproj -c Release -p:GeneratePackageOnBuild=false -p:Version=0.0.0-ci -o $feed
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet run --project tests/LuminPack.Tests.CodeFixes/LuminPack.Tests.CodeFixes.csproj -c Release --no-build -- --verify-package (Join-Path $feed 'LuminPack.Generator.0.0.0-ci.nupkg')
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet pack src/LuminPack.Core/LuminPack.Core.csproj -c Release --no-build --no-restore -p:Version=0.0.0-ci -o $feed
+          dotnet run --project tests/LuminPack.Tests.CodeFixes/LuminPack.Tests.CodeFixes.csproj -c Release --no-build -- --verify-package (Join-Path $feed 'LuminPack.0.0.0-ci.nupkg')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $configPath = Join-Path $feed 'NuGet.Config'
           $config = [xml]'<configuration><packageSources><clear /><add key="local" value="" /><add key="nuget" value="https://api.nuget.org/v3/index.json" /></packageSources><packageSourceMapping><packageSource key="local"><package pattern="LuminPack*" /></packageSource><packageSource key="nuget"><package pattern="*" /></packageSource></packageSourceMapping></configuration>'
@@ -151,7 +149,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release --no-restore -p:LuminPackPackageVersion=0.0.0-ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .github/scripts/verify-static-package.ps1 -Version 0.0.0-ci -Config $configPath -Cache $cache
+          .github/scripts/verify-next-package.ps1 -Version 0.0.0-ci -Config $configPath -Cache $cache
 
       - name: Upload test results
         if: always()
@@ -169,6 +167,8 @@ jobs:
     name: Full serialization matrix
     if: github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
     uses: ./.github/workflows/benchmark-matrix.yml
+    with:
+      jit: ${{ inputs.benchmark_jit }}
 
   benchmark:
     name: Benchmark (${{ matrix.host }})

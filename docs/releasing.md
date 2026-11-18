@@ -2,29 +2,28 @@
 
 [Chinese](releasing.cn.md)
 
-The release workflow currently **builds and validates candidates only**. It never uploads to NuGet, creates a GitHub release or creates a tag. It has read-only repository permissions and requires no NuGet API key. Refactoring is still in progress; a successful candidate build does not declare the API frozen or the library released.
+The release workflow builds and validates a candidate for review. In the upstream repository, pushing the exact release tag configured in `eng/Versions.props` also starts the NuGet publish job after validation succeeds.
 
 ## Package scope
 
-The maintained NuGet candidates are `LuminPack` (Core) and `LuminPack.Generator`. Core depends on the matching Generator version; Generator carries the generator and CodeFixes assemblies. The optional platform, Unity and Burst projects currently remain non-packable. Platform packages need their own dependency and target-framework contracts before joining this workflow; Unity distribution remains a separate concern.
+Consumers install one `LuminPack` NuGet package. It contains the Core runtime in `lib/`, the Next generator and CodeFixes in `analyzers/dotnet/cs/`, and the IL postprocessor with Mono.Cecil in `tools/`. The `buildTransitive/` assets enable compiler interception and IL rewriting. Core's portable symbols also ship as a separate `.snupkg` for the NuGet symbol server. Platform adapters, Unity and Burst use their source distributions.
 
-`eng/Versions.props` owns the development target version, the optional previously published Core baseline and the disabled publishing marker. The existing target version remains `2.0.0`; this file is not a record of an actual release.
+`eng/Versions.props` configures the development target `2.0.0`, the optional previously published Core baseline and the version eligible for NuGet publishing. `LuminPackNuGetPublishVersion` is set to `2.0.0-rc.1`. An empty value leaves the workflow in candidate validation mode.
 
 - Use `major.minor.patch` and optional SemVer prerelease identifiers. A candidate's numeric version must match the version file. Numeric prerelease identifiers cannot have leading zeroes.
 - Raise the major version for incompatible public API or wire-contract changes. A major bump never substitutes for approval of a mechanism change.
-- A blank candidate version produces `<version>-ci.g<commit>`. Manual inputs can select a reviewed preview version. A pushed `v*` tag selects its version but still only builds artifacts.
-- Set `LuminPackReleaseBaselineVersion` to an actual previously published Core version when that compatibility baseline is agreed. It starts empty because this refactoring does not establish a new shipped baseline.
-- Keep `LuminPackPublishingEnabled=false`. Changing that value does not implement publication; the build-only script rejects it.
+- A blank candidate version produces `<version>-ci.g<commit>`. Manual inputs and pushed `v*` tags can select a version for validation.
+- Set `LuminPackReleaseBaselineVersion` when a previously published Core version must remain API-compatible. For the 2.0 major release, the baseline stays empty and cross-framework PackageValidation still runs. Use `-BaselineVersion 1.1.9` to investigate SDK compatibility with 1.x separately.
 
 ## Build a candidate locally
 
-Install PowerShell 7 and the repository's SDKs, including the .NET 11 preview SDK, then run from the repository root:
+Install PowerShell 7 and the repository's SDKs, including the .NET 11 SDK, then run from the repository root.
 
 ```powershell
-pwsh -File .github/scripts/release.ps1 -Version 2.0.0-preview.1 -ApiBaseRef HEAD
+pwsh -File .github/scripts/release.ps1 -Version 2.0.0-rc.1 -ApiBaseRef 'HEAD^'
 ```
 
-This packs both candidates, runs Core PackageValidation, verifies package identities and aligned dependencies, verifies portable SourceLink symbols, exports public APIs, compares with packages built from the requested Git commit, checks the analyzer package and runs the package consumer's focused `--verify-installation` selector against an isolated local feed. It checks binary/JSON values, reuse and truncated-input rejection. The full trimmed/AOT contracts remain a separate CI gate. No key or upload permission is used.
+This builds the package and symbols, runs Core PackageValidation, verifies the package layout and SourceLink, and compares the public APIs with the requested Git commit. The single-package consumers restore from an isolated local feed. They check binary/JSON values, reuse, truncated-input rejection, compiler interception, IL rewriting and registered fallback. The full trimmed/AOT contracts run in the runtime compatibility workflow.
 
 The API base is exported into a fresh scratch directory; no checkout, branch or working file is overwritten. Every invocation writes to a new `run-*` directory below `.tmp/release-validation`. `-Output` changes the parent directory. `-SkipInstallationCheck` is available for focused packaging diagnostics; it is not used by the hosted workflow and is recorded in the manifest.
 
@@ -44,26 +43,31 @@ Release builds set `LuminPackReleaseBuild=true`, enabling the SDK's [PackageVali
 
 `eng/CompatibilitySuppressions.xml` lists six exact, established cross-framework differences covering Standard-only Burst hooks, four cursor fields represented by spans on Standard and by references on modern targets, and the .NET 10 BitArray storage view. Each exception identifies the diagnostic, API and left/right assets. These entries document existing conditional contracts, do not change them, and do not authorize new breaks or blanket suppression of baseline errors.
 
-The Generator package carries analyzers rather than ordinary `lib` assets, so its package layout, dependency use and installed behavior are checked explicitly rather than claiming SDK runtime-asset validation for it.
+The repository checks the bundled analyzers and build tools through package layout, dependency and installation checks. SDK PackageValidation covers the Core runtime assets.
 
 ## SourceLink and artifacts
 
-The SDK's built-in [SourceLink integration](https://github.com/dotnet/sourcelink) records GitHub source mappings. Shared build properties enable repository metadata, portable symbols, deterministic compilation, embedded untracked sources and CI path normalization. Core publishes a local `.snupkg` candidate; Generator carries portable PDBs beside both analyzer DLLs in its `.nupkg`.
+The SDK's built-in [SourceLink integration](https://github.com/dotnet/sourcelink) records GitHub source mappings. Shared build properties enable repository metadata, portable symbols, deterministic compilation, embedded untracked sources and CI path normalization. The `.nupkg` carries portable PDBs beside both analyzer DLLs, and the `.snupkg` provides the runtime symbols.
 
-The inspector requires all five Core framework assets, both analyzer assemblies and their symbols, matching version/dependency/repository metadata, and seven portable PDBs with SourceLink mappings to the candidate commit. It does not download source documents or publish symbols.
+The inspector requires all five Core framework assets, both analyzer assemblies and their symbols, the MSBuild assets, and the candidate version and commit metadata. Each packaged portable PDB must map to the candidate commit.
 
 Each successful validation retains:
 
-- `packages/`: candidate `.nupkg` and `.snupkg` files.
+- `packages/`: one candidate `.nupkg` and its `.snupkg`.
 - `api/`, `api-base/`, `public-api.diff`: reviewable per-assembly and per-framework APIs.
-- `release-manifest.json`: version, commit, dirty state, configured baseline and performed checks, always with publishing disabled.
+- `release-manifest.json`: candidate version, commit, dirty state, configured baseline and performed checks.
 - `CHANGELOG.md`: a generated, explicitly unpublished change record from the API-base commit through the candidate commit. Uncommitted edits are not represented by that commit list.
 - `SHA256SUMS`: hashes of the candidate package files.
 
 Change history is generated into build artifacts rather than maintained in README or `docs`, as required by the repository rules.
 
-## Workflow and future publication
+## Publish to NuGet.org
 
-`.github/workflows/release.yml` runs for relevant PR changes, `v*` tag pushes and manual dispatch. It fetches full history, installs the SDKs, performs package/API/installation checks and uploads artifacts, including partial evidence on failure. Creating a tag still requires the owner's explicit authorization. The workflow itself creates no tags or releases.
+`.github/workflows/release.yml` runs for relevant PR changes, `v*` tag pushes and manual dispatch. It retains the packages and API comparison as workflow artifacts, including available evidence on failure. GitHub requires the workflow on the default branch to offer manual dispatch.
 
-After refactoring, agree the API/wire baseline and version, review the API diff and change record, run the required platform/compatibility tests, and then implement and authorize publication separately. A future upload job can read `NUGET_API_KEY` from a protected GitHub environment or use NuGet trusted publishing. Never put credentials in Git, workflow inputs, command examples or chat. Merely adding a Secret cannot make this build-only workflow publish.
+1. In GitHub, create the `nuget` environment and set its variable `NUGET_USER` to the NuGet.org account name that owns `LuminPack` (`TheLight233`). The environment can restrict deployment to release tags and require a reviewer.
+2. In the NuGet.org account, add a [Trusted Publishing policy](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) for repository owner `TheLight-233`, repository `LuminPack`, workflow file `release.yml`, and environment `nuget`. Scope it to pushing new versions of the existing package `LuminPack`.
+3. Review the candidate API diff, the change record and the platform checks for the selected commit. Push the authorized `v2.0.0-rc.1` tag pointing at that commit, which must include the workflow. The tag's version must equal `LuminPackNuGetPublishVersion`.
+4. The publish job checks the candidate manifest and hashes, obtains a short-lived NuGet key via OIDC, and uploads the validated package and symbols. If publication is interrupted, rerun the failed job on the same run to reuse the same artifact. Use a new version for a different build.
+
+PR builds, manual validation and all other version tags produce candidate artifacts. The workflow leaves Git tags and GitHub Releases to the maintainer.

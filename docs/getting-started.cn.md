@@ -11,15 +11,15 @@ LuminPack 支持 `netstandard2.1`、`net8.0`、`net9.0`、`net10.0` 和 `net11.0
 > [!IMPORTANT]
 > LuminPack 2.0 还没有发布到 NuGet；NuGet 上的 [`LuminPack`](https://www.nuget.org/packages/LuminPack) 包是 API 不同的 1.x 版本。在 2.0 发布之前，请使用下面的[源码引用](#从源码引用)，或按[发布文档](releasing.cn.md#本地构建候选包)在本地构建候选包。
 
-2.0 发布后，只需安装 `LuminPack` 包，NuGet 会自动安装匹配版本的 `LuminPack.Generator`。
+2.0 RC1 发布后，只需安装一个 `LuminPack` 包，其中包含运行时、Next 源代码生成器、IDE 快速修复和 IL 重写工具。
 
 ```shell
-dotnet add package LuminPack
+dotnet add package LuminPack --version 2.0.0-rc.1
 ```
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="LuminPack" Version="2.0.0" />
+  <PackageReference Include="LuminPack" Version="2.0.0-rc.1" />
 </ItemGroup>
 ```
 
@@ -32,7 +32,7 @@ dotnet add package LuminPack
 ```xml
 <ItemGroup>
   <ProjectReference Include="path/to/LuminPack/src/LuminPack.Core/LuminPack.Core.csproj" />
-  <ProjectReference Include="path/to/LuminPack/src/LuminPack.Generator/LuminPack.Generator.csproj"
+  <ProjectReference Include="path/to/LuminPack/src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj"
                     OutputItemType="Analyzer"
                     ReferenceOutputAssembly="false" />
 </ItemGroup>

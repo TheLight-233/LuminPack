@@ -86,7 +86,7 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --verify-fixtu
 独立的[序列化矩阵](../benchmarks/LuminPack.MatrixBenchmark)覆盖框架类型、模型图和 51 类集合。二进制对照 MemoryPack 和 Nino（包括 Nino 官方的不可变集合格式化器），JSON 对照使用源生成元数据的 System.Text.Json。Write 返回新的字节数组或字符串，Fresh 读入空目标，Reuse 读入已有目标；System.Text.Json 没有根对象 Reuse 操作。报告列出不支持和未通过往返校验的操作，并按对照库分别计算同一进程内有效配对的比值。本地校验某个场景时，传入格式、场景、轮数和 JSONL 输出路径；轮数为零时只做校验。
 
 ```bash
-dotnet run --project benchmarks/LuminPack.MatrixBenchmark -c Release -p:LuminPackLegacyGeneratorReference=false -p:LuminPackUseSatori=false -- binary small 0 matrix.jsonl
+dotnet run --project benchmarks/LuminPack.MatrixBenchmark -c Release -p:LuminPackUseSatori=false -- binary small 0 matrix.jsonl
 ```
 
 ### README 图表

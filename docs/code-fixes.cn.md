@@ -2,10 +2,10 @@
 
 [English](code-fixes.md)
 
-`LuminPack.Generator` NuGet 包自带诊断对应的 C# 快速修复。消费者仍然只安装 `LuminPack`，它会自动依赖生成器包：
+`LuminPack` NuGet 包包含 Next 源代码生成器和受支持诊断的 C# 快速修复。
 
 ```xml
-<PackageReference Include="LuminPack" Version="2.0.0" />
+<PackageReference Include="LuminPack" Version="2.0.0-rc.1" />
 ```
 
 在支持 Roslyn 代码修复的 IDE 中，将光标放到诊断处并打开快速操作（例如 Visual Studio 的 `Ctrl+.`），查看预览后应用修复。消费项目不需要另装 CodeFix 包或引用 Workspaces。命令行构建仍然报告诊断，不会自动修改源码。
@@ -36,7 +36,7 @@
 
 `src/LuminPack.CodeFixes` 的目标框架是 `netstandard2.0`，使用 `Microsoft.CodeAnalysis.CSharp.Workspaces` 4.3.0，与生成器的 Roslyn 基线一致。`CodeFixProvider` 位于 Workspaces，C# 包还提供 C# 工作区服务。依赖均设置 `PrivateAssets="all"`。
 
-生成器包在 `analyzers/dotnet/cs` 中同时包含 `LuminPack.Generator.dll`、`LuminPack.CodeFixes.dll` 及其 XML 文档。CodeFix 项目不单独打包；生成器中的项目引用只用于构建，不产生程序集引用或 NuGet 依赖。包内不携带 Roslyn 和组合服务 DLL，它们由 IDE 提供。运行时、生成器均不引用修复程序集或 Workspaces，修复程序集也不引用这两个产品程序集，因此编译器和 Unity 加载生成器不依赖 IDE 服务。Unity 需要能够加载 Roslyn CodeFix 程序集的编辑器集成；仅复制源生成器不会启用快速修复。
+`LuminPack` 在 `analyzers/dotnet/cs` 中包含 `LuminPack.SourceGenerator.dll`、`LuminPack.CodeFixes.dll` 及其 XML 文档。修复程序集可独立于 Core 和生成器加载，使用 IDE 提供的 Roslyn 和组合服务。Unity 快速修复需要能加载 Roslyn CodeFix 程序集的编辑器集成。
 
 运行聚焦的工作区检查：
 
