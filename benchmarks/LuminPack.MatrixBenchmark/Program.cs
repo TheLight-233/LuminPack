@@ -11,6 +11,7 @@ internal static class Program
     private const int WarmupMilliseconds = 15;
     private const int TieredWarmupLimitMilliseconds = 2_000;
     private const int StableWarmupRounds = 2;
+    private const int InitialWarmupCalls = 256;
 
     private sealed record Operation(string Library, string Name, Action Invoke);
 
@@ -53,6 +54,8 @@ internal static class Program
             fixtures = fixtures.Where(fixture => names.Contains(fixture.Name)).ToArray();
         }
         bool tiered = Environment.GetEnvironmentVariable("DOTNET_TieredCompilation") == "1";
+        bool measureInitialWarmup = rounds > 0 &&
+            Environment.GetEnvironmentVariable("LUMINPACK_MATRIX_INITIAL_WARMUP") == "1";
         using var output = new StreamWriter(args[3]) { AutoFlush = true };
         void Emit(object row) => output.WriteLine(JsonSerializer.Serialize(row));
         Emit(new
@@ -111,6 +114,27 @@ internal static class Program
                     if (codec.Library == "LuminPack")
                         Console.Error.WriteLine($"{fixture.Name}: {exception.Message}");
                 }
+            }
+
+            if (measureInitialWarmup)
+            {
+                // Validate has already used the codecs. Time this first batch before any calibration for this fixture.
+                var initialWarmup = new List<(Operation Operation, double Nanoseconds, double AllocatedBytes)>(work.Count);
+                foreach (var group in work.GroupBy(item => item.Name))
+                {
+                    Operation[] order = group.ToArray();
+                    random.Shuffle(order.AsSpan());
+                    foreach (Operation operation in order)
+                    {
+                        long allocated = GC.GetAllocatedBytesForCurrentThread();
+                        double elapsed = Measure(operation.Invoke, InitialWarmupCalls);
+                        long bytes = GC.GetAllocatedBytesForCurrentThread() - allocated;
+                        initialWarmup.Add((operation, elapsed, (double)bytes / InitialWarmupCalls));
+                    }
+                }
+                foreach (var sample in initialWarmup)
+                    Emit(new { Kind = "InitialWarmup", Case = fixture.Name, Operation = sample.Operation.Name,
+                        sample.Operation.Library, Calls = InitialWarmupCalls, sample.Nanoseconds, sample.AllocatedBytes });
             }
 
             var measurements = new List<Measurement>();

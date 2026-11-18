@@ -25,8 +25,8 @@ def make_row(key, reference, pairs, variants):
     return row
 
 
-def read_pairs(path):
-    """Pair each LuminPack sample with the reference sample from the same quiet round."""
+def read_pairs(path, kind="Sample"):
+    """Pair LuminPack and reference observations from the same quiet round or initial batch."""
     samples = defaultdict(dict)
     with path.open(encoding="utf-8") as stream:
         next(stream)
@@ -34,10 +34,16 @@ def read_pairs(path):
         for line in stream:
             row = json.loads(line)
             validated |= row["Kind"] == "Validated" and row["Library"] == "LuminPack"
-            if row["Kind"] == "Sample" and row["JitCompiledMethodsBefore"] == row["JitCompiledMethodsAfter"]:
-                samples[row["Case"], row["Operation"], row["Library"]][row["Round"]] = row
+            if row["Kind"] != kind:
+                continue
+            if kind == "Sample" and row["JitCompiledMethodsBefore"] != row["JitCompiledMethodsAfter"]:
+                continue
+            observation = row["Round"] if kind == "Sample" else 0
+            samples[row["Case"], row["Operation"], row["Library"]][observation] = row
     if not validated:
         raise ValueError(f"{path}: no matching LuminPack fixtures validated")
+    if kind == "InitialWarmup" and not any(library == "LuminPack" for _, _, library in samples):
+        raise ValueError(f"{path}: no post-validation initial warmup observations")
     for case, operation, reference in samples:
         if reference == "LuminPack":
             continue
@@ -61,8 +67,10 @@ def run(args):
     rounds = args.rounds or (15 if args.mode == "pgo" else 9)
     mode = "1" if args.mode == "pgo" else "0"
     env = dict(os.environ, DOTNET_TieredCompilation=mode, DOTNET_TieredPGO=mode,
-               DOTNET_TC_CallCountingDelayMs="0", LUMINPACK_MATRIX_CASES=args.cases)
+               DOTNET_TC_CallCountingDelayMs="0", LUMINPACK_MATRIX_CASES=args.cases,
+               LUMINPACK_MATRIX_INITIAL_WARMUP="1" if args.initial_warmup else "0")
     stats = defaultdict(lambda: defaultdict(list))
+    initial_warmup = defaultdict(lambda: defaultdict(list))
     args.output.mkdir(parents=True, exist_ok=True)
     for fmt, scene in dict.fromkeys(args.group):
         for process in range(args.processes):
@@ -74,13 +82,23 @@ def run(args):
                 subprocess.run(["dotnet", str(dlls[index]), fmt, scene, str(rounds), str(path)], env=env, check=True)
                 for (case, operation, reference), sample in read_pairs(path):
                     stats[fmt, scene, case, operation, reference][variant].append(sample)
-    with (args.output / "pairs.csv").open("w", encoding="utf-8", newline="") as stream:
+                if args.initial_warmup:
+                    for (case, operation, reference), sample in read_pairs(path, "InitialWarmup"):
+                        initial_warmup[fmt, scene, case, operation, reference][variant].append(sample)
+    write_summary(args.output / "pairs.csv", stats, variants, args.processes)
+    if args.initial_warmup:
+        write_summary(args.output / "post-validation-initial-warmup.csv", initial_warmup, variants, args.processes)
+
+
+def write_summary(path, stats, variants, processes):
+    """Write complete paired observations for all variants to one metric CSV."""
+    with path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.writer(stream)
         fields = ["ns", "over_stock", "over_reference", "spread", "B_per_op", "processes"]
         writer.writerow(["Format", "Scene", "Case", "Operation", "Reference", "Reference_drift"] +
                         [f"{variant}_{field}" for variant in variants for field in fields])
         for (fmt, scene, case, operation, reference), pairs in sorted(stats.items()):
-            if any(len(pairs[variant]) != args.processes for variant in variants):
+            if any(len(pairs[variant]) != processes for variant in variants):
                 continue
             row = make_row((fmt, scene, case, operation), reference, pairs, variants)
             writer.writerow(row)
@@ -104,6 +122,7 @@ def main():
     parser.add_argument("--comparison", type=Path)
     parser.add_argument("--group", type=parse_group, action="append", required=True)
     parser.add_argument("--cases", required=True, help="Comma-separated exact fixture names")
+    parser.add_argument("--initial-warmup", action="store_true", help="Time the first 256 calls after fixture validation")
     parser.add_argument("--processes", type=int, default=3)
     parser.add_argument("--rounds", type=int)
     args = parser.parse_args()

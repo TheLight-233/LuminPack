@@ -18,6 +18,10 @@ on:
         description: Comma-separated exact fixture names
         required: true
         type: string
+      initial_warmup:
+        description: Time the first 256 calls after fixture validation
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -76,15 +80,17 @@ jobs:
           JIT_MODE: ${{ matrix.mode }}
           MATRIX_GROUP: ${{ inputs.group }}
           MATRIX_CASES: ${{ inputs.cases }}
+          INITIAL_WARMUP: ${{ inputs.initial_warmup }}
         run: |
           set -euo pipefail
           dotnet --info > results/dotnet-info.txt
           lscpu > results/cpu.txt
           dll=benchmarks/LuminPack.MatrixBenchmark/bin/Release/net10.0/LuminPack.MatrixBenchmark.dll
-          third=()
-          if [[ -d comparison ]]; then third=(--comparison "comparison/$dll"); fi
+          extra=()
+          if [[ -d comparison ]]; then extra+=(--comparison "comparison/$dll"); fi
+          if [[ "$INITIAL_WARMUP" == true ]]; then extra+=(--initial-warmup); fi
           python3 candidate/.github/scripts/benchmark-matrix-paired.py "$JIT_MODE" "stock/$dll" "candidate/$dll" results \
-            --group "$MATRIX_GROUP" --cases "$MATRIX_CASES" "${third[@]}"
+            --group "$MATRIX_GROUP" --cases "$MATRIX_CASES" "${extra[@]}"
       - name: Upload paired measurements
         if: always()
         uses: actions/upload-artifact@v4

@@ -60,4 +60,6 @@ The `benchmark-matrix` artifact includes the raw JSONL with warmup observations,
 
 Dispatch `benchmark-matrix-paired.yml` with the baseline revision, one format and scenario, and exact fixture names. An optional comparison revision supplies a third variant. Each JIT mode builds all variants with the same fixture source and rotates their process order on one host. The CSV includes within-process reference ratios, variant medians, reference drift, process spread and allocations. Ratios use rounds without observed global JIT activity for either library.
 
+The optional `initial_warmup` input writes `post-validation-initial-warmup.csv` with a separate comparison of the first 256 timed calls per operation, after validation and before calibration for that fixture. Fixture preparation and validation may already invoke the serializers. Earlier operations and fixtures can also warm shared code, so this metric describes initial post-validation warmup only.
+
 Chart generation from these artifacts is described in [Contributing](../CONTRIBUTING.md#benchmarks).
