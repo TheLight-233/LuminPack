@@ -28,6 +28,8 @@ internal static class SerializerBinaryEntryShapeRegression
             [LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]
             public struct PackedCell { public byte X; public long Y; }
 
+            [LuminPackable] public struct ManagedCell { public int Id; public string Name; public double Score; }
+
             [LuminPackable] public sealed class PlainGraph { public List<string> Text; public PackedCell? Cell; }
             [LuminPackable] public sealed class ReadBoundaryCell { public int Number; }
             [LuminPackable] public sealed class TextReadRoot { public string Text; }
@@ -154,6 +156,19 @@ internal static class SerializerBinaryEntryShapeRegression
                     var received = LuminPackSerializer.Deserialize<PackedCell?>(nullableBytes);
                     if (received?.X != 23 || received?.Y != -4096) throw new Exception("Packed nullable read changed fields.");
 
+                    ManagedCell? managed = new ManagedCell { Id = 19, Name = "cell", Score = -3.25 };
+                    byte[] managedBytes = LuminPackSerializer.Serialize(managed);
+                    ManagedCell? managedCopy = null;
+                    if (LuminPackSerializer.Deserialize(managedBytes, ref managedCopy) != managedBytes.Length ||
+                        managedCopy is not { Id: 19, Name: "cell", Score: -3.25 })
+                        throw new Exception("Managed nullable read changed fields or consumed width.");
+                    managedCopy = new ManagedCell { Id = 41, Name = "previous", Score = 7.5 };
+                    failed = false;
+                    try { LuminPackSerializer.Deserialize(managedBytes.AsSpan(0, managedBytes.Length - 1), ref managedCopy); }
+                    catch { failed = true; }
+                    if (!failed || managedCopy is not { Id: 41, Name: "previous", Score: 7.5 })
+                        throw new Exception("A truncated managed nullable changed the existing value.");
+
                     var plain = new PlainGraph { Text = new List<string> { "abc" }, Cell = packed };
                     byte[] plainBytes = LuminPackSerializer.Serialize<PlainGraph, LuminPackUtf8TokenOptions>(plain);
                     PlainGraph reused = new PlainGraph { Text = new List<string>(), Cell = null };
@@ -276,6 +291,14 @@ internal static class SerializerBinaryEntryShapeRegression
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
         var declarations = driver.GetRunResult().GeneratedTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
         VerifyCollectionReadBoundaries(declarations);
+        var managedNullableReader = declarations.Single(method => (method.Identifier.ValueText is "Read" or "RootRead") &&
+            method.ParameterList.Parameters.Count == 2 &&
+            method.ParameterList.Parameters[1].Type?.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>()
+                .Any(name => name.Identifier.ValueText == "ManagedCell") == true &&
+            method.Body?.ToString().Contains("Invalid nullable element marker.", StringComparison.Ordinal) == true);
+        if (managedNullableReader.Body!.ToString().Contains("GetValueRefOrDefaultRef", StringComparison.Ordinal) ||
+            managedNullableReader.Body.ToString().Contains("ReadNativeNullablePayload", StringComparison.Ordinal))
+            throw new InvalidOperationException("A managed nullable reader populated nullable storage in place.");
         var capturedRoot = declarations.FirstOrDefault(method => method.Body != null &&
             method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().Contains("CapturedRecord", StringComparison.Ordinal) == true) &&
             method.Body.ToString().Contains(".ReserveRecord(", StringComparison.Ordinal));

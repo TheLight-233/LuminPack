@@ -193,11 +193,13 @@ internal static class ClosedGenericOwnerFile
             if (nullable)
             {
                 FormatterModel argument = model.Arguments[0];
-                bool direct = argument.Raw && argument.Type != "bool" && (argument.Payload == null || argument.RawStorage);
-                w.Line("#if NET8_0_OR_GREATER");
-                // Native reads validate the payload before their single store. Stage compound reads to preserve failure publication.
+                bool direct = model.UnmanagedNullablePayload && argument.Raw && argument.Type != "bool" &&
+                    (argument.Payload == null || argument.RawStorage);
+                bool staged = model.UnmanagedNullablePayload && !direct;
+                // Native reads validate the payload before their single store.
                 if (direct)
                 {
+                    w.Line("#if NET8_0_OR_GREATER");
                     w.Line("if (global::System.IntPtr.Size == 8)");
                     w.Open();
                     if (model.Supports("ReadNativeNullablePayload"))
@@ -212,8 +214,10 @@ internal static class ClosedGenericOwnerFile
                     w.Close();
                     w.Line("#endif");
                 }
-                else
+                else if (staged)
                 {
+                    // Compound reads publish the temporary nullable only after the payload reader succeeds.
+                    w.Line("#if NET8_0_OR_GREATER");
                     w.Line(model.Type + " staged = default;");
                     GenericOwnerFile.NullablePayload(w, argument.Type, "staged");
                     FormatterElementEmitter.Read(w, set, argument, "payload", fresh: true);
@@ -225,7 +229,7 @@ internal static class ClosedGenericOwnerFile
                 w.Line(argument.Type + " item0 = default!;");
                 FormatterElementEmitter.Read(w, set, argument, "item0", fresh: true);
                 w.Line("value = item0;");
-                if (!direct)
+                if (staged)
                     w.Line("#endif");
                 return;
             }

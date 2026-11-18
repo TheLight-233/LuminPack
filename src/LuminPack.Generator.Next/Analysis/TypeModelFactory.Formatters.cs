@@ -176,7 +176,8 @@ internal static partial class TypeModelFactory
                 if (isNullable)
                 {
                     var nullable = NullableCollectionStorage(named, arguments[0]);
-                    return new FormatterModel(spelling, definition, arguments, nullableStorage: nullable.Layout, nullableEncoding: nullable.Encoding);
+                    return new FormatterModel(spelling, definition, arguments, nullableStorage: nullable.Layout,
+                        nullableEncoding: nullable.Encoding, unmanagedNullablePayload: named.TypeArguments[0].IsUnmanagedType);
                 }
                 bool raw = definition == GenericIdentity.ValueTuple && rawCollection;
                 return new FormatterModel(spelling, definition, arguments, raw, rawCollection, layout);
