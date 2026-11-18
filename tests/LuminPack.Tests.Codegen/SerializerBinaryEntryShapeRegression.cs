@@ -235,13 +235,24 @@ internal static class SerializerBinaryEntryShapeRegression
                 private static void CheckNullReadOutlining(byte[] nullObject)
                 {
                     var text = LuminPackSerializer.Serialize(new TextReadRoot { Text = "value" });
-                    if (LuminPackSerializer.Deserialize<TextReadRoot>(text).Text != "value")
+                    var textCopy = LuminPackSerializer.Deserialize<TextReadRoot>(text);
+                    if (textCopy.Text != "value")
                         throw new Exception("The compact string root changed its payload.");
+                    bool failed = false;
+                    try { LuminPackSerializer.Deserialize(text.AsSpan(0, 1), ref textCopy); }
+                    catch { failed = true; }
+                    if (!failed || textCopy.Text != "value")
+                        throw new Exception("The compact string root accepted a truncated record or changed its target.");
 
                     var wide = LuminPackSerializer.Serialize(new WideReadRecord { A = -17, H = 39 });
                     var wideCopy = LuminPackSerializer.Deserialize<WideReadRecord>(wide);
                     if (wideCopy.A != -17 || wideCopy.H != 39)
                         throw new Exception("The outlined record root changed its payload.");
+                    failed = false;
+                    try { LuminPackSerializer.Deserialize(wide.AsSpan(0, 2), ref wideCopy); }
+                    catch { failed = true; }
+                    if (!failed || wideCopy.A != -17 || wideCopy.H != 39)
+                        throw new Exception("The outlined record root accepted a truncated record or changed its target.");
 
                     var graph = new UnionReadGraph { Value = new ReadCase { Number = 31 } };
                     var copy = LuminPackSerializer.Deserialize<UnionReadGraph>(LuminPackSerializer.Serialize(graph));
@@ -255,7 +266,7 @@ internal static class SerializerBinaryEntryShapeRegression
                         LuminPackSerializer.Deserialize<PlainGraph, LuminPackUtf8TokenOptions>(nullObject) is not null)
                         throw new Exception("The outlined root null marker changed target publication.");
 
-                    bool failed = false;
+                    failed = false;
                     try { LuminPackSerializer.Deserialize<PlainGraph, LuminPackUtf8TokenOptions>(ReadOnlySpan<byte>.Empty, ref target); }
                     catch { failed = true; }
                     if (!failed || !ReferenceEquals(existing, target))
@@ -407,6 +418,9 @@ internal static class SerializerBinaryEntryShapeRegression
             if (reads.Length == 0 || reads.Any(method => method.DescendantNodes().OfType<LocalFunctionStatementSyntax>()
                     .Any(local => local.Identifier.ValueText == "ReadNonNull") != outlined))
                 throw new InvalidOperationException(type + " has the wrong binary null read boundary.");
+            if (reads.Any(method => method.DescendantNodes().OfType<InvocationExpressionSyntax>().Count(call =>
+                    call.Expression is MemberAccessExpressionSyntax access && access.Name.Identifier.ValueText == "CheckInput") != 1))
+                throw new InvalidOperationException(type + " did not check the span input limit once.");
         }
     }
 

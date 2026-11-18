@@ -396,11 +396,11 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         }
         if (shape.OutlineNonNullRead && api is SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef)
         {
-            const string cap = "                        LuminPackInputPolicy.CheckInput(buffer.Length, %LIMIT%);\n";
             binaryRead = NullObjectSpanRead + "\n" +
                 "                [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]\n" +
-                LocalRead("ReadNonNull", "ReadOnlySpan<byte>", binaryRead.Replace(cap, string.Empty));
+                LocalRead("ReadNonNull", "ReadOnlySpan<byte>", binaryRead);
         }
+        binaryRead = BinarySpanInputCheck + binaryRead;
         string statements = api switch
         {
             SerializerApi.SerializeArray => AllocatingWrite(shape, measured),
@@ -788,8 +788,11 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                         writerBuffer.CompleteWrite(writer.CurrentIndex);
         """ + "\n";
 
-    private const string BinarySpanRead = """
+    private const string BinarySpanInputCheck = """
                         LuminPackInputPolicy.CheckInput(buffer.Length, %LIMIT%);
+        """ + "\n";
+
+    private const string BinarySpanRead = """
                         var state = LuminPackReaderOptionalState.Lease(ref _threadStaticReaderOptionalState);
                         var reader = new LuminPackReader(ref buffer, state);
                         try
@@ -804,7 +807,6 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         """ + "\n";
 
     private const string NullObjectSpanRead = """
-                        LuminPackInputPolicy.CheckInput(buffer.Length, %LIMIT%);
                         if (!buffer.IsEmpty && buffer[0] == global::LuminPack.Code.LuminPackCode.NullObject)
                             return 1;
                         return ReadNonNull(buffer, ref value);
@@ -992,14 +994,12 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         """ + "\n";
 
     private const string RawRead = """
-                        LuminPackInputPolicy.CheckInput(buffer.Length, %LIMIT%);
                         if (buffer.Length < Unsafe.SizeOf<%TYPE%>())
                             LuminPackExceptionHelper.ThrowSpanOutOfRange(Unsafe.SizeOf<%TYPE%>());
                         return LuminPackReader.ReadComplete(ref MemoryMarshal.GetReference(buffer), ref value);
         """ + "\n";
 
     private const string StatelessRead = """
-                        LuminPackInputPolicy.CheckInput(buffer.Length, %LIMIT%);
         %ENUMCHECK%                var reader = new LuminPackReader(ref buffer);
                         %READ%
                         return reader.Position;
