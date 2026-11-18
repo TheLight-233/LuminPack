@@ -381,17 +381,11 @@ internal static class DictionaryOwnerFile
                         w.Line("if (value.Count == 0 && " + memory + ".SizeOf<global::System.IntPtr>() == 8 &&");
                         w.Line("    global::System.Object.ReferenceEquals(value.Comparer, global::System.Collections.Generic.EqualityComparer<" + key + ">.Default))");
                         w.Open();
+                        ValidateRawPairs("refillSource", "refillBytes");
                         w.Line("int refillVersion = global::LuminPack.Code.LuminPackMarshal.GetDictionaryView(value)._version;");
                         w.Line("var refillView = global::LuminPack.Code.LuminPackMarshal.PrepareDictionaryRefill(value, length);");
                         w.Line("ref var refillRef = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(refillView._entries!);");
-                        w.Line("int refillIndex = 0;");
-                        w.Line("do");
-                        w.Open();
-                        w.Line("ref var refillEntry = ref " + memory + ".Add(ref refillRef, (nint)(uint)refillIndex);");
-                        ReadMember("operationState", key, "refillEntry.Key");
-                        ReadMember("operationState", value, "refillEntry.Value");
-                        w.Close();
-                        w.Line("while (++refillIndex < length);");
+                        FillRawEntries("refillView", "refillRef", "refillSource", "refillBytes", "refillEntry", "refillRemaining");
                         w.Line("if (!global::LuminPack.Code.LuminPackMarshal.TryRebuildFreshDictionaryBuckets(refillView, length))");
                         w.Indented(() => w.Line("ReplayRejectedRefill(value, ref refillRef, length);"));
                         w.Line("else");
@@ -423,41 +417,12 @@ internal static class DictionaryOwnerFile
                     w.Close();
                     w.Blank();
                     if (pair)
-                    {
-                        // An oversized claim cannot fit after the collection header, so Advance rejects the saturated width.
-                        w.Line("long required = (long)length * " + pairWidth + ";");
-                        w.Line("int byteCount = (int)global::System.Math.Min(required, int.MaxValue);");
-                        w.Line("ref byte source = ref operationState.Cursor;");
-                        // Validate and consume the complete input before issuing any address-only loads.
-                        w.Line("operationState.Advance(byteCount);");
-                    }
+                        ValidateRawPairs("source", "byteCount");
                     w.Line("var result = new " + dictionary + "(length);");
                     w.Line("var dictionaryView = global::LuminPack.Code.LuminPackMarshal.GetDictionaryView(result);");
                     w.Line("ref var firstEntry = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(dictionaryView._entries!);");
                     if (pair)
-                    {
-                        const string read = "global::LuminPack.Core.LuminPackReader.Read";
-                        if (expandPairs)
-                        {
-                            const string marshal = "global::LuminPack.Code.LuminPackMarshal";
-                            w.Line("if (!" + marshal + ".TryExpandDenseRawPairs(" + marshal +
-                                ".CreateReadOnlySpan(ref source, byteCount), dictionaryView, length))");
-                            w.Open();
-                        }
-                        w.Line("ref var entry = ref firstEntry;");
-                        // The storage was allocated for length entries, and the payload check dominates this loop.
-                        w.Line("int remaining = length;");
-                        w.Line("do");
-                        w.Open();
-                        w.Line(read + "(ref source, out entry.Key);");
-                        w.Line(read + "(ref " + memory + ".Add(ref source, " + keyWidth + "), out entry.Value);");
-                        w.Line("entry = ref " + memory + ".Add(ref entry, 1);");
-                        w.Line("source = ref " + memory + ".Add(ref source, " + pairWidth + ");");
-                        w.Close();
-                        w.Line("while (--remaining != 0);");
-                        if (expandPairs)
-                            w.Close();
-                    }
+                        FillRawEntries("dictionaryView", "firstEntry", "source", "byteCount", "entry", "remaining");
                     else
                     {
                         w.Line("ref var entry = ref firstEntry;");
@@ -590,6 +555,40 @@ internal static class DictionaryOwnerFile
                     w.Blank();
                     break;
             }
+        }
+
+        // Bound the full key/value block before loading an address-only field or mutating refill storage.
+        void ValidateRawPairs(string input, string byteCount)
+        {
+            // An oversized claim cannot fit after the collection header, so Advance rejects the saturated width.
+            w.Line("int " + byteCount + " = (int)global::System.Math.Min((long)length * " + pairWidth + ", int.MaxValue);");
+            w.Line("ref byte " + input + " = ref operationState.Cursor;");
+            w.Line("operationState.Advance(" + byteCount + ");");
+        }
+
+        // Both callers have established room for length entries and a complete source block.
+        void FillRawEntries(string view, string first, string input, string byteCount, string entryCursor, string remaining)
+        {
+            const string read = "global::LuminPack.Core.LuminPackReader.Read";
+            if (expandPairs)
+            {
+                const string marshal = "global::LuminPack.Code.LuminPackMarshal";
+                w.Line("if (!" + marshal + ".TryExpandDenseRawPairs(" + marshal + ".CreateReadOnlySpan(ref " + input +
+                    ", " + byteCount + "), " + view + ", length))");
+                w.Open();
+            }
+            w.Line("ref var " + entryCursor + " = ref " + first + ";");
+            w.Line("int " + remaining + " = length;");
+            w.Line("do");
+            w.Open();
+            w.Line(read + "(ref " + input + ", out " + entryCursor + ".Key);");
+            w.Line(read + "(ref " + memory + ".Add(ref " + input + ", " + keyWidth + "), out " + entryCursor + ".Value);");
+            w.Line(entryCursor + " = ref " + memory + ".Add(ref " + entryCursor + ", 1);");
+            w.Line(input + " = ref " + memory + ".Add(ref " + input + ", " + pairWidth + ");");
+            w.Close();
+            w.Line("while (--" + remaining + " != 0);");
+            if (expandPairs)
+                w.Close();
         }
 
         /// <summary>Emits the cold refill replay through the original dictionary's public insertion path.</summary>

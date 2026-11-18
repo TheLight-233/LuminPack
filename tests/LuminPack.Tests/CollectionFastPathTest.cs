@@ -116,15 +116,19 @@ public class CollectionFastPathTest
             LuminPackSerializer.SerializeJson<IReadOnlyDictionary<int, long>, LuminPackUtf16LengthOptions>(source));
     }
 
-    /// <summary>Checks that a freshly allocated raw dictionary is published only after the full pair block is readable.</summary>
-    [Fact]
-    public void TruncatedRawDictionaryLeavesReaderAndTargetUnchanged()
+    /// <summary>Checks the raw pair block before publishing a new dictionary or refilling an empty one.</summary>
+    /// <param name="reuse">Whether the caller supplies an empty destination with retained entry storage.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TruncatedRawDictionaryLeavesReaderAndTargetUnchanged(bool reuse)
     {
         var source = new Dictionary<int, long> { [-1] = long.MinValue, [7] = long.MaxValue };
         byte[] bytes = LuminPackSerializer.Serialize(source);
         ReadOnlySpan<byte> input = bytes.AsSpan(0, bytes.Length - 1);
         var reader = new LuminPackReader(ref input);
-        Dictionary<int, long>? target = null;
+        Dictionary<int, long>? target = reuse ? new Dictionary<int, long>(8) : null;
+        var original = target;
         try
         {
             LuminPackSerializer.Deserialize(ref reader, ref target);
@@ -132,9 +136,32 @@ public class CollectionFastPathTest
         }
         catch (Exception error) when (error.GetType().Name == "LuminPackException")
         {
-            Assert.Null(target);
+            Assert.Same(original, target);
+            if (target is not null)
+                Assert.Empty(target);
             Assert.Equal(0, reader.Position);
         }
+    }
+
+    /// <summary>Retains an empty destination and its packed pair order across a successful refill.</summary>
+    /// <param name="count">The payload size, covering small and dense blocks.</param>
+    [Theory]
+    [InlineData(3)]
+    [InlineData(48)]
+    public void RawDictionaryRefillRetainsDestinationAndPairOrder(int count)
+    {
+        var source = Enumerable.Range(0, count).Reverse().ToDictionary(key => key, key => key * -7);
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        ReadOnlySpan<byte> input = bytes;
+        var reader = new LuminPackReader(ref input);
+        var original = new Dictionary<int, int>(count);
+        var target = original;
+        LuminPackSerializer.Deserialize(ref reader, ref target);
+
+        Assert.Same(original, target);
+        Assert.Equal(source.ToArray(), target.ToArray());
+        Assert.Equal(bytes.Length, reader.Position);
+        Assert.Equal(bytes, LuminPackSerializer.Serialize(target));
     }
 
     /// <summary>Checks integer JSON run separators across empty segments and output growth.</summary>
