@@ -463,6 +463,17 @@ internal static partial class BinaryEmitter
                 Method(stores, "WriteFixedRoot", false, "(ref byte cursor, " + type + " value)", inline, prepared: true);
                 w.Blank();
             }
+            if (CanReserveBoundedNullableObject(model))
+            {
+                string bound = string.Join(" + ", members.Select(member => member.NativeNullablePayload is { } nullable
+                    ? "1 + " + w.A("Unsafe") + ".SizeOf<" + nullable + ">()" : member.Width));
+                w.Line(inline);
+                w.Line("internal static int NullableRootBound() => checked(1 + " + bound + ");");
+                w.Blank();
+                Method(BoundedNullableStores(model, w), "WriteBoundedNullableRoot", false, "(ref byte destination, " + type + " value)",
+                    DirectInlining.Write(model, union: false, sizes: 0) ? inline : null, returns: "int", prepared: true);
+                w.Blank();
+            }
             if (model.MemberWrite)
             {
                 Method(MemberWriteBody(model, w), "RootWriteMember", !fixedProfile, "(scoped ref " + writer + " writer, " + type + "? input)", inline);

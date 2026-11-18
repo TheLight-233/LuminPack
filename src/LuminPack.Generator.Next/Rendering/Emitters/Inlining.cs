@@ -1,5 +1,6 @@
 #nullable disable
 using System.Linq;
+using LuminPack.SourceGenerator.Next.Model;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
@@ -107,6 +108,17 @@ internal static class DirectInlining
     /// <param name="model">The normalized model for this contract.</param>
     /// <returns>Whether the input satisfies the portable write check.</returns>
     internal static bool PortableWrite(PayloadRenderModel model) => PortableCount(model, write: true) <= Limit;
+
+    /// <summary>Whether a packed standalone root's enumerated storage operations fit the direct write budget.</summary>
+    /// <param name="layout">The existing fixed storage transfer tree.</param>
+    /// <returns>Whether the generated stores can inline inside a retained root.</returns>
+    internal static bool PortableStorageWrite(FormatterStorageModel layout) => StorageWriteCalls(layout) <= Limit;
+
+    /// <summary>Counts the view accesses, offsets and stores in a packed storage transfer.</summary>
+    /// <param name="layout">A fixed storage aggregate or scalar leaf.</param>
+    /// <returns>The number of operations in the generated transfer.</returns>
+    private static int StorageWriteCalls(FormatterStorageModel layout) =>
+        !layout.Aggregate ? 2 : (layout.Direct ? 0 : 2) + layout.Fields.Sum(field => StorageWriteCalls(field.Storage));
 
     /// <summary>Whether a portable struct's read root keeps its aggressive inlining hint.</summary>
     /// <param name="model">The normalized model for this contract.</param>

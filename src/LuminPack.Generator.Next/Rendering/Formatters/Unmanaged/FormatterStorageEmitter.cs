@@ -269,7 +269,7 @@ internal static class FormatterStorageEmitter
     /// <param name = "expression">The addressable value expression.</param>
     /// <param name = "wire">The wire used by this operation.</param>
     /// <param name = "write">Whether to emit the write operation.</param>
-    private static void Transfer(CodeWriter w, FormatterStorageModel model, string expression, string wire, bool write)
+    internal static void Transfer(CodeWriter w, FormatterStorageModel model, string expression, string wire, bool write)
     {
         int position = 0, local = 0;
         Visit(w, model, expression, ref local, (leaf, access, isVolatile) =>

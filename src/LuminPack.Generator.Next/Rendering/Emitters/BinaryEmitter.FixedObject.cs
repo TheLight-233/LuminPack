@@ -1,5 +1,6 @@
 #nullable disable
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
@@ -14,6 +15,42 @@ internal static partial class BinaryEmitter
         model.Rejection == null && model.Version == null && model.Bounded == null && model.Mirror == null &&
         !model.HasCallbacks && model.Rent == null && model.Members.Length != 0 &&
         model.Members.All(member => member.IsFixed && !member.Volatile && !member.Mirrored && !member.Property);
+
+    /// <summary>Proves a field-only nullable record can use reserved output without observing writer state.</summary>
+    /// <param name="model">The candidate positional object.</param>
+    /// <returns>Whether every field write has a finite upper bound and requires no writer state.</returns>
+    internal static bool CanReserveBoundedNullableObject(PayloadRenderModel model) =>
+        model.Net8 && !model.IsStruct && model.TypeParameters.Length == 0 && !model.UnionRoot && !model.Circle &&
+        !model.Recursive && model.Rejection == null && model.Version == null && model.Bounded == null && model.Mirror == null &&
+        model.SequenceBase == null && model.Redirect == null && !model.HasCallbacks && model.Rent == null &&
+        model.Members.Any(member => member.NativeNullablePayload != null) &&
+        model.Members.All(member => !member.Volatile && !member.Mirrored && !member.Property &&
+            (member.IsFixed || member.NativeNullablePayload != null));
+
+    /// <summary>Writes the original positional record into a window that fits every nullable presence pattern.</summary>
+    /// <param name="model">The proven nullable record.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <returns>The bounded writer's source statements.</returns>
+    private static List<string> BoundedNullableStores(PayloadRenderModel model, CodeWriter w)
+    {
+        string unsafeType = w.A("Unsafe");
+        string writer = w.A("LuminPackWriter");
+        string memberCount = model.Members.Length.ToString(CultureInfo.InvariantCulture);
+        var body = new List<string>
+        {
+            "destination = (byte)" + memberCount + ";",
+            "ref byte cursor = ref " + unsafeType + ".Add(ref destination, 1);",
+        };
+        foreach (var member in model.Members)
+        {
+            string store = member.NativeNullablePayload is { } nullable
+                ? "WriteReservedNullable<" + nullable + ">(ref cursor, value." + member.Name + ")"
+                : "WriteReserved(ref cursor, in value." + member.Name + ")";
+            body.Add("cursor = ref " + writer + "." + store + ";");
+        }
+        body.Add("return (int)" + unsafeType + ".ByteOffset(ref destination, ref cursor);");
+        return body;
+    }
 
     /// <summary>Writes one fixed class through a single checked reservation and cursor publication.</summary>
     /// <param name="model">The class record.</param>

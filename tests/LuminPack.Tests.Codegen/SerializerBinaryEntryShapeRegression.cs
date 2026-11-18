@@ -29,6 +29,15 @@ internal static class SerializerBinaryEntryShapeRegression
             [LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]
             public struct PackedCell { public byte X; public long Y; }
 
+            [LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]
+            public struct PackedNullableCell { public int Id; public long? Total; }
+
+            [LuminPackable]
+            public sealed class BoundedNullableCell { public ushort Id; public long? Total; public bool? Flag; }
+
+            [LuminPackable]
+            public sealed class ObservedNullableCell { public long? Total { get; set; } }
+
             [LuminPackable] public struct ManagedCell { public int Id; public string Name; public double Score; }
             [LuminPackable, LuminPackOption(UntrustedData = true, MaxStringLength = 3)]
             public sealed class BoundedManagedGraph { public ManagedCell? Value; }
@@ -121,6 +130,7 @@ internal static class SerializerBinaryEntryShapeRegression
                     using var buffer = new LuminBufferWriter(true);
                     CheckTextRoots(buffer);
                     CheckFixedArray(buffer);
+                    CheckBoundedNullableRoots(buffer);
                     var raw = new NativeCell { X = -321, Y = 412 };
                     var rawBytes = LuminPackSerializer.Serialize(raw);
                     LuminPackSerializer.Serialize(raw, buffer);
@@ -209,6 +219,51 @@ internal static class SerializerBinaryEntryShapeRegression
                     var customBytes = LuminPackSerializer.Serialize(new CustomGraph { Cell = new CustomCell { Value = 71 } });
                     if (LuminPackSerializer.Deserialize<CustomGraph>(customBytes).Cell.Value != 71)
                         throw new Exception("Nested Custom read changed data.");
+                }
+
+                private static void CheckBoundedNullableRoots(LuminBufferWriter buffer)
+                {
+                    Span<byte> scratch = new byte[32];
+                    for (int mask = 0; mask < 4; mask++)
+                    {
+                        var record = new BoundedNullableCell
+                        {
+                            Id = 0x2175,
+                            Total = (mask & 1) == 0 ? null : 0x1122334455667788L,
+                            Flag = (mask & 2) == 0 ? null : true,
+                        };
+                        var expected = new LuminPackWriter(ref scratch);
+                        expected.WriteObjectHeader(3);
+                        expected.Write(record.Id);
+                        expected.WriteNullable(record.Total);
+                        expected.WriteNullable(record.Flag);
+                        buffer.ResetWrittenCount();
+                        LuminPackSerializer.Serialize(record, buffer);
+                        if (!buffer.GetSpan().SequenceEqual(expected.GetSpan()))
+                            throw new Exception("A bounded nullable root changed its markers or field payload.");
+                        LuminPackSerializer.Serialize(record, buffer);
+                        if (buffer.CurrentIndex != 2 * expected.CurrentIndex ||
+                            !buffer.GetSpan().Slice(expected.CurrentIndex).SequenceEqual(expected.GetSpan()))
+                            throw new Exception("A bounded nullable root changed append or committed its upper bound.");
+                    }
+                    buffer.ResetWrittenCount();
+                    LuminPackSerializer.Serialize((BoundedNullableCell)null, buffer);
+                    if (!buffer.GetSpan().SequenceEqual(new byte[] { 255 }))
+                        throw new Exception("A bounded nullable root changed its object null marker.");
+
+                    var packed = new PackedNullableCell { Id = -21 };
+                    Unsafe.AsRef(in Nullable.GetValueRefOrDefaultRef(in packed.Total)) = 0x1122334455667788L;
+                    var packedWriter = new LuminPackWriter(ref scratch);
+                    packedWriter.Write(packed.Id);
+                    packedWriter.Write(false);
+                    packedWriter.Write(0x1122334455667788L);
+                    buffer.ResetWrittenCount();
+                    LuminPackSerializer.Serialize(packed, buffer);
+                    if (!buffer.GetSpan().SequenceEqual(packedWriter.GetSpan()))
+                        throw new Exception("A packed retained root dropped the stored payload of an absent nullable.");
+                    buffer.ResetWrittenCount();
+                    LuminPackSerializer.Serialize(new ObservedNullableCell { Total = 37L }, buffer);
+                    buffer.ResetWrittenCount();
                 }
 
                 private static void CheckManagedNullablePolicies(ManagedCell value)
@@ -433,6 +488,19 @@ internal static class SerializerBinaryEntryShapeRegression
         if (!nativeNullable.ToString().Contains("Nullable.GetValueRefOrDefaultRef(in value)", StringComparison.Ordinal) ||
             nativeNullable.ToString().Contains("var record = value", StringComparison.Ordinal))
             throw new InvalidOperationException("A native nullable root copied the wrapper before writing its payload.");
+        var packedNullable = Retained("PackedNullableCell");
+        var boundedNullable = Retained("BoundedNullableCell");
+        if (!packedNullable.Contains("TryBeginFixedRoot(13)", StringComparison.Ordinal) ||
+            !packedNullable.Contains("WriteFixedStorage", StringComparison.Ordinal) ||
+            !boundedNullable.Contains("WriteBoundedNullableRoot", StringComparison.Ordinal) ||
+            !boundedNullable.Contains("CompleteWrite(written)", StringComparison.Ordinal) ||
+            Retained("ObservedNullableCell").Contains("WriteBoundedNullableRoot", StringComparison.Ordinal))
+            throw new InvalidOperationException("Nullable retained roots did not select the expected bounded or fallback operation.");
+
+        string Retained(string type) => methods.Single(method =>
+            method.Identifier.ValueText.StartsWith("LuminIntercept_" + type + "_", StringComparison.Ordinal) &&
+            method.ReturnType.ToString() == "void" &&
+            method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "LuminBufferWriter")).ToString();
         foreach (string type in new[] { "VersionGraph", "CustomGraph" })
         {
             var stateful = methods.Single(method => method.Identifier.ValueText.StartsWith("LuminIntercept_" + type + "_", StringComparison.Ordinal) &&

@@ -146,8 +146,14 @@ internal static partial class TypeModelFactory
             if (!containsReferences && (KnownValueTypes.Contains(name) || payload is StructModel
                 { Storage: StructStorage.RawUnmanaged, StoragePlan: null, Layout: null, Versioned: false, Rejection: null }))
                 return new EntryShape(EntryKind.RawScalar);
-            if (payload is StructModel { Storage: StructStorage.PortableUnmanaged, Layout: { Complete: true } layout, Rejection: null })
-                return new EntryShape(EntryKind.FixedWidthRecord, width: layout.WireSize);
+            if (payload is StructModel { Storage: StructStorage.PortableUnmanaged, Rejection: null } structure)
+            {
+                if (type is INamedTypeSymbol { IsGenericType: false } && UnmanagedOwnerFile.CanWriteFixedRoot(structure))
+                    return new EntryShape(EntryKind.FixedWidthRecord,
+                        ReadableTypeName.Of(GeneratedNames.PayloadKey(structure.Identity.GlobalName)), structure.StoragePlan!.WireSize);
+                if (structure.Layout is { Complete: true } layout)
+                    return new EntryShape(EntryKind.FixedWidthRecord, width: layout.WireSize);
+            }
             if (name == "global::System.TimeZoneInfo")
                 return new EntryShape(EntryKind.TimeZoneSnapshot);
             if (name == "global::System.Version" && payload == null && type.DeclaringSyntaxReferences.IsEmpty)
@@ -160,6 +166,10 @@ internal static partial class TypeModelFactory
                 return new EntryShape(EntryKind.RootCulture);
             if (type is INamedTypeSymbol { IsSealed: true, IsGenericType: false } && FixedRootObject(payload) is { } fixedRoot)
                 return new EntryShape(EntryKind.FixedObject, fixedRoot.Readable);
+            if (type is INamedTypeSymbol { IsSealed: true, IsGenericType: false } &&
+                payload is RecordModel { Implicit: false, Derived: false } &&
+                RenderModelFactory.Create(payload, Options) is { } boundedRoot && BinaryEmitter.CanReserveBoundedNullableObject(boundedRoot))
+                return new EntryShape(EntryKind.BoundedNullableObject, boundedRoot.Readable);
             if (type is IArrayTypeSymbol { IsSZArray: true } array)
             {
                 if (HasRetainedDirectWrite && IsKnownScalar(array.ElementType))

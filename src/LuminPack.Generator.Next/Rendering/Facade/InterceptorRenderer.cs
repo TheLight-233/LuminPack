@@ -603,6 +603,11 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                 "                    if (!Unsafe.IsNullRef(ref destination))\n                    {\n" + Indent(Indent(fixedRoot.Store)) +
                 "                        writerBuffer.CompleteWrite(length);\n                        return;\n                    }\n                }\n";
         }
+        else if (shape.Kind == EntryKind.FixedWidthRecord && shape.Element != null)
+            hot = RetainedFixedStorage.Replace("%OWNER%", FixedObjectOwner(shape.Element)).Replace("%WIDTH%",
+                shape.Width!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        else if (shape.Kind == EntryKind.BoundedNullableObject)
+            hot = RetainedBoundedNullableObject.Replace("%OWNER%", FixedObjectOwner(shape.Element!));
         else if (shape.NullObject)
             hot = RetainedNullRoot;
         else
@@ -612,6 +617,42 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             "                static void WriteRootSlow(in %TYPE% value, LuminBufferWriter writerBuffer)\n                {\n" +
             Indent(BinaryBufferWrite) + "                }\n";
     }
+
+    private const string RetainedFixedStorage = """
+                if (writerBuffer is not null)
+                {
+                    ref byte destination = ref writerBuffer.TryBeginFixedRoot(%WIDTH%);
+                    if (!Unsafe.IsNullRef(ref destination))
+                    {
+                        %OWNER%.WriteFixedStorage(ref destination, in value);
+                        writerBuffer.CompleteWrite(%WIDTH%);
+                        return;
+                    }
+                }
+
+    """;
+
+    private const string RetainedBoundedNullableObject = """
+                if (writerBuffer is not null)
+                {
+                    var record = value;
+                    ref byte destination = ref writerBuffer.TryBeginFixedRoot(record is null ? 1 : %OWNER%.NullableRootBound());
+                    if (!Unsafe.IsNullRef(ref destination))
+                    {
+                        int written;
+                        if (record is null)
+                        {
+                            destination = LuminPackCode.NullObject;
+                            written = 1;
+                        }
+                        else
+                            written = %OWNER%.WriteBoundedNullableRoot(ref destination, record);
+                        writerBuffer.CompleteWrite(written);
+                        return;
+                    }
+                }
+
+    """;
 
     private const string FixedObjectArrayWrite = """
                         var items = value;

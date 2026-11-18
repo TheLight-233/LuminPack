@@ -102,6 +102,9 @@ internal enum EntryKind
     /// <summary>An ordinary positional class with one marker and fixed-width fields.</summary>
     FixedObject,
 
+    /// <summary>An ordinary positional class with a fixed bound and at least one nullable field.</summary>
+    BoundedNullableObject,
+
     /// <summary>A contiguous array of fixed-width positional classes.</summary>
     FixedObjectArray,
 
