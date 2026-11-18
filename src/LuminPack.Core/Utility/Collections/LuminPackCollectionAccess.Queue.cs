@@ -111,7 +111,9 @@ public static partial class LuminPackCollectionAccess
     public static bool TryWriteIntegerQueueJson<TOptions, T>(scoped ref LuminPackJsonWriter writer, Queue<T> queue)
         where TOptions : struct, ILuminPackOptions where T : unmanaged
     {
-        if (default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8 ||
+        var encoding = default(TOptions).StringEncoding;
+        if ((encoding != LuminPackStringEncoding.UTF8 &&
+             (encoding != LuminPackStringEncoding.UTF16 || !LuminPackMarshal.ConstantStringProfile<TOptions>())) ||
             (typeof(T) != typeof(int) && typeof(T) != typeof(long)))
             return false;
         int count = queue.Count;
@@ -253,7 +255,7 @@ public static partial class LuminPackCollectionAccess
     }
 
     /// <summary>Shares one integer loop across both physical queue segments.</summary>
-    /// <typeparam name="TOptions">The compiled UTF-8 profile.</typeparam>
+    /// <typeparam name="TOptions">The compiled UTF-8 or UTF-16 profile.</typeparam>
     /// <typeparam name="T">The exact framework integer type.</typeparam>
     /// <param name="writer">The open JSON array writer.</param>
     /// <param name="items">The current segment.</param>
@@ -265,7 +267,7 @@ public static partial class LuminPackCollectionAccess
         WriteOrderedIntegerItems<TOptions, T>(ref writer, items, ref version, captured, reverse: false);
 
     /// <summary>Writes an active array segment across windows in the same order as the collection enumerator.</summary>
-    /// <typeparam name="TOptions">The compiled UTF-8 profile.</typeparam>
+    /// <typeparam name="TOptions">The compiled UTF-8 or UTF-16 profile.</typeparam>
     /// <typeparam name="T">The exact framework integer type.</typeparam>
     /// <param name="writer">The open JSON array writer.</param>
     /// <param name="items">The remaining values in storage order.</param>
@@ -294,7 +296,7 @@ public static partial class LuminPackCollectionAccess
     }
 
     /// <summary>Writes the item captured before a separator can commit a window and invoke the caller.</summary>
-    /// <typeparam name="TOptions">The compiled UTF-8 profile.</typeparam>
+    /// <typeparam name="TOptions">The compiled UTF-8 or UTF-16 profile.</typeparam>
     /// <typeparam name="T">The selected scalar.</typeparam>
     /// <param name="writer">The open JSON array writer.</param>
     /// <param name="item">The captured element.</param>

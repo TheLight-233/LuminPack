@@ -66,6 +66,9 @@ public sealed class OrderedCollectionFastPathTest
         LuminPackSerializer.SerializeJson<Queue<int>, LuminPackUtf8LengthOptions>(queue, output);
         Assert.Equal(System.Text.Json.JsonSerializer.Serialize(queue), output.Text);
         output = new WindowOutput(61);
+        LuminPackSerializer.SerializeJson<Queue<int>, LuminPackUtf16LengthOptions>(queue, output);
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(queue), output.GetText(Encoding.Unicode));
+        output = new WindowOutput(61);
         LuminPackSerializer.SerializeJson<Stack<int>, LuminPackUtf8LengthOptions>(stack, output);
         Assert.Equal(System.Text.Json.JsonSerializer.Serialize(stack), output.Text);
     }
@@ -75,7 +78,8 @@ public sealed class OrderedCollectionFastPathTest
     public void OrderedJsonStillDetectsMutationInOutputCallback()
     {
         var queue = new Queue<int>(Enumerable.Repeat(int.MinValue, 20));
-        Assert.Throws<InvalidOperationException>(() => WriteQueue(queue, new WindowOutput(12, () => queue.Enqueue(17))));
+        Assert.Throws<InvalidOperationException>(() => WriteQueue<LuminPackUtf8LengthOptions>(queue, new WindowOutput(12, () => queue.Enqueue(17))));
+        Assert.Throws<InvalidOperationException>(() => WriteQueue<LuminPackUtf16LengthOptions>(queue, new WindowOutput(12, () => queue.Enqueue(17))));
         var stack = new Stack<int>(Enumerable.Repeat(int.MinValue, 20));
         Assert.Throws<InvalidOperationException>(() => WriteStack(stack, new WindowOutput(12, () => stack.Push(17))));
         var heap = new PriorityQueue<int, long>();
@@ -83,11 +87,11 @@ public sealed class OrderedCollectionFastPathTest
         heap.Enqueue(17, 3);
         Assert.Throws<InvalidOperationException>(() => WriteHeap(heap, new WindowOutput(12, () => heap.Enqueue(90, 90))));
 
-        static void WriteQueue(Queue<int> value, WindowOutput output)
+        static void WriteQueue<TOptions>(Queue<int> value, WindowOutput output) where TOptions : struct, ILuminPackOptions
         {
             using var owner = new LuminPack.Utility.LuminBufferWriter(true);
             var writer = new LuminPackJsonWriter(output, owner.WriterState, 12);
-            try { LuminPackSerializer.SerializeJson<Queue<int>, LuminPackUtf8LengthOptions>(ref writer, value); }
+            try { LuminPackSerializer.SerializeJson<Queue<int>, TOptions>(ref writer, value); }
             finally { writer.Dispose(); }
         }
 
@@ -171,7 +175,12 @@ public sealed class OrderedCollectionFastPathTest
         private bool _first = true;
 
         /// <summary>Gets the accumulated UTF-8 output.</summary>
-        internal string Text => Encoding.UTF8.GetString(_bytes.ToArray());
+        internal string Text => GetText(Encoding.UTF8);
+
+        /// <summary>Gets the accumulated text in its selected encoding.</summary>
+        /// <param name="encoding">The encoding used by the writer.</param>
+        /// <returns>The decoded output.</returns>
+        internal string GetText(Encoding encoding) => encoding.GetString(_bytes.ToArray());
 
         /// <inheritdoc/>
         public void Advance(int count)
