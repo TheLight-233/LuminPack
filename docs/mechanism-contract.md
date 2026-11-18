@@ -173,6 +173,7 @@ The history of individual approvals lives in Git. When this document, the code a
 - **Rectangular nullable writes**. Zero-based rectangular arrays whose elements have a native standalone nullable payload can write the existing marker-prefixed elements inside a proven output window. The array dimensions and per-element null markers are unchanged. Other element contracts or short windows use the existing operation.
 - **Binary Union tag lookup**. Generated case tables may map the full case hashes to dense indices for a jump table. Each selected arm verifies the original tag before reading its payload. Unknown tags, registered escapes, reader checks and failure publication keep the existing contract.
 - **Memory layout initialization**. A modern JIT consumer retaining the optimized binary `Memory<T>` reader can initialize the exact-array layout probe once before the reader is first compiled. This does not initialize formatter registration. Other layouts and backends retain their checked fallback.
+- **Counted linked-list writes**. When framework node storage is verified, eligible raw or built-in-profile string linked lists can write the observed count by following the circular links directly. Formatter operations that can invoke user code and unrecognized storage keep the public traversal.
 
 ### Options and generation
 

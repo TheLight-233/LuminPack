@@ -29,6 +29,12 @@ internal static class LinkedListOwnerFile
             c.CountedWrite("value");
             return;
         }
+        if ((c.Text || !c.Forwarded) && c.Supports("LinkedListRingWriter"))
+        {
+            string write = c.Text ? "TryWriteLinkedListStrings<TLuminProfile>" : "TryWriteLinkedListRaw";
+            w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess." + write + "(ref operationState, value))");
+            w.Indented(() => w.Line("goto operationComplete_RootWrite;"));
+        }
         w.Line("int countPosition = operationState.BeginCollection();");
         w.Line("int count = 0;");
         w.Line("var node = value.First;");

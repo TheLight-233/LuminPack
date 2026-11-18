@@ -1,11 +1,85 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using LuminPack.Core;
+using LuminPack.Option;
 
 namespace LuminPack.Code;
 
 public static partial class LuminPackCollectionAccess
 {
+    /// <summary>Writes a native linked-list record directly from a verified circular node layout.</summary>
+    /// <typeparam name="T">The native element type.</typeparam>
+    /// <param name="writer">The current binary writer.</param>
+    /// <param name="list">The source list.</param>
+    /// <returns>Whether the record was written. False leaves the writer unchanged.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static bool TryWriteLinkedListRaw<T>(scoped ref LuminPackWriter writer, LinkedList<T> list) where T : unmanaged
+    {
+        int count = list.Count;
+        int width = Unsafe.SizeOf<T>();
+        if (!LinkedListLinking.Available || list.GetType() != typeof(LinkedList<T>) || list.First is not { } node ||
+            count == 0 || writer.Position < 0 || writer.RecordRoom() < sizeof(int) + (long)count * width)
+            return false;
+
+        int header = writer.BeginCollection();
+        int written = 0;
+        ref byte cursor = ref writer.CurrentReference;
+        do
+        {
+            var item = node.Value;
+            LuminPackWriter.Write(ref cursor, in item);
+            cursor = ref Unsafe.Add(ref cursor, (nint)(uint)width);
+            node = NextNode(node);
+        }
+        while (++written < count && node is not null);
+        writer.CompleteRun(written * width);
+        writer.EndCollection(header, written);
+        writer.CheckBuffer();
+        return true;
+    }
+
+    /// <summary>Writes a linked list of strings in ring order under a callback-free string profile.</summary>
+    /// <typeparam name="TProfile">The compiled string profile.</typeparam>
+    /// <param name="writer">The current binary writer.</param>
+    /// <param name="list">The source list.</param>
+    /// <returns>Whether the record was written. False leaves the writer unchanged.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static bool TryWriteLinkedListStrings<TProfile>(scoped ref LuminPackWriter writer, LinkedList<string?> list)
+        where TProfile : struct, ILuminPackOptions
+    {
+        // A caller-owned profile can run user code during an element write. Leave that path on the public node walk.
+        if (!(typeof(TProfile) == typeof(LuminPackUtf16LengthOptions) || typeof(TProfile) == typeof(LuminPackUtf8LengthOptions) ||
+              typeof(TProfile) == typeof(LuminPackUtf16TokenOptions) || typeof(TProfile) == typeof(LuminPackUtf8TokenOptions) ||
+              typeof(TProfile) == typeof(LuminPackUtf16VarIntOptions) || typeof(TProfile) == typeof(LuminPackUtf8VarIntOptions) ||
+              typeof(TProfile) == typeof(LuminPackDefaultOptions) || typeof(TProfile) == typeof(LuminPackDeclaredOptions)) ||
+            !LinkedListLinking.Available || list.GetType() != typeof(LinkedList<string>) || list.First is not { } node)
+            return false;
+
+        int count = list.Count;
+        if (count == 0)
+            return false;
+        int header = writer.BeginCollection();
+        int written = 0;
+        do
+        {
+            writer.Write<TProfile>(node.Value);
+            node = NextNode(node);
+        }
+        while (++written < count && node is not null);
+        writer.EndCollection(header, written);
+        writer.CheckBuffer();
+        return true;
+    }
+
+    /// <summary>Reads the next node from the verified ring.</summary>
+    /// <typeparam name="T">The linked-list element type.</typeparam>
+    /// <param name="node">The current node.</param>
+    /// <returns>The next node, which may point back to the head.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static LinkedListNode<T>? NextNode<T>(LinkedListNode<T> node) =>
+        LuminFieldLayout.Field<LinkedListNode<T>?>(node, LuminCollectionLayouts.LinkedNodeNext);
+
     /// <summary>Starts linking decoded items into an empty linked list as they are read.</summary>
     /// <typeparam name="T">The element type.</typeparam>
     /// <param name="list">The fresh or cleared destination.</param>

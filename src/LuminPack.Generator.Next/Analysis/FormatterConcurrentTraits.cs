@@ -435,6 +435,30 @@ internal static class FormatterConcurrentTraits
                 SymbolEqualityComparer.Default.Equals(method.ReturnType, builder.Construct(method.TypeParameters[0], method.TypeParameters[1])));
     }
 
+    /// <summary>Checks a layout-probed linked-list writer against its full static signature.</summary>
+    /// <param name="compilation">The consumer's Core and framework references.</param>
+    /// <param name="list">The closed list type receiving the fast path.</param>
+    /// <param name="text">Whether the helper specializes the string profile.</param>
+    /// <returns>Whether the runtime exposes the corresponding writer.</returns>
+    internal static bool HasLinkedListRingWriter(Compilation compilation, INamedTypeSymbol list, bool text)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        var comparer = SymbolEqualityComparer.Default;
+        return writer != null && (!text || options != null) && owner is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } &&
+            owner.GetMembers(text ? "TryWriteLinkedListStrings" : "TryWriteLinkedListRaw").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1 } &&
+                method.ReturnType.SpecialType == SpecialType.System_Boolean && !method.ReturnsByRef && !method.ReturnsByRefReadonly &&
+                method.Parameters.Length == 2 && method.Parameters[0].RefKind == RefKind.Ref && comparer.Equals(method.Parameters[0].Type, writer) &&
+                method.Parameters[1].RefKind == RefKind.None && (text
+                    ? comparer.Equals(method.Parameters[1].Type, list) && method.TypeParameters[0].HasValueTypeConstraint &&
+                        !method.TypeParameters[0].HasUnmanagedTypeConstraint && method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+                        comparer.Equals(method.TypeParameters[0].ConstraintTypes[0], options)
+                    : method.TypeParameters[0].HasUnmanagedTypeConstraint && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+                        comparer.Equals(method.Parameters[1].Type, list.OriginalDefinition.Construct(method.TypeParameters[0]))));
+    }
+
     /// <summary>Checks the optional direct linked-list appender.</summary>
     /// <param name="compilation">The consumer's Core and framework references.</param>
     /// <returns>Whether the referenced helper has the expected public signature.</returns>

@@ -43,9 +43,16 @@ internal static class FormatterCapabilities
             FormatterOrderedCollectionTraits.Capture(compilation, named, definition == "System.Collections.Generic.Stack", result);
         if (definition == "System.Collections.Generic.Queue" && FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))
             result.Add("QueueJsonCapacity");
-        if (definition == "System.Collections.Generic.LinkedList" && named.TypeArguments[0].IsUnmanagedType &&
-            FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation))
-            result.Add("LinkedListRawWindow");
+        if (definition == "System.Collections.Generic.LinkedList")
+        {
+            var element = named.TypeArguments[0];
+            if (element.IsUnmanagedType && FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation))
+                result.Add("LinkedListRawWindow");
+            bool text = element.SpecialType == SpecialType.System_String;
+            if (modern && !unity && (text || element.IsUnmanagedType) &&
+                FormatterConcurrentTraits.HasLinkedListRingWriter(compilation, named, text))
+                result.Add("LinkedListRingWriter");
+        }
         if (definition is "System.Collections.ObjectModel.Collection" or "System.Collections.ObjectModel.ObservableCollection" or
             "System.Collections.ObjectModel.ReadOnlyCollection" or "System.Collections.ObjectModel.ReadOnlyObservableCollection" or
             "System.Runtime.CompilerServices.ReadOnlyCollectionBuilder")
