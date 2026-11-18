@@ -99,7 +99,7 @@ internal static class ImmutableInterfaceOwnerFile
                 {
                     w.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
                     w.Line("operationState.WriteCollectionHeader(" + source + ".Count);");
-                    ImmutableTreeTraversal.Lease(w, source, c.Scalar, () =>
+                    ImmutableTreeTraversal.Lease(w, source, c.Scalar, c.Supports("CollectionStaging"), () =>
                     {
                         if (c.Text && c.Supports("ImmutableStringRun"))
                             w.Line("operationState.WriteStrings<TLuminProfile>(" + ImmutableTreeTraversal.CapturedSpan + ");");
@@ -135,7 +135,7 @@ internal static class ImmutableInterfaceOwnerFile
             ImmutableTreeTraversal.Select(w, c.Sequence, c.Scalar, family, source =>
             {
                 w.Open();
-                ImmutableTreeTraversal.Lease(w, source, c.Scalar, () =>
+                ImmutableTreeTraversal.Lease(w, source, c.Scalar, c.Supports("CollectionStaging"), () =>
                 {
                     if (JsonIntegerRunWriter.TryEmit(w, set, c.Sequence, c.Scalar, ImmutableTreeTraversal.CapturedSpan, readBeforeSeparator: true))
                         return;
@@ -167,8 +167,10 @@ internal static class ImmutableInterfaceOwnerFile
 
         var w = c.W;
         string concrete = Namespace + family + "<" + c.Scalar + ">";
-        string pool = "global::System.Buffers.ArrayPool<" + c.Scalar + ">.Shared";
-        string clear = "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + c.Scalar + ">()";
+        bool staging = c.Supports("CollectionStaging");
+        string pool = staging ? "global::LuminPack.Utility.LuminStaging<" + c.Scalar + ">" :
+            "global::System.Buffers.ArrayPool<" + c.Scalar + ">.Shared";
+        string clear = staging ? "count" : "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + c.Scalar + ">()";
         bool guardedCulture = sorted && c.Text;
         if (guardedCulture)
         {
@@ -403,7 +405,9 @@ internal static class ImmutableInterfaceOwnerFile
         string candidate = "LuminImmutableCandidate<" + c.Sequence + ">";
         string comparer = sorted ? "global::System.Collections.Generic.Comparer<string>.Default" : "global::System.Collections.Generic.EqualityComparer<string>.Default";
         string tree = "global::LuminPack.Utility.LuminTreeStorage";
-        w.Line("var items = global::System.Buffers.ArrayPool<string>.Shared.Rent(length);");
+        bool staging = c.Supports("CollectionStaging");
+        string pool = staging ? "global::LuminPack.Utility.LuminStaging<string>" : "global::System.Buffers.ArrayPool<string>.Shared";
+        w.Line("var items = " + pool + ".Rent(length);");
         w.Line("try");
         w.Open();
         w.Line("ref string first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items);");
@@ -478,7 +482,7 @@ internal static class ImmutableInterfaceOwnerFile
         w.Close();
         w.Line("finally");
         w.Open();
-        w.Line("global::System.Buffers.ArrayPool<string>.Shared.Return(items, true);");
+        w.Line(pool + ".Return(items, " + (staging ? "length" : "true") + ");");
         w.Close();
         w.Blank();
         w.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");

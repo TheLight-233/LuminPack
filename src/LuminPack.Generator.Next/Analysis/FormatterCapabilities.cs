@@ -27,6 +27,11 @@ internal static class FormatterCapabilities
         if (type is not INamedTypeSymbol { IsGenericType: true } named)
             return result.ToArray();
         string definition = named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.Name;
+        if ((SequenceInterface(definition) || definition.StartsWith("System.Collections.Immutable.", StringComparison.Ordinal) ||
+            definition is "System.Collections.Generic.Stack" or "System.Collections.Generic.SortedSet" or "System.Collections.Generic.LinkedList" or
+                "System.Collections.Concurrent.ConcurrentStack" or "System.Collections.Concurrent.ConcurrentBag" or "System.Collections.Frozen.FrozenSet") &&
+            FormatterRuntimeTraits.HasStaging(compilation))
+            result.Add("CollectionStaging");
         if (definition == "System.Collections.Generic.HashSet" &&
             named.TypeArguments[0].IsReferenceType && named.TypeArguments[0].SpecialType != SpecialType.System_String &&
             FormatterOrderedCollectionTraits.HasHashSetTraversal(compilation))

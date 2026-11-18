@@ -32,13 +32,15 @@ internal static class ImmutableTreeTraversal
     /// <param name="w">The source writer.</param>
     /// <param name="source">The concrete immutable tree expression.</param>
     /// <param name="item">The captured element or pair type.</param>
+    /// <param name="staging">Whether Core supplies the thread-local staging lease.</param>
     /// <param name="consume">The statements consuming the complete element span.</param>
-    internal static void Lease(CodeWriter w, string source, string item, Action consume)
+    internal static void Lease(CodeWriter w, string source, string item, bool staging, Action consume)
     {
         w.Line("int capturedCount = " + source + ".Count;");
         w.Line("if (capturedCount != 0)");
         w.Open();
-        string pool = "global::System.Buffers.ArrayPool<" + item + ">.Shared";
+        string pool = staging ? "global::LuminPack.Utility.LuminStaging<" + item + ">" :
+            "global::System.Buffers.ArrayPool<" + item + ">.Shared";
         w.Line("var captured = " + pool + ".Rent(capturedCount);");
         w.Line("try");
         w.Open();
@@ -49,7 +51,8 @@ internal static class ImmutableTreeTraversal
         w.Close();
         w.Line("finally");
         w.Open();
-        w.Line(pool + ".Return(captured, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + item + ">());");
+        w.Line(pool + ".Return(captured, " + (staging ? "capturedCount" :
+            "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + item + ">()") + ");");
         w.Close();
         w.Close();
     }

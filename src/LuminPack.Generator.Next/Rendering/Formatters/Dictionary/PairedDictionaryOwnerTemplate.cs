@@ -1043,7 +1043,7 @@ internal static class PairedDictionaryOwnerTemplate
                         ImmutableTreeTraversal.Select(w, dictionary, key + ", " + value, family, source =>
                         {
                             w.Open();
-                            ImmutableTreeTraversal.Lease(w, source, context.Pair, () =>
+                            ImmutableTreeTraversal.Lease(w, source, context.Pair, context.Supports("CollectionStaging"), () =>
                             {
                                 pairWriter.Begin();
                                 ImmutableTreeTraversal.Items(w, () =>

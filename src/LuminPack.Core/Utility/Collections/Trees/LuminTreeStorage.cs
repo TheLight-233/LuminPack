@@ -544,7 +544,7 @@ public static partial class LuminTreeStorage
                 writer.Write<T>(ReadOnlySpan<T>.Empty, 0);
                 return;
             }
-            var items = System.Buffers.ArrayPool<T>.Shared.Rent(count);
+            var items = LuminStaging<T>.Rent(count);
             try
             {
                 list.CopyTo(items);
@@ -552,7 +552,7 @@ public static partial class LuminTreeStorage
             }
             finally
             {
-                System.Buffers.ArrayPool<T>.Shared.Return(items);
+                LuminStaging<T>.Return(items, count);
             }
         }
     }
@@ -571,7 +571,7 @@ public static partial class LuminTreeStorage
             CompleteRaw<T>(ref writer, count);
             return;
         }
-        var pooled = System.Buffers.ArrayPool<T>.Shared.Rent(count);
+        var pooled = LuminStaging<T>.Rent(count);
         try
         {
             CopyTo(set, pooled.AsSpan(0, count));
@@ -579,7 +579,7 @@ public static partial class LuminTreeStorage
         }
         finally
         {
-            System.Buffers.ArrayPool<T>.Shared.Return(pooled); }
+            LuminStaging<T>.Return(pooled, count); }
     }
 
     /// <summary>Writes an immutable sorted set of raw elements as the count followed by the elements in order.</summary>
@@ -596,7 +596,7 @@ public static partial class LuminTreeStorage
             CompleteRaw<T>(ref writer, count);
             return;
         }
-        var pooled = System.Buffers.ArrayPool<T>.Shared.Rent(count);
+        var pooled = LuminStaging<T>.Rent(count);
         try
         {
             CopyTo(set, pooled.AsSpan(0, count));
@@ -604,7 +604,7 @@ public static partial class LuminTreeStorage
         }
         finally
         {
-            System.Buffers.ArrayPool<T>.Shared.Return(pooled); }
+            LuminStaging<T>.Return(pooled, count); }
     }
 
     /// <summary>Writes an immutable hash set of raw elements as the count followed by the elements in enumeration order.</summary>
@@ -621,7 +621,7 @@ public static partial class LuminTreeStorage
             CompleteRaw<T>(ref writer, count);
             return;
         }
-        var pooled = System.Buffers.ArrayPool<T>.Shared.Rent(count);
+        var pooled = LuminStaging<T>.Rent(count);
         try
         {
             CopyTo(set, pooled.AsSpan(0, count));
@@ -629,7 +629,7 @@ public static partial class LuminTreeStorage
         }
         finally
         {
-            System.Buffers.ArrayPool<T>.Shared.Return(pooled); }
+            LuminStaging<T>.Return(pooled, count); }
     }
 
     /// <summary>Reserves a raw record and writes its count, exposing the element block as typed storage.</summary>

@@ -303,7 +303,7 @@ internal static class InterfaceOwnerFile
             if (isFrozen)
                 w.Line("operationState.WriteStrings<TLuminProfile>(items.Items.AsSpan());");
             else
-                ImmutableTreeTraversal.Lease(w, "items", "string", () =>
+                ImmutableTreeTraversal.Lease(w, "items", "string", c.Supports("CollectionStaging"), () =>
                     w.Line("operationState.WriteStrings<TLuminProfile>(" + ImmutableTreeTraversal.CapturedSpan + ");"));
             w.Line("operationState.EndCollection(capturedHeader, items.Count);");
             w.Line("operationState.CheckBuffer();");

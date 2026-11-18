@@ -363,7 +363,10 @@ internal sealed partial class EnumerableOwnerContext
     /// <param name="rawBlock">Whether to enable raw block for this operation.</param>
     internal void PooledRead(Action consume, Action? onReadFailure = null, bool rawBlock = false)
     {
-        W.Line("var pooled = global::System.Buffers.ArrayPool<" + Scalar + ">.Shared.Rent(length);");
+        bool staging = Supports("CollectionStaging");
+        string pool = staging ? "global::LuminPack.Utility.LuminStaging<" + Scalar + ">" :
+            "global::System.Buffers.ArrayPool<" + Scalar + ">.Shared";
+        W.Line("var pooled = " + pool + ".Rent(length);");
         W.Line("try");
         W.Open();
         if (rawBlock)
@@ -404,8 +407,9 @@ internal sealed partial class EnumerableOwnerContext
         W.Close();
         W.Line("finally");
         W.Open();
-        // A pooled string block holds references, so it is cleared when it returns.
-        W.Line("global::System.Buffers.ArrayPool<" + Scalar + ">.Shared.Return(pooled, " + (Forwarded ? "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + Scalar + ">()" : Counted ? "true" : "false") + ");");
+        string release = staging ? "length" : Forwarded ?
+            "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + Scalar + ">()" : Counted ? "true" : "false";
+        W.Line(pool + ".Return(pooled, " + release + ");");
         W.Close();
     }
 }
