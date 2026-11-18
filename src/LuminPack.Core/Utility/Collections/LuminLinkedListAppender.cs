@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LuminPack.Core;
@@ -70,6 +71,68 @@ public static partial class LuminPackCollectionAccess
         while (++written < count && node is not null);
         writer.EndCollection(header, written);
         writer.CheckBuffer();
+        return true;
+    }
+
+    /// <summary>Writes fixed integer groups from a verified linked list without enumerator state.</summary>
+    /// <typeparam name="TOptions">The compiled JSON profile.</typeparam>
+    /// <typeparam name="T">The native Int32 or Int64 element.</typeparam>
+    /// <param name="writer">The writer within an open JSON array.</param>
+    /// <param name="list">The source list.</param>
+    /// <returns>Whether the list was traversed and written.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static bool TryWriteIntegerLinkedListJson<TOptions, T>(scoped ref LuminPackJsonWriter writer, LinkedList<T> list)
+        where TOptions : struct, ILuminPackOptions where T : unmanaged
+    {
+        bool isInt = typeof(T) == typeof(int);
+        if (!LuminPackMarshal.ConstantStringProfile<TOptions>() ||
+            (!isInt && typeof(T) != typeof(long)) ||
+            !LinkedListReadLayout<T>.CanLink || list.GetType() != typeof(LinkedList<T>) || list.First is not { } node)
+            return false;
+
+        var encoding = default(TOptions).StringEncoding;
+        if (encoding is not (LuminPackStringEncoding.UTF8 or LuminPackStringEncoding.UTF16))
+            return false;
+
+        bool utf8 = encoding == LuminPackStringEncoding.UTF8;
+        int maximum = (isInt ? 12 : 21) * (utf8 ? 1 : 2);
+        ref int version = ref LuminFieldLayout.Field<int>(list, LuminCollectionLayouts.LinkedListVersion);
+        int captured = version;
+        int remaining = list.Count;
+        Span<T> staged = stackalloc T[256];
+        do
+        {
+            int position = writer.Position;
+            int room = writer.Buffer.Length - position;
+            int count = position >= 0 && room >= maximum && (utf8 || CultureInfo.CurrentCulture.GetType() == typeof(CultureInfo))
+                ? Math.Min(Math.Min(remaining, staged.Length), room / maximum) : 0;
+            if (count == 0)
+            {
+                T item = node.Value;
+                WriteOrderedIntegerBoundary<TOptions, T>(ref writer, item);
+                if (captured != version)
+                    LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
+                node = NextNode(node)!;
+                remaining--;
+                continue;
+            }
+            // All staged elements fit even at their full scalar reserve widths, so the run cannot call the output owner.
+            for (int index = 0; index < count; index++)
+            {
+                staged[index] = node.Value;
+                node = NextNode(node)!;
+            }
+            var items = staged.Slice(0, count);
+            if (isInt)
+                writer.WriteIntegerRun<TOptions>(MemoryMarshal.Cast<T, int>(items), readBeforeSeparator: true);
+            else
+                writer.WriteIntegerRun<TOptions>(MemoryMarshal.Cast<T, long>(items), readBeforeSeparator: true);
+            if (captured != version)
+                LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
+            remaining -= count;
+        }
+        while (remaining != 0);
         return true;
     }
 

@@ -73,6 +73,25 @@ public sealed class OrderedCollectionFastPathTest
         Assert.Equal(System.Text.Json.JsonSerializer.Serialize(stack), output.Text);
     }
 
+    /// <summary>Checks linked-list integer segments in both encodings and across short output windows.</summary>
+    [Fact]
+    public void LinkedListIntegerRunsKeepOrder()
+    {
+        Check<LuminPackUtf8LengthOptions>(Encoding.UTF8);
+        Check<LuminPackUtf16LengthOptions>(Encoding.Unicode);
+
+        static void Check<TOptions>(Encoding encoding) where TOptions : struct, ILuminPackOptions
+        {
+            var list = new LinkedList<long>(Enumerable.Range(0, 700).Select(index =>
+                index % 2 == 0 ? long.MinValue + index : long.MaxValue - index));
+            string expected = System.Text.Json.JsonSerializer.Serialize(list);
+            Assert.Equal(expected, LuminPackSerializer.SerializeJson<LinkedList<long>, TOptions>(list));
+            var output = new WindowOutput(61);
+            LuminPackSerializer.SerializeJson<LinkedList<long>, TOptions>(list, output);
+            Assert.Equal(expected, output.GetText(encoding));
+        }
+    }
+
     /// <summary>Exercises collection mutation at the same streaming boundary used by the public enumerators.</summary>
     [Fact]
     public void OrderedJsonStillDetectsMutationInOutputCallback()
@@ -80,6 +99,8 @@ public sealed class OrderedCollectionFastPathTest
         var queue = new Queue<int>(Enumerable.Repeat(int.MinValue, 20));
         Assert.Throws<InvalidOperationException>(() => WriteQueue<LuminPackUtf8LengthOptions>(queue, new WindowOutput(12, () => queue.Enqueue(17))));
         Assert.Throws<InvalidOperationException>(() => WriteQueue<LuminPackUtf16LengthOptions>(queue, new WindowOutput(12, () => queue.Enqueue(17))));
+        var list = new LinkedList<int>(Enumerable.Repeat(int.MinValue, 20));
+        Assert.Throws<InvalidOperationException>(() => WriteList(list, new WindowOutput(12, () => list.AddLast(17))));
         var stack = new Stack<int>(Enumerable.Repeat(int.MinValue, 20));
         Assert.Throws<InvalidOperationException>(() => WriteStack(stack, new WindowOutput(12, () => stack.Push(17))));
         var heap = new PriorityQueue<int, long>();
@@ -92,6 +113,14 @@ public sealed class OrderedCollectionFastPathTest
             using var owner = new LuminPack.Utility.LuminBufferWriter(true);
             var writer = new LuminPackJsonWriter(output, owner.WriterState, 12);
             try { LuminPackSerializer.SerializeJson<Queue<int>, TOptions>(ref writer, value); }
+            finally { writer.Dispose(); }
+        }
+
+        static void WriteList(LinkedList<int> value, WindowOutput output)
+        {
+            using var owner = new LuminPack.Utility.LuminBufferWriter(true);
+            var writer = new LuminPackJsonWriter(output, owner.WriterState, 12);
+            try { LuminPackSerializer.SerializeJson<LinkedList<int>, LuminPackUtf16LengthOptions>(ref writer, value); }
             finally { writer.Dispose(); }
         }
 

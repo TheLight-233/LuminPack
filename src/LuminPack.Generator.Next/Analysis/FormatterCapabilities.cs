@@ -60,6 +60,10 @@ internal static class FormatterCapabilities
             if (modern && !unity && (text || element.IsUnmanagedType) &&
                 FormatterConcurrentTraits.HasLinkedListRingWriter(compilation, named, text))
                 result.Add("LinkedListRingWriter");
+            if (element.SpecialType is SpecialType.System_Int32 or SpecialType.System_Int64 &&
+                FormatterRuntimeTraits.HasCollectionTransfer(compilation, named, "LuminPack.Code.LuminPackCollectionAccess",
+                    "TryWriteIntegerLinkedListJson", "LuminPackJsonWriter", SpecialType.System_Boolean, takesCount: false))
+                result.Add("LinkedListIntegerJson");
         }
         if (definition is "System.Collections.ObjectModel.Collection" or "System.Collections.ObjectModel.ObservableCollection" or
             "System.Collections.ObjectModel.ReadOnlyCollection" or "System.Collections.ObjectModel.ReadOnlyObservableCollection" or

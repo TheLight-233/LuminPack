@@ -871,10 +871,12 @@ internal static class EnumerableOwnerTemplate
                         w.Blank();
                         break;
                     }
-                    if (fact.Family.Kind == CollectionKind.Queue && context.Supports("OrderedIntegerJson") &&
+                    if ((fact.Family.Kind == CollectionKind.Queue && context.Supports("OrderedIntegerJson") ||
+                        context.Supports("LinkedListIntegerJson")) &&
                         GenericFormatterReuse.Real(scalar) is "int" or "long")
                     {
-                        w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteIntegerQueueJson<TLuminProfile, " + scalar + ">(ref writer, value))");
+                        string method = fact.Family.Kind == CollectionKind.Queue ? "TryWriteIntegerQueueJson" : "TryWriteIntegerLinkedListJson";
+                        w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess." + method + "<TLuminProfile, " + scalar + ">(ref writer, value))");
                         w.Open();
                         w.Line("writer.WriteArrayEnd<TLuminProfile>();");
                         w.Line("return;");
