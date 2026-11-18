@@ -165,6 +165,7 @@ The history of individual approvals lives in Git. When this document, the code a
 - **Evolved version tables**. A generated receiving schema on modern .NET can retain up to two immutable, validated revision-two tables of at most 4096 bytes each. A hit requires the same field count and exact bytes within the current reader limit. It reuses the mapping and fingerprint and records the table in the current operation as usual. The mapped reader keeps each variable field inside its own checked boundary and restores the enclosing boundary on failure.
 - **Short Latin-1 string runs**. For binary UTF-16 length records on accelerated 64-bit targets, a contiguous string read may decode a run of short Latin-1 records using one captured readable end. Each record remains bounds-checked and retains its equal existing string, including when other slots change.
 - **Retained writer entry and reset**. An empty retained writer can begin using its current managed window directly. Independent reset clears reference and version state only when that operation populated the corresponding tables. It retains capacity and preserves independent read and write context ownership.
+- **Packed priority queue reads**. The checked packed heap reader can validate and copy eight signed 32-bit priorities at a time with AVX2. It resumes four-wide or scalar checking at the first group that needs it. Non-heap input still takes the ordinary enqueue suffix.
 
 ### Options and generation
 

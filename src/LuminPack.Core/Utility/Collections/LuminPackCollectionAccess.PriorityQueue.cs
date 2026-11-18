@@ -201,7 +201,7 @@ public static partial class LuminPackCollectionAccess
         return true;
     }
 
-    /// <summary>Copies complete groups of four packed children while none orders before their shared parent.</summary>
+    /// <summary>Copies complete groups of packed children while none orders before its parent.</summary>
     /// <param name="pairs">The checked input pairs, starting at the root.</param>
     /// <param name="nodes">The packed destination heap, whose root is already stored.</param>
     /// <param name="childCount">The number of children after the root.</param>
@@ -214,7 +214,29 @@ public static partial class LuminPackCollectionAccess
         ref byte destination = ref Unsafe.Add(ref nodes, 8);
         ref byte parentPriority = ref Unsafe.Add(ref pairs, 4);
         int accepted = 0;
-        do
+        if (Avx2.IsSupported)
+        {
+            while (accepted <= childCount - 8)
+            {
+                var low = Vector256.LoadUnsafe(ref children);
+                var high = Vector256.LoadUnsafe(ref children, 32);
+                // The shuffle works independently in each 128-bit lane: two priorities from each parent.
+                var priorities = Avx.Shuffle(low.AsSingle(), high.AsSingle(), 0b11_01_11_01).AsInt32();
+                int first = Unsafe.ReadUnaligned<int>(ref parentPriority);
+                int second = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref parentPriority, 8));
+                var parents = Vector128.Create(first, first, second, second);
+                if (Avx2.MoveMask(Avx2.CompareGreaterThan(Vector256.Create(parents, parents), priorities).AsByte()) != 0)
+                    break;
+                low.StoreUnsafe(ref destination);
+                high.StoreUnsafe(ref destination, 32);
+                children = ref Unsafe.Add(ref children, 64);
+                destination = ref Unsafe.Add(ref destination, 64);
+                parentPriority = ref Unsafe.Add(ref parentPriority, 16);
+                accepted += 8;
+            }
+        }
+
+        while (accepted <= childCount - 4)
         {
             var low = Vector128.LoadUnsafe(ref children);
             var high = Vector128.LoadUnsafe(ref children, 16);
@@ -227,7 +249,7 @@ public static partial class LuminPackCollectionAccess
             destination = ref Unsafe.Add(ref destination, 32);
             parentPriority = ref Unsafe.Add(ref parentPriority, 8);
             accepted += 4;
-        } while (accepted <= childCount - 4);
+        }
         return accepted;
     }
 
