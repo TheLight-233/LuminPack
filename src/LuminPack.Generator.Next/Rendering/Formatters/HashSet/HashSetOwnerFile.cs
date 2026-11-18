@@ -35,6 +35,11 @@ internal static class HashSetOwnerFile
     /// <param name="c">The case or formatter context in scope.</param>
     private static void Write(EnumerableOwnerContext c)
     {
+        if (c.NativeNullableElement && c.Supports("WriteNullableHashSetRaw"))
+        {
+            c.W.Line("global::LuminPack.Code.LuminPackMarshal.WriteNullableHashSetRaw(ref operationState, value);");
+            return;
+        }
         // The raw kernel needs unmanaged elements; strings are counted while the set is enumerated.
         if (c.Counted)
         {
@@ -107,9 +112,10 @@ internal static class HashSetOwnerFile
             ? "value = global::LuminPack.Code.LuminPackCollectionAccess.PrepareHashSetForRefill(value, length);"
             : "value = new " + c.Sequence + "(length);");
         w.Blank();
-        if (!c.Counted && c.Supports("ReadRawHashSet"))
+        if (c.NativeNullableElement && c.Supports("ReadNullableHashSetRaw") || !c.Counted && c.Supports("ReadRawHashSet"))
         {
-            w.Line("global::LuminPack.Code.LuminPackMarshal.ReadRawHashSet(ref operationState, value, length);");
+            string method = c.NativeNullableElement ? "ReadNullableHashSetRaw" : "ReadRawHashSet";
+            w.Line("global::LuminPack.Code.LuminPackMarshal." + method + "(ref operationState, value, length);");
             return;
         }
         w.Line("var setView = global::LuminPack.Code.LuminPackMarshal.GetHashSetView(value);");

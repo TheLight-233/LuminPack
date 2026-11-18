@@ -100,14 +100,19 @@ internal static class QueueOwnerFile
             w.Line("var slots = global::LuminPack.Code.LuminPackCollectionAccess.PrepareQueueRefill(value, length);");
             w.Line("if (slots.Length == length)");
             w.Open();
-            w.Line("ref var firstSlot = ref " + c.Marshal + ".GetReference(slots);");
-            w.Line("int index = 0;");
-            w.Line("do");
-            w.Open();
-            w.Line("ref var slot = ref " + c.Memory + ".Add(ref firstSlot, (nint)(uint)index);");
-            c.ReadElement("slot");
-            w.Close();
-            w.Line("while (++index < length);");
+            if (c.NativeNullableElement)
+                c.ReadBlock("slots");
+            else
+            {
+                w.Line("ref var firstSlot = ref " + c.Marshal + ".GetReference(slots);");
+                w.Line("int index = 0;");
+                w.Line("do");
+                w.Open();
+                w.Line("ref var slot = ref " + c.Memory + ".Add(ref firstSlot, (nint)(uint)index);");
+                c.ReadElement("slot");
+                w.Close();
+                w.Line("while (++index < length);");
+            }
             w.Line("global::LuminPack.Code.LuminPackCollectionAccess.CompleteQueueRefill(value, length);");
             w.Line("goto operationComplete_RootRead;");
             w.Close();

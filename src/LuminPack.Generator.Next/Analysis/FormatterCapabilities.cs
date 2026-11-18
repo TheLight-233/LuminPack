@@ -258,6 +258,21 @@ internal static class FormatterCapabilities
             FormatterRuntimeTraits.HasCollectionTransfer(compilation, setStorage.Construct(named.TypeArguments[0]),
                 "LuminPack.Code.LuminPackMarshal", "ReadRawHashSet", "LuminPackReader", SpecialType.System_Void, takesCount: true))
             result.Add("ReadRawHashSet");
+        if (definition is "System.Collections.Generic.HashSet" or "System.Collections.Generic.ISet" or "System.Collections.Generic.IReadOnlySet" &&
+            named.TypeArguments[0] is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable &&
+            nullable.TypeArguments[0].IsUnmanagedType && compilation.GetTypeByMetadataName("System.Collections.Generic.HashSet`1") is { } nullableSet)
+        {
+            var storage = nullableSet.Construct(nullable);
+            if (FormatterRuntimeTraits.HasCollectionTransfer(compilation, storage,
+                "LuminPack.Code.LuminPackMarshal", "WriteNullableHashSetRaw", "LuminPackWriter", SpecialType.System_Void,
+                takesCount: false, nullableElement: true))
+                result.Add("WriteNullableHashSetRaw");
+            if (modern && !unity && RawCallbackFreeSetElement(nullable.TypeArguments[0]) &&
+                FormatterRuntimeTraits.HasCollectionTransfer(compilation, storage,
+                    "LuminPack.Code.LuminPackMarshal", "ReadNullableHashSetRaw", "LuminPackReader", SpecialType.System_Void,
+                    takesCount: true, nullableElement: true))
+                result.Add("ReadNullableHashSetRaw");
+        }
         if (definition == "System.Collections.Generic.SortedSet")
         {
             var element = named.TypeArguments[0];

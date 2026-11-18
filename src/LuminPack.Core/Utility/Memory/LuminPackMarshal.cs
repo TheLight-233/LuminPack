@@ -485,7 +485,22 @@ public static partial class LuminPackMarshal
     /// <remarks>A set without removed entries holds its live elements in the first <c>Count</c> entries, which are copied without
     /// testing each entry. Each element uses the architecture-aware scalar core, so 32-bit targets keep block copies for values
     /// wider than four bytes. The writes stay inside the reserved record even if the set changes concurrently.</remarks>
-    public static void WriteHashSetRaw<T>(ref global::LuminPack.Core.LuminPackWriter writer, HashSet<T> set) where T : unmanaged
+    public static void WriteHashSetRaw<T>(ref global::LuminPack.Core.LuminPackWriter writer, HashSet<T> set) where T : unmanaged =>
+        WriteReferenceFreeHashSet(ref writer, set);
+
+    /// <summary>Writes the native storage of each reference-free nullable element in set enumeration order.</summary>
+    /// <typeparam name="T">The unmanaged underlying element type.</typeparam>
+    /// <param name="writer">The writer receiving the record.</param>
+    /// <param name="set">The non-null set.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static void WriteNullableHashSetRaw<T>(ref LuminPackWriter writer, HashSet<T?> set) where T : unmanaged =>
+        WriteReferenceFreeHashSet(ref writer, set);
+
+    /// <summary>Writes live entries whose reference-free storage is guaranteed by the public entry points.</summary>
+    /// <typeparam name="T">The physical set element type.</typeparam>
+    /// <param name="writer">The writer receiving the record.</param>
+    /// <param name="set">The non-null set.</param>
+    private static void WriteReferenceFreeHashSet<T>(ref LuminPackWriter writer, HashSet<T> set)
     {
         int count = set.Count;
         int bytes = checked(count * Unsafe.SizeOf<T>());
@@ -497,8 +512,10 @@ public static partial class LuminPackMarshal
             ref byte destination = ref Unsafe.Add(ref cursor, sizeof(int));
             var view = GetHashSetView(set);
             var entries = view._entries;
-            ref var entry = ref GetArrayReference(entries);
             int used = view._count;
+            if (entries is null || (uint)used > (uint)entries.Length || used < count || set.Count != count)
+                LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
+            ref var entry = ref GetArrayReference(entries);
             if (used == count)
             {
 #if NET8_0_OR_GREATER
@@ -522,21 +539,21 @@ public static partial class LuminPackMarshal
                     {
                         do
                         {
-                            LuminPackWriter.Write(ref at, in entryCursor.Value);
-                            LuminPackWriter.Write(ref Unsafe.Add(ref at, (nint)(uint)width), in Unsafe.Add(ref entryCursor, 1).Value);
+                            CopyHashSetValue(ref at, ref entryCursor.Value);
+                            CopyHashSetValue(ref Unsafe.Add(ref at, (nint)(uint)width), ref Unsafe.Add(ref entryCursor, 1).Value);
                             entryCursor = ref Unsafe.Add(ref entryCursor, 2);
                             at = ref Unsafe.Add(ref at, (nint)(uint)(2 * width));
                         } while (--pairs != 0);
                     }
                     if ((count & 1) != 0)
-                        LuminPackWriter.Write(ref at, in entryCursor.Value);
+                        CopyHashSetValue(ref at, ref entryCursor.Value);
                 }
                 else
                 {
                     int left = count;
                     do
                     {
-                        LuminPackWriter.Write(ref at, in entryCursor.Value);
+                        CopyHashSetValue(ref at, ref entryCursor.Value);
                         entryCursor = ref Unsafe.Add(ref entryCursor, 1);
                         at = ref Unsafe.Add(ref at, (nint)(uint)width);
                     } while (--left != 0);
@@ -550,6 +567,31 @@ public static partial class LuminPackMarshal
         writer.AdvanceSafe(sizeof(int) + bytes);
     }
 
+    /// <summary>Copies a native reference-free element, including any representation padding.</summary>
+    /// <typeparam name="T">The physical set element type.</typeparam>
+    /// <param name="destination">The first output byte.</param>
+    /// <param name="value">The value in its original storage.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CopyHashSetValue<T>(scoped ref byte destination, scoped ref T value) =>
+        CopyHashSetStorage(ref destination, ref Unsafe.As<T, byte>(ref value), Unsafe.SizeOf<T>());
+
+    /// <summary>Copies a raw set value with the fixed unaligned access limits of the current target.</summary>
+    /// <param name="destination">The first output byte.</param>
+    /// <param name="source">The first input byte.</param>
+    /// <param name="width">The element's native width.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CopyHashSetStorage(scoped ref byte destination, scoped ref byte source, int width)
+    {
+        switch (width)
+        {
+            case 1: destination = source; break;
+            case 2: Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<ushort>(ref source)); break;
+            case 4: Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<uint>(ref source)); break;
+            case 8 when IntPtr.Size == 8: Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<ulong>(ref source)); break;
+            default: CopyBlockUnaligned(ref destination, ref source, (uint)width); break;
+        }
+    }
+
     /// <summary>Writes live entries from the used prefix into the reserved element region.</summary>
     /// <typeparam name="T">The raw element type.</typeparam>
     /// <param name="destination">The first payload byte.</param>
@@ -558,19 +600,20 @@ public static partial class LuminPackMarshal
     /// <param name="count">The number of elements reserved for output.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteSparseHashSetEntries<T>(scoped ref byte destination, scoped ref HashSetView<T>.Entry entry, int used, int count)
-        where T : unmanaged
     {
         while (used > 0 && count > 0)
         {
             if (IsHashTableEntryActive(entry.HashCode, entry.Next))
             {
-                LuminPackWriter.Write(ref destination, in entry.Value);
+                CopyHashSetValue(ref destination, ref entry.Value);
                 destination = ref Unsafe.Add(ref destination, Unsafe.SizeOf<T>());
                 count--;
             }
             entry = ref Unsafe.Add(ref entry, 1);
             used--;
         }
+        if (count != 0)
+            LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
     }
 
     /// <summary>Copies the raw key and value storage of a dense dictionary's first <paramref name="count"/> entries into the reserved record.</summary>
@@ -1727,8 +1770,25 @@ public static partial class LuminPackMarshal
     /// <param name="count">The declared count of fixed-width elements.</param>
     /// <remarks>As in the staged entry rebuild, each wire slot is preserved in order and duplicates are not removed.</remarks>
     [EditorBrowsable(EditorBrowsableState.Never)]
+    public static void ReadRawHashSet<T>(scoped ref LuminPackReader reader, HashSet<T> set, int count) where T : unmanaged =>
+        ReadReferenceFreeHashSet(ref reader, set, count);
+
+    /// <summary>Loads the unchanged native representation of nullable elements and links the set's buckets.</summary>
+    /// <typeparam name="T">The unmanaged underlying element type.</typeparam>
+    /// <param name="reader">The reader positioned after the collection header.</param>
+    /// <param name="set">A cleared default-comparer set with enough entry slots.</param>
+    /// <param name="count">The declared count of fixed-width elements.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static void ReadNullableHashSetRaw<T>(scoped ref LuminPackReader reader, HashSet<T?> set, int count) where T : unmanaged =>
+        ReadReferenceFreeHashSet(ref reader, set, count);
+
+    /// <summary>Reads a validated native range into entries and rebuilds the bucket links during the same traversal.</summary>
+    /// <typeparam name="T">The reference-free element type.</typeparam>
+    /// <param name="reader">The reader positioned after the collection header.</param>
+    /// <param name="set">A cleared default-comparer set with enough entry slots.</param>
+    /// <param name="count">The declared count of fixed-width elements.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static void ReadRawHashSet<T>(scoped ref LuminPackReader reader, HashSet<T> set, int count) where T : unmanaged
+    private static void ReadReferenceFreeHashSet<T>(scoped ref LuminPackReader reader, HashSet<T> set, int count)
     {
         var view = GetHashSetView(set);
         var entries = view._entries;
@@ -1752,10 +1812,9 @@ public static partial class LuminPackMarshal
         int index = 0;
         do
         {
-            T item = LuminPackReader.Read<T>(ref source);
-            uint hashCode = unchecked((uint)item.GetHashCode());
+            CopyHashSetStorage(ref Unsafe.As<T, byte>(ref entry.Value), ref source, width);
+            uint hashCode = unchecked((uint)entry.Value!.GetHashCode());
             ref int bucket = ref Unsafe.Add(ref firstBucket, (nint)(nuint)GetBucketIndex(hashCode, bucketCount, multiplier));
-            entry.Value = item;
             entry.HashCode = hashCode;
             entry.Next = bucket - 1;
             bucket = ++index;

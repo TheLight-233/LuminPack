@@ -19,7 +19,7 @@ public static partial class LuminPackMarshal
     /// <returns>Whether this kernel wrote the complete payload.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool TryWriteDenseHashSetInt32<T>(scoped ref byte destination, scoped ref HashSetView<T>.Entry entry,
-        int count, int capacity) where T : unmanaged
+        int count, int capacity)
     {
         if (!Sse.IsSupported || IntPtr.Size != 8 || Unsafe.SizeOf<T>() != sizeof(uint) ||
             Unsafe.SizeOf<HashSetView<T>.Entry>() != 3 * sizeof(uint) || count < 16 || count > capacity ||
@@ -41,7 +41,7 @@ public static partial class LuminPackMarshal
 
     /// <summary>Requires direct proof of the framework entry stride and value offset for vector loads.</summary>
     /// <typeparam name="T">The closed element storage type.</typeparam>
-    private static class DenseHashSetInt32Layout<T> where T : unmanaged
+    private static class DenseHashSetInt32Layout<T>
     {
         /// <summary>Whether the current runtime exposes and matches the required entry layout.</summary>
         internal static readonly bool Available = Check();

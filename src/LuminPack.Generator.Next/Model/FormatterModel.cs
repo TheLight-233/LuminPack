@@ -19,6 +19,9 @@ internal sealed class FormatterModel : IEquatable<FormatterModel>
     internal readonly bool Raw;
     /// <summary>Whether raw collection storage preserves the element's established contiguous contract.</summary>
     internal readonly bool RawCollection;
+    /// <summary>Whether enumerable element loops store the nullable value in native reference-free storage.</summary>
+    internal bool NativeNullableElement => Definition == Rendering.Formatters.GenericIdentity.Nullable &&
+        Layout == null && Arguments.Length == 1 && Arguments[0].RawCollection;
     /// <summary>Whether the value's own formatter is exactly a copy of its native storage, so a keyed entry may store it raw.</summary>
     /// <remarks>The original raw-storage rule for dictionary keys and values: a contiguous collection copies any reference-free
     /// element, but a pair, a version-tolerant or managed-record struct and a Union frame their values themselves.</remarks>

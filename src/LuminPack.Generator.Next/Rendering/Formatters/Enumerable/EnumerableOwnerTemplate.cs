@@ -217,15 +217,10 @@ internal sealed partial class EnumerableOwnerContext
         }
         if (Forwarded)
         {
-            if (Contiguous && _element!.RawCollection)
+            if (NativeNullableElement || Contiguous && _element!.RawCollection)
                 W.Line("operationState.Read(ref " + Memory + ".As<" + Scalar + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + Scalar + ">());");
             else
-            {
-                if (NativeNullableElement)
-                    W.Line("operationState.Read(ref " + Memory + ".As<" + Scalar + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + Scalar + ">());");
-                else
-                    FormatterElementEmitter.Read(W, _set, _element!, destination, "operationState", fresh: fresh);
-            }
+                FormatterElementEmitter.Read(W, _set, _element!, destination, "operationState", fresh: fresh);
             return;
         }
         if (Payload != null)
@@ -292,7 +287,7 @@ internal sealed partial class EnumerableOwnerContext
             W.Line("operationState.ReadStrings<TLuminProfile>(" + span + ");");
             return;
         }
-        if (Forwarded && Contiguous && (_element!.RawCollection || _element.Layout != null))
+        if (NativeNullableElement || Forwarded && Contiguous && (_element!.RawCollection || _element.Layout != null))
         {
             ReadContiguous(span);
             return;
@@ -560,11 +555,11 @@ internal static class EnumerableOwnerTemplate
         // A string element needs the profile, so its binary roots are generic in it.
         bool text = scalar == "string" || payload != null || fact.ForwardedType != null;
         bool measureRaw = !text && nonEmptyRawHeaderBytes != 0;
-        string minimum = fact.ForwardedType != null ? (fact.Family.ContiguousElements && set.FindFormatter(scalar)?.RawCollection == true ?
-            memory + ".SizeOf<" + scalar + ">()" : fact.Family.ContiguousElements && set.FindFormatter(scalar)?.Layout != null ? "0" :
-            FormatterElementEmitter.Minimum(set.FindFormatter(scalar) ?? new FormatterModel(scalar, FormatterDefinitions.PayloadReference))) :
-            text ? "1" : memory + ".SizeOf<" + scalar + ">()";
         FormatterModel? element = fact.ForwardedType == null ? null : set.FindFormatter(scalar) ?? new FormatterModel(scalar, FormatterDefinitions.PayloadReference);
+        string minimum = element != null ? (element.NativeNullableElement || fact.Family.ContiguousElements && element.RawCollection ?
+            memory + ".SizeOf<" + scalar + ">()" : fact.Family.ContiguousElements && set.FindFormatter(scalar)?.Layout != null ? "0" :
+            FormatterElementEmitter.Minimum(element)) :
+            text ? "1" : memory + ".SizeOf<" + scalar + ">()";
         var context = new EnumerableOwnerContext(w, sequence, scalar, memory, marshal, payload, set, element, fact.Family.ContiguousElements);
         bool concurrentStack = sequence.StartsWith("global::System.Collections.Concurrent.ConcurrentStack<", StringComparison.Ordinal);
 

@@ -141,7 +141,8 @@ internal static class FormatterOrderedCollectionTraits
             result.Add("OrderedIntegerJson");
         if (!isStack)
         {
-            if (element.IsReferenceType && element.SpecialType != SpecialType.System_String &&
+            if ((element.IsReferenceType && element.SpecialType != SpecialType.System_String ||
+                element is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T }) &&
                 compilation.GetTypeByMetadataName("System.ReadOnlySpan`1") is { } segment &&
                 access.GetMembers("TryGetQueueSegments").OfType<IMethodSymbol>().Any(method => QueueMethod(method, 5) &&
                     method.ReturnType.SpecialType == SpecialType.System_Boolean &&

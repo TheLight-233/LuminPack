@@ -72,7 +72,7 @@ internal static class InterfaceOwnerFile
         bool outlineFallback = c.Counted || setInterface;
         bool stringSpan = !setInterface && c.Text && c.Supports("WriteInterfaceStrings");
         var reservedElement = setInterface ? null : c.ReservableListElement();
-        bool rawSpan = !setInterface && !c.Counted;
+        bool rawSpan = !setInterface && (!c.Counted || c.NativeNullableElement);
         const string collections = "global::System.Collections.Generic.";
         string[] concreteSequences = c.Sequence.StartsWith(collections + "IEnumerable<", System.StringComparison.Ordinal) ||
             c.Sequence.StartsWith(collections + "IReadOnlyCollection<", System.StringComparison.Ordinal)
@@ -102,12 +102,14 @@ internal static class InterfaceOwnerFile
             w.Indented(() => w.Line("goto operationComplete_RootWrite;"));
             w.Line("WriteKnown(ref operationState, " + set + ");");
         }
-        else if (c.Counted)
-            w.Line("WriteKnown(ref operationState, " + c.Memory + ".As<" + type + ">(value));");
-        else if (setInterface)
+        else if (rawSpan)
+            w.Line("items = global::LuminPack.Code.LuminPackMarshal.GetListSpan(" + c.Memory + ".As<" + type + ">(value));");
+        else if (setInterface && c.Supports("WriteNullableHashSetRaw") && c.NativeNullableElement)
+            w.Line("global::LuminPack.Code.LuminPackMarshal.WriteNullableHashSetRaw(ref operationState, " + c.Memory + ".As<" + type + ">(value));");
+        else if (!c.Counted)
             w.Line("global::LuminPack.Code.LuminPackMarshal.WriteHashSetRaw(ref operationState, " + c.Memory + ".As<" + type + ">(value));");
         else
-            w.Line("items = global::LuminPack.Code.LuminPackMarshal.GetListSpan(" + c.Memory + ".As<" + type + ">(value));");
+            w.Line("WriteKnown(ref operationState, " + c.Memory + ".As<" + type + ">(value));");
         w.Close();
         if (!setInterface)
         {
@@ -116,10 +118,10 @@ internal static class InterfaceOwnerFile
             string array = c.Memory + ".As<" + arrayType + ">(value)";
             if (stringSpan)
                 w.Line("WriteStringSpan(ref operationState, new global::System.ReadOnlySpan<string>(" + array + "));");
-            else if (c.Counted)
-                w.Line("WriteArray(ref operationState, " + array + ");");
-            else
+            else if (rawSpan)
                 w.Line("items = " + array + ";");
+            else
+                w.Line("WriteArray(ref operationState, " + array + ");");
             w.Close();
         }
         foreach (string name in concreteSequences)
@@ -155,7 +157,13 @@ internal static class InterfaceOwnerFile
         }
         w.Line("else");
         if (outlineFallback)
-            w.Indented(() => w.Line("WriteInterface(ref operationState, value);"));
+        {
+            w.Open();
+            w.Line("WriteInterface(ref operationState, value);");
+            if (rawSpan)
+                w.Line("goto operationComplete_RootWrite;");
+            w.Close();
+        }
         else
         {
             w.Open();
@@ -163,7 +171,9 @@ internal static class InterfaceOwnerFile
             w.Line("goto operationComplete_RootWrite;");
             w.Close();
         }
-        if (rawSpan)
+        if (c.NativeNullableElement && rawSpan)
+            c.WriteNativeNullableSpan("items");
+        else if (rawSpan)
         {
             w.Line("operationState.Write<" + scalar + ">(items, items.Length);");
             w.Line("operationState.CheckBuffer();");
@@ -182,7 +192,7 @@ internal static class InterfaceOwnerFile
             w.Close();
             w.Blank();
         }
-        else if (c.Counted)
+        else if (c.Counted && !rawSpan && !(setInterface && c.NativeNullableElement && c.Supports("WriteNullableHashSetRaw")))
         {
             WriteCounted("WriteKnown", type);
             if (!setInterface)
@@ -325,15 +335,12 @@ internal static class InterfaceOwnerFile
         w.Line(c.HashSetRefill
             ? "var hashSet = global::LuminPack.Code.LuminPackCollectionAccess.PrepareHashSetForRefill(value as " + set + ", length);"
             : "var hashSet = new " + set + "(length);");
-        if (!c.Counted && c.Supports("ReadRawHashSet"))
+        if (c.NativeNullableElement && c.Supports("ReadNullableHashSetRaw") || !c.Counted && c.Supports("ReadRawHashSet"))
         {
-            // Keep the inline rebuild for short records where the shared transfer's setup costs more.
-            w.Line("if (length >= 16)");
-            w.Open();
-            w.Line("global::LuminPack.Code.LuminPackMarshal.ReadRawHashSet(ref operationState, hashSet, length);");
+            string method = c.NativeNullableElement ? "ReadNullableHashSetRaw" : "ReadRawHashSet";
+            w.Line("global::LuminPack.Code.LuminPackMarshal." + method + "(ref operationState, hashSet, length);");
             w.Line("value = hashSet;");
-            w.Line("goto operationComplete_RootRead;");
-            w.Close();
+            return;
         }
         w.Line("var setView = global::LuminPack.Code.LuminPackMarshal.GetHashSetView(hashSet);");
         w.Line("ref var entryRef = ref global::LuminPack.Code.LuminPackMarshal.GetArrayReference(setView._entries);");

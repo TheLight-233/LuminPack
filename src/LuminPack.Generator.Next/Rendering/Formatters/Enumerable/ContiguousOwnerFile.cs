@@ -46,8 +46,7 @@ internal static class ContiguousOwnerFile
         bool rawSequence = scalarElements && element.RawCollection && element.Layout == null;
         // A nullable raw scalar is stored natively too: the original contiguous writers copied the complete Nullable storage
         // through the tagged block writer, which records the layout where models differ.
-        bool raw = (element.RawCollection || element.Definition == GenericIdentity.Nullable && element.Arguments.Length == 1 &&
-            element.Arguments[0].RawCollection && element.Layout == null) && !scalarElements;
+        bool raw = (element.RawCollection || element.NativeNullableElement) && !scalarElements;
         FormatterStorageModel? layout = scalarElements ? null : element.Layout;
         string empty = reference ? "null" : "default";
         string absent = shape switch

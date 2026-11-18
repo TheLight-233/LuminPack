@@ -72,8 +72,7 @@ internal sealed partial class EnumerableOwnerContext
     }
 
     /// <summary>Whether the forwarded element is a nullable reference-free scalar without a storage layout.</summary>
-    internal bool NativeNullableElement => _element is { Definition: GenericIdentity.Nullable, Layout: null } element &&
-        element.Arguments.Length == 1 && element.Arguments[0].RawCollection;
+    internal bool NativeNullableElement => _element?.NativeNullableElement == true;
 
     /// <summary>Shares one object element loop across exact list, exact array and fresh interface destinations.</summary>
     /// <param name="freshList">Whether the fallback is a new list rather than an array.</param>
@@ -173,6 +172,11 @@ internal sealed partial class EnumerableOwnerContext
     internal void WriteSpan(string expression)
     {
         W.Line("global::System.ReadOnlySpan<" + Scalar + "> blockItems = " + expression + ";");
+        if (NativeNullableElement)
+        {
+            WriteNativeNullableSpan("blockItems");
+            return;
+        }
         if (_element!.RawCollection)
         {
             W.Line("int blockBytes = global::LuminPack.Core.LuminPackWriter.Size<" + Scalar + ">(blockItems.Length, true, false);");
@@ -198,6 +202,24 @@ internal sealed partial class EnumerableOwnerContext
         W.Line("operationState.CheckBuffer();");
     }
 
+    /// <summary>Writes the unchanged native nullable element bytes under one capacity check.</summary>
+    /// <param name="span">The typed source span.</param>
+    internal void WriteNativeNullableSpan(string span)
+    {
+        W.Line("int blockBytes = checked(" + span + ".Length * " + Memory + ".SizeOf<" + Scalar + ">());");
+        W.Line("operationState.EnsureAdditionalCapacity(checked(sizeof(int) + blockBytes));");
+        W.Line("operationState.WriteCollectionHeader(" + span + ".Length);");
+        WriteNativeSegment(span, "blockBytes");
+        W.Line("operationState.CheckBuffer();");
+    }
+
+    /// <summary>Copies a native nullable span into a previously reserved output range.</summary>
+    /// <param name="span">The typed source span.</param>
+    /// <param name="bytes">The checked byte count.</param>
+    private void WriteNativeSegment(string span, string bytes) =>
+        W.Line("if (" + bytes + " != 0) operationState.Write(ref " + Memory + ".As<" + Scalar + ", byte>(ref " +
+            Marshal + ".GetReference(" + span + ")), " + bytes + ");");
+
     /// <summary>Reads a validated contiguous block before its family publishes the destination.</summary>
     /// <param name = "span">The element storage span expression.</param>
     private void ReadContiguous(string span)
@@ -218,7 +240,7 @@ internal sealed partial class EnumerableOwnerContext
     internal void WrapperWrite(string local)
     {
         if (_set.FindFormatter(Sequence)?.Definition == "System.Collections.ObjectModel.ReadOnlyCollection" &&
-            !_element!.RawCollection && _element.Layout == null && Supports("WrapperJsonStorage"))
+            !NativeNullableElement && !_element!.RawCollection && _element.Layout == null && Supports("WrapperJsonStorage"))
         {
             W.Line("var storage = global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + Scalar + ">(" + local + ");");
             W.Line("global::System.ReadOnlySpan<" + Scalar + "> items;");
@@ -243,7 +265,7 @@ internal sealed partial class EnumerableOwnerContext
 
         W.Line("int wrapperDepth = 0;");
         W.Line("var wrapperList = global::LuminPack.Code.LuminPackCollectionAccess.GetUnderlyingIList(" + local + ", ref wrapperDepth);");
-        if (!_element!.RawCollection && _element.Layout == null)
+        if (!NativeNullableElement && !_element!.RawCollection && _element.Layout == null)
         {
             W.Line("if (wrapperList != null)");
             W.Indented(() => W.Line("WriteList(ref operationState, wrapperList);"));
@@ -389,6 +411,8 @@ internal sealed partial class EnumerableOwnerContext
     {
         W.Line("int queueSize = " + local + ".Count;");
         bool segments = Supports("QueueSegments");
+        if (segments && NativeNullableElement)
+            WriteNativeQueueSegments(local);
         if (segments)
         {
             W.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
@@ -402,7 +426,7 @@ internal sealed partial class EnumerableOwnerContext
         W.Line("operationState.Write(0);");
         W.Line("operationState.Write(0);");
         W.Line("operationState.Write(queueSize);");
-        if (segments)
+        if (segments && !NativeNullableElement)
         {
             const string access = "global::LuminPack.Code.LuminPackCollectionAccess";
             W.Line("if (" + access + ".TryGetQueueSegments(" + local + ", queueSize, out var first, out var second, out int version))");
@@ -430,6 +454,29 @@ internal sealed partial class EnumerableOwnerContext
         if (!segments)
             W.Line("operationState.EndCollection(countPosition, queueSize);");
         W.Line("operationState.CheckBuffer();");
+    }
+
+    /// <summary>Copies a recognized ring's two active ranges, preserving dequeue order and the queue's storage words.</summary>
+    /// <param name="local">The source queue.</param>
+    private void WriteNativeQueueSegments(string local)
+    {
+        const string access = "global::LuminPack.Code.LuminPackCollectionAccess";
+        W.Line("int elementWidth = " + Memory + ".SizeOf<" + Scalar + ">();");
+        W.Line("if (queueSize != 0 && " + access + ".TryGetQueueSegments(" + local +
+            ", queueSize, out var first, out var second, out int version))");
+        W.Open();
+        W.Line("operationState.EnsureAdditionalCapacity(checked(4 * sizeof(int) + queueSize * elementWidth));");
+        W.Line(access + ".CheckQueueTraversalVersion(" + local + ", version);");
+        W.Line("operationState.WriteCollectionHeader(queueSize);");
+        W.Line("operationState.Write(0);");
+        W.Line("operationState.Write(0);");
+        W.Line("operationState.Write(queueSize);");
+        WriteNativeSegment("first", "(first.Length * elementWidth)");
+        WriteNativeSegment("second", "(second.Length * elementWidth)");
+        W.Line(access + ".CheckQueueTraversalVersion(" + local + ", version);");
+        W.Line("operationState.CheckBuffer();");
+        W.Line("goto operationComplete_RootWrite;");
+        W.Close();
     }
 
     /// <summary>Writes the leased stack snapshot bottom first and returns every reference-bearing slot to its pool safely.</summary>

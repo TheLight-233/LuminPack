@@ -164,14 +164,16 @@ internal static class FormatterRuntimeTraits
     /// <param name="state">The reader or writer type name.</param>
     /// <param name="result">The required result type.</param>
     /// <param name="takesCount">Whether the operation takes a count, with no profile type parameter.</param>
+    /// <param name="nullableElement">Whether the element is the nullable form of the unmanaged parameter, with no profile.</param>
     /// <returns>Whether the exact public signature exists.</returns>
     internal static bool HasCollectionTransfer(Compilation compilation, INamedTypeSymbol collection, string owner, string name,
-        string state, SpecialType result, bool takesCount)
+        string state, SpecialType result, bool takesCount, bool nullableElement = false)
     {
         var access = compilation.GetTypeByMetadataName(owner);
         var operationState = compilation.GetTypeByMetadataName("LuminPack.Core." + state);
         var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
-        bool hasProfile = !takesCount;
+        bool hasProfile = !takesCount && !nullableElement;
+        var nullable = nullableElement ? compilation.GetSpecialType(SpecialType.System_Nullable_T) : null;
         if (access is null || !access.IsStatic || access.DeclaredAccessibility != Accessibility.Public ||
             operationState is null || (hasProfile && options is null))
             return false;
@@ -187,7 +189,8 @@ internal static class FormatterRuntimeTraits
             method.Parameters.Length == (takesCount ? 3 : 2) &&
             method.Parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, operationState) &&
             method.Parameters[1].RefKind == RefKind.None &&
-            SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, collection.OriginalDefinition.Construct(method.TypeParameters[method.Arity - 1])) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, collection.OriginalDefinition.Construct(
+                nullable?.Construct(method.TypeParameters[0]) ?? (ITypeSymbol)method.TypeParameters[method.Arity - 1])) &&
             (!takesCount || (method.Parameters[2].RefKind == RefKind.None && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32)));
     }
 
