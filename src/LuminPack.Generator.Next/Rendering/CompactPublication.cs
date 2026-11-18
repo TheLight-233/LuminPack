@@ -859,9 +859,10 @@ internal static partial class CompactPublication
         {
             Document = document;
             Method = method;
-            // Interceptors are bound by their attribute or called by wrapper bodies by name, so they are never inlined away.
+            string attributes = document.Text.Substring(method.Start, method.SignatureStart - method.Start);
+            // The compiler can reference module initializers and interceptors without a direct generated call.
             Forward = method.Name.StartsWith("LuminIntercept", StringComparison.Ordinal) ||
-                document.Text.Substring(method.Start, method.SignatureStart - method.Start).Contains("InterceptsLocation") ? null : method.Forward;
+                attributes.Contains("InterceptsLocation") || attributes.Contains("ModuleInitializer") ? null : method.Forward;
             if (Forward != null)
             {
                 string values = Forward.Target + "(" + string.Join(",", Forward.Arguments) + ")";

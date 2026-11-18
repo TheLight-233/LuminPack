@@ -1,4 +1,8 @@
+extern alias ModelBasedAnalyzer;
+
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 internal static partial class SerializerIssueRegression
 {
@@ -93,6 +97,67 @@ internal static partial class SerializerIssueRegression
             """;
         Execute(references, singleOperation.Replace("OPERATION", "if (LuminPackSerializer.Serialize(value).Length != 20) throw new Exception();", StringComparison.Ordinal), "VectorBinaryOnly");
         Execute(references, singleOperation.Replace("OPERATION", "if (LuminPackSerializer.SerializeJson(value) != \"[[1,2,3,4]]\") throw new Exception();", StringComparison.Ordinal), "VectorJsonOnly");
+        VerifyMemoryStorageInitializer(references);
         Console.WriteLine("Passed framework scalar arrays, lists and nested collections across four generation modes.");
+    }
+
+    /// <summary>Checks that retained mutable memory readers request the initializer when Core supplies it.</summary>
+    /// <param name="references">Platform and runtime references.</param>
+    private static void VerifyMemoryStorageInitializer(MetadataReference[] references)
+    {
+        const string source = """
+            using System;
+            using LuminPack;
+            using LuminPack.Attribute;
+            DECLARATIONS
+            public static class Entry
+            {
+                public static void Main()
+                {
+                    int[] storage = [11, 0, 13];
+                    Memory<int> slice = storage.AsMemory(1, 1);
+                    Memory<long> wide = new long[1];
+                    OPERATION
+                }
+            }
+            """;
+        const string read = """
+            if (LuminPackSerializer.Deserialize(new byte[] { 1, 0, 0, 0, 23, 0, 0, 0 }, ref slice) != 8 ||
+                LuminPackSerializer.Deserialize(new byte[] { 1, 0, 0, 0, 29, 0, 0, 0, 0, 0, 0, 0 }, ref wide) != 12 ||
+                storage[0] != 11 || storage[1] != 23 || storage[2] != 13 || wide.Span[0] != 29)
+                throw new Exception("Mutable memory storage reuse changed.");
+            """;
+        const string readOnly = """
+            [assembly: LuminPackGeneratorOptions(ForceGenerateDeserialize = true)]
+            [LuminPackable] public sealed class Holder { public ReadOnlyMemory<int> Data; }
+            """;
+        var core = references.Single(reference => Path.GetFileName(reference.Display) == "LuminPack.Core.dll");
+        var older = MetadataReference.CreateFromImage(FrameworkRuntimeMetadata.WithoutMethods(core.Display!, "InitializeMemoryStorage"));
+        MetadataReference[] olderReferences = references.Select(reference => ReferenceEquals(reference, core) ? older : reference).ToArray();
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"])
+            .WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
+        Verify("MemoryStorageRead", "", read, references, expected: 1);
+        Verify("MemoryStorageReadOnly", readOnly, "", references, expected: 0);
+        Verify("MemoryStorageOlder", "", read, olderReferences, expected: 0);
+
+        void Verify(string name, string declarations, string operation, MetadataReference[] runtime, int expected)
+        {
+            string text = source.Replace("DECLARATIONS", declarations, StringComparison.Ordinal)
+                .Replace("OPERATION", operation, StringComparison.Ordinal);
+            var compilation = CSharpCompilation.Create(name, [CSharpSyntaxTree.ParseText(text, parse, "Entry.cs")],
+                runtime, new CSharpCompilationOptions(OutputKind.ConsoleApplication, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+            var driver = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse)
+                .RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+            int initializers = driver.GetRunResult().Results.SelectMany(item => item.GeneratedSources)
+                .Count(item => item.SourceText.ToString().Contains("LuminPackMarshal.InitializeMemoryStorage()", StringComparison.Ordinal));
+            if (initializers != expected)
+                throw new InvalidOperationException($"{name} published {initializers} Memory storage initializers, expected {expected}.");
+            using var image = new MemoryStream();
+            var result = output.Emit(image);
+            if (!result.Success || diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error))
+                throw new InvalidOperationException(string.Join(Environment.NewLine, diagnostics.Concat(result.Diagnostics).Where(item => item.Severity == DiagnosticSeverity.Error)));
+            if (expected != 0)
+                System.Reflection.Assembly.Load(image.ToArray()).EntryPoint!.Invoke(null, null);
+        }
     }
 }

@@ -78,6 +78,16 @@ public static partial class LuminPackMarshal
         internal int Length;
     }
 
+#if NET8_0_OR_GREATER
+    /// <summary>Validates exact array layouts before a generated mutable memory reader is compiled.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static void InitializeMemoryStorage()
+    {
+        if (RuntimeFeature.IsDynamicCodeCompiled)
+            RuntimeHelpers.RunClassConstructor(typeof(MemoryStorage).TypeHandle);
+    }
+#endif
+
     /// <summary>Holds the one-time check of the memory field layout.</summary>
     private static class MemoryStorage
     {
