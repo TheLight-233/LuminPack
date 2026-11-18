@@ -81,8 +81,10 @@ internal static class ImmutableInterfaceOwnerFile
         bool hash = WriteTree("ImmutableHashSet", "CopyImmutableHashTree");
         bool sorted = WriteTree("ImmutableSortedSet", "CopyImmutableSortedTree");
         bool list = WriteTree("ImmutableList", "CopyImmutableListTree");
-        if (!hash && !sorted && !list || c.Sequence.StartsWith(Namespace + "IImmutable", System.StringComparison.Ordinal))
+        if (!hash && !sorted && !list)
             c.CountedWrite("value");
+        else if (c.Sequence.StartsWith(Namespace + "IImmutable", System.StringComparison.Ordinal))
+            c.CountedWriteFallback("value");
 
         bool WriteTree(string family, string capability)
         {
@@ -315,11 +317,16 @@ internal static class ImmutableInterfaceOwnerFile
                 c.W.Line("goto operationComplete_RootWrite;");
             });
         }
-        if (isInterface)
+        if (isInterface && !bounded)
+            c.CountedWriteFallback("value");
+        else if (isInterface)
+        {
             c.W.Open();
-        c.CountedWrite("value");
-        if (isInterface)
+            c.CountedWrite("value");
             c.W.Close();
+        }
+        else
+            c.CountedWrite("value");
 
         void WriteRaw(string source)
         {

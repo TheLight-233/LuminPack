@@ -74,7 +74,8 @@ internal static class ConcurrentStackTextOwnerFile
         w.Line("if (value is null)");
         w.Indented(() => w.Line("value = new " + c.Sequence + "();"));
         // Strings stay on the plain read: seeding saved their allocations but cost more time than it saved.
-        if (c.ConcurrentStackSeed && !c.Text)
+        bool seededRefill = c.ConcurrentStackSeed && !c.Text;
+        if (seededRefill)
         {
             // The existing items seed the leased block bottom first, so existing objects are read in place before the stack
             // is cleared and the block is pushed back.
@@ -102,7 +103,7 @@ internal static class ConcurrentStackTextOwnerFile
         w.Line("if (length == 0)");
         w.Indented(() => w.Line("goto operationComplete_RootRead;"));
         w.Blank();
-        c.PooledRead(() => w.Line(push));
+        c.PooledRead(() => w.Line(push), outline: seededRefill);
     }
 
     /// <summary>Handles before for <c>ConcurrentStackTextOwnerFile</c>.</summary>

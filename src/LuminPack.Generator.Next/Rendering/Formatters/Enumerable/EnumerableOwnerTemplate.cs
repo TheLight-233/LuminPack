@@ -374,8 +374,18 @@ internal sealed partial class EnumerableOwnerContext
     /// <param name="consume">The statements that consume the pooled array and <c>length</c>.</param>
     /// <param name="onReadFailure">The action used to process on read failure.</param>
     /// <param name="rawBlock">Whether to enable raw block for this operation.</param>
-    internal void PooledRead(Action consume, Action? onReadFailure = null, bool rawBlock = false)
+    /// <param name="outline">Whether a faster read already expands the element operation in the caller.</param>
+    internal void PooledRead(Action consume, Action? onReadFailure = null, bool rawBlock = false, bool outline = false)
     {
+        if (outline)
+        {
+            W.Line("ReadPooledFallback(ref operationState, ref value, length);");
+            W.Blank();
+            W.Line(W.MethodImpl("NoInlining"));
+            W.Line("static void ReadPooledFallback(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref " + Sequence + " value, int length)");
+            W.Open();
+            W.Line("ref var operationState = ref reader;");
+        }
         bool staging = Supports("CollectionStaging");
         string pool = staging ? "global::LuminPack.Utility.LuminStaging<" + Scalar + ">" :
             "global::System.Buffers.ArrayPool<" + Scalar + ">.Shared";
@@ -424,6 +434,8 @@ internal sealed partial class EnumerableOwnerContext
             "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + Scalar + ">()" : Counted ? "true" : "false";
         W.Line(pool + ".Return(pooled, " + release + ");");
         W.Close();
+        if (outline)
+            W.Close();
     }
 }
 

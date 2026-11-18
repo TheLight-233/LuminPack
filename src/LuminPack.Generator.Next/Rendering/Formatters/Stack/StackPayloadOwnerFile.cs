@@ -35,6 +35,14 @@ internal static class StackPayloadOwnerFile
             w.Line("goto operationComplete_RootWrite;");
             w.Close();
             w.Blank();
+            w.Line("WriteSnapshotFallback(ref operationState, value);");
+            w.Blank();
+            w.Line(w.MethodImpl("NoInlining"));
+            w.Line("static void WriteSnapshotFallback(scoped ref global::LuminPack.Core.LuminPackWriter operationState, " + c.Sequence + " value)");
+            w.Open();
+            c.StackPayloadWrite("value", false);
+            w.Close();
+            return;
         }
         c.StackPayloadWrite("value", false);
     }
@@ -83,7 +91,7 @@ internal static class StackPayloadOwnerFile
         if (c.Supports("RestoreStackFromBottom"))
         {
             c.PooledRead(() => w.Line("global::LuminPack.Code.LuminPackCollectionAccess.RestoreStackFromBottom(value, " +
-                "new global::System.ReadOnlySpan<" + c.Scalar + ">(pooled, 0, length));"));
+                "new global::System.ReadOnlySpan<" + c.Scalar + ">(pooled, 0, length));"), outline: c.StackRefill);
             return;
         }
         c.PooledRead(() =>
@@ -95,7 +103,7 @@ internal static class StackPayloadOwnerFile
             w.Line("value.Push(" + c.Memory + ".Add(ref first, (nint)(uint)index));");
             w.Close();
             w.Line("while (++index < length);");
-        });
+        }, outline: c.StackRefill);
     }
 
     /// <summary>Handles before for <c>StackPayloadOwnerFile</c>.</summary>
