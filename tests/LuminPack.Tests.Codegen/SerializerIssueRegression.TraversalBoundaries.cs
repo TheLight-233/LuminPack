@@ -9,9 +9,13 @@ internal static partial class SerializerIssueRegression
     {
         const string source = """
             using System;
+            using System.Collections.Concurrent;
             using System.Collections.Generic;
             using LuminPack;
             using LuminPack.Attribute;
+            using LuminPack.Core;
+            using LuminPack.Option;
+            using LuminPack.Utility;
             [LuminPackable] public sealed class FlatTraversalChild { public int Number; public string Text; }
             [LuminPackable] public sealed class CompoundTraversalChild { public List<string> Items; }
             [LuminPackable] public sealed class ScalarPrefix { public short Id; public List<TraversalParent> Items; }
@@ -55,6 +59,37 @@ internal static partial class SerializerIssueRegression
                     LuminPackSerializer.DeserializeJson("[\"text\"]", ref text);
                     if (!set.SetEquals([3, 9]) || queue.Dequeue() != 9 || queue.Dequeue() != 3000000000L || !text.SetEquals(["text"]))
                         throw new Exception("The tiered integer read or the text control changed its values.");
+
+                    CheckConcurrentPairs<LuminPackUtf16LengthOptions>();
+                    CheckConcurrentPairs<LuminPackUtf8LengthOptions>();
+                }
+
+                private static void CheckConcurrentPairs<TProfile>() where TProfile : struct, ILuminPackOptions
+                {
+                    var source = new ConcurrentDictionary<string, string>();
+                    for (int i = 0; i < 80; i++)
+                        source["key" + i] = (i % 4) switch
+                        {
+                            0 => null,
+                            1 => "",
+                            2 => new string('a', 3900),
+                            _ => new string('\u96ea', 1600),
+                        };
+                    using var expectedBuffer = new LuminBufferWriter(true);
+                    var writer = new LuminPackWriter(expectedBuffer);
+                    int header = writer.BeginCollection();
+                    foreach (var pair in source)
+                    {
+                        writer.CheckBuffer();
+                        writer.Write<TProfile>(pair.Key);
+                        writer.CheckBuffer();
+                        writer.Write<TProfile>(pair.Value);
+                    }
+                    writer.EndCollection(header, source.Count);
+                    using var actual = new LuminBufferWriter(true);
+                    LuminPackSerializer.Serialize<ConcurrentDictionary<string, string>, TProfile>(source, actual);
+                    if (!actual.GetSpan().SequenceEqual(writer.GetSpan()))
+                        throw new Exception("Concurrent string pairs changed bytes across output windows.");
                 }
             }
             """;
@@ -94,6 +129,14 @@ internal static partial class SerializerIssueRegression
             if (write.ToString().Contains("loopWriter", StringComparison.Ordinal) || write.DescendantNodes().OfType<TryStatementSyntax>().Any() ||
                 read.ToString().Contains("loopReader", StringComparison.Ordinal))
                 throw new InvalidOperationException("A compound collection staged the formatter's operation state.");
+
+            var concurrentWrite = owners.Single(owner => owner.Identifier.ValueText == "ConcurrentDictionaryOfStringAndStringFormatter")
+                .Members.OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == "Write" && method.Body != null);
+            string concurrentBody = concurrentWrite.ToString();
+            if (!concurrentBody.Contains("EnumerateConcurrentDictionary", StringComparison.Ordinal) ||
+                !concurrentBody.Contains("CommitRecords(ref cursor)", StringComparison.Ordinal) ||
+                !concurrentBody.Contains("WritePairSlow", StringComparison.Ordinal))
+                throw new InvalidOperationException("The concurrent text writer lost its bounded traversal or growth fallback.");
 
             CheckJsonTier("HashSetOfIntFormatter", "ReadJson", fullOptimization: false);
             CheckJsonTier("QueueOfLongFormatter", "ReadJson", fullOptimization: false);

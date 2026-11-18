@@ -17,7 +17,7 @@ internal static class ConcurrentDictionaryOwnerFile
     internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations) =>
         PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec);
 
-    /// <summary>Writes each fixed UTF-16 key and raw value after one complete pair capacity check.</summary>
+    /// <summary>Writes fixed UTF-16 keys and eligible values in a proven output window.</summary>
     /// <param name="c">The generated dictionary write context.</param>
     private static void Write(PairedDictionaryContext c)
     {
@@ -30,7 +30,8 @@ internal static class ConcurrentDictionaryOwnerFile
             w.Line("operationState.CheckBuffer();");
             return;
         }
-        if (!c.UsesRawOrStringEntries || !c.Supports("ConcurrentBinaryTextPair"))
+        bool pairCursor = c.Supports("BinaryStringPairCursor");
+        if (!c.UsesRawOrStringEntries || !(pairCursor || c.Supports("ConcurrentBinaryTextPair")))
         {
             c.CountedWrite();
             return;
@@ -46,22 +47,41 @@ internal static class ConcurrentDictionaryOwnerFile
         w.Blank();
         w.Line("int countPosition = operationState.BeginCollection();");
         w.Line("int count = 0;");
+        if (pairCursor)
+        {
+            w.Line("ref byte cursor = ref operationState.Cursor;");
+            w.Line("int room = operationState.RecordRoom(ref cursor);");
+        }
         w.Line("foreach (var item in " + c.Source + ")");
         w.Open();
         w.Line("count++;");
         w.Line("var key = item.Key;");
         w.Line("var itemValue = item.Value;");
-        // Widen before subtracting so a cursor past the checked limit cannot wrap into a valid room count.
-        w.Line("if ((long)operationState.RecordRoom() - " + width + " >= " + writer + ".Utf16RecordBound(key))");
-        w.Open();
-        w.Line("ref byte cursor = ref operationState.Cursor;");
-        w.Line("int written = " + writer + ".WriteReservedUtf16Record(ref cursor, key);");
-        w.Line(writer + ".Write(ref " + c.Memory + ".Add(ref cursor, unchecked((nint)(uint)written)), in itemValue);");
-        w.Line("operationState.CompleteRun(written + " + width + ");");
+        if (pairCursor)
+        {
+            // Publish the captured window before the original pair operation can grow the writer.
+            ParallelDictionaryWrite.WriteStringKeyPairIfFits(w, c.Memory);
+            w.Line("operationState.CommitRecords(ref cursor);");
+            w.Line("WritePairSlow(ref operationState, key, in itemValue);");
+            w.Line("cursor = ref operationState.Cursor;");
+            w.Line("room = operationState.RecordRoom(ref cursor);");
+        }
+        else
+        {
+            // Widen before subtracting so a cursor past the checked limit cannot wrap into a valid room count.
+            w.Line("if ((long)operationState.RecordRoom() - " + width + " >= " + writer + ".Utf16RecordBound(key))");
+            w.Open();
+            w.Line("ref byte cursor = ref operationState.Cursor;");
+            w.Line("int written = " + writer + ".WriteReservedUtf16Record(ref cursor, key);");
+            w.Line(writer + ".Write(ref " + c.Memory + ".Add(ref cursor, unchecked((nint)(uint)written)), in itemValue);");
+            w.Line("operationState.CompleteRun(written + " + width + ");");
+            w.Close();
+            w.Line("else");
+            w.Indented(() => w.Line("WritePairSlow(ref operationState, key, in itemValue);"));
+        }
         w.Close();
-        w.Line("else");
-        w.Indented(() => w.Line("WritePairSlow(ref operationState, key, in itemValue);"));
-        w.Close();
+        if (pairCursor)
+            w.Line("operationState.CommitRecords(ref cursor);");
         w.Line("operationState.EndCollection(countPosition, count);");
         w.Line("operationState.CheckBuffer();");
         w.Blank();

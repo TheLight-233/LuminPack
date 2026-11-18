@@ -544,9 +544,10 @@ internal static class FormatterCapabilities
             FormatterConcurrentTraits.HasDictionaryView(compilation, dictionary))
             result.Add("DenseDictionaryView");
         if (definition is "System.Collections.Generic.Dictionary" or "System.Collections.Generic.IDictionary" or
-            "System.Collections.Generic.IReadOnlyDictionary" && modern && !unity &&
+            "System.Collections.Generic.IReadOnlyDictionary" or "System.Collections.Concurrent.ConcurrentDictionary" && modern && !unity &&
             named.TypeArguments[0].SpecialType == SpecialType.System_String &&
-            named.TypeArguments[1].SpecialType is SpecialType.System_String or SpecialType.System_Int32 &&
+            (named.TypeArguments[1].SpecialType == SpecialType.System_String ||
+             definition != "System.Collections.Concurrent.ConcurrentDictionary" && named.TypeArguments[1].SpecialType == SpecialType.System_Int32) &&
             FormatterConcurrentTraits.HasBinaryTextPairCursor(compilation))
             result.Add("BinaryStringPairCursor");
         if (definition.StartsWith("System.Collections.Concurrent.Concurrent", StringComparison.Ordinal) && FormatterConcurrentTraits.Available(compilation, named.Name, named.Arity))
