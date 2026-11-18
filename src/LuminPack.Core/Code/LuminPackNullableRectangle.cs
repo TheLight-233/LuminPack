@@ -372,6 +372,11 @@ public static class LuminPackNullableRectangle
                     if ((Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, offset)) & low) != 0)
                         goto InvalidStorage;
         }
+        else if (boolean < 0 && stride is not (2 or 4 or 8 or 16))
+        {
+            ValidateStridedPresence(ref Unsafe.Add(ref source, presence), count, stride);
+            return;
+        }
 
         int remaining = count - offset / stride;
         ref byte current = ref Unsafe.Add(ref source, offset);
@@ -385,6 +390,37 @@ public static class LuminPackNullableRectangle
 
     InvalidStorage:
         InvalidBooleanStorage();
+    }
+
+    /// <summary>Checks presence flags four records at a time when the stride has no packed SIMD mask.</summary>
+    /// <param name="presence">The first record's validated presence-byte location.</param>
+    /// <param name="count">The number of complete records.</param>
+    /// <param name="stride">The byte distance between flags.</param>
+    [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
+    private static void ValidateStridedPresence(ref byte presence, int count, int stride)
+    {
+        nint step = stride;
+        if (count >= 4)
+        {
+            nint second = step * 2;
+            nint third = step * 3;
+            nint batch = step * 4;
+            do
+            {
+                if ((presence | Unsafe.Add(ref presence, step) | Unsafe.Add(ref presence, second) |
+                     Unsafe.Add(ref presence, third)) > 1)
+                    InvalidBooleanStorage();
+                presence = ref Unsafe.Add(ref presence, batch);
+                count -= 4;
+            }
+            while (count >= 4);
+        }
+        for (; count > 0; count--)
+        {
+            if (presence > 1)
+                InvalidBooleanStorage();
+            presence = ref Unsafe.Add(ref presence, step);
+        }
     }
 
     /// <summary>Reports an invalid managed Boolean value in a nullable block.</summary>
