@@ -515,6 +515,9 @@ internal static class UnionEmitter
         private readonly uint _multiplier;
         private readonly int _shift;
 
+        /// <summary>Captures a proven collision-free projection for the known hashes.</summary>
+        /// <param name="multiplier">The unsigned multiplier used before taking the high bits.</param>
+        /// <param name="shift">The number of low bits to discard.</param>
         private ReadDispatch(uint multiplier, int shift)
         {
             _multiplier = multiplier;
@@ -528,10 +531,16 @@ internal static class UnionEmitter
                 _shift.ToString(CultureInfo.InvariantCulture)
             : "tag";
 
+        /// <summary>Formats a known case's label under this projection.</summary>
+        /// <param name="item">The known Union case.</param>
+        /// <returns>The dense index or the original hash literal.</returns>
         internal string Label(UnionRenderCase item) => Dense
             ? Index(item.NameHash, _multiplier, _shift).ToString(CultureInfo.InvariantCulture) + "u"
             : NameHash(item);
 
+        /// <summary>Searches a bounded set of dense projections for known cases.</summary>
+        /// <param name="cases">The emitted case table.</param>
+        /// <returns>A collision-free projection, or the original sparse switch plan.</returns>
         internal static ReadDispatch Create(UnionRenderCase[] cases)
         {
             int count = cases.Length;
@@ -569,6 +578,11 @@ internal static class UnionEmitter
             return default;
         }
 
+        /// <summary>Projects a hash using the same wrapping arithmetic as the emitted switch.</summary>
+        /// <param name="tag">The original case hash.</param>
+        /// <param name="multiplier">The unsigned multiplier.</param>
+        /// <param name="shift">The number of low bits to discard.</param>
+        /// <returns>An unsigned switch index represented as an integer.</returns>
         private static int Index(uint tag, uint multiplier, int shift) => (int)(unchecked(tag * multiplier) >> shift);
     }
 

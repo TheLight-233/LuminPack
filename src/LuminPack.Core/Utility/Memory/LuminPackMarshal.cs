@@ -594,11 +594,21 @@ public static partial class LuminPackMarshal
     {
         switch (width)
         {
-            case 1: destination = source; break;
-            case 2: Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<ushort>(ref source)); break;
-            case 4: Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<uint>(ref source)); break;
-            case 8 when IntPtr.Size == 8: Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<ulong>(ref source)); break;
-            default: CopyBlockUnaligned(ref destination, ref source, (uint)width); break;
+            case 1:
+                destination = source;
+                break;
+            case 2:
+                Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<ushort>(ref source));
+                break;
+            case 4:
+                Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<uint>(ref source));
+                break;
+            case 8 when IntPtr.Size == 8:
+                Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<ulong>(ref source));
+                break;
+            default:
+                CopyBlockUnaligned(ref destination, ref source, (uint)width);
+                break;
         }
     }
 
