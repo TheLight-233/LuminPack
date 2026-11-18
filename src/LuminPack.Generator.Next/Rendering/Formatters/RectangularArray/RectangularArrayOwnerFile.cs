@@ -259,6 +259,11 @@ internal static class RectangularArrayOwnerFile
                 return;
             }
             w.Line("if (length == 0) return;");
+            if (set.FindFormatter(type)?.Supports("ReadFramedNullableInt32s") == true && !raw)
+            {
+                w.Line("reader.ReadFramedNullableInt32s(" + Marshal + ".CreateSpan(ref first, length));");
+                return;
+            }
             w.Line("int index = 0;");
             w.Line("do");
             w.Open();

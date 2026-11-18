@@ -46,6 +46,8 @@ internal static class ConcurrentQueueStringOwnerFile
         string owner = GeneratedNames.Owner(extension, queue);
         string readable = ReadableTypeName.Of(GeneratedNames.PayloadKey(queue));
         string roots = "LuminRoots_" + readable;
+        bool framedNullableInt32 = set.FindFormatter(queue)?.Supports("ReadFramedNullableInt32s") == true &&
+            set.FindFormatter(itemType)?.NativeNullablePayload == "int";
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -179,16 +181,23 @@ internal static class ConcurrentQueueStringOwnerFile
                     w.Open();
                     w.Line("if (length != 0)");
                     w.Open();
-                    w.Line("ref var first = ref " + marshal + ".GetNotNullArrayReference(pooled);");
-                    w.Line("int i = 0;");
-                    w.Line("do");
-                    w.Open();
-                    w.Line(itemType + " item = default !;");
-                    ForwardedElementRead.Emit(w, itemType, "operationState", "item",
-                        element + ".Read<TLuminProfile>(ref operationState, ref item);");
-                    w.Line(memory + ".Add(ref first, (nint)(uint)i) = item;");
-                    w.Close();
-                    w.Line("while (++i < length);");
+                    if (framedNullableInt32)
+                    {
+                        w.Line("operationState.ReadFramedNullableInt32s(global::System.MemoryExtensions.AsSpan(pooled, 0, length));");
+                    }
+                    else
+                    {
+                        w.Line("ref var first = ref " + marshal + ".GetNotNullArrayReference(pooled);");
+                        w.Line("int i = 0;");
+                        w.Line("do");
+                        w.Open();
+                        w.Line(itemType + " item = default !;");
+                        ForwardedElementRead.Emit(w, itemType, "operationState", "item",
+                            element + ".Read<TLuminProfile>(ref operationState, ref item);");
+                        w.Line(memory + ".Add(ref first, (nint)(uint)i) = item;");
+                        w.Close();
+                        w.Line("while (++i < length);");
+                    }
                     w.Close();
                     w.Blank();
                     ConcurrentQueueOwnerFile.WriteFreshConstruction(w, set, queue, itemType);
@@ -207,9 +216,14 @@ internal static class ConcurrentQueueStringOwnerFile
                     w.Line("int remaining = length;");
                     w.Line("do");
                     w.Open();
-                    w.Line(itemType + " v = default !;");
-                    ForwardedElementRead.Emit(w, itemType, "operationState", "v",
-                        element + ".Read<TLuminProfile>(ref operationState, ref v);");
+                    if (framedNullableInt32)
+                        w.Line("int? v = global::LuminPack.Security.LuminPackInputPolicy.ReadNullMarker(ref operationState, 0) ? null : operationState.Read<int>();");
+                    else
+                    {
+                        w.Line(itemType + " v = default !;");
+                        ForwardedElementRead.Emit(w, itemType, "operationState", "v",
+                            element + ".Read<TLuminProfile>(ref operationState, ref v);");
+                    }
                     w.Line("value.Enqueue(v);");
                     w.Close();
                     w.Line("while (--remaining != 0);");

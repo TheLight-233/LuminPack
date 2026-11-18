@@ -1,5 +1,6 @@
 #if LUMINPACK_NEXT_GENERATOR
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using LuminPack;
 using LuminPack.Attribute;
 using Xunit;
@@ -141,6 +142,72 @@ public sealed class RectangularArrayReuseTest
         LuminPackSerializer.Deserialize(wire, ref target);
         Assert.Same(alias, target);
         Assert.Equal(source.Cast<int>(), alias.Cast<int>());
+    }
+
+    /// <summary>Round-trips the framed nullable representation, including the final short records.</summary>
+    /// <param name="nullPercent">The percentage of values that are absent.</param>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(20)]
+    [InlineData(100)]
+    public void FramedNullableMatrixRetainsItsWire(int nullPercent)
+    {
+        const int headerWidth = 1 + 3 * sizeof(int);
+        var source = new int?[5, 20];
+        for (int i = 0; i < source.Length; i++)
+            source[i / 20, i % 20] = i * 37 % 100 < nullPercent ? null : 100 - i;
+        byte[] wire = LuminPackSerializer.Serialize(source);
+        var expected = source.Cast<int?>().SelectMany(item => item.HasValue ?
+            new byte[] { 0 }.Concat(BitConverter.GetBytes(item.Value)) : new byte[] { 255 });
+        Assert.Equal(expected, wire.Skip(headerWidth));
+        int?[,]? target = null;
+        Assert.Equal(wire.Length, LuminPackSerializer.Deserialize(wire, ref target));
+        Assert.Equal(source.Cast<int?>(), target!.Cast<int?>());
+    }
+
+    /// <summary>Rejects both incomplete payloads and invalid markers in the bounded run and its short tail.</summary>
+    [Fact]
+    public void FramedNullableMatrixRejectsMalformedElements()
+    {
+        const int headerWidth = 1 + 3 * sizeof(int);
+        int?[,] source = { { 10, null, 12, null } };
+        byte[] wire = LuminPackSerializer.Serialize(source);
+        int?[,]? target = null;
+        Assert.ThrowsAny<Exception>(() =>
+            LuminPackSerializer.Deserialize(wire.AsSpan(0, wire.Length - 2), ref target));
+
+        byte[] invalid = (byte[])wire.Clone();
+        invalid[headerWidth + 5] = 2;
+        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(invalid, ref target));
+        Assert.Equal(10, target![0, 0]);
+        Assert.Null(target[0, 1]);
+
+        invalid[headerWidth + 5] = 255;
+        invalid[^1] = 2;
+        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(invalid, ref target));
+        Assert.Equal(12, target![0, 2]);
+    }
+
+    /// <summary>Reads framed queue elements in order and checks markers before enqueueing.</summary>
+    [Fact]
+    public void FramedNullableQueueKeepsPublicationOrder()
+    {
+        var source = new ConcurrentQueue<int?>([10, null, 12, null]);
+        byte[] wire = LuminPackSerializer.Serialize(source);
+        ConcurrentQueue<int?>? fresh = null;
+        Assert.Equal(wire.Length, LuminPackSerializer.Deserialize(wire, ref fresh));
+        Assert.Equal(source.ToArray(), fresh!.ToArray());
+
+        wire[sizeof(int) + 1 + sizeof(int)] = 2;
+        fresh = null;
+        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(wire, ref fresh));
+        Assert.Null(fresh);
+
+        ConcurrentQueue<int?>? reused = new([77]);
+        var alias = reused;
+        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(wire, ref reused));
+        Assert.Same(alias, reused);
+        Assert.Equal(new int?[] { 10 }, alias.ToArray());
     }
 }
 

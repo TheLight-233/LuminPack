@@ -26,6 +26,8 @@ internal static class FormatterCapabilities
             if (array.Rank > 1 && array.ElementType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } &&
                 FormatterRuntimeTraits.HasFramedNullableSpanWriter(compilation))
                 result.Add("WriteFramedNullableSpan");
+            if (array.Rank > 1 && modern && !unity && FormatterRuntimeTraits.HasFramedNullableInt32Reader(compilation, array.ElementType))
+                result.Add("ReadFramedNullableInt32s");
         }
         if (type is not INamedTypeSymbol { IsGenericType: true } named)
             return result.ToArray();
@@ -33,6 +35,9 @@ internal static class FormatterCapabilities
         if (modern && !unity && named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T &&
             named.TypeArguments[0].IsUnmanagedType && FormatterRuntimeTraits.HasNativeNullablePayloadReader(compilation))
             result.Add("ReadNativeNullablePayload");
+        if (definition == "System.Collections.Concurrent.ConcurrentQueue" && modern && !unity &&
+            FormatterRuntimeTraits.HasFramedNullableInt32Reader(compilation, named.TypeArguments[0]))
+            result.Add("ReadFramedNullableInt32s");
         if ((SequenceInterface(definition) || definition.StartsWith("System.Collections.Immutable.", StringComparison.Ordinal) ||
             definition is "System.Collections.Generic.Stack" or "System.Collections.Generic.SortedSet" or "System.Collections.Generic.LinkedList" or
                 "System.Collections.Concurrent.ConcurrentStack" or "System.Collections.Concurrent.ConcurrentBag" or "System.Collections.Frozen.FrozenSet") &&

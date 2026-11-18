@@ -116,6 +116,24 @@ internal static class FormatterRuntimeTraits
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, span.Construct(nullable.Construct(method.TypeParameters[0]))));
     }
 
+    /// <summary>Checks for the bounded reader of a marker-prefixed nullable integer span.</summary>
+    /// <param name="compilation">The consuming compilation and its runtime metadata.</param>
+    /// <param name="element">The closed element type.</param>
+    /// <returns>Whether the runtime supports reading the exact framed element.</returns>
+    internal static bool HasFramedNullableInt32Reader(Compilation compilation, ITypeSymbol element)
+    {
+        if (element is not INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable ||
+            nullable.TypeArguments[0].SpecialType != SpecialType.System_Int32)
+            return false;
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader");
+        var span = compilation.GetTypeByMetadataName("System.Span`1")?.Construct(element);
+        return reader != null && span != null &&
+            reader.GetMembers("ReadFramedNullableInt32s").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 0, ReturnsVoid: true } &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, span));
+    }
+
     /// <summary>Checks the referenced runtime for the present nullable native-payload reader.</summary>
     /// <param name="compilation">The consuming compilation's runtime metadata.</param>
     /// <returns>Whether the exact advancing reader entry is available.</returns>

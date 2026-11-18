@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace LuminPack.Core;
 
@@ -16,11 +17,35 @@ public ref partial struct LuminPackWriter
     {
         if (values.IsEmpty)
             return true;
-        if (RecordRoom() < (long)values.Length * (1L + Unsafe.SizeOf<T>()))
+        int size = Unsafe.SizeOf<T>();
+        long width = (long)values.Length * (1L + size);
+        if (RecordRoom() < width)
             return false;
         ref byte cursor = ref Current;
-        foreach (ref readonly T? value in values)
-            cursor = ref WriteReservedNullable(ref cursor, value);
+        int index = 0;
+        if (values.Length > size)
+        {
+            ref byte first = ref Unsafe.As<T?, byte>(ref MemoryMarshal.GetReference(values));
+            long offset = (long)Unsafe.ByteOffset(ref cursor, ref first);
+            long sourceBytes = (long)values.Length * Unsafe.SizeOf<T?>();
+            if (offset >= width || offset <= -sourceBytes)
+            {
+                // A speculative payload never passes the minimum width of the remaining records.
+                int stop = values.Length - size;
+                do
+                {
+                    T? value = values[index];
+                    int present = value.HasValue ? 1 : 0;
+                    cursor = unchecked((byte)(present - 1));
+                    T payload = value.GetValueOrDefault();
+                    WriteReserved(ref Unsafe.Add(ref cursor, 1), in payload);
+                    cursor = ref Unsafe.Add(ref cursor, 1 + present * size);
+                }
+                while (++index < stop);
+            }
+        }
+        for (; index < values.Length; index++)
+            cursor = ref WriteReservedNullable(ref cursor, values[index]);
         CommitRecords(ref cursor);
         return true;
     }
