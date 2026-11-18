@@ -11,6 +11,7 @@
 | `runtime-compatibility.yml` | 裁剪与 NativeAOT 程序、SIMD 回退路径、x86 以及 AVX-512 硬件测试。 |
 | `unity.yml`、`unity-extensions.yml` | Unity Editor 测试、IL2CPP 与 WebGL Player、Unity 对象与 Burst 契约。 |
 | `benchmark-matrix.yml` | 序列化矩阵的往返校验；手动运行时计时。 |
+| `benchmark-matrix-paired.yml` | 手动在同一 runner 上以 FullOpts 和 TieredPGO 对照两个或三个版本的指定 Matrix 用例。 |
 | `fuzz.yml` | 有预算上限的 SharpFuzz/libFuzzer 测试，见 [Fuzz 测试](fuzzing.cn.md)。 |
 | `release.yml` | 构建候选包、比较 API，并通过配置的版本标签发布到 NuGet。见[发布](releasing.cn.md)。 |
 
@@ -56,5 +57,7 @@ Unity 2022.3.51f1 和 6000.0.43f1 依次运行 Editor 测试、IL2CPP smoke Play
 最终校准采样次数前，矩阵会对同一个操作的各库打乱顺序、交错预热。每个库的每项操作至少累计 15 毫秒的实际运行时间和 256 次调用。如果同一进程的前三轮和最后三轮中位数相差至少 20%，报告会标记该项，并保留所有样本。
 
 `benchmark-matrix` 产物包含记录了预热数据的原始 JSONL、机器信息、`stability.csv` 和 `REPORT.md`。库之间的比值在同一次运行内比较。
+
+手动触发 `benchmark-matrix-paired.yml` 时，指定基线版本、一个格式和场景以及准确的用例名，也可指定第三个对照版本。每种 JIT 模式在同一台主机上使用相同的夹具源码构建各版本，并轮换进程启动顺序。CSV 记录进程内参考库比值、各版本中位数、参考库漂移、进程间波动和分配量。比值只使用参与比较的两个库均未观察到全局 JIT 活动的轮次。
 
 如何用这些产物生成图表，见[贡献指南](CONTRIBUTING.cn.md#基准测试)。

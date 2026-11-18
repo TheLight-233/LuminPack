@@ -1,0 +1,93 @@
+name: Paired benchmark matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: Baseline revision compatible with the selected Matrix harness
+        required: true
+        type: string
+      comparison:
+        description: Optional third revision, for example an alternative JIT policy
+        type: string
+      group:
+        description: Matrix format and scene, for example binary/regular
+        required: true
+        type: string
+      cases:
+        description: Comma-separated exact fixture names
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  paired:
+    name: Paired Matrix (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [fullopts, pgo]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          path: stock
+          ref: ${{ inputs.baseline }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        if: inputs.comparison != ''
+        with:
+          path: comparison
+          ref: ${{ inputs.comparison }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+      - name: Build each revision with the candidate Matrix harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          matrix_dir=benchmarks/LuminPack.MatrixBenchmark
+          for variant in stock candidate comparison; do
+            if [[ ! -d "$variant" ]]; then continue; fi
+            git -C "$variant" rev-parse HEAD > "results/$variant.txt"
+            if [[ "$variant" != candidate ]]; then
+              cp -a "candidate/$matrix_dir/." "$variant/$matrix_dir/"
+            fi
+          done
+          for variant in stock candidate comparison; do
+            if [[ ! -d "$variant" ]]; then continue; fi
+            dotnet build "$variant/$matrix_dir" -c Release \
+              -p:LuminPackUseSatori=false -p:GeneratePackageOnBuild=false
+          done
+      - name: Sample alternating revisions
+        shell: bash
+        env:
+          JIT_MODE: ${{ matrix.mode }}
+          MATRIX_GROUP: ${{ inputs.group }}
+          MATRIX_CASES: ${{ inputs.cases }}
+        run: |
+          set -euo pipefail
+          dotnet --info > results/dotnet-info.txt
+          lscpu > results/cpu.txt
+          dll=benchmarks/LuminPack.MatrixBenchmark/bin/Release/net10.0/LuminPack.MatrixBenchmark.dll
+          third=()
+          if [[ -d comparison ]]; then third=(--comparison "comparison/$dll"); fi
+          python3 candidate/.github/scripts/benchmark-matrix-paired.py "$JIT_MODE" "stock/$dll" "candidate/$dll" results \
+            --group "$MATRIX_GROUP" --cases "$MATRIX_CASES" "${third[@]}"
+      - name: Upload paired measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-matrix-paired-${{ matrix.mode }}
+          path: results

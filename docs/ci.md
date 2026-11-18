@@ -11,6 +11,7 @@ Pushes to `main` and `refactor`, and pull requests, trigger the hosted checks. T
 | `runtime-compatibility.yml` | Trimmed and NativeAOT programs, SIMD fallbacks, x86 and AVX-512 hardware tests. |
 | `unity.yml`, `unity-extensions.yml` | Unity Editor tests, IL2CPP and WebGL players, Unity object and Burst contracts. |
 | `benchmark-matrix.yml` | Round-trip validation of the serialization matrix; timing on manual runs. |
+| `benchmark-matrix-paired.yml` | Manual same-runner comparison of two or three revisions for selected Matrix fixtures, in FullOpts and TieredPGO. |
 | `fuzz.yml` | Bounded SharpFuzz/libFuzzer campaigns; see [fuzzing](fuzzing.md). |
 | `release.yml` | Release candidate builds, API comparison and NuGet publishing from the configured version tag. See [releasing](releasing.md). |
 
@@ -56,5 +57,7 @@ Manually dispatching `ci.yml` with `run_benchmarks` enabled times both the Bench
 Before final sample calibration, the matrix interleaves shuffled warmup batches across libraries for the same operation. Each library and operation accumulates at least 15 ms of active time and 256 calls. The report flags cases whose first and last three sample medians within a process differ by at least 20%, and retains all samples.
 
 The `benchmark-matrix` artifact includes the raw JSONL with warmup observations, the machine information, `stability.csv` and `REPORT.md`. Compare library ratios within the same run.
+
+Dispatch `benchmark-matrix-paired.yml` with the baseline revision, one format and scenario, and exact fixture names. An optional comparison revision supplies a third variant. Each JIT mode builds all variants with the same fixture source and rotates their process order on one host. The CSV includes within-process reference ratios, variant medians, reference drift, process spread and allocations. Ratios use rounds without observed global JIT activity for either library.
 
 Chart generation from these artifacts is described in [Contributing](../CONTRIBUTING.md#benchmarks).
