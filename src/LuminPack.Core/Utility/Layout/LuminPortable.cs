@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using LuminPack.Code;
 #if NET8_0_OR_GREATER
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -32,7 +33,8 @@ public interface ILuminPortableLayout
 /// <typeparam name="TLayout">The generated layout of <typeparamref name="T"/>.</typeparam>
 /// <remarks>
 /// <para>
-/// The wire is unchanged: fields are declaration-ordered and unpadded on every architecture. A shuffle mask built once
+/// The wire is unchanged: fields are declaration-ordered and unpadded on every architecture. An exact identity layout
+/// can transfer the complete disjoint block. For other layouts, a shuffle mask built once
 /// from the actual field offsets gathers whole elements per 16-byte block, so padding removal costs one load, one shuffle
 /// and one store for several small elements, or a few shuffles for an element of up to 32 bytes.
 /// Eligible padded layouts on supported 64-bit hardware can use wider cached grouped permutations for complete prefixes.
@@ -41,13 +43,17 @@ public interface ILuminPortableLayout
 /// Each block stores a full vector and later blocks overwrite the unused tail, so every call stops while a complete
 /// vector still fits in both the source and the destination; the caller's field-wise loop finishes the remaining elements.
 /// Modern CoreCLR and Native AOT targets with byte-shuffle hardware use the built-in kernel. The netstandard2.1 target
-/// can use an explicitly registered native layout hook; without one it reports zero and keeps the established field-wise path.
+/// can use an explicitly registered native layout hook for conversions. Without one, unproven or overlapping layouts
+/// keep the established field-wise path.
 /// </para>
 /// </remarks>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class LuminPortable<T, TLayout>
     where TLayout : struct, ILuminPortableLayout
 {
+    private const int MaxIdentityProbeWidth = 4096;
+    private static readonly bool Identity;
+
 #if NETSTANDARD2_1
     /// <summary>Creates native byte descriptors only after a backend is explicitly installed.</summary>
     private static class NativeLayout
@@ -93,15 +99,35 @@ public static class LuminPortable<T, TLayout>
     /// <summary>Unpack masks: storage vector <c>o</c> takes wire vector <c>i</c> through <c>Unpack[o * 2 + i]</c>.</summary>
     private static readonly Vector128<byte> Unpack0, Unpack1, Unpack2, Unpack3;
     private static readonly LuminGroupedLayout? GroupedPack, GroupedUnpack;
+#endif
 
-    /// <summary>Builds the masks once from the running process's actual storage offsets.</summary>
+    /// <summary>Verifies the actual byte layout and builds any required shuffle masks once per closed type.</summary>
     static LuminPortable()
     {
         int size = Unsafe.SizeOf<T>(), wire = default(TLayout).WireSize;
-        if (!(Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) || wire <= 0 || size > 32 || wire > 32)
+        bool testIdentity = wire > 0 && wire <= MaxIdentityProbeWidth && size == wire &&
+            !RuntimeHelpers.IsReferenceOrContainsReferences<T>();
+#if NET8_0_OR_GREATER
+        bool shuffle = wire > 0 && wire <= 32 && size <= 32 && (Ssse3.IsSupported || AdvSimd.Arm64.IsSupported);
+        if (!testIdentity && !shuffle)
+#else
+        if (!testIdentity)
+#endif
             return;
-        Span<int> offsets = stackalloc int[wire];
+        Span<int> offsets = wire <= 128 ? stackalloc int[wire] : new int[wire];
+        if (testIdentity)
+            offsets.Fill(-1);
         default(TLayout).Describe(offsets);
+        if (testIdentity)
+        {
+            int index = 0;
+            while (index < wire && offsets[index] == index)
+                index++;
+            Identity = index == wire;
+        }
+#if NET8_0_OR_GREATER
+        if (!shuffle)
+            return;
         foreach (int offset in offsets)
             if ((uint)offset >= (uint)size)
                 return;
@@ -126,8 +152,10 @@ public static class LuminPortable<T, TLayout>
             packed[i] = i;
         GroupedPack = LuminGroupedLayout.Create(offsets, size, packed, wire);
         GroupedUnpack = LuminGroupedLayout.Create(packed, wire, offsets, size);
+#endif
     }
 
+#if NET8_0_OR_GREATER
     /// <summary>Selects bytes by index, producing zero for out-of-range indices on every supported instruction set.</summary>
     /// <param name="source">The source vector.</param>
     /// <param name="indices">The per-byte indices, 0xFF for zero.</param>
@@ -145,6 +173,8 @@ public static class LuminPortable<T, TLayout>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int Pack(ref T source, int count, ref byte destination)
     {
+        if (Identity && count > 0 && TryCopyIdentity(ref Unsafe.As<T, byte>(ref source), count, ref destination))
+            return count;
 #if NETSTANDARD2_1
         if (count > 0 && global::LuminPack.Core.LuminPackBurst.UseLayout(count) && NativeLayout.Valid)
             return global::LuminPack.Core.LuminPackBurst.TryLayout(ref Unsafe.As<T, byte>(ref source), ref destination,
@@ -169,6 +199,8 @@ public static class LuminPortable<T, TLayout>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int Unpack(ref byte source, int count, ref T destination)
     {
+        if (Identity && count > 0 && TryCopyIdentity(ref source, count, ref Unsafe.As<T, byte>(ref destination)))
+            return count;
 #if NETSTANDARD2_1
         if (count > 0 && global::LuminPack.Core.LuminPackBurst.UseLayout(count) && NativeLayout.Valid)
             return global::LuminPack.Core.LuminPackBurst.TryLayout(ref source, ref Unsafe.As<T, byte>(ref destination),
@@ -183,6 +215,22 @@ public static class LuminPortable<T, TLayout>
 #else
         return 0;
 #endif
+    }
+
+    /// <summary>Copies complete elements when the proven identity layout's two windows are disjoint.</summary>
+    /// <param name="source">The first byte in the validated source.</param>
+    /// <param name="count">The validated nonzero element count.</param>
+    /// <param name="destination">The first byte in the validated destination.</param>
+    /// <returns>Whether the windows were transferred as one block.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool TryCopyIdentity(ref byte source, int count, ref byte destination)
+    {
+        long bytes = (long)count * Unsafe.SizeOf<T>();
+        long offset = (long)Unsafe.ByteOffset(ref source, ref destination);
+        if ((ulong)bytes > uint.MaxValue || (offset < bytes && offset > -bytes))
+            return false;
+        LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)bytes);
+        return true;
     }
 
 #if NET8_0_OR_GREATER

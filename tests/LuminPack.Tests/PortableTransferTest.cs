@@ -1,7 +1,9 @@
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using System.Collections.Frozen;
 using LuminPack;
 using LuminPack.Attribute;
+using LuminPack.Utility;
 using Xunit;
 
 namespace LuminPackUnitTest;
@@ -93,6 +95,76 @@ public class PortableTransferTest
                 .Concat(BitConverter.GetBytes(value.E)).Concat(new[] { value.F }));
         Check(index => new PortableVolatile { Tag = (byte)index, Value = index * 13 },
             value => new[] { value.Tag }.Concat(BitConverter.GetBytes(value.Value)));
+    }
+
+    /// <summary>Checks the complete copy, same-width reordered descriptor and overlapping window at a single element.</summary>
+    [Fact]
+    public void VerifiedIdentityTransfersACompleteShortBlock()
+    {
+        const long sample = 0x0102030405060708;
+        long source = sample;
+        byte[] bytes = new byte[12];
+        bytes.AsSpan().Fill(0xA5);
+        Assert.Equal(1, LuminPortable<long, IdentityWordLayout>.Pack(ref source, 1, ref bytes[2]));
+        Assert.Equal(BitConverter.GetBytes(sample), bytes.AsSpan(2, sizeof(long)).ToArray());
+        Assert.Equal(new byte[] { 0xA5, 0xA5, 0xA5, 0xA5 }, bytes.Take(2).Concat(bytes.Skip(10)));
+        long target = 0;
+        Assert.Equal(1, LuminPortable<long, IdentityWordLayout>.Unpack(ref bytes[2], 1, ref target));
+        Assert.Equal(sample, target);
+
+        Assert.Equal(0, LuminPortable<long, ReorderedWordLayout>.Pack(ref source, 1, ref bytes[2]));
+        Assert.Equal(0, LuminPortable<long, ReorderedWordLayout>.Unpack(ref bytes[2], 1, ref target));
+        ref byte overlapping = ref Unsafe.As<long, byte>(ref source);
+        Assert.Equal(0, LuminPortable<long, IdentityWordLayout>.Pack(ref source, 1, ref overlapping));
+        Assert.Equal(0, LuminPortable<long, IdentityWordLayout>.Unpack(ref overlapping, 1, ref source));
+        Assert.Equal(sample, source);
+    }
+
+    /// <summary>Checks packed rank-two framing and declaration order for matching and reordered layouts.</summary>
+    [Fact]
+    public void PackedRectangularArraysKeepFieldOrderedBytes()
+    {
+        byte[] expected = new byte[] { 0 }.Concat(BitConverter.GetBytes(1)).Concat(BitConverter.GetBytes(2))
+            .Concat(BitConverter.GetBytes(2)).Concat(BitConverter.GetBytes(11)).Concat(BitConverter.GetBytes(-2))
+            .Concat(BitConverter.GetBytes(17)).Concat(BitConverter.GetBytes(4)).ToArray();
+        PortableAutoPair[,] identity = { { new() { First = 11, Second = -2 }, new() { First = 17, Second = 4 } } };
+        PortableReorderedPair[,] reordered = { { new() { First = 11, Second = -2 }, new() { First = 17, Second = 4 } } };
+        Assert.Equal(expected, LuminPackSerializer.Serialize(identity));
+        Assert.Equal(expected, LuminPackSerializer.Serialize(reordered));
+
+        PortableAutoPair[,]? readIdentity = null;
+        PortableReorderedPair[,]? readReordered = null;
+        LuminPackSerializer.Deserialize(expected, ref readIdentity);
+        LuminPackSerializer.Deserialize(expected, ref readReordered);
+        Assert.Equal(identity.Cast<PortableAutoPair>(), readIdentity!.Cast<PortableAutoPair>());
+        Assert.Equal(reordered.Cast<PortableReorderedPair>(), readReordered!.Cast<PortableReorderedPair>());
+    }
+
+    /// <summary>Provides the word's complete identity byte map.</summary>
+    private readonly struct IdentityWordLayout : ILuminPortableLayout
+    {
+        public int WireSize => sizeof(long);
+
+        /// <inheritdoc />
+        public void Describe(Span<int> storageOffsets)
+        {
+            for (int index = 0; index < storageOffsets.Length; index++)
+                storageOffsets[index] = index;
+        }
+    }
+
+    /// <summary>Provides a same-width mapping with the word's first and last bytes exchanged.</summary>
+    private readonly struct ReorderedWordLayout : ILuminPortableLayout
+    {
+        public int WireSize => sizeof(long);
+
+        /// <inheritdoc />
+        public void Describe(Span<int> storageOffsets)
+        {
+            default(IdentityWordLayout).Describe(storageOffsets);
+            storageOffsets[0] = sizeof(long) - 1;
+            storageOffsets[^1] = 0;
+        }
     }
 
     /// <summary>Checks overlapping explicit fields write each field and read back with the later field winning.</summary>
@@ -289,4 +361,20 @@ public partial struct PortableOverlap
     [FieldOffset(0)] public long Whole;
     /// <summary>The high half, aliasing <see cref="Whole"/>.</summary>
     [FieldOffset(4)] public int High;
+}
+
+/// <summary>Retains a packed descriptor for an auto layout which can match the packed wire exactly.</summary>
+[LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Packed), StructLayout(LayoutKind.Auto)]
+public partial struct PortableAutoPair
+{
+    public int First;
+    public int Second;
+}
+
+/// <summary>Has the packed width but stores its fields in reverse address order.</summary>
+[LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Packed), StructLayout(LayoutKind.Explicit)]
+public partial struct PortableReorderedPair
+{
+    [FieldOffset(4)] public int First;
+    [FieldOffset(0)] public int Second;
 }
