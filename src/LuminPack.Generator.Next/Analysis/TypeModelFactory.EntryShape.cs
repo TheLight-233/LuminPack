@@ -104,6 +104,16 @@ internal static partial class TypeModelFactory
             formatter.Arguments.Any(HasLargeFormatterRead);
 
         private bool? _hasRetainedDirectWrite;
+        private bool? _hasScalarHeader;
+
+        /// <summary>Checks the referenced Core before using its combined marker and scalar field write.</summary>
+        private bool HasScalarHeader => _hasScalarHeader ??=
+            _compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter")?.GetMembers("WriteObjectHeader")
+                .OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.ReturnsVoid && method.Arity == 1 &&
+                    method.DeclaredAccessibility == Accessibility.Public && method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+                    method.Parameters.Length == 2 && method.Parameters[0].RefKind == RefKind.None &&
+                    method.Parameters[0].Type.SpecialType == SpecialType.System_Byte && method.Parameters[1].RefKind == RefKind.In &&
+                    SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, method.TypeParameters[0])) == true;
 
         /// <summary>Checks the referenced Core for the retained root storage API before emitting a call to it.</summary>
         private bool HasRetainedDirectWrite => _hasRetainedDirectWrite ??=

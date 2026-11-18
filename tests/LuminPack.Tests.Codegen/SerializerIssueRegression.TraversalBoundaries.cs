@@ -14,6 +14,8 @@ internal static partial class SerializerIssueRegression
             using LuminPack.Attribute;
             [LuminPackable] public sealed class FlatTraversalChild { public int Number; public string Text; }
             [LuminPackable] public sealed class CompoundTraversalChild { public List<string> Items; }
+            [LuminPackable] public sealed class ScalarPrefix { public short Id; public List<TraversalParent> Items; }
+            [LuminPackable] public sealed class FieldRunPrefix { public int A; public int B; public List<TraversalParent> Items; }
             [LuminPackable] public sealed class TraversalParent
             {
                 public FlatTraversalChild Flat;
@@ -29,6 +31,14 @@ internal static partial class SerializerIssueRegression
                         new() { Flat = null, Compound = null },
                     };
                     byte[] bytes = LuminPackSerializer.Serialize(source);
+                    var scalar = new ScalarPrefix { Id = 0x1234, Items = source };
+                    var scalarBytes = LuminPackSerializer.Serialize(scalar);
+                    ScalarPrefix scalarCopy = null;
+                    if (scalarBytes[0] != 2 || scalarBytes[1] != 0x34 || scalarBytes[2] != 0x12 ||
+                        LuminPackSerializer.Deserialize(scalarBytes, ref scalarCopy) != scalarBytes.Length ||
+                        scalarCopy.Id != scalar.Id || scalarCopy.Items.Count != 2)
+                        throw new Exception("The first scalar field or the collection following it lost its wire position.");
+                    _ = LuminPackSerializer.Serialize(new FieldRunPrefix { A = 1, B = 2, Items = source });
                     List<TraversalParent> copy = null;
                     for (int i = 0; i < 2; ++i)
                     {
@@ -45,6 +55,13 @@ internal static partial class SerializerIssueRegression
         static void Inspect(GeneratorDriverRunResult result)
         {
             var owners = result.GeneratedTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<StructDeclarationSyntax>()).ToArray();
+            foreach (var expected in new[] { ("ScalarPrefixFormatter", true), ("FieldRunPrefixFormatter", false) })
+            {
+                var body = owners.Where(owner => owner.Identifier.ValueText == expected.Item1).SelectMany(owner => owner.Members)
+                    .OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == "Write" && method.Body != null);
+                if (body.ToString().Contains("writer.WriteObjectHeader(", StringComparison.Ordinal) != expected.Item2)
+                    throw new InvalidOperationException("Unexpected scalar header write for " + expected.Item1 + Environment.NewLine + body);
+            }
             var parent = owners.Single(owner => owner.Identifier.ValueText == "TraversalParentFormatter" &&
                 owner.Members.OfType<MethodDeclarationSyntax>().Any(method => method.Identifier.ValueText == "Write" && method.Body != null));
             foreach (string direction in new[] { "Write", "Read" })

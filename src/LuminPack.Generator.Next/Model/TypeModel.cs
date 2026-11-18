@@ -306,6 +306,8 @@ internal sealed class RecordModel : TypeModel
 
     /// <summary>Whether the record is a case of a Union root that uses the shared returning cursor kernel.</summary>
     internal readonly bool FixedUnionCase;
+    /// <summary>Whether a plain class can use the referenced writer's scalar header overload.</summary>
+    internal readonly bool ScalarHeader;
 
     /// <summary>Whether the record has a base payload whose members follow its own.</summary>
     internal readonly bool Derived;
@@ -379,17 +381,19 @@ internal sealed class RecordModel : TypeModel
     /// <param name="implicitPayload">Whether to enable implicit payload for this operation.</param>
     /// <param name="sequenceBase">The list base whose contents are the record's payload.</param>
     /// <param name="sequenceElement">The list base's element spelling.</param>
+    /// <param name="scalarHeader">Whether the ordinary class can use a combined marker and scalar.</param>
     internal RecordModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
         bool versioned, bool fixedUnionCase, bool derived, bool proven, bool recordWidth, bool freshResult, string? mirror,
         string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, VersionSchemaModel? version,
         ConstructorModel? constructor = null, CallbackModel? callbacks = null, string? rent = null, StorageMirrorModel[]? mirrors = null,
         string? rejection = null, bool recursive = false, bool implicitPayload = false,
-        string? sequenceBase = null, string? sequenceElement = null)
+        string? sequenceBase = null, string? sequenceElement = null, bool scalarHeader = false)
         : base(identity, accessibility, PayloadKind.Record, members, policy, constraints)
     {
         Implicit = implicitPayload;
         SequenceBase = sequenceBase;
         SequenceElement = sequenceElement;
+        ScalarHeader = scalarHeader;
         Recursive = recursive;
         Rejection = rejection;
         Rent = rent;
@@ -415,7 +419,7 @@ internal sealed class RecordModel : TypeModel
         FixedUnionCase == record.FixedUnionCase && Derived == record.Derived &&
         Proven == record.Proven && RecordWidth == record.RecordWidth && FreshResult == record.FreshResult &&
         Mirror == record.Mirror && Rent == record.Rent && Rejection == record.Rejection && Recursive == record.Recursive && Implicit == record.Implicit &&
-        SequenceBase == record.SequenceBase && SequenceElement == record.SequenceElement &&
+        SequenceBase == record.SequenceBase && SequenceElement == record.SequenceElement && ScalarHeader == record.ScalarHeader &&
         Equals(Constructor, record.Constructor) &&
         Equals(Callbacks, record.Callbacks) &&
         MirrorLayout == record.MirrorLayout && Equals(Version, record.Version) &&

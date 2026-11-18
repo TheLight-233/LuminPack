@@ -479,7 +479,8 @@ internal static partial class TypeModelFactory
                         // its own elements, so it keeps the guard as well.
                         recursive: sequenceBase != null || IsRecursive(symbol), implicitPayload: attribute == null,
                         sequenceBase: sequenceBase?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                        sequenceElement: sequenceBase?.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                        sequenceElement: sequenceBase?.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        scalarHeader: symbol.BaseType?.SpecialType == SpecialType.System_Object && symbol.AllInterfaces.IsEmpty && HasScalarHeader);
                 }
             }
         }

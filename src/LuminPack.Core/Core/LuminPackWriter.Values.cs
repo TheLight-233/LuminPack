@@ -96,6 +96,25 @@ namespace LuminPack.Core
             Write(memberCount);
         }
 
+        /// <summary>Writes an ordinary object's member count and first scalar field with one cursor update.</summary>
+        /// <param name="memberCount">The serialized member count.</param>
+        /// <param name="field">The directly accessible first field of a non-null object.</param>
+        /// <typeparam name="T">The scalar storage type.</typeparam>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteObjectHeader<T>(byte memberCount, in T field) where T : unmanaged
+        {
+#if DEBUG
+            WriteObjectHeader(memberCount);
+            Write(in field);
+#else
+            ref byte header = ref Current;
+            header = memberCount;
+            Write(ref Unsafe.Add(ref header, 1), in field);
+            AdvanceProven(1 + Unsafe.SizeOf<T>());
+#endif
+        }
+
         /// <summary>Writes and advances past a narrow Union tag.</summary>
         /// <param name = "tag">The declared narrow tag.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

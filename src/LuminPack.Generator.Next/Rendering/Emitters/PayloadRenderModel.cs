@@ -449,6 +449,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal readonly int[] MirrorOffsets;
     /// <summary>Whether the Union write is the shared returning cursor kernel <c>SerializeUnionAt</c> of a fixed Union case.</summary>
     internal readonly bool FixedUnionCase;
+    /// <summary>Whether a plain class can use the combined object marker and scalar field write.</summary>
+    internal readonly bool ScalarHeader;
 
     /// <summary>Whether the fixed case can carry a managed output cursor.</summary>
     internal bool ManagedFixedUnionCase => FixedUnionCase && Net8 && Bounded == null;
@@ -686,6 +688,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <param name="generatedInt32Runs">Whether the runtime supports bounded integer runs.</param>
     /// <param name="sequenceBase">The list base whose contents are the payload's body.</param>
     /// <param name="sequenceElement">The list base's element spelling.</param>
+    /// <param name="scalarHeader">Whether the writer and class shape allow a combined marker and scalar.</param>
     internal PayloadRenderModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         RenderMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
@@ -700,10 +703,11 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, int[] circleSlots = null, int[] circleWidths = null, StorageMirrorModel[] mirrors = null,
         string rejection = null, InputLimits limits = null, bool recursive = false, bool registration = true,
         bool generatedPropertyHeads = false, bool generatedInt32Runs = false,
-        string sequenceBase = null, string sequenceElement = null)
+        string sequenceBase = null, string sequenceElement = null, bool scalarHeader = false)
     {
         SequenceBase = sequenceBase;
         SequenceElement = sequenceElement;
+        ScalarHeader = scalarHeader;
         GeneratedPropertyHeads = generatedPropertyHeads;
         GeneratedInt32Runs = generatedInt32Runs;
         Registration = registration;
@@ -808,7 +812,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         Same(UnionCases, other.UnionCases) && Same(TypeParameters, other.TypeParameters) && Same(TypeConstraints, other.TypeConstraints) &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Same(MirrorOffsets, other.MirrorOffsets) &&
-        SequenceBase == other.SequenceBase && SequenceElement == other.SequenceElement &&
+        SequenceBase == other.SequenceBase && SequenceElement == other.SequenceElement && ScalarHeader == other.ScalarHeader &&
         Members.SequenceEqual(other.Members);
 
     /// <inheritdoc/>

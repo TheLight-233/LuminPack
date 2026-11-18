@@ -1918,13 +1918,26 @@ internal static partial class BinaryEmitter
     /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> StreamWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body)
     {
+        int first = 0;
         if (!union)
         {
-            body.Add("writer.Cursor = (byte)" + model.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
-            body.Add("writer.Advance(1);");
+            var members = model.Members;
+            string count = members.Length.ToString(CultureInfo.InvariantCulture);
+            if (model.Net8 && model.ScalarHeader && !model.HasCallbacks && model.Bounded == null && model.Mirror == null &&
+                members.Length > 1 && members[0].IsFixed && !members[1].IsFixed && !members[0].Volatile &&
+                !members[0].Mirrored && !members[0].Property && members[0].Size > 0)
+            {
+                body.Add("writer.WriteObjectHeader(" + count + ", in value." + members[0].Name + ");");
+                first = 1;
+            }
+            else
+            {
+                body.Add("writer.Cursor = (byte)" + count + ";");
+                body.Add("writer.Advance(1);");
+            }
         }
         int ends = 0, cursors = 0, spans = 0;
-        AddStreamWrite(body, model, "value", 0, w, new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1 }, ref ends, ref cursors, ref spans);
+        AddStreamWrite(body, model, "value", 0, w, new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1 }, ref ends, ref cursors, ref spans, first);
         ReduceInlineNames(body);
         return body;
     }
@@ -1941,11 +1954,12 @@ internal static partial class BinaryEmitter
     /// <param name="cursors">The cursor local counter shared by the whole method; a mixed record's own cursor holds the first
     /// occurrence.</param>
     /// <param name="spans">The string list span counter shared by the whole method.</param>
+    /// <param name="first">The first member after any scalar already written with the object marker.</param>
     private static void AddStreamWrite(List<string> body, PayloadRenderModel model, string owner, int depth, CodeWriter w,
-        Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
+        Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans, int first = 0)
     {
         var members = model.Members;
-        for (int index = 0; index < members.Length; index++)
+        for (int index = first; index < members.Length; index++)
         {
             var member = members[index];
             // A string inside an inline object writes with the operation's profile, as the old pipeline's inline object
