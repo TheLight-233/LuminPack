@@ -93,31 +93,14 @@ internal static class LinkedListOwnerFile
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;
-        // A reused list reads each element into its existing node in order, as a reused List<T> reads into its slots, then
-        // appends missing nodes or removes surplus ones. A failed read exposes the completed prefix.
+        bool outline = c.Text && c.LinkedListAppender;
+        // A failed read into existing nodes exposes the completed prefix.
         w.Line("if (value is not null && length != 0 && value.First is { } reuseNode)");
         w.Open();
-        w.Line("int reuseIndex = 0;");
-        w.Line("do");
-        w.Open();
-        w.Line("var reuseItem = reuseNode.Value;");
-        c.ReadElement("reuseItem");
-        w.Line("reuseNode.Value = reuseItem;");
-        w.Line("reuseNode = reuseNode.Next!;");
-        w.Close();
-        w.Line("while (++reuseIndex < length && reuseNode is not null);");
-        w.Line("for (; reuseIndex < length; reuseIndex++)");
-        w.Open();
-        w.Line(c.Scalar + " addedItem = default!;");
-        c.ReadElement("addedItem", fresh: true);
-        w.Line("value.AddLast(addedItem);");
-        w.Close();
-        w.Line("while (reuseNode is not null)");
-        w.Open();
-        w.Line("var nextNode = reuseNode.Next;");
-        w.Line("value.Remove(reuseNode);");
-        w.Line("reuseNode = nextNode!;");
-        w.Close();
+        if (outline)
+            w.Line("ReadExisting(ref operationState, value, reuseNode, length);");
+        else
+            ReadExisting(c);
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
@@ -162,10 +145,65 @@ internal static class LinkedListOwnerFile
             w.Close();
             w.Blank();
         }
+        if (!outline)
+        {
+            ReadStaged(c);
+            return;
+        }
+
+        w.Line("ReadStaged(ref operationState, value, length);");
+        w.Blank();
+        w.Line(w.MethodImpl("NoInlining"));
+        w.Line("static void ReadExisting(scoped ref global::LuminPack.Core.LuminPackReader operationState, " +
+            c.Sequence + " value, global::System.Collections.Generic.LinkedListNode<" + c.Scalar + "> reuseNode, int length)");
+        w.Open();
+        ReadExisting(c);
+        w.Close();
+        w.Blank();
+        w.Line(w.MethodImpl("NoInlining"));
+        w.Line("static void ReadStaged(scoped ref global::LuminPack.Core.LuminPackReader operationState, " +
+            c.Sequence + " value, int length)");
+        w.Open();
+        ReadStaged(c);
+        w.Close();
+    }
+
+    /// <summary>Emits the existing-node read, including adding and removing nodes to match the input length.</summary>
+    /// <param name="c">The linked-list formatter context.</param>
+    private static void ReadExisting(EnumerableOwnerContext c)
+    {
+        var w = c.W;
+        w.Line("int reuseIndex = 0;");
+        w.Line("do");
+        w.Open();
+        w.Line("var reuseItem = reuseNode.Value;");
+        c.ReadElement("reuseItem");
+        w.Line("reuseNode.Value = reuseItem;");
+        w.Line("reuseNode = reuseNode.Next!;");
+        w.Close();
+        w.Line("while (++reuseIndex < length && reuseNode is not null);");
+        w.Line("for (; reuseIndex < length; reuseIndex++)");
+        w.Open();
+        w.Line(c.Scalar + " addedItem = default!;");
+        c.ReadElement("addedItem", fresh: true);
+        w.Line("value.AddLast(addedItem);");
+        w.Close();
+        w.Line("while (reuseNode is not null)");
+        w.Open();
+        w.Line("var nextNode = reuseNode.Next;");
+        w.Line("value.Remove(reuseNode);");
+        w.Line("reuseNode = nextNode!;");
+        w.Close();
+    }
+
+    /// <summary>Emits the destination fill through pooled staging when direct linking is unavailable.</summary>
+    /// <param name="c">The linked-list formatter context.</param>
+    private static void ReadStaged(EnumerableOwnerContext c)
+    {
         c.PooledRead(() =>
         {
-            w.Blank();
-            w.Line("global::LuminPack.Code.LuminPackCollectionAccess.FillLinkedList(value, pooled, length);");
+            c.W.Blank();
+            c.W.Line("global::LuminPack.Code.LuminPackCollectionAccess.FillLinkedList(value, pooled, length);");
         });
     }
 }
