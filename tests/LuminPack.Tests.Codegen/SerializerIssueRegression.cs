@@ -16,6 +16,7 @@ internal static partial class SerializerIssueRegression
         const string source = """
             using System;
             using System.Buffers.Binary;
+            using System.Collections.Generic;
             using LuminPack;
             using LuminPack.Attribute;
             [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
@@ -31,6 +32,23 @@ internal static partial class SerializerIssueRegression
                 public ProbeStop Stop;
             }
             [LuminPackable] public sealed partial class ProbeStop { public string Name; public int Code; }
+            [LuminPackable, LuminPackUnion(1, typeof(ProbeClaimA)), LuminPackUnion(2, typeof(ProbeClaimB))]
+            public abstract partial class ProbeClaimBase { public new Type GetType() => typeof(ProbeClaimB); }
+            [LuminPackable] public sealed partial class ProbeClaimA : ProbeClaimBase { public int V; }
+            [LuminPackable] public sealed partial class ProbeClaimB : ProbeClaimBase { public int V; }
+            public interface IProbeTypeClaim { Type GetType(); }
+            [LuminPackable, LuminPackUnion(1, typeof(ProbeExplicitA)), LuminPackUnion(2, typeof(ProbeExplicitB))]
+            public partial interface IProbeClaim : IProbeTypeClaim { }
+            [LuminPackable] public sealed partial class ProbeExplicitA : IProbeClaim
+            {
+                public int V;
+                Type IProbeTypeClaim.GetType() => typeof(ProbeExplicitB);
+            }
+            [LuminPackable] public sealed partial class ProbeExplicitB : IProbeClaim
+            {
+                public int V;
+                Type IProbeTypeClaim.GetType() => typeof(ProbeExplicitA);
+            }
             public static class Entry
             {
                 public static void Check()
@@ -84,38 +102,99 @@ internal static partial class SerializerIssueRegression
                     ProbeRouteBase unionRouteCopy = null;
                     LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(unionRoute), ref unionRouteCopy);
                     if (unionRouteCopy is not ProbeRoute { Distance: 500, Stages: 3, Stop: { Name: "Central", Code: 9 } }) throw new Exception("Nested payload read");
+
+                    List<ProbeRouteBase> routes = [null, unionRoute];
+                    List<ProbeRouteBase> routeCopies = null;
+                    var routesBytes = LuminPackSerializer.Serialize(routes);
+                    LuminPackSerializer.Deserialize(routesBytes, ref routeCopies);
+                    if (routeCopies is not [null, ProbeRoute { Stop: { Name: "Central", Code: 9 } }]) throw new Exception("Fresh Union list read");
+                    var reusedRoute = routeCopies[1];
+                    LuminPackSerializer.Deserialize(routesBytes, ref routeCopies);
+                    if (!ReferenceEquals(reusedRoute, routeCopies[1])) throw new Exception("Union list case reuse");
+
+                    ProbeClaimBase claim = new ProbeClaimA { V = 5 };
+                    ProbeClaimBase claimCopy = null;
+                    LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(claim), ref claimCopy);
+                    if (claimCopy is not ProbeClaimA { V: 5 }) throw new Exception("The class GetType member changed binary dispatch");
+                    LuminPackSerializer.DeserializeJson(LuminPackSerializer.SerializeJson(claim), ref claimCopy);
+                    if (claimCopy is not ProbeClaimA { V: 5 }) throw new Exception("The class GetType member changed JSON dispatch");
+
+                    IProbeClaim explicitClaim = new ProbeExplicitA { V = 9 };
+                    IProbeClaim explicitCopy = null;
+                    LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(explicitClaim), ref explicitCopy);
+                    if (explicitCopy is not ProbeExplicitA { V: 9 }) throw new Exception("The interface GetType member changed binary dispatch");
+                    LuminPackSerializer.DeserializeJson(LuminPackSerializer.SerializeJson(explicitClaim), ref explicitCopy);
+                    if (explicitCopy is not ProbeExplicitA { V: 9 }) throw new Exception("The interface GetType member changed JSON dispatch");
                 }
             }
             """;
+        // The definition uses virtual slots, while the exercised closed roots each have few enough cases for exact comparisons.
+        string unrelatedCases = string.Join("\n", Enumerable.Range(0, 30).Select(index =>
+            $"[LuminPackable] public sealed partial class ProbeOther{index} : ProbeBox<byte> {{ }}"));
         foreach (string mode in new[] { "Full", "Light", "Minimal" })
-            Execute(references, source.Replace("MODE", mode, StringComparison.Ordinal), "Union" + mode, InspectUnion);
+            Execute(references, source.Replace("MODE", mode, StringComparison.Ordinal) + "\n" + unrelatedCases, "Union" + mode, InspectUnion);
         Console.WriteLine("Passed discovered closed generic Union case compilation, reuse, and round trips.");
     }
 
-    /// <summary>Checks that closed Union readers keep only their own hashes and variable cases stay out of the switch.</summary>
+    /// <summary>Checks the case dispatch and inlining boundaries of closed Union roots and collection elements.</summary>
     /// <param name="result">The generated consumer source.</param>
     private static void InspectUnion(GeneratorDriverRunResult result)
     {
         var owners = result.GeneratedTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<StructDeclarationSyntax>()).ToArray();
-        CheckReader("ProbeBoxOfIntFormatter", 2, outlined: false);
-        CheckReader("ProbeBoxOfStringFormatter", 1, outlined: true);
-        var nestedRead = owners.Where(item => item.Identifier.ValueText == "ProbeRouteFormatter").SelectMany(item => item.Members)
-            .OfType<MethodDeclarationSyntax>().Where(method => method.Identifier.ValueText == "Read")
-            .SelectMany(method => method.DescendantNodes().OfType<LocalFunctionStatementSyntax>())
-            .SingleOrDefault(method => method.Identifier.ValueText == "ReadNested");
-        if (nestedRead == null || !nestedRead.AttributeLists.ToString().Contains("NoInlining", StringComparison.Ordinal))
-            throw new InvalidOperationException("The two parent framings did not share one outlined child reader.");
+        CheckExactWriter("ProbeBoxOfIntFormatter", 2);
+        CheckExactWriter("ProbeBoxOfStringFormatter", 1);
+        CheckExactWriter("ProbeRouteBaseFormatter", 1);
+        CheckExactWriter("ProbeClaimBaseFormatter", 2, "caseValue");
+        CheckExactWriter("IProbeClaimFormatter", 2, "caseValue");
+        CheckReader("ProbeBoxOfIntFormatter", 2);
+        CheckReader("ProbeBoxOfStringFormatter", 1);
+        CheckReader("ProbeRouteBaseFormatter", 1);
 
-        void CheckReader(string owner, int cases, bool outlined)
+        var listWrite = Operation("ListOfProbeRouteBaseFormatter", "Write");
+        var listRead = Operation("ListOfProbeRouteBaseFormatter", "Read");
+        string writeOptions = listWrite.AttributeLists.ToString();
+        if (!writeOptions.Contains("NoInlining", StringComparison.Ordinal) || !writeOptions.Contains("AggressiveOptimization", StringComparison.Ordinal))
+            throw new InvalidOperationException("The Union list writer did not retain its optimized loop boundary.");
+        if (listWrite.DescendantTokens().Any(token => token.ValueText == "loopWriter") ||
+            listRead.DescendantTokens().Any(token => token.ValueText == "loopReader"))
+            throw new InvalidOperationException("The Union list copied its operation state around case dispatch.");
+        if (!listRead.DescendantNodes().OfType<SwitchStatementSyntax>().Any() || HasOutlinedCase(listRead))
+            throw new InvalidOperationException("The fresh list read did not keep its Union cases in the loop.");
+
+        var routeMembers = result.GeneratedTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>())
+            .Where(item => item.Identifier.ValueText == "ProbeRouteBaseState").SelectMany(item => item.Members)
+            .OfType<MethodDeclarationSyntax>().Where(method => method.Identifier.ValueText is "Write" or "Read").ToArray();
+        if (routeMembers.Length == 0 || routeMembers.Any(method => !method.AttributeLists.ToString().Contains("AggressiveInlining", StringComparison.Ordinal)))
+            throw new InvalidOperationException("The Union member state did not forward through inlined entries.");
+
+        MethodDeclarationSyntax Operation(string owner, string name) =>
+            owners.Where(item => item.Identifier.ValueText == owner).SelectMany(item => item.Members)
+                .OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == name && method.Body != null);
+
+        void CheckExactWriter(string owner, int cases, string receiver = "value")
         {
-            var read = owners.Where(item => item.Identifier.ValueText == owner).SelectMany(item => item.Members)
-                .OfType<MethodDeclarationSyntax>().SingleOrDefault(method => method.Identifier.ValueText == "Read" && method.Body != null);
-            var dispatch = read?.Body?.Statements.OfType<SwitchStatementSyntax>().SingleOrDefault();
+            var comparisons = Operation(owner, "Write").DescendantNodes().OfType<BinaryExpressionSyntax>()
+                .Where(condition => condition.IsKind(SyntaxKind.EqualsExpression) && condition.Right is TypeOfExpressionSyntax).ToArray();
+            if (comparisons.Length != cases || comparisons.Any(condition => condition.Left is not InvocationExpressionSyntax
+                {
+                    Expression: MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax candidate, Name.Identifier.ValueText: "GetType" }
+                } || candidate.Identifier.ValueText != receiver))
+                throw new InvalidOperationException(owner + " did not compare the runtime type directly in every case branch.");
+        }
+
+        void CheckReader(string owner, int cases)
+        {
+            var read = Operation(owner, "Read");
+            var dispatch = read.Body!.Statements.OfType<SwitchStatementSyntax>().SingleOrDefault();
             if (dispatch == null || dispatch.Sections.SelectMany(arm => arm.Labels).OfType<CaseSwitchLabelSyntax>().Count() != cases)
                 throw new InvalidOperationException(owner + " did not emit its own closed Union switch.");
-            if (read!.Body!.Statements.OfType<LocalFunctionStatementSyntax>().Any(method => method.AttributeLists.ToString().Contains("NoInlining", StringComparison.Ordinal)) != outlined)
-                throw new InvalidOperationException(owner + " has the wrong case boundary for its payloads.");
+            if (HasOutlinedCase(read))
+                throw new InvalidOperationException(owner + " outlined a case read from its Union switch.");
         }
+
+        static bool HasOutlinedCase(MethodDeclarationSyntax read) =>
+            read.Body!.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Any(method =>
+                method.Identifier.ValueText.Contains("ReadCase", StringComparison.Ordinal));
     }
 
     /// <summary>Compiles a Next consumer and executes its checks.</summary>

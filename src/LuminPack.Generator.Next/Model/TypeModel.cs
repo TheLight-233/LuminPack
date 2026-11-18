@@ -931,6 +931,9 @@ internal sealed class UnionModel : TypeModel
     /// <summary>The compiled dispatch tier.</summary>
     internal readonly UnionDispatchTier Tier;
 
+    /// <summary>Whether the root's declarations can hide <c>object.GetType</c> from an exact dispatch branch.</summary>
+    internal readonly bool HidesGetType;
+
     /// <summary>The original virtual slot suffix when a closed writer can dispatch directly to sealed cases.</summary>
     internal readonly string? ClosedWriteSlot;
 
@@ -972,6 +975,7 @@ internal sealed class UnionModel : TypeModel
     /// <param name="unionSuffix">The union suffix supplied to <c>UnionModel</c>.</param>
     /// <param name="tier">The tier supplied to <c>UnionModel</c>.</param>
     /// <param name="closedWriteSlot">The defining root's virtual slot suffix for a closed exact-type writer.</param>
+    /// <param name="hidesGetType">Whether the root's declarations can hide <c>object.GetType</c>.</param>
     /// <param name="cursor">Whether to enable cursor for this operation.</param>
     /// <param name="readGeneric">Whether to enable read generic for this operation.</param>
     /// <param name="chain">The chain supplied to <c>UnionModel</c>.</param>
@@ -986,7 +990,8 @@ internal sealed class UnionModel : TypeModel
     internal UnionModel(TypeIdentity identity, TypeAccessibility accessibility, WirePolicy policy, string[] constraints, UnionCaseModel[] cases,
         bool isInterface, bool wideTags, string unionSuffix, UnionDispatchTier tier, bool cursor,
         bool readGeneric, string[] chain, string? @namespace, UnionSlotModel[] binarySlots, UnionSlotModel[] jsonSlots, bool canonical,
-        string standardBinary, string standardJson, bool referenced = false, string? rejection = null, string? closedWriteSlot = null)
+        string standardBinary, string standardJson, bool referenced = false, string? rejection = null, string? closedWriteSlot = null,
+        bool hidesGetType = false)
         : base(identity, accessibility, PayloadKind.Union, System.Array.Empty<MemberModel>(), policy, constraints)
     {
         Rejection = rejection;
@@ -1001,6 +1006,7 @@ internal sealed class UnionModel : TypeModel
         ReadGeneric = readGeneric;
         Cursor = cursor;
         Tier = tier;
+        HidesGetType = hidesGetType;
         ClosedWriteSlot = closedWriteSlot;
         UnionSuffix = unionSuffix;
         WideTags = wideTags;
@@ -1011,7 +1017,8 @@ internal sealed class UnionModel : TypeModel
     /// <inheritdoc/>
     public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
         other is UnionModel union && base.Equals(other) && IsInterface == union.IsInterface && WideTags == union.WideTags &&
-        UnionSuffix == union.UnionSuffix && Tier == union.Tier && ClosedWriteSlot == union.ClosedWriteSlot && Cursor == union.Cursor && ReadGeneric == union.ReadGeneric &&
+        UnionSuffix == union.UnionSuffix && Tier == union.Tier && ClosedWriteSlot == union.ClosedWriteSlot &&
+        HidesGetType == union.HidesGetType && Cursor == union.Cursor && ReadGeneric == union.ReadGeneric &&
         Canonical == union.Canonical && StandardBinary == union.StandardBinary && StandardJson == union.StandardJson &&
         Namespace == union.Namespace && Same(Cases, union.Cases) &&
         Same(Chain, union.Chain) && Same(BinarySlots, union.BinarySlots) &&

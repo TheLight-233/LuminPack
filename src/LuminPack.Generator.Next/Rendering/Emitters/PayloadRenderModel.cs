@@ -529,6 +529,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal readonly string UnionStandardJson;
     /// <summary>The selected Union write tier: virtual slots or exact comparisons.</summary>
     internal readonly int UnionTier;
+    /// <summary>Whether the Union's exact write branches need an object-typed receiver to call <c>object.GetType</c>.</summary>
+    internal readonly bool UnionHidesGetType;
     /// <summary>Whether the root writes and reads three-byte Union headers, because a declared case tag exceeds the narrow
     /// byte protocol or the root declares <c>[LuminPackWideTag]</c>.</summary>
     internal readonly bool UnionWide;
@@ -660,6 +662,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <param name="unionStandardBinary">The union standard binary supplied to <c>PayloadRenderModel</c>.</param>
     /// <param name="unionStandardJson">The union standard JSON supplied to <c>PayloadRenderModel</c>.</param>
     /// <param name="unionTier">The union tier supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="unionHidesGetType">Whether the Union's declarations can hide <c>object.GetType</c>.</param>
     /// <param name="circle">Whether to enable circle for this operation.</param>
     /// <param name="circleGuarded">Whether to enable circle guarded for this operation.</param>
     /// <param name="managedStruct">Whether to enable managed struct for this operation.</param>
@@ -691,7 +694,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         bool unionRoot = false, bool unionInterface = false, string unionSuffix = null, UnionRenderCase[] unionCases = null,
         bool unionCursor = false, bool unionReadGeneric = false, string[] unionChain = null, string unionNamespace = null, bool unionReferenced = false,
         UnionRenderSlot[] unionBinarySlots = null, UnionRenderSlot[] unionJsonSlots = null, bool unionCanonical = false,
-        string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0,
+        string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, bool unionHidesGetType = false,
         bool circle = false, bool circleGuarded = false, bool managedStruct = false,
         PortableView portableView = null, bool unionWide = false, int[] mirrorOffsets = null, string[] typeParameters = null,
         string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, int[] circleSlots = null, int[] circleWidths = null, StorageMirrorModel[] mirrors = null,
@@ -723,6 +726,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         CircleGuarded = circleGuarded;
         Circle = circle;
         UnionTier = unionTier;
+        UnionHidesGetType = unionHidesGetType;
         UnionStandardJson = unionStandardJson;
         UnionStandardBinary = unionStandardBinary;
         UnionCanonical = unionCanonical;
@@ -796,7 +800,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         UnionRoot == other.UnionRoot && UnionInterface == other.UnionInterface && UnionSuffix == other.UnionSuffix &&
         UnionCursor == other.UnionCursor && UnionReadGeneric == other.UnionReadGeneric && UnionNamespace == other.UnionNamespace &&
         UnionCanonical == other.UnionCanonical && UnionStandardBinary == other.UnionStandardBinary && UnionStandardJson == other.UnionStandardJson &&
-        UnionTier == other.UnionTier && UnionWide == other.UnionWide && Same(UnionChain, other.UnionChain) && UnionReferenced == other.UnionReferenced &&
+        UnionTier == other.UnionTier && UnionHidesGetType == other.UnionHidesGetType && UnionWide == other.UnionWide &&
+        Same(UnionChain, other.UnionChain) && UnionReferenced == other.UnionReferenced &&
          Same(UnionBinarySlots, other.UnionBinarySlots) && Same(UnionJsonSlots, other.UnionJsonSlots) &&
         Same(Mirrors, other.Mirrors) && Circle == other.Circle && CircleGuarded == other.CircleGuarded && Same(CircleSlots, other.CircleSlots) &&
         Same(CircleWidths, other.CircleWidths) &&

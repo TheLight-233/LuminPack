@@ -408,7 +408,8 @@ internal static partial class TypeModelFactory
                         binarySlots: UnionSlots(json: false, encoding, recording), jsonSlots: UnionSlots(json: true, encoding, 0),
                         canonical: CanonicalUnionProfiles(),
                         standardBinary: UnionProfileAlias(encoding, recording),
-                        standardJson: UnionProfileAlias(encoding, recording), referenced: referenced, rejection: unionRejection, closedWriteSlot: closedWriteSlot);
+                        standardJson: UnionProfileAlias(encoding, recording), referenced: referenced, rejection: unionRejection,
+                        closedWriteSlot: closedWriteSlot, hidesGetType: HidesObjectGetType(symbol));
                 }
                 case PayloadKind.CircleReference:
                 {
@@ -1484,6 +1485,22 @@ internal static partial class TypeModelFactory
         private UnionDispatchTier UnionTier(INamedTypeSymbol root)
         {
             return UsesVirtualUnionDispatch(root) ? UnionDispatchTier.Virtual : UnionDispatchTier.Exact;
+        }
+
+        /// <summary>Finds declarations that can change how a parameterless call to <c>GetType</c> binds.</summary>
+        /// <param name="root">The exact static type of the generated writer's receiver.</param>
+        /// <returns>Whether the writer needs an object-typed receiver to call <c>object.GetType</c>.</returns>
+        private bool HidesObjectGetType(INamedTypeSymbol root)
+        {
+            for (INamedTypeSymbol? type = root; type != null && type.SpecialType != SpecialType.System_Object; type = type.BaseType)
+                if (HasCandidate(type))
+                    return true;
+            return root.TypeKind == TypeKind.Interface && root.AllInterfaces.Any(HasCandidate);
+
+            bool HasCandidate(INamedTypeSymbol type) => type.GetMembers(nameof(object.GetType)).Any(member =>
+                _compilation.IsSymbolAccessibleWithin(member, _compilation.Assembly) &&
+                (member is not IMethodSymbol method || method is { MethodKind: MethodKind.Ordinary, Arity: 0 } &&
+                    method.Parameters.All(parameter => parameter.IsOptional || parameter.IsParams)));
         }
 
         /// <summary>Lists the cases whose complete fixed payload uses the returning cursor kernel.</summary>

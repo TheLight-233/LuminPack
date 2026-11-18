@@ -119,12 +119,14 @@ internal static class UnionEmitter
         w.Line("internal static partial class " + model.Owner);
         w.Open();
         w.Suppressed = !writes;
-        bool outlineMember = OutlinesRead(model);
-        string memberHint = outlineMember ? w.MethodImpl("NoInlining") : inline;
-        MemberWrite(false);
-        MemberWrite(true);
+        w.Line(inline);
+        w.Line("internal static void Write" + model.TypeArguments() + "(this ref " + writer + " state, in " + type + "? value) " + constraints + "=> " + serializer + "." + container +
+            ".RootWrite" + model.TypeArguments(standard) + "(ref state, value);");
+        w.Line(inline);
+        w.Line("internal static void Write" + model.TypeArguments("TOptions") + "(this ref " + writer + " state, in " + type + "? value)");
+        w.Indented(() => w.Line(constraints + "where TOptions : struct, " + w.A("ILuminPackOptions") + " => " + serializer + "." + container + ".RootWrite" + model.TypeArguments("TOptions") + "(ref state, value);"));
         w.Suppressed = !reads;
-        w.Line(memberHint);
+        w.Line(inline);
         w.Line("internal static void Read" + model.TypeArguments() + "(this ref " + reader + " state, ref " + type + "? value)");
         if (constraints.Length != 0)
             w.Indented(() => w.Line(model.TypeConstraintText));
@@ -135,7 +137,7 @@ internal static class UnionEmitter
         w.Line("isolated.CopyTo(ref state);");
         w.Close();
         w.Blank();
-        w.Line(memberHint);
+        w.Line(inline);
         w.Line("internal static void Read" + model.TypeArguments("TOptions") + "(this ref " + reader + " state, ref " + type + "? value)");
         w.Indented(() => w.Line(constraints + "where TOptions : struct, " + w.A("ILuminPackOptions")));
         w.Open();
@@ -147,27 +149,6 @@ internal static class UnionEmitter
         w.Suppressed = false;
         w.Close();
         w.Close();
-
-        void MemberWrite(bool profiled)
-        {
-            string method = "internal static void Write" + (profiled ? model.TypeArguments("TOptions") : model.TypeArguments()) +
-                "(this ref " + writer + " state, in " + type + "? value)";
-            string methodConstraints = profiled ? constraints + "where TOptions : struct, " + w.A("ILuminPackOptions") : constraints.TrimEnd();
-            string target = serializer + "." + container + ".RootWrite" + model.TypeArguments(profiled ? "TOptions" : standard);
-            w.Line(memberHint);
-            w.Line(method);
-            if (outlineMember)
-            {
-                if (methodConstraints.Length != 0)
-                    w.Indented(() => w.Line(methodConstraints));
-                w.Open();
-                w.Line("var memberValue = value;");
-                w.Line(target + "(ref state, memberValue);");
-                w.Close();
-            }
-            else
-                w.Indented(() => w.Line((methodConstraints.Length == 0 ? string.Empty : methodConstraints + " ") + "=> " + target + "(ref state, value);"));
-        }
 
         // An imported root keeps the dispatch and registration its own assembly declared inside it and its cases.
         if (model.UnionReferenced || StaticDispatch(model))
@@ -374,8 +355,6 @@ internal static class UnionEmitter
     {
         string reader = w.A("LuminPackReader");
         w.Line(w.Preserve);
-        if (OutlinesRead(model))
-            w.Line(w.MethodImpl("NoInlining"));
         w.Line("internal static void Read_" + model.Readable + "<" + Profile + ">(scoped ref " + reader +
             " state, scoped ref " + model.GlobalName + "? value)");
         w.Indented(() => w.Line("where " + Profile + " : struct, " + w.A("ILuminPackOptions")));
@@ -406,10 +385,9 @@ internal static class UnionEmitter
         blocks.Declare(model, w, reuse: true);
         w.Line("switch (tag)");
         w.Open();
-        ReadArms(model, w, true, "reader", new SwitchCounters(), blocks: blocks, helperPrefix: "ReadCase");
+        ReadArms(model, w, true, "reader", new SwitchCounters(), blocks: blocks);
         w.Close();
         blocks.Emit(w, "reader", reuse: true, "value", "return;");
-        ReadCaseHelpers(model, w, "ReadCase", reuse: true);
     }
 
     /// <summary>Emits the marked case switch of a read root, fresh or seeded from an existing instance.</summary>
@@ -421,9 +399,8 @@ internal static class UnionEmitter
     /// <param name="freshTarget">The fresh target supplied to <c>ReadArms</c>.</param>
     /// <param name="freshExit">The fresh exit supplied to <c>ReadArms</c>.</param>
     /// <param name="blocks">The checked block reads that same-width fixed cases share, or null to expand every case.</param>
-    /// <param name="helperPrefix">The enclosing switch's unique local case helper prefix.</param>
     private static void ReadArms(PayloadRenderModel model, CodeWriter w, bool reuse, string reader, SwitchCounters counters,
-        string? freshTarget = null, string? freshExit = null, SharedBlocks? blocks = null, string helperPrefix = "ReadCase")
+        string? freshTarget = null, string? freshExit = null, SharedBlocks? blocks = null)
     {
         string target = freshTarget ?? "value";
         string exit = freshExit ?? "return;";
@@ -434,10 +411,21 @@ internal static class UnionEmitter
             w.Open();
             if (item.OwnEntry)
             {
-                if (OutlineCase(model, item))
-                    w.Line(helperPrefix + Number(member) + "(ref " + reader + ", ref " + target + ");");
-                else
-                    ReadOwnCase(model, item, w, reader, target, "member" + Number(member), reuse);
+                w.Line(item.Type + " member" + Number(member) + " = " + (reuse
+                    ? StructCase(item) ? "(" + target + " is " + item.Type + " existing" + Number(member) + " ? existing" + Number(member) + " : default);"
+                        : w.A("LuminPackMarshal") + ".AsExact<" + item.Type + ">(" + target + ")!;"
+                    : "default !;"));
+                // A struct case reads its boxed value through its payload owner, which every struct file publishes.
+                w.Line(NeedsCheckedCase(model, item)
+                    ? (model.Redirect?.RequestUnionCase(item.Model) ??
+                       w.A("LuminPackSerializer") + ".LuminUnionInput_" + model.Readable + ".Read_" + item.Readable) +
+                      "<" + Prefix(item) + (item.ReadGeneric ? Profile : w.A(model.UnionStandardBinary)) + ">(ref " + reader + ", ref member" + Number(member) + ");"
+                    : StructCase(item)
+                    ? CaseOwner(model, item) + ".Read<" + Profile + ">(ref " + reader + ", ref member" + Number(member) + ");"
+                    : w.A("LuminPackSerializer") + ".DeserializeUnion" + (model.UniqueEntries ? "_" + item.Readable : string.Empty) +
+                    (item.ReadGeneric ? "<" + Prefix(item) + Profile + ">" : item.Arguments.Length != 0 ? "<" + item.Arguments + ">" : string.Empty) +
+                    "(ref " + reader + ", ref member" + Number(member) + ");");
+                w.Line(target + " = " + Assign(model, item, "member" + Number(member)) + ";");
                 w.Line(exit);
                 w.Close();
                 w.Blank();
@@ -493,69 +481,6 @@ internal static class UnionEmitter
         w.Close();
     }
 
-    /// <summary>Reads a case through its existing payload entry and publishes the destination after that entry returns.</summary>
-    /// <param name="model">The Union contract.</param>
-    /// <param name="item">The selected case.</param>
-    /// <param name="w">The source writer.</param>
-    /// <param name="reader">The reader expression.</param>
-    /// <param name="target">The destination expression.</param>
-    /// <param name="member">The case local name.</param>
-    /// <param name="reuse">Whether the destination already has a candidate to reuse.</param>
-    private static void ReadOwnCase(PayloadRenderModel model, UnionRenderCase item, CodeWriter w, string reader,
-        string target, string member, bool reuse)
-    {
-        w.Line(item.Type + " " + member + " = " + (reuse
-            ? StructCase(item) ? "(" + target + " is " + item.Type + " existing" + member + " ? existing" + member + " : default);"
-                : w.A("LuminPackMarshal") + ".AsExact<" + item.Type + ">(" + target + ")!;"
-            : "default !;"));
-        // A struct case reads its boxed value through its payload owner, which every struct file publishes.
-        w.Line(NeedsCheckedCase(model, item)
-            ? (model.Redirect?.RequestUnionCase(item.Model) ??
-               w.A("LuminPackSerializer") + ".LuminUnionInput_" + model.Readable + ".Read_" + item.Readable) +
-              "<" + Prefix(item) + (item.ReadGeneric ? Profile : w.A(model.UnionStandardBinary)) + ">(ref " + reader + ", ref " + member + ");"
-            : StructCase(item)
-            ? CaseOwner(model, item) + ".Read<" + Profile + ">(ref " + reader + ", ref " + member + ");"
-            : w.A("LuminPackSerializer") + ".DeserializeUnion" + (model.UniqueEntries ? "_" + item.Readable : string.Empty) +
-            (item.ReadGeneric ? "<" + Prefix(item) + Profile + ">" : item.Arguments.Length != 0 ? "<" + item.Arguments + ">" : string.Empty) +
-            "(ref " + reader + ", ref " + member + ");");
-        w.Line(target + " = " + Assign(model, item, member) + ";");
-    }
-
-    /// <summary>Whether the case body gets its own JIT inlining budget.</summary>
-    /// <param name="model">The Union contract.</param>
-    /// <param name="item">The declared case.</param>
-    /// <returns>Whether the case may inline variable or nested payload operations.</returns>
-    private static bool OutlineCase(PayloadRenderModel model, UnionRenderCase item) =>
-        model.Net8 && item.OwnEntry && (item.Model == null || item.Model.Version != null || item.Model.Circle ||
-            item.Model.Members.Any(member => !member.IsFixed));
-
-    /// <summary>Whether a Union state member read needs a separate call boundary.</summary>
-    /// <param name="model">The Union contract.</param>
-    /// <returns>Whether any case body is outlined.</returns>
-    private static bool OutlinesRead(PayloadRenderModel model) => model.UnionCases.Any(item => OutlineCase(model, item));
-
-    /// <summary>Emits no-inline local helpers so the switch keeps the budget for its checked discriminator.</summary>
-    /// <param name="model">The Union contract.</param>
-    /// <param name="w">The source writer.</param>
-    /// <param name="prefix">The local helper prefix for this switch.</param>
-    /// <param name="reuse">Whether the switch reads into a previously populated slot.</param>
-    private static void ReadCaseHelpers(PayloadRenderModel model, CodeWriter w, string prefix, bool reuse)
-    {
-        for (int index = 0; index < model.UnionCases.Length; index++)
-        {
-            var item = model.UnionCases[index];
-            if (!OutlineCase(model, item))
-                continue;
-            w.Blank();
-            w.Line(w.MethodImpl("NoInlining"));
-            w.Line("static void " + prefix + Number(index) + "(scoped ref " + w.A("LuminPackReader") +
-                " caseReader, scoped ref " + model.GlobalName + "? caseValue)");
-            w.Open();
-            ReadOwnCase(model, item, w, "caseReader", "caseValue", "caseMember", reuse);
-            w.Close();
-        }
-    }
-
     /// <summary>Emits one fresh Union element read in place: the header check and the case arms, each ending at a label.</summary>
     /// <param name="model">The Union root render model.</param>
     /// <param name="w">The owner writer, whose operation profile is <c>TLuminProfile</c> and whose reader is <c>reader</c>.</param>
@@ -574,10 +499,9 @@ internal static class UnionEmitter
         w.Line("// Union cases");
         w.Line("switch (tag)");
         w.Open();
-        ReadArms(model, w, false, reader, new SwitchCounters(), target, "goto " + label + ";", blocks, label + "ReadCase");
+        ReadArms(model, w, false, reader, new SwitchCounters(), target, "goto " + label + ";", blocks);
         w.Close();
         blocks.Emit(w, reader, reuse: false, target, "goto " + label + ";");
-        ReadCaseHelpers(model, w, label + "ReadCase", reuse: false);
     }
 
     /// <summary>The checked block reads of one case switch that two or more fixed cases of the same payload width share.</summary>
@@ -866,7 +790,7 @@ internal static class UnionEmitter
         w.Close();
     }
 
-    /// <summary>Emits exact comparisons and compiled slots for a closed generic Union write.</summary>
+    /// <summary>Emits JSON Union framing and opens the case switch inside the property loop.</summary>
     /// <param name="w">The generated source writer.</param>
     /// <param name="reader">The JSON reader type name used to qualify token kinds.</param>
     internal static void OpenJsonCases(CodeWriter w, string reader)
@@ -1029,23 +953,38 @@ internal static class UnionEmitter
         w.Line("return;");
         w.Close();
         w.Line("bool useDefault = " + MatchesDeclaredBinaryProfile(w, model.StandardBinary) + ";");
+        string receiver = ExactTypeReceiver(w, model.HidesGetType);
+        string branch = "if";
         foreach (UnionCaseModel item in model.Cases.OrderBy(item => item.Tag))
         {
-            w.Line("if (((object)value).GetType() == typeof(" + item.Type.GlobalName + "))");
+            w.Line(branch + " (" + receiver + ".GetType() == typeof(" + item.Type.GlobalName + "))");
             w.Open();
             w.Line("var concreteValue = " + w.A("Unsafe") + ".As<" + item.Type.GlobalName + ">(value);");
             Slots("concreteValue");
             w.Line("return;");
             w.Close();
+            branch = "else if";
         }
         Slots("value");
 
-        void Slots(string receiver)
+        void Slots(string target)
         {
-            string slot = receiver + ".Write_" + model.ClosedWriteSlot;
+            string slot = target + ".Write_" + model.ClosedWriteSlot;
             w.Line("if (useDefault) " + slot + "_Default(ref writer);");
             w.Line("else " + slot + "<" + Profile + ">(ref writer);");
         }
+    }
+
+    /// <summary>Spells the receiver that resolves each dispatch comparison to <c>object.GetType</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="hidesGetType">Whether the Union root can hide the inherited method.</param>
+    /// <returns>The receiver expression for each comparison.</returns>
+    private static string ExactTypeReceiver(CodeWriter w, bool hidesGetType)
+    {
+        if (!hidesGetType)
+            return "value";
+        w.Line("object caseValue = value;");
+        return "caseValue";
     }
 
     /// <summary>Spells the binary virtual slot's selection of the declared profile.</summary>
@@ -1067,11 +1006,12 @@ internal static class UnionEmitter
     {
         string operation = json ? "WriteJsonCase" : "WriteCase";
         string arguments = model.TypeArguments(Profile);
+        string receiver = ExactTypeReceiver(w, model.UnionHidesGetType);
         int index = 0;
         foreach (UnionRenderCase item in model.UnionCases.OrderBy(item => item.Id))
         {
             string branch = index == 0 ? "if" : "else if";
-            w.Line(branch + " (((object)value).GetType() == typeof(" + item.Type + ")) { " + operation + Number(index++) + arguments + "(ref writer, value); return; }");
+            w.Line(branch + " (" + receiver + ".GetType() == typeof(" + item.Type + ")) { " + operation + Number(index++) + arguments + "(ref writer, value); return; }");
         }
         if (model.Registration)
         {

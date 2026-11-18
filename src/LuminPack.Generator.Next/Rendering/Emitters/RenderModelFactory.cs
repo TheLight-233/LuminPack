@@ -172,7 +172,7 @@ internal static class RenderModelFactory
             unionChain: model.Chain, unionNamespace: model.Namespace!, unionReferenced: model.Referenced,
             unionBinarySlots: Slots(model.BinarySlots), unionJsonSlots: Slots(model.JsonSlots),
             unionCanonical: model.Canonical, unionStandardBinary: model.StandardBinary, unionStandardJson: model.StandardJson,
-            unionTier: (int)model.Tier, unionWide: model.WideTags,
+            unionTier: (int)model.Tier, unionHidesGetType: model.HidesGetType, unionWide: model.WideTags,
             trusted: model.Policy.Input == InputPolicy.Trusted, registration: options.RegisterMode != RegisterMode.Disabled,
             rejection: model.Rejection, limits: model.Policy.Input == InputPolicy.Untrusted ? model.Policy.Limits : null);
     }

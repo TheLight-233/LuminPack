@@ -19,6 +19,10 @@ internal static class BinaryTraversalTiering
     /// <returns>Whether to leave tier selection to the JIT.</returns>
     internal static bool PreferPgo(string type, FormatterModel? contract, PayloadRenderModel? payload = null)
     {
+        // Union collection loops rely on full optimization to inline the exact type dispatch and its case bodies.
+        if (payload?.UnionRoot == true || contract is { Payload: UnionModel } or
+            { Definition: FormatterDefinitions.GenericUnion or FormatterDefinitions.CompilerUnion })
+            return false;
         if (type == "string")
             return true;
         if (contract is { RawCollection: true } or { NativeNullableElement: true } or { Layout: not null })
@@ -54,7 +58,7 @@ internal static class BinaryTraversalTiering
     {
         if (element is { RawStorage: true } or { NativeNullableElement: true } or { Layout: not null })
             return false;
-        return element is { Payload: UnionModel } || element.Definition is FormatterDefinitions.GenericUnion or GenericIdentity.Nullable ||
+        return element.Definition == GenericIdentity.Nullable ||
             element is { Payload: RecordModel { Versioned: false, Callbacks: null, Rejection: null } record } &&
             record.Members.Any(member => !member.Compressed && member is
                 (DictionaryMember or CollectionMember or PayloadMember { Nested: UnionModel } or
