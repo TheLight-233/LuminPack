@@ -42,6 +42,37 @@ namespace LuminPack.Core
             Write(LuminPackCode.NullObject);
         }
 
+        /// <summary>Reserves and writes a nullable value whose standalone payload is native storage.</summary>
+        /// <typeparam name="T">The unmanaged payload type.</typeparam>
+        /// <param name="value">The nullable payload.</param>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteNullable<T>(T? value) where T : unmanaged
+        {
+            ref byte cursor = ref ReserveRecord(ref Current, value.HasValue ? 1 + Unsafe.SizeOf<T>() : 1);
+            CommitRecords(ref WriteReservedNullable(ref cursor, value));
+        }
+
+        /// <summary>Writes the nullable marker and any native payload into a reserved record.</summary>
+        /// <typeparam name="T">The unmanaged payload type.</typeparam>
+        /// <param name="cursor">The current byte, followed by room for the complete value.</param>
+        /// <param name="value">The nullable payload.</param>
+        /// <returns>The cursor after the written record.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ref byte WriteReservedNullable<T>(ref byte cursor, T? value) where T : unmanaged
+        {
+            ref byte payload = ref Unsafe.Add(ref cursor, 1);
+            if (!value.HasValue)
+            {
+                cursor = LuminPackCode.NullObject;
+                return ref payload;
+            }
+            cursor = 0;
+            T item = value.GetValueOrDefault();
+            return ref WriteReserved(ref payload, in item);
+        }
+
         /// <summary>Writes and advances past a collection length.</summary>
         /// <param name = "length">The collection element count.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

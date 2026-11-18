@@ -372,7 +372,8 @@ internal static class RenderModelFactory
                     "global::LuminPack." + GeneratedNames.Owner(extension, special.Declared), ScalarKind.Other, mirrored,
                     property: property, nullObjectGuard: special.Formatter?.OrdinaryObject == true, referencePayload: special.Nullable,
                     seedExisting: special.Formatter?.Payload is StructModel { Storage: StructStorage.ManagedRecord },
-                    reservableArray: reserveRawArrays && special.ReservableArray);
+                    reservableArray: reserveRawArrays && special.ReservableArray,
+                    nativeNullablePayload: special.Formatter?.NativeNullablePayload);
             case PayloadMember { Shape: PayloadShape.Inline, Nested: RecordModel { Derived: false } nested } payload
                 when !mirrored && nested.Policy.Bound == null && Element(nested, options) is { } element:
                 return new RenderMember(payload.Name, RenderMemberKind.Object, payload.Type.GlobalName, payload.Type.GlobalName,

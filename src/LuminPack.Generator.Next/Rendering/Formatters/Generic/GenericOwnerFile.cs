@@ -31,7 +31,7 @@ internal static class GenericOwnerFile
                     (w, c) => PairJsonWrite(w, c, args, extension), (w, c) => PairJsonRead(w, c, args, declared, extension));
             case GenericIdentity.Nullable:
                 return SpecialOwnerFile.Render(set, operations, shortName, declared, false,
-                    (w, c) => ValueWrite(w, c, args[0], "value.HasValue", "value.Value"),
+                    (w, c) => w.Line("writer.WriteNullable<" + args[0] + ">(value);"),
                     (w, c) => ValueRead(w, c, args[0], "value = item;", "value = null;", null),
                     (w, c) => ValueJsonWrite(w, c, args[0], "!value.HasValue", "value.Value", extension, false),
                     (w, c) => ValueJsonRead(w, c, args[0], "value = null;", "value = item;", "value.GetValueOrDefault()", extension));

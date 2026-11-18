@@ -820,16 +820,18 @@ internal static partial class BinaryEmitter
             AddBoundExit(body, model, union);
             return body;
         }
+        bool nullableRecord = members.Any(member => member.NativeNullablePayload != null) &&
+            members.All(member => member.IsFixed || member.NativeNullablePayload != null);
         // Inline objects and reserving members alternate: the leading members share the header's reservation, each object
         // writes in place, and every following run reserves on its own.
-        if (model.MixedRecord || members.Any(member => member.ReservableArray))
+        if (!nullableRecord && (model.MixedRecord || members.Any(member => member.ReservableArray)))
         {
             MixedWriteBody(model, w, union, body);
             AddBoundExit(body, model, union);
             return body;
         }
         // A pure stream writes its member count and lets each remaining segment advance the writer.
-        if (model.StreamRecord)
+        if (!nullableRecord && model.StreamRecord)
         {
             StreamWriteBody(model, w, union, body);
             AddBoundExit(body, model, union);
@@ -840,7 +842,7 @@ internal static partial class BinaryEmitter
         // A record whose strings a declaration fixes carries no member comment: the profile projection replaces the site.
         if (model.DeclaredProfile == null)
             body.Add("// Fields: " + string.Join(", ", members.Select(member => member.Name)));
-        if (union && members.Length == 1)
+        if (union && members.Length == 1 && !nullableRecord)
         {
             // A lone record checks itself.
             body.Add(members[0].Kind == RenderMemberKind.Text
@@ -851,14 +853,28 @@ internal static partial class BinaryEmitter
             return body;
         }
         var terms = new List<string>();
+        var exactTerms = nullableRecord ? new List<string>() : null;
         if (!union)
+        {
             terms.Add("1");
+            exactTerms?.Add("1");
+        }
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
             string snapshot = Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null);
             if (member.Kind == RenderMemberKind.Fixed)
+            {
                 terms.Add(member.Width);
+                exactTerms?.Add(member.Width);
+            }
+            else if (member.NativeNullablePayload != null)
+            {
+                string width = w.A("Unsafe") + ".SizeOf<" + member.NativeNullablePayload + ">()";
+                body.Add("var " + snapshot + " = value." + member.Name + ";");
+                terms.Add("1 + " + width);
+                exactTerms.Add("(" + snapshot + ".HasValue ? 1 + " + width + " : 1)");
+            }
             else if (member.Kind == RenderMemberKind.Text)
             {
                 body.Add("string " + snapshot + " = value." + member.Name + ";");
@@ -870,7 +886,14 @@ internal static partial class BinaryEmitter
                 terms.Add(snapshot + ".Bound");
             }
         }
-        body.Add("cursor = ref writer.ReserveRecord(ref cursor, checked(" + string.Join(" + ", terms) + "));");
+        string bound = "checked(" + string.Join(" + ", terms) + ")";
+        if (nullableRecord)
+        {
+            body.Add("if (writer.RecordRoom(ref cursor) < " + bound + ")");
+            body.Add("\tcursor = ref writer.ReserveRecord(ref cursor, checked(" + string.Join(" + ", exactTerms) + "));");
+        }
+        else
+            body.Add("cursor = ref writer.ReserveRecord(ref cursor, " + bound + ");");
         if (!union)
         {
             body.Add("cursor = (byte)" + count + ";");
@@ -923,6 +946,8 @@ internal static partial class BinaryEmitter
             body.Add("// Field: " + member.Name);
             if (member.Kind == RenderMemberKind.Text)
                 body.Add("cursor = ref writer.WriteReservedRecordString<" + WriteProfile(model, w, member) + ">(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null) + ");");
+            else if (member.NativeNullablePayload != null)
+                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedNullable<" + member.NativeNullablePayload + ">(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null) + ");");
             else
                 body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null) + ");");
         }

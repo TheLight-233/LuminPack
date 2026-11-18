@@ -28,6 +28,10 @@ internal sealed class FormatterModel : IEquatable<FormatterModel>
     internal bool RawStorage => RawCollection && Definition != Rendering.Formatters.GenericIdentity.KeyValuePair && Payload is not UnionModel &&
         Payload is not StructModel { Versioned: true } && Payload is not StructModel { Storage: StructStorage.ManagedRecord };
 
+    /// <summary>The payload of a marker-prefixed nullable whose own binary value uses native storage.</summary>
+    internal string? NativeNullablePayload => Definition == Rendering.Formatters.GenericIdentity.Nullable && Arguments.Length == 1 &&
+        Arguments[0] is { Raw: true, RawStorage: true, Layout: null } argument ? argument.Type : null;
+
     /// <summary>The optional packed or tagged contiguous storage plan.</summary>
     internal readonly FormatterStorageModel? Layout;
     /// <summary>Whether shared publication must emit a payload outside the attributed declaration stream.</summary>

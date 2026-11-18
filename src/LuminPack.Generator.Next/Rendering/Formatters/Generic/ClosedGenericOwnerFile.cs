@@ -127,6 +127,12 @@ internal static class ClosedGenericOwnerFile
                 return;
             }
 
+            if (model.NativeNullablePayload is { } nativePayload)
+            {
+                w.Line("writer.WriteNullable<" + nativePayload + ">(value);");
+                return;
+            }
+
             if (reference || nullable)
             {
                 if (!exact)
