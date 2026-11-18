@@ -629,6 +629,23 @@ namespace LuminPack.Core
                 IsFirstElement = false;
                 return;
             }
+            if (LuminPackMarshal.ConstantStringProfile<TOptions>() && default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 &&
+                HasEnumerationCapacity(26 * sizeof(char)) && System.Globalization.CultureInfo.CurrentCulture.GetType() == typeof(System.Globalization.CultureInfo))
+            {
+                int skip = IsFirstElement ? 0 : sizeof(char);
+                ref byte start = ref Current;
+                Unsafe.WriteUnaligned(ref start, ',');
+                ref byte entry = ref Unsafe.Add(ref start, skip);
+                Unsafe.WriteUnaligned(ref entry, '[');
+                int bytes = sizeof(char) + WriteBoundedInteger(ref Unsafe.Add(ref entry, sizeof(char)), key, 11, utf8: false);
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref entry, bytes), ',');
+                bytes += sizeof(char);
+                bytes += WriteBoundedInteger(ref Unsafe.Add(ref entry, bytes), value, 11, utf8: false);
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref entry, bytes), ']');
+                Advance(skip + bytes + sizeof(char));
+                IsFirstElement = false;
+                return;
+            }
             WriteArrayStart<TOptions>();
             Write<TOptions>(key);
             Write<TOptions>(value);
