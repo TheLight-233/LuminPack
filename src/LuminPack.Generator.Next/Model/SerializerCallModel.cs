@@ -126,6 +126,9 @@ internal enum EntryKind
     /// <summary>A UTF-16 length string behind the culture object marker.</summary>
     RootCulture,
 
+    /// <summary>A lazy string whose value is stable after its factory has completed.</summary>
+    LazyString,
+
     /// <summary>A portable record with a constant wire width independent of its native layout.</summary>
     FixedWidthRecord,
 

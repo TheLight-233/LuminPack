@@ -317,7 +317,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         if (api == SerializerApi.SerializeArray && bodyKey.Shape.Kind == EntryKind.CompoundDirect && profile != RootEntry.DefaultProfile)
             bodyKey = (api, EntryShape.Pooled, false);
         if (api == SerializerApi.SerializeBuffer && profile != RootEntry.DefaultProfile &&
-            bodyKey.Shape.Kind is EntryKind.RootString or EntryKind.RootUri or EntryKind.RootCulture)
+            bodyKey.Shape.Kind is EntryKind.RootString or EntryKind.RootUri or EntryKind.RootCulture or EntryKind.LazyString)
             bodyKey = (api, EntryShape.Pooled, false);
         if (!documentBodies.TryGetValue(bodyKey, out string? body))
         {
@@ -587,15 +587,14 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         if (!shape.RetainedDirect)
             return BinaryBufferWrite;
         string hot;
-        if (shape.Kind is EntryKind.RootString or EntryKind.RootUri or EntryKind.RootCulture)
+        if (shape.Kind is EntryKind.RootString or EntryKind.RootUri or EntryKind.RootCulture or EntryKind.LazyString)
         {
             hot = shape.Kind switch
             {
                 EntryKind.RootString => RetainedTextRoot,
                 EntryKind.RootUri => RetainedTextObject.Replace("%TEXT%", "record.OriginalString").Replace("%EXACT%", string.Empty),
-                _ => RetainedTextObject.Replace("%TEXT%", "record.Name").Replace("%EXACT%",
-                    "                    if (record.GetType() != typeof(global::System.Globalization.CultureInfo))\n" +
-                    "                    {\n                        WriteRootSlow(in value, writerBuffer);\n                        return;\n                    }\n"),
+                EntryKind.LazyString => GuardedTextObject("record.Value", "!record.IsValueCreated"),
+                _ => GuardedTextObject("record.Name", "record.GetType() != typeof(global::System.Globalization.CultureInfo)"),
             };
         }
         else if (FixedRoot(shape) is { } fixedRoot)
@@ -710,6 +709,15 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                             }
                         }
         """ + "\n";
+
+    /// <summary>Preserves the original writer when the projected text can execute user code.</summary>
+    /// <param name="text">The stable framework string after the guard.</param>
+    /// <param name="guard">The condition that requires the original writer.</param>
+    /// <returns>The retained object write.</returns>
+    private static string GuardedTextObject(string text, string guard) =>
+        RetainedTextObject.Replace("%TEXT%", text).Replace("%EXACT%",
+            "                        if (" + guard + ")\n" +
+            "                        {\n                            WriteRootSlow(in value, writerBuffer);\n                            return;\n                        }\n");
 
     private const string RetainedTextObject = """
                         if (writerBuffer is not null)

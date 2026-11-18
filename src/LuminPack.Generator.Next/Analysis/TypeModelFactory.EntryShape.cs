@@ -154,6 +154,9 @@ internal static partial class TypeModelFactory
                 if (structure.Layout is { Complete: true } layout)
                     return new EntryShape(EntryKind.FixedWidthRecord, width: layout.WireSize);
             }
+            if (type is INamedTypeSymbol { Name: "Lazy", TypeArguments.Length: 1 } lazy &&
+                lazy.TypeArguments[0].SpecialType == SpecialType.System_String && IsFrameworkCollection(lazy, "System.Lazy`1"))
+                return new EntryShape(EntryKind.LazyString);
             if (name == "global::System.TimeZoneInfo")
                 return new EntryShape(EntryKind.TimeZoneSnapshot);
             if (name == "global::System.Version" && payload == null && type.DeclaringSyntaxReferences.IsEmpty)

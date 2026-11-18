@@ -301,6 +301,39 @@ public class AdvancingBinaryApiTest
         Assert.Equal(writer.Position, reader.Position);
     }
 
+    /// <summary>Preserves factory invocation, null values and profile selection for retained lazy strings.</summary>
+    [Fact]
+    public void RetainedLazyStringUsesTheCompletedValue()
+    {
+        int calls = 0;
+        var value = new Lazy<string>(() => { calls++; return "a λazy value"; });
+        using var retained = new LuminBufferWriter(true);
+        LuminPackSerializer.Serialize(value, retained);
+        Assert.Equal(1, calls);
+        var record = LuminPackSerializer.Serialize(value);
+        Assert.Equal(record, retained.GetSpan().ToArray());
+        retained.ResetWrittenCount();
+        LuminPackSerializer.Serialize(value, retained);
+        LuminPackSerializer.Serialize(value, retained);
+        Assert.Equal(record, retained.GetSpan()[..record.Length].ToArray());
+        Assert.Equal(record, retained.GetSpan()[record.Length..].ToArray());
+        Assert.Equal(1, calls);
+
+        retained.ResetWrittenCount();
+        LuminPackSerializer.Serialize<Lazy<string>, LuminPackUtf8LengthOptions>(value, retained);
+        Assert.Equal(LuminPackSerializer.Serialize<Lazy<string>, LuminPackUtf8LengthOptions>(value), retained.GetSpan().ToArray());
+
+        retained.ResetWrittenCount();
+        var missing = new Lazy<string>(() => null!);
+        Assert.Null(missing.Value);
+        LuminPackSerializer.Serialize(missing, retained);
+        Assert.Equal(new byte[] { 0, 255, 255, 255, 255 }, retained.GetSpan().ToArray());
+        var failed = new Lazy<string>(() => throw new InvalidOperationException("factory"));
+        var previous = retained.GetSpan().ToArray();
+        Assert.Throws<InvalidOperationException>(() => LuminPackSerializer.Serialize(failed, retained));
+        Assert.Equal(previous, retained.GetSpan().ToArray());
+    }
+
     /// <summary>Composes scalar, string and closed BCL operations without external cursor bookkeeping.</summary>
     [Fact]
     public void CompleteOperationsAdvanceExactlyOnceAndReuseCollections()
