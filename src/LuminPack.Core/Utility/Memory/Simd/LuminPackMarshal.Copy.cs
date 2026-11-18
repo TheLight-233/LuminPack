@@ -15,8 +15,10 @@ public static partial class LuminPackMarshal
     /// <remarks>
     /// The caller supplies valid ranges; this method does not perform bounds checks or provide
     /// memmove, atomic or volatile semantics. Managed references stay tracked. On modern 64-bit
-    /// SIMD targets, blocks through 32 bytes use bounded cached accesses and larger reused
-    /// blocks use accelerated 256-bit stores through 32 KiB. Other lengths, older targets,
+    /// SIMD targets, blocks through 32 bytes use bounded cached accesses. Reused blocks from 256 bytes
+    /// through 32 KiB use destination-aligned 256-bit stores, and from 128 bytes on Intel processors
+    /// with accelerated 512-bit vectors, destination-aligned 512-bit stores (see <see cref="LuminKernelPolicy"/>
+    /// for the measurements behind both ranges). Other lengths, older targets,
     /// 32-bit targets and unsupported hardware retain <c>Unsafe.CopyBlockUnaligned</c>.
     /// An explicitly registered netstandard2.1 native copy hook may handle complete blocks of at least sixteen bytes on 64-bit.
     /// </remarks>
@@ -50,10 +52,19 @@ public static partial class LuminPackMarshal
                 return;
             }
 
-            if (!destinationIsNew && LuminKernelPolicy.UseMediumCopy(true, Vector256.IsHardwareAccelerated, byteCount))
+            if (!destinationIsNew)
             {
-                CopyMediumBlock(ref destination, ref src, byteCount);
-                return;
+                if (LuminKernelPolicy.UseWideCopy(true, WideCopyHardware.Preferred, byteCount))
+                {
+                    CopyWideBlock(ref destination, ref src, byteCount);
+                    return;
+                }
+
+                if (LuminKernelPolicy.UseMediumCopy(true, Vector256.IsHardwareAccelerated, byteCount))
+                {
+                    CopyMediumBlock(ref destination, ref src, byteCount);
+                    return;
+                }
             }
 
             // if ((Avx2.IsSupported || Avx512F.IsSupported) && byteCount >= 1024 * 1024)
@@ -67,10 +78,10 @@ public static partial class LuminPackMarshal
     }
 
 #if NET8_0_OR_GREATER
-    /// <summary>Copies 257 bytes through 32 KiB with 256-bit loads and destination-aligned stores.</summary>
+    /// <summary>Copies 256 bytes through 32 KiB with 256-bit loads and destination-aligned stores.</summary>
     /// <param name="destination">The valid writable byte range.</param>
     /// <param name="source">The valid readable non-overlapping byte range.</param>
-    /// <param name="count">A byte count from 257 through 32 KiB.</param>
+    /// <param name="count">A byte count from 256 through 32 KiB.</param>
     /// <remarks>The first and final vectors are stored unaligned and overlap the aligned body; every access stays inside the
     /// two complete ranges. The alignment is only a position hint: a relocation during the copy changes speed, not bytes.</remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -96,6 +107,64 @@ public static partial class LuminPackMarshal
         for (; offset <= last; offset += (nuint)Vector256<byte>.Count)
             Vector256.LoadUnsafe(ref source, offset).StoreUnsafe(ref destination, offset);
         Vector256.LoadUnsafe(ref source, last).StoreUnsafe(ref destination, last);
+    }
+
+    /// <summary>Selects 512-bit medium copies only where the CI 57 round-4 measurements showed a gain.</summary>
+    /// <remarks>
+    /// Accelerated 512-bit vectors alone do not decide it: on the EPYC 9V74 (Zen 4, which splits 512-bit operations into two
+    /// 256-bit halves) the matrix raw-collection reuse rows took 1.04 times as long with the 512-bit kernel, while on the
+    /// Xeon 6975P-C they took 0.87 to 0.92. Only the GenuineIntel vendor string is accepted; other vendors, including the
+    /// unsampled Zen 5, keep the 256-bit schedule.
+    /// </remarks>
+    private static class WideCopyHardware
+    {
+        /// <summary>Whether this processor uses the 512-bit medium schedule.</summary>
+        internal static readonly bool Preferred = Vector512.IsHardwareAccelerated && IsGenuineIntel();
+
+        /// <summary>Reads the CPUID vendor string.</summary>
+        /// <returns>Whether the vendor is GenuineIntel.</returns>
+        private static bool IsGenuineIntel()
+        {
+            if (!X86Base.IsSupported)
+                return false;
+            (_, int ebx, int ecx, int edx) = X86Base.CpuId(0, 0);
+            // "Genu" "ineI" "ntel" in EBX, EDX, ECX.
+            return ebx == 0x756E6547 && edx == 0x49656E69 && ecx == 0x6C65746E;
+        }
+    }
+
+    /// <summary>Copies 128 bytes through 32 KiB with 512-bit loads and destination-aligned stores.</summary>
+    /// <param name="destination">The valid writable byte range.</param>
+    /// <param name="source">The valid readable non-overlapping byte range.</param>
+    /// <param name="count">A byte count from 128 through 32 KiB.</param>
+    /// <remarks>The same schedule as <see cref="CopyMediumBlock"/> at twice the width: the first and final vectors are stored
+    /// unaligned and overlap the aligned body, and every access stays inside the two complete ranges. The alignment is only a
+    /// position hint: a relocation during the copy changes speed, not bytes. Measured against the runtime block copy on the
+    /// Xeon 6975P-C (reused destination, one cache-resident target): 0.81 at 128 bytes, 0.48 at 512 bytes, 0.57 at 1 KiB,
+    /// 0.86 at 4 KiB and 0.93 at 16 KiB; see <see cref="LuminKernelPolicy"/> for the matrix results.</remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void CopyWideBlock(ref byte destination, ref byte source, uint count)
+    {
+        Vector512.LoadUnsafe(ref source).StoreUnsafe(ref destination);
+        nuint last = count - (nuint)Vector512<byte>.Count;
+        // Complement the address bits to avoid the .NET 11 JIT fallback when computing the next vector boundary.
+        nuint address = (nuint)Unsafe.ByteOffset(ref Unsafe.NullRef<byte>(), ref destination);
+        nuint offset = (~address & (nuint)(Vector512<byte>.Count - 1)) + 1;
+        for (; offset + 3 * (nuint)Vector512<byte>.Count <= last; offset += 4 * (nuint)Vector512<byte>.Count)
+        {
+            var first = Vector512.LoadUnsafe(ref source, offset);
+            var second = Vector512.LoadUnsafe(ref source, offset + (nuint)Vector512<byte>.Count);
+            var third = Vector512.LoadUnsafe(ref source, offset + 2 * (nuint)Vector512<byte>.Count);
+            var fourth = Vector512.LoadUnsafe(ref source, offset + 3 * (nuint)Vector512<byte>.Count);
+            first.StoreUnsafe(ref destination, offset);
+            second.StoreUnsafe(ref destination, offset + (nuint)Vector512<byte>.Count);
+            third.StoreUnsafe(ref destination, offset + 2 * (nuint)Vector512<byte>.Count);
+            fourth.StoreUnsafe(ref destination, offset + 3 * (nuint)Vector512<byte>.Count);
+        }
+
+        for (; offset <= last; offset += (nuint)Vector512<byte>.Count)
+            Vector512.LoadUnsafe(ref source, offset).StoreUnsafe(ref destination, offset);
+        Vector512.LoadUnsafe(ref source, last).StoreUnsafe(ref destination, last);
     }
 
     /// <summary>Copies at most 32 bytes with exact cached lanes and no long vector loop.</summary>

@@ -1045,14 +1045,41 @@ public static partial class LuminPackMarshal
         return (T)RuntimeHelpers.GetUninitializedObject(typeof(T));
     }
 
-    /// <summary>Performs the allocate uninitialized array step for the current operation.</summary>
-    /// <param name="length">The number of bytes or elements to process.</param>
-    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
-    /// <returns>The result of the operation.</returns>
+    // Zeroed-array threshold evidence (LuminPack's own CI 57 round-4 allocation probe, run 44205342061, .NET 10 FullOpts,
+    // Server GC, four reported processors). Each call allocated a byte array and overwrote every byte, as the callers of
+    // this helper do; values are uninitialized-allocation time / zeroed-allocation time, median of nine rounds:
+    //
+    //   host               2 KiB   4 KiB   8 KiB   16 KiB   32 KiB   64 KiB
+    //   Xeon 6975P-C        1.33    1.28    1.11    1.03     0.79     0.70
+    //   EPYC 9V74           1.23    1.02    0.89    0.95     0.88     0.87
+    //   EPYC 7763           1.28    1.04    0.88    0.87     0.67     0.82
+    //   i7-8700B            1.01    1.02    0.99    0.96     0.66     0.69
+    //   Neoverse N2         1.41    1.03    0.89    0.87     0.86     0.83
+    //   Cobalt 100          1.44    1.05    0.94    0.90     0.89     0.85
+    //   Apple M1            0.99    0.76    0.85    0.77     1.11     1.08
+    //
+    // Below 2 KiB the runtime already returns a zeroed array. From 2 KiB through 4 KiB the uninitialized request is slower
+    // on six of seven hosts (it leaves the inline allocation path); from 8 KiB on it is faster on most hosts and then by a
+    // widening margin. Workstation GC gave the same crossover (2 KiB: 1.07 to 1.97; 8 KiB: 0.79 to 0.87 except 1.18 on the
+    // Xeon). End to end, zeroed arrays below 64 KiB made most matrix 4 KiB rows faster (main fresh reads 0.91 to 0.98 on six
+    // hosts, main writes 0.87 to 0.97 on five) and every 16 KiB write row slower (large writes 1.08 to 1.22 on all seven),
+    // placing the threshold at 8 KiB. The Apple M1 host was noisy (4 KiB rows 1.06 to 1.11) and is the main exception.
+
+    /// <summary>The smallest array, in bytes, requested without zeroing.</summary>
+    private const ulong ZeroedArrayLimit = 8 * 1024;
+
+    /// <summary>Allocates an array that the caller overwrites completely before exposing it.</summary>
+    /// <param name="length">The number of elements.</param>
+    /// <typeparam name="T">The element type.</typeparam>
+    /// <returns>A zeroed array below 8 KiB, otherwise an array whose reference-free contents may be uninitialized.</returns>
+    /// <remarks>The threshold comes from the measurements above.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static T[] AllocateUninitializedArray<T>(int length)
     {
 #if NET8_0_OR_GREATER
+        // A negative length fails the comparison and reaches the runtime, which rejects it exactly as before.
+        if ((ulong)(uint)length * (ulong)Unsafe.SizeOf<T>() < ZeroedArrayLimit)
+            return new T[length];
         return GC.AllocateUninitializedArray<T>(length);
 #else
         return new T[length];

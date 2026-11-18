@@ -27,7 +27,7 @@
 - **存储占位。** 镜像字段、padding 成员和隐藏存储不能因为普通的调用点搜索找不到引用就删除。
 - **相邻字段批量复制。** 连续的非托管字段只在 64 位上、且证明实际字段地址与紧凑偏移一致、排除 volatile 字段并保留逐字段回退时，才可以整块复制。
 - **按架构区分的固定值访问。** 在 32 位上，只有 `Unsafe.SizeOf<T>() <= 4` 的单个非托管值可以使用类型化的 `Unsafe.ReadUnaligned` / `WriteUnaligned`。更大的值和字段批次使用 `LuminPackMarshal.CopyBlockUnaligned` 和紧凑存储视图，因为对它们做类型化非对齐访问可能让 IL2CPP 崩溃。所有成员都不超过 4 字节，也不代表可以对整体做类型化访问。64 位上类型化访问和块复制都允许。
-- **原始复制。** 不重叠的块复制（包括生成代码中的）都经过 `LuminPackMarshal.CopyBlockUnaligned`；只有这个辅助方法直接调用 `Unsafe.CopyBlockUnaligned`。允许重叠的 span 复制保持 memmove 语义。
+- **原始复制。** 不重叠的块复制（包括生成代码中的）都经过 `LuminPackMarshal.CopyBlockUnaligned`；只有这个辅助方法直接调用 `Unsafe.CopyBlockUnaligned`。允许重叠的 span 复制保持 memmove 语义。它的尺寸与处理器范围只能依据新的跨主机测量调整，测量记录写在 `LuminKernelPolicy` 旁。当前范围是：256 字节起使用 256 位存储；在 512 位向量有硬件加速的 GenuineIntel 处理器上，128 字节起使用 512 位存储；其余情况使用运行时复制。`AllocateUninitializedArray` 的 8 KiB 清零阈值遵循同样的规则。
 
 ### 数据表示
 
