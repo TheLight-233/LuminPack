@@ -49,9 +49,8 @@ public sealed partial class TreeNodeAllocationTest
         object set = Layout("ImmutableHashSetLayout`1", new[] { typeof(string) }, "Hash");
         Assert.Equal(expected, Bound(Part(set, "Tree")));
         Assert.Equal(expected, Bound(Part(set, "List")));
-        // The two-parameter dictionary bucket node keeps the uninitialized-object request.
         object dictionary = Layout("ImmutableDictionaryLayout`2", new[] { typeof(int), typeof(string) }, "Hash");
-        Assert.False(Bound(Part(dictionary, "Tree")));
+        Assert.Equal(expected, Bound(Part(dictionary, "Tree")));
         Assert.Equal(expected, Bound(Part(dictionary, "List")));
     }
 

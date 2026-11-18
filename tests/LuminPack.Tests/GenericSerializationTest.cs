@@ -52,8 +52,7 @@ public partial class GenericSerializationTest
     // Include this type in discovery.
     /// <summary>Provides concrete generic class functionality.</summary>
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
-    // The polymorphism tests read the Union frame through this concrete entry, whose header the tag replaces; only a
-    // trusted read ignores that header byte, an untrusted one checks it against the member count.
+    // The legacy polymorphism tests read the one-byte Union tag through the trusted concrete entry.
     [LuminPackable, LuminPackOption(UntrustedData = false)]
     public partial class ConcreteGenericClass<T> : AbstractGenericBase<T>
     {
@@ -94,8 +93,7 @@ public partial class GenericSerializationTest
     // Exclude this type from discovery.
     /// <summary>Provides numeric generic class functionality.</summary>
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
-    // The polymorphism tests read the Union frame through this concrete entry, whose header the tag replaces; only a
-    // trusted read ignores that header byte, an untrusted one checks it against the member count.
+    // The legacy polymorphism tests read the one-byte Union tag through the trusted concrete entry.
     [LuminPackable, LuminPackOption(UntrustedData = false)]
     public partial class NumericGenericClass<T> : AbstractGenericBase<T> where T : struct
     {
@@ -337,7 +335,13 @@ public partial class GenericSerializationTest
             };
 
             var buf = LuminPackSerializer.Serialize(polyObj);
+#if LUMINPACK_NEXT_GENERATOR
+            AbstractGenericBase<string> decoded = null!;
+            LuminPackSerializer.Deserialize(buf.AsSpan(), ref decoded);
+            var deserializedObj = decoded as ConcreteGenericClass<string>;
+#else
             var deserializedObj = global::LuminPackUnitTest.ConcreteReads.Read<ConcreteGenericClass<string>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ConcreteGenericClass<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
+#endif
 
             if (deserializedObj != null &&
                 deserializedObj.BaseValue == "BaseString" &&
@@ -373,7 +377,13 @@ public partial class GenericSerializationTest
             };
 
             var buf = LuminPackSerializer.Serialize(polyObj);
+#if LUMINPACK_NEXT_GENERATOR
+            AbstractGenericBase<int> decoded = null!;
+            LuminPackSerializer.Deserialize(buf.AsSpan(), ref decoded);
+            var deserializedObj = decoded as ConcreteGenericClass<int>;
+#else
             var deserializedObj = global::LuminPackUnitTest.ConcreteReads.Read<ConcreteGenericClass<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ConcreteGenericClass<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
+#endif
 
             if (deserializedObj != null &&
                 deserializedObj.BaseValue == 100 &&
@@ -410,7 +420,13 @@ public partial class GenericSerializationTest
             };
 
             var buf = LuminPackSerializer.Serialize(numericObj);
+#if LUMINPACK_NEXT_GENERATOR
+            AbstractGenericBase<double> decoded = null!;
+            LuminPackSerializer.Deserialize(buf.AsSpan(), ref decoded);
+            var deserializedObj = decoded as NumericGenericClass<double>;
+#else
             var deserializedObj = global::LuminPackUnitTest.ConcreteReads.Read<NumericGenericClass<double>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref NumericGenericClass<double> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
+#endif
 
             if (deserializedObj != null &&
                 Math.Abs(deserializedObj.BaseValue - 50.5) < 0.00001 &&

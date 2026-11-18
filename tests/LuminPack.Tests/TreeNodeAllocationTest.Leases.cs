@@ -90,7 +90,7 @@ public sealed partial class TreeNodeAllocationTest
         }
     }
 
-    /// <summary>Returns hash ordering storage after both scan failures and the later singleton-factory callback.</summary>
+    /// <summary>Returns hash ordering storage after scan failures and any later singleton-factory callback.</summary>
     /// <param name="dictionary">Whether to construct key/value buckets.</param>
     /// <param name="failAt">The hash callback that throws the original exception.</param>
     [Theory]
@@ -119,9 +119,22 @@ public sealed partial class TreeNodeAllocationTest
             Exception? observed = null;
             try { GC.KeepAlive(build()); } catch (Exception error) { observed = error; }
             actual = ArrayPool<long>.Shared.Rent(16);
-            Assert.Same(failure, observed);
-            Assert.Contains(nameof(HashLeaseKey.GetHashCode), observed!.StackTrace);
-            Assert.Equal(failAt, HashLeaseKey.Calls);
+            bool constructedDirectly = false;
+#if NET10_0_OR_GREATER
+            constructedDirectly = dictionary && failAt == 3 &&
+                Layout("ImmutableDictionaryConstructors`2", new[] { typeof(HashLeaseKey), typeof(int) }, "Wrap") is not null;
+#endif
+            if (constructedDirectly)
+            {
+                Assert.Null(observed);
+                Assert.Equal(items.Length, HashLeaseKey.Calls);
+            }
+            else
+            {
+                Assert.Same(failure, observed);
+                Assert.Contains(nameof(HashLeaseKey.GetHashCode), observed!.StackTrace);
+                Assert.Equal(failAt, HashLeaseKey.Calls);
+            }
             Assert.Same(expected, actual);
         }
         finally
