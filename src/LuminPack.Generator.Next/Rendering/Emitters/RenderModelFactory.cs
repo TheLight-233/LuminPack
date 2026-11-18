@@ -378,7 +378,9 @@ internal static class RenderModelFactory
                     dictionary: ReservedPairs(special, extension),
                     seedExisting: special.Formatter?.Payload is StructModel { Storage: StructStorage.ManagedRecord },
                     reservableSpan: reserveRawSpans && special.ReservableSpan,
-                    nativeNullablePayload: special.Formatter?.NativeNullablePayload);
+                    nativeNullablePayload: special.Formatter?.NativeNullablePayload,
+                    originalSpanReservation: special.Formatter is { Definition: FormatterDefinitions.Array, Arguments.Length: 1 } vector &&
+                        vector.Arguments[0] is { Definition: FormatterDefinitions.Scalar, Underlying: null });
             case PayloadMember { Shape: PayloadShape.Inline, Nested: RecordModel { Derived: false } nested } payload
                 when !mirrored && nested.Policy.Bound == null && Element(nested, options) is { } element:
                 return new RenderMember(payload.Name, RenderMemberKind.Object, payload.Type.GlobalName, payload.Type.GlobalName,

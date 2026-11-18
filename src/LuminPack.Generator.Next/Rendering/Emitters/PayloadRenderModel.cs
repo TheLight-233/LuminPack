@@ -185,6 +185,8 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     internal readonly bool SeedExisting;
     /// <summary>Whether a forwarded scalar vector or list can write inside an ordinary positional reservation.</summary>
     internal readonly bool ReservableSpan;
+    /// <summary>Whether the original positional writer already reserved this forwarded scalar array.</summary>
+    internal readonly bool OriginalSpanReservation;
     /// <summary>The unmanaged payload type of a nullable member with a one-byte marker, or null.</summary>
     internal readonly string NativeNullablePayload;
     /// <summary>Whether the member's declared type is a reference type, whose temporary local carries the nullable annotation.</summary>
@@ -224,15 +226,18 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <param name="reservableSpan">Whether the contiguous member may use the enclosing reservation.</param>
     /// <param name="fixedPayloadMemberCount">The checked marker's member count, or zero when the object reader is required.</param>
     /// <param name="nativeNullablePayload">The nullable member's native payload type, or null.</param>
+    /// <param name="originalSpanReservation">Whether the original positional writer already reserved the span.</param>
     internal RenderMember(string name, RenderMemberKind kind, string scalar, string typeName, int size, string formatter, ScalarKind fieldType,
         bool mirrored, string underlying = null, bool raw = false, bool builtin = false, PayloadRenderModel nested = null, bool formatterCall = false,
         bool property = false, RenderDictionary dictionary = null, RenderCollection collection = null, bool valueTypeParameter = false,
         bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false, string scopeProfile = null, SequenceFormatter sequence = null, bool isVolatile = false,
-        bool seedExisting = false, bool reservableSpan = false, int fixedPayloadMemberCount = 0, string nativeNullablePayload = null)
+        bool seedExisting = false, bool reservableSpan = false, int fixedPayloadMemberCount = 0, string nativeNullablePayload = null,
+        bool originalSpanReservation = false)
     {
         NativeNullablePayload = nativeNullablePayload;
         SeedExisting = seedExisting;
         ReservableSpan = reservableSpan;
+        OriginalSpanReservation = originalSpanReservation;
         Volatile = isVolatile;
         Sequence = sequence;
         ScopeProfile = scopeProfile;
@@ -293,7 +298,8 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     internal RenderMember WithScope(string profile) => new RenderMember(Name, Kind, Scalar, TypeName, Size, Formatter, FieldType,
         Mirrored, Underlying, Raw, Builtin, Nested, FormatterCall, Property, Dictionary, Collection, ValueTypeParameter,
         BareParameter, NullObjectGuard, ReferencePayload, profile, Sequence, Volatile, reservableSpan: ReservableSpan,
-        fixedPayloadMemberCount: FixedPayloadMemberCount, nativeNullablePayload: NativeNullablePayload);
+        fixedPayloadMemberCount: FixedPayloadMemberCount, nativeNullablePayload: NativeNullablePayload,
+        originalSpanReservation: OriginalSpanReservation);
 
     /// <summary>Whether fixed field access is volatile and excluded from adjacent-field copies.</summary>
     internal readonly bool Volatile;
@@ -321,7 +327,8 @@ internal sealed class RenderMember : IEquatable<RenderMember>
         Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Collection, other.Collection) &&
         ValueTypeParameter == other.ValueTypeParameter && BareParameter == other.BareParameter &&
         NullObjectGuard == other.NullObjectGuard && FixedPayloadMemberCount == other.FixedPayloadMemberCount && ReferencePayload == other.ReferencePayload &&
-        Volatile == other.Volatile && ReservableSpan == other.ReservableSpan && NativeNullablePayload == other.NativeNullablePayload && ReferenceEquals(Sequence, other.Sequence) &&
+        Volatile == other.Volatile && ReservableSpan == other.ReservableSpan && OriginalSpanReservation == other.OriginalSpanReservation &&
+        NativeNullablePayload == other.NativeNullablePayload && ReferenceEquals(Sequence, other.Sequence) &&
         ScopeProfile == other.ScopeProfile && Equals(Nested, other.Nested);
 
     /// <inheritdoc/>

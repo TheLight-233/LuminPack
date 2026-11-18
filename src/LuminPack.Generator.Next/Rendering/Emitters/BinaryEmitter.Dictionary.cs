@@ -14,7 +14,8 @@ internal static partial class BinaryEmitter
     /// <param name="w">The generated source writer.</param>
     /// <param name="union">Whether to enable union for this operation.</param>
     /// <param name="body">The statements in the generated operation body.</param>
-    private static void DictionaryWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body)
+    /// <param name="reserveNativeSpans">Whether newly captured spans may share the reservation.</param>
+    private static void DictionaryWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body, bool reserveNativeSpans)
     {
         var members = model.Members;
         // The body's own cursor local takes the first name, so nested blocks number theirs after it.
@@ -26,7 +27,7 @@ internal static partial class BinaryEmitter
         while (index < members.Length)
         {
             var member = members[index];
-            if (IsInlineSegment(member))
+            if (IsInlineSegment(member, reserveNativeSpans))
             {
                 if (header)
                 {
@@ -75,7 +76,7 @@ internal static partial class BinaryEmitter
                 continue;
             }
             int last = index;
-            while (last + 1 < members.Length && !IsInlineSegment(members[last + 1]) &&
+            while (last + 1 < members.Length && !IsInlineSegment(members[last + 1], reserveNativeSpans) &&
                 !(members[last + 1].Kind == RenderMemberKind.Dictionary && !members[last + 1].Dictionary.Pair))
                 last++;
             if (!current && !header)

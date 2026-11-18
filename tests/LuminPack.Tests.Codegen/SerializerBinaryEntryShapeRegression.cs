@@ -146,7 +146,8 @@ internal static class SerializerBinaryEntryShapeRegression
         var capturedRoot = declarations.FirstOrDefault(method => method.Body != null &&
             method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().Contains("CapturedRecord", StringComparison.Ordinal) == true) &&
             method.Body.ToString().Contains(".ReserveRecord(", StringComparison.Ordinal));
-        var capturedCalls = capturedRoot?.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray() ?? [];
+        var capturedCalls = capturedRoot?.DescendantNodes(node => node is not LocalFunctionStatementSyntax)
+            .OfType<InvocationExpressionSyntax>().ToArray() ?? [];
         var reservations = capturedCalls.Where(call => Operation(call) == "ReserveRecord").ToArray();
         // Object and Union payload framing differ in their header byte but share both snapshots and span stores.
         if (reservations.Length is < 1 or > 2 || capturedCalls.Count(call => Operation(call) == "Capture") != 2 ||

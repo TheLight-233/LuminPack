@@ -8,11 +8,13 @@ internal static partial class SerializerIssueRegression
     {
         const string source = """
             using System;
+            using System.Buffers;
             using System.Buffers.Binary;
             using System.Collections.Generic;
             using System.Numerics;
             using LuminPack;
             using LuminPack.Attribute;
+            using LuminPack.Option;
             using LuminPack.Utility;
 
             [LuminPackable] public sealed class FixedRecord
@@ -37,6 +39,31 @@ internal static partial class SerializerIssueRegression
                 [LuminPackOrder(2)] public int[] Numbers;
                 [LuminPackOrder(3)] public Dictionary<int, int> Pairs;
                 [LuminPackOrder(4)] public Dictionary<int, string> Text;
+            }
+
+            [LuminPackable] public sealed class PositionalRecord
+            {
+                public string Text { get; set; }
+                public List<Vector3> Positions;
+            }
+
+            public readonly struct ObservingProfile : ILuminPackOptions
+            {
+                public static Action Observe;
+                public LuminPackStringEncoding StringEncoding
+                {
+                    get
+                    {
+                        var observer = Observe;
+                        Observe = null;
+                        observer?.Invoke();
+                        return LuminPackStringEncoding.UTF16;
+                    }
+                }
+                public LuminPackStringRecording StringRecording => LuminPackStringRecording.Length;
+                public StandardFormat StandardFormat => new('G');
+                public int MaxJsonDepth => 1024;
+                public bool ValidateJsonSyntax => false;
             }
 
             public static class Entry
@@ -109,6 +136,21 @@ internal static partial class SerializerIssueRegression
                         throw new Exception("A mismatched fixed-size payload was accepted.");
                     }
                     catch (FormatException) { }
+
+                    var positional = new PositionalRecord { Text = "point", Positions = new() { Vector3.UnitX } };
+                    ObservingProfile.Observe = () => positional.Positions.Add(Vector3.UnitY);
+                    bytes = LuminPackSerializer.Serialize<PositionalRecord, ObservingProfile>(positional);
+                    if (!bytes.AsSpan().SequenceEqual(LuminPackSerializer.Serialize(positional)))
+                        throw new Exception("A positional span was captured before the custom string profile ran.");
+
+                    ObservingProfile.Observe = () =>
+                    {
+                        version.Numbers = [7, 11];
+                        version.Pairs.Add(31, 37);
+                    };
+                    bytes = LuminPackSerializer.Serialize<VersionRecord, ObservingProfile>(version);
+                    if (!bytes.AsSpan().SequenceEqual(LuminPackSerializer.Serialize(version)))
+                        throw new Exception("A versioned collection was captured before the custom schema profile ran.");
                 }
             }
             """;
@@ -123,13 +165,14 @@ internal static partial class SerializerIssueRegression
                 throw new InvalidOperationException("The fixed object or array lost its shared capacity check.");
             string version = files.Single(text => text.Contains("struct VersionRecordFormatter", StringComparison.Ordinal) &&
                 text.Contains(".CompleteVersionLength(", StringComparison.Ordinal));
-            if (!version.Contains(".WriteReserved<global::System.Guid>", StringComparison.Ordinal) ||
-                !version.Contains(".WriteReservedSpanRecord(", StringComparison.Ordinal) ||
-                !version.Contains(".WriteReserved(ref cursor, pairsSnapshot)", StringComparison.Ordinal) ||
-                version.IndexOf(".CompleteVersionLength(", StringComparison.Ordinal) !=
-                version.LastIndexOf(".CompleteVersionLength(", StringComparison.Ordinal))
+            string reserved = version[..version.IndexOf("static void WriteWithProfile(", StringComparison.Ordinal)];
+            if (!reserved.Contains(".WriteReserved<global::System.Guid>", StringComparison.Ordinal) ||
+                !reserved.Contains(".WriteReservedSpanRecord(", StringComparison.Ordinal) ||
+                !reserved.Contains(".WriteReserved(ref cursor, pairsSnapshot)", StringComparison.Ordinal) ||
+                reserved.IndexOf(".CompleteVersionLength(", StringComparison.Ordinal) !=
+                reserved.LastIndexOf(".CompleteVersionLength(", StringComparison.Ordinal))
                 throw new InvalidOperationException("A known-width named payload took the variable field write path.");
         });
-        Console.WriteLine("Passed fixed class and array reservations, property callbacks, and revision-2 fixed and variable field lengths.");
+        Console.WriteLine("Passed fixed class and array reservations, callbacks, profile observation order, and revision-2 field lengths.");
     }
 }

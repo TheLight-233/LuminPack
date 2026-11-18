@@ -37,17 +37,37 @@ internal static partial class BinaryEmitter
             body.Add("}");
             body.Add("");
         }
+        if (model.Net8 && members.Any(VersionCapture))
+        {
+            // The schema and strings may invoke custom profile getters before a later collection is observed.
+            AddStorageProfileBranches(model, w, body, (branch, reserveNativeSlots) =>
+                AppendVersionSlots(model, w, branch, reserveNativeSlots));
+        }
+        else
+            AppendVersionSlots(model, w, body, reserveNativeSlots: model.Net8);
+        return ApplyBoundedWrite(model, body);
+    }
+
+    /// <summary>Writes the schema and slots in consecutive reservations separated by unmeasured fields.</summary>
+    /// <param name="model">The complete versioned contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="body">The receiving operation body.</param>
+    /// <param name="reserveNativeSlots">Whether newly measured native fields may share a reservation.</param>
+    private static void AppendVersionSlots(PayloadRenderModel model, CodeWriter w, List<string> body, bool reserveNativeSlots)
+    {
+        var members = model.Members;
+        var schema = model.Version;
         body.Add("ref byte cursor = ref writer.Cursor;");
         bool prefix = true;
         int lengths = 0;
         for (int index = 0; index <= members.Length;)
         {
             int end = index;
-            while (end < members.Length && VersionReservable(model, members[end], schema.Widths[end]))
+            while (end < members.Length && VersionReservable(members[end], schema.Widths[end], reserveNativeSlots))
                 end++;
             if (prefix || end > index)
             {
-                AppendVersionReservation(model, w, body, index, end, prefix, ref lengths);
+                AppendVersionReservation(model, w, body, index, end, prefix, reserveNativeSlots, ref lengths);
                 prefix = false;
             }
             if (end == members.Length)
@@ -60,18 +80,17 @@ internal static partial class BinaryEmitter
         if (body[body.Count - 1].Length != 0 && members.Any(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.List))
             body.Add("");
         body.Add("writer.Cursor = ref cursor;");
-        return ApplyBoundedWrite(model, body);
     }
 
     /// <summary>Whether the complete slot can be written inside a fixed reservation.</summary>
-    /// <param name="model">The complete versioned contract.</param>
     /// <param name="member">The member being analyzed or emitted.</param>
     /// <param name="width">The width of the storage or input range.</param>
+    /// <param name="reserveNativeSlots">Whether newly measured native fields may share a reservation.</param>
     /// <returns>Whether the input satisfies the version reservable check.</returns>
-    private static bool VersionReservable(PayloadRenderModel model, RenderMember member, int width) => width != 255 ||
+    private static bool VersionReservable(RenderMember member, int width, bool reserveNativeSlots) => width != 255 ||
         member.Kind == RenderMemberKind.Text ||
         member.Kind == RenderMemberKind.List && member.Nested == null && member.Scalar != "string" ||
-        model.Net8 && (member.IsFixed || VersionCapture(member));
+        reserveNativeSlots && (member.IsFixed || VersionCapture(member));
 
     /// <summary>Whether the existing binary member is a raw vector or dictionary pair record.</summary>
     /// <param name="member">The projected field operation.</param>
@@ -87,9 +106,10 @@ internal static partial class BinaryEmitter
     /// <param name="first">The first supplied to <c>AppendVersionReservation</c>.</param>
     /// <param name="end">The end supplied to <c>AppendVersionReservation</c>.</param>
     /// <param name="prefix">The prefix to use for the generated name.</param>
+    /// <param name="reserveNativeSlots">Whether newly measured native fields may share a reservation.</param>
     /// <param name="lengths">The lengths supplied to <c>AppendVersionReservation</c>.</param>
     private static void AppendVersionReservation(PayloadRenderModel model, CodeWriter w, List<string> body,
-        int first, int end, bool prefix, ref int lengths)
+        int first, int end, bool prefix, bool reserveNativeSlots, ref int lengths)
     {
         var members = model.Members;
         var terms = new List<string>();
@@ -105,7 +125,7 @@ internal static partial class BinaryEmitter
                 terms.Add(member.Width);
                 continue;
             }
-            if (member.Kind == RenderMemberKind.List || model.Net8 && VersionCapture(member))
+            if (member.Kind == RenderMemberKind.List || reserveNativeSlots && VersionCapture(member))
             {
                 // The captured span or pair count fixes the complete field size before the record is reserved.
                 string snapshot = VersionSnapshot(model, index);
@@ -137,7 +157,7 @@ internal static partial class BinaryEmitter
                 body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReserved<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
                 continue;
             }
-            if (member.Kind == RenderMemberKind.List || model.Net8 && VersionCapture(member))
+            if (member.Kind == RenderMemberKind.List || reserveNativeSlots && VersionCapture(member))
             {
                 string snapshot = VersionSnapshot(model, index);
                 body.Add(w.A("Unsafe") + ".WriteUnaligned(ref cursor, " + snapshot + "Width);");

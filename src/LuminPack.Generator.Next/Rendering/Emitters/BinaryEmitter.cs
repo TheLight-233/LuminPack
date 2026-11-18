@@ -814,23 +814,27 @@ internal static partial class BinaryEmitter
             AddBoundExit(body, model, union);
             return body;
         }
-        // Dictionary members write at a cursor local with fused entry kernels, which also sets the record header and commits
-        // once around every inline block between them.
-        if (model.HasDictionary)
-        {
-            DictionaryWriteBody(model, w, union, body);
-            AddBoundExit(body, model, union);
-            return body;
-        }
         bool nullableRecord = members.Any(member => member.NativeNullablePayload != null) &&
             members.All(member => member.IsFixed || member.NativeNullablePayload != null);
-        // Inline objects and reserving members alternate: the leading members share the header's reservation, each object
-        // writes in place, and every following run reserves on its own.
-        if (!nullableRecord && (model.MixedRecord || members.Any(member => member.ReservableSpan)))
+        // Reserving members share the header and consecutive runs. Dictionary entries and inline blocks keep their own kernels.
+        bool dictionary = model.HasDictionary;
+        if (dictionary || !nullableRecord && (model.MixedRecord || members.Any(member => member.ReservableSpan)))
         {
-            MixedWriteBody(model, w, union, body);
+            if (model.DeclaredProfile == null && members.Any(member => member.Kind == RenderMemberKind.Text && member.ScopeProfile == null) &&
+                members.Any(member => member.ReservableSpan && !member.OriginalSpanReservation))
+                AddStorageProfileBranches(model, w, body, AppendSegments);
+            else
+                AppendSegments(body, reserveNativeSpans: true);
             AddBoundExit(body, model, union);
             return body;
+
+            void AppendSegments(List<string> branch, bool reserveNativeSpans)
+            {
+                if (dictionary)
+                    DictionaryWriteBody(model, w, union, branch, reserveNativeSpans);
+                else
+                    MixedWriteBody(model, w, union, branch, reserveNativeSpans);
+            }
         }
         // A pure stream writes its member count and lets each remaining segment advance the writer.
         if (!nullableRecord && model.StreamRecord)
@@ -1042,6 +1046,34 @@ internal static partial class BinaryEmitter
         member.ScopeProfile != null ? ScopedProfile(w, member.ScopeProfile) :
         model.DeclaredProfile != null ? ScopedProfile(w, model.DeclaredProfile) : Profile;
 
+    /// <summary>Separates the built-in length profiles from profiles that may observe or alter a field snapshot.</summary>
+    /// <param name="model">The complete positional or versioned contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="body">The receiving operation body.</param>
+    /// <param name="append">Emits a segment with or without native field batching.</param>
+    private static void AddStorageProfileBranches(PayloadRenderModel model, CodeWriter w, List<string> body, Action<List<string>, bool> append)
+    {
+        const string standard = "LuminPackUtf16LengthOptions", fallback = "LuminPackDefaultOptions";
+        const string matches = "typeof(" + Profile + ") == typeof(";
+        string profile = matches + w.A(standard) + ") || " + matches + w.A(fallback) + ") || " +
+            matches + ScopedProfile(w, standard) + ") || " + matches + ScopedProfile(w, fallback) + ") || " +
+            matches + w.A("LuminPackDeclaredOptions") + ")";
+        bool mirrored = model.Mirror != null && model.Members.Any(member => member.Mirrored);
+        body.Add("if (" + profile + ")");
+        body.Add("{");
+        append(body, true);
+        body.Add("}");
+        body.Add("else");
+        body.Add("\tWriteWithProfile(ref writer, value" + (mirrored ? ", ref local" : string.Empty) + ");");
+        body.Add("");
+        body.Add(w.MethodImpl("NoInlining"));
+        body.Add("static void WriteWithProfile(scoped ref " + w.A("LuminPackWriter") + " writer, " + model.GlobalName + " value" +
+            (mirrored ? ", scoped ref " + model.Mirror + " local" : string.Empty) + ")");
+        body.Add("{");
+        append(body, false);
+        body.Add("}");
+    }
+
     /// <summary>The profile a plain string read consumes: a declared profile is passed without the fixed wrapper, as the
     /// member and type projections do.</summary>
     /// <param name="model">The normalized model for this contract.</param>
@@ -1149,8 +1181,9 @@ internal static partial class BinaryEmitter
     /// <param name="w">The generated source writer.</param>
     /// <param name="union">Whether to enable union for this operation.</param>
     /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="reserveNativeSpans">Whether newly captured spans may share the reservation.</param>
     /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
-    private static List<string> MixedWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body)
+    private static List<string> MixedWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body, bool reserveNativeSpans)
     {
         var members = model.Members;
         int ends = 0, cursors = 1, spans = 0;
@@ -1158,7 +1191,7 @@ internal static partial class BinaryEmitter
         // The leading members before the first inline object share the header's reservation; without any, the header is a
         // lone record of its own.
         int first = 0;
-        while (first < members.Length && !IsInlineSegment(members[first]))
+        while (first < members.Length && !IsInlineSegment(members[first], reserveNativeSpans))
             first++;
         body.Add("ref byte cursor = ref writer.Cursor;");
         if (first == 0)
@@ -1233,7 +1266,7 @@ internal static partial class BinaryEmitter
                 continue;
             }
             // A framework member writes through its shared formatter owner, which frames its own null record.
-            if (member.Kind == RenderMemberKind.Special && !member.ReservableSpan)
+            if (member.Kind == RenderMemberKind.Special && !ReserveSpan(member, reserveNativeSpans))
             {
                 body.Add(member.BinaryFormatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
                 index++;
@@ -1246,7 +1279,7 @@ internal static partial class BinaryEmitter
                 continue;
             }
             int last = index;
-            while (last + 1 < members.Length && !IsInlineSegment(members[last + 1]))
+            while (last + 1 < members.Length && !IsInlineSegment(members[last + 1], reserveNativeSpans))
                 last++;
             body.Add("cursor = ref writer.Cursor;");
             if (last == index)
@@ -2061,10 +2094,18 @@ internal static partial class BinaryEmitter
 
     /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
     /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="reserveNativeSpans">Whether newly captured spans may share the reservation.</param>
     /// <returns>Whether the input is inline segment.</returns>
-    private static bool IsInlineSegment(RenderMember member) => !member.ReservableSpan && (member.Kind == RenderMemberKind.Object || IsTextList(member) ||
+    private static bool IsInlineSegment(RenderMember member, bool reserveNativeSpans) => !ReserveSpan(member, reserveNativeSpans) && (member.Kind == RenderMemberKind.Object || IsTextList(member) ||
         IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall ||
         member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.Sequence);
+
+    /// <summary>Checks whether this profile may capture the forwarded span alongside adjacent fields.</summary>
+    /// <param name="member">The member being emitted.</param>
+    /// <param name="reserveNativeSpans">Whether the profile's properties are constant and side-effect free.</param>
+    /// <returns>Whether this segment may share a reservation.</returns>
+    private static bool ReserveSpan(RenderMember member, bool reserveNativeSpans) =>
+        member.ReservableSpan && (reserveNativeSpans || member.OriginalSpanReservation);
 
     /// <summary>Whether a member opens a block in place, whose following member starts without a separating blank line.</summary>
     /// <param name="member">The member being analyzed or emitted.</param>
