@@ -60,12 +60,12 @@ internal static class SpecialOwnerFile
     /// <param name="jsonWriteRun">Whether the JSON writer only frames a complete out-of-line element run.</param>
     /// <param name="optimizedRoots">Whether the outlined roots traverse elements and request full optimization where the
     /// runtime supports it.</param>
-    /// <param name="inlineBinaryRead">Whether to request inlining of the binary read root.</param>
+    /// <param name="outlineBinaryRead">Whether the binary read root keeps an independent inlining budget.</param>
     internal static string Render(SharedFormatterSet set, GeneratedOperations operations, string shortName, string typeName,
         bool referenceType, Action<CodeWriter, SpecialOwnerContext> binaryWrite, Action<CodeWriter, SpecialOwnerContext> binaryRead,
         Action<CodeWriter, SpecialOwnerContext> jsonWrite, Action<CodeWriter, SpecialOwnerContext> jsonRead, Action<CodeWriter>? support = null,
         bool compressedEntries = false, bool outlineJson = false, bool outlineBinaryWrite = false,
-        Action<CodeWriter>? binaryWriteEntries = null, bool jsonWriteRun = false, bool optimizedRoots = false, bool inlineBinaryRead = true)
+        Action<CodeWriter>? binaryWriteEntries = null, bool jsonWriteRun = false, bool optimizedRoots = false, bool outlineBinaryRead = false)
     {
         using var w = new CodeWriter(set.AvailableAliases) { Scoped = set.Options == null || set.Options.CSharpVersion >= 1100 };
         string serializer = w.A("LuminPackSerializer");
@@ -170,8 +170,7 @@ internal static class SpecialOwnerFile
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    if (inlineBinaryRead)
-                        w.Line(inline);
+                    w.Line(outlineBinaryRead ? w.MethodImpl("NoInlining") : inline);
                     w.Line("internal static void RootRead<TLuminProfile>(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + typeName + " value)");

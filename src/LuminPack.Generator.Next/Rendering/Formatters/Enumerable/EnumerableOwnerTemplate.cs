@@ -143,6 +143,19 @@ internal sealed partial class EnumerableOwnerContext
         }
     }
 
+    /// <summary>Isolates the counted fallback when a storage path already emits the element writer.</summary>
+    /// <param name="local">The source sequence.</param>
+    internal void CountedWriteFallback(string local)
+    {
+        W.Line("WriteCountedFallback(ref operationState, " + local + ");");
+        W.Blank();
+        W.Line(W.MethodImpl("NoInlining"));
+        W.Line("static void WriteCountedFallback(scoped ref global::LuminPack.Core.LuminPackWriter operationState, " + Sequence + " items)");
+        W.Open();
+        CountedWrite("items");
+        W.Close();
+    }
+
     /// <summary>Writes one captured item through the counted sequence's existing element operation.</summary>
     /// <param name="item">The captured value.</param>
     /// <param name="incrementCount">Whether this operation counts the item before writing it.</param>
@@ -488,7 +501,7 @@ internal sealed class EnumerableOwnerSpec
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
         Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true,
         bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false, bool arrayReuse = false,
-        bool concurrentStackStaging = false, bool interfaceListReuse = false, string? readInlining = "AggressiveInlining",
+        bool concurrentStackStaging = false, bool interfaceListReuse = false, string? readInlining = "NoInlining",
         bool outlineJson = false, bool interfaceSetTraversal = false, bool jsonEmptyBeforeStaging = false, bool jsonObservableBacking = false)
     {
         ReadInlining = readInlining;
@@ -721,11 +734,11 @@ internal static class EnumerableOwnerTemplate
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    // The original scalar sequence interfaces leave the allocating read to the JIT's default budget.
+                    // Readers that traverse or refill storage keep an independent budget for their checked helpers.
                     if (inlineRawRead && !text)
-                        w.Line(w.MethodImpl("AggressiveInlining", optimized));
-                    else if (spec.ReadInlining != null && (text || !spec.InterfaceListReuse))
-                        w.Line(w.MethodImpl(spec.ReadInlining, optimized));
+                        w.Line(inline);
+                    else if (spec.ReadInlining != null)
+                        w.Line(w.MethodImpl(spec.ReadInlining));
                     w.Line("internal static void RootRead" + (text ? "<TLuminProfile>" : "") + "(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");

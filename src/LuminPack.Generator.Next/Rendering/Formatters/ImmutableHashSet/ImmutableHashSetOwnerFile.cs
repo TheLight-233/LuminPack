@@ -171,6 +171,7 @@ internal static class ImmutableHashSetOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootRead(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");

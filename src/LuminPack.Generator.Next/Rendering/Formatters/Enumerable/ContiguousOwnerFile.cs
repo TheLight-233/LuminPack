@@ -72,8 +72,7 @@ internal static class ContiguousOwnerFile
                 FormatterStorageEmitter.Support(w, layout);
         }, compressedEntries: shape is ContiguousShape.Array or ContiguousShape.List, outlineJson: true,
             outlineBinaryWrite: scalarElements || (!raw && layout == null && element.Type != "string"),
-            // Let the JIT decide whether to inline the fresh Union switch and the reuse loop into each caller.
-            inlineBinaryRead: !(set.OptimizedRoots && shape == ContiguousShape.List && freshUnion != null),
+            outlineBinaryRead: !raw && !rawSequence && layout == null && element.Type != "string",
             binaryWriteEntries: measure ? MeasureRecord : null,
             jsonWriteRun: !scalarElements && JsonIntegerRunWriter.Supports(set, model.Type, element.Type), optimizedRoots: true);
 

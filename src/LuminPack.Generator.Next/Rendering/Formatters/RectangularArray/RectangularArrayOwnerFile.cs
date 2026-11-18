@@ -64,7 +64,8 @@ internal static class RectangularArrayOwnerFile
                 if (layout != null)
                     FormatterStorageEmitter.Support(w, layout);
             },
-            outlineJson: true, outlineBinaryWrite: !raw && layout == null);
+            outlineJson: true, outlineBinaryWrite: !raw && layout == null,
+            outlineBinaryRead: !raw && layout == null);
 
         void BinaryWrite(CodeWriter w)
         {

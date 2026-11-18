@@ -29,6 +29,7 @@ internal static class SerializerBinaryEntryShapeRegression
             public struct PackedCell { public byte X; public long Y; }
 
             [LuminPackable] public sealed class PlainGraph { public List<string> Text; public PackedCell? Cell; }
+            [LuminPackable] public sealed class ReadBoundaryCell { public int Number; }
             [LuminPackable(GeneratorType.VersionTolerant)] public sealed class VersionCell { public int Value; }
             [LuminPackable] public sealed class VersionGraph { public List<VersionCell> Cells; }
 
@@ -46,6 +47,12 @@ internal static class SerializerBinaryEntryShapeRegression
 
             public static class Cases
             {
+                public static int ReadList(ReadOnlySpan<byte> data, ref IList<int> value) => LuminPackSerializer.Deserialize(data, ref value);
+                public static int ReadCollection(ReadOnlySpan<byte> data, ref ICollection<int> value) => LuminPackSerializer.Deserialize(data, ref value);
+                public static int ReadOnlyList(ReadOnlySpan<byte> data, ref IReadOnlyList<int> value) => LuminPackSerializer.Deserialize(data, ref value);
+                public static int ReadRecords(ReadOnlySpan<byte> data, ref List<ReadBoundaryCell> value) => LuminPackSerializer.Deserialize(data, ref value);
+                public static int ReadCompact(ReadOnlySpan<byte> data, ref List<int> value) => LuminPackSerializer.Deserialize(data, ref value);
+
                 public static void Run()
                 {
                     using var buffer = new LuminBufferWriter(true);
@@ -95,8 +102,9 @@ internal static class SerializerBinaryEntryShapeRegression
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release, allowUnsafe: true));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
-        var methods = driver.GetRunResult().GeneratedTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
-            .Where(method => method.Identifier.ValueText.StartsWith("LuminIntercept_", StringComparison.Ordinal)).ToArray();
+        var declarations = driver.GetRunResult().GeneratedTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
+        VerifyCollectionReadBoundaries(declarations);
+        var methods = declarations.Where(method => method.Identifier.ValueText.StartsWith("LuminIntercept_", StringComparison.Ordinal)).ToArray();
         var native = methods.Where(method => method.Identifier.ValueText.StartsWith("LuminIntercept_NativeCell_", StringComparison.Ordinal)).ToArray();
         var plain = methods.Single(method => method.Identifier.ValueText.StartsWith("LuminIntercept_PlainGraph_", StringComparison.Ordinal) &&
             method.ParameterList.Parameters[0].Type!.ToString() == "ReadOnlySpan<byte>");
@@ -118,6 +126,31 @@ internal static class SerializerBinaryEntryShapeRegression
             throw new InvalidOperationException(string.Join(Environment.NewLine, diagnostics.Concat(emitted.Diagnostics)
                 .Where(item => item.Severity == DiagnosticSeverity.Error)));
         Assembly.Load(image.ToArray()).GetType("Cases")!.GetMethod("Run")!.Invoke(null, null);
-        Console.WriteLine("Passed raw, portable, nullable, stateless and pooled binary root entry contracts.");
+        Console.WriteLine("Passed binary root entry shapes and collection read inlining boundaries.");
+    }
+
+    /// <summary>Checks the inlining flags on the published binary collection bodies themselves.</summary>
+    /// <param name="declarations">The generated Next method declarations.</param>
+    private static void VerifyCollectionReadBoundaries(MethodDeclarationSyntax[] declarations)
+    {
+        foreach (string expectedType in new[] { "IList<int>", "ICollection<int>", "IReadOnlyList<int>", "List<ReadBoundaryCell>", "List<int>" })
+        {
+            // Method names depend on whether publication compacts the owner. Reading the length identifies the body,
+            // excluding both the static facade and lightweight reader forwarding methods.
+            var roots = declarations.Where(method => (method.Identifier.ValueText is "Read" or "RootRead") &&
+                method.ParameterList.Parameters.Count == 2 &&
+                method.ParameterList.Parameters[0].Type?.ToString().EndsWith("LuminPackReader", StringComparison.Ordinal) == true &&
+                method.ParameterList.Parameters[1].Type?.DescendantNodesAndSelf().OfType<GenericNameSyntax>().Any(name =>
+                    name.ToString().Replace("global::", "", StringComparison.Ordinal) == expectedType) == true &&
+                method.Body?.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
+                    call.Expression is MemberAccessExpressionSyntax access && access.Name.Identifier.ValueText == "ReadLength") == true)
+                .ToArray();
+            if (roots.Length != 1)
+                throw new InvalidOperationException("Expected one binary read body for " + expectedType + ", found " + roots.Length + ".");
+            string attributes = roots[0].AttributeLists.ToString();
+            string expectedHint = expectedType == "List<int>" ? "AggressiveInlining" : "NoInlining";
+            if (!attributes.Contains(expectedHint, StringComparison.Ordinal) || attributes.Contains("AggressiveOptimization", StringComparison.Ordinal))
+                throw new InvalidOperationException(expectedType + " did not retain the expected binary read JIT boundary.");
+        }
     }
 }
