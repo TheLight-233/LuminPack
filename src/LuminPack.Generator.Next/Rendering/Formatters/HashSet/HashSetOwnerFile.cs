@@ -43,15 +43,20 @@ internal static class HashSetOwnerFile
         // The raw kernel needs unmanaged elements; strings are counted while the set is enumerated.
         if (c.Counted)
         {
-            if (c.Text && c.Supports("StringSetWriter"))
+            bool stringStorage = c.Text && c.Supports("StringSetWriter");
+            bool entryStorage = c.Forwarded && c.Supports("HashSetTraversal");
+            if (stringStorage)
             {
                 c.W.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile +
                     " && global::LuminPack.Code.LuminPackMarshal.TryWriteStringSet<TLuminProfile>(ref operationState, value))");
                 c.W.Indented(() => c.W.Line("goto operationComplete_RootWrite;"));
             }
-            if (c.Forwarded && c.Supports("HashSetTraversal"))
+            if (entryStorage)
                 WriteEntries(c);
-            c.CountedWrite("value");
+            if (entryStorage || stringStorage)
+                c.CountedWriteFallback("value");
+            else
+                c.CountedWrite("value");
             return;
         }
         WriteRaw(c, "operationState", "value");

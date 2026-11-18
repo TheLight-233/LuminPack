@@ -445,15 +445,32 @@ internal sealed partial class EnumerableOwnerContext
             W.Line("while (!segment.IsEmpty);");
             W.Close();
             W.Line("else");
+            W.Indented(() => W.Line("WriteQueueFallback(ref operationState, " + local + ");"));
         }
-        W.Line("foreach (var item in " + local + ")");
-        W.Open();
-        WriteElement("item");
-        W.Close();
+        else
+            Items(local);
         W.Close();
         if (!segments)
             W.Line("operationState.EndCollection(countPosition, queueSize);");
         W.Line("operationState.CheckBuffer();");
+
+        if (segments && !NativeNullableElement)
+        {
+            W.Blank();
+            W.Line(W.MethodImpl("NoInlining"));
+            W.Line("static void WriteQueueFallback(scoped ref global::LuminPack.Core.LuminPackWriter operationState, " + Sequence + " items)");
+            W.Open();
+            Items("items");
+            W.Close();
+        }
+
+        void Items(string source)
+        {
+            W.Line("foreach (var item in " + source + ")");
+            W.Open();
+            WriteElement("item");
+            W.Close();
+        }
     }
 
     /// <summary>Copies a recognized ring's two active ranges, preserving dequeue order and the queue's storage words.</summary>

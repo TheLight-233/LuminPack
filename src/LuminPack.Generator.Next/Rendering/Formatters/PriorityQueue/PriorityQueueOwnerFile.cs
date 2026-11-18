@@ -54,6 +54,14 @@ internal static class PriorityQueueOwnerFile
             w.Line("operationState.CheckBuffer();");
             w.Line("goto operationComplete_RootWrite;");
             w.Close();
+            w.Line("WriteQueueFallback(ref operationState, value);");
+            w.Blank();
+            w.Line(w.MethodImpl("NoInlining"));
+            w.Line("static void WriteQueueFallback(scoped ref global::LuminPack.Core.LuminPackWriter operationState, " + c.Dictionary + " value)");
+            w.Open();
+            c.CountedWrite();
+            w.Close();
+            return;
         }
         c.CountedWrite();
     }

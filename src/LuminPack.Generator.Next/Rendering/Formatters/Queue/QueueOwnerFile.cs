@@ -121,14 +121,19 @@ internal static class QueueOwnerFile
         if (c.Counted)
         {
             // A string or packable element is read and enqueued one at a time.
-            w.Line("int remaining = length;");
-            w.Line("do");
-            w.Open();
-            w.Line(scalar + " item = default;");
-            c.ReadElement("item");
-            w.Line("value.Enqueue(item);");
-            w.Close();
-            w.Line("while (--remaining != 0);");
+            if (refill && !c.NativeNullableElement)
+            {
+                w.Line("ReadQueueFallback(ref operationState, value, length);");
+                w.Blank();
+                w.Line(w.MethodImpl("NoInlining"));
+                w.Line("static void ReadQueueFallback(scoped ref global::LuminPack.Core.LuminPackReader reader, " + c.Sequence + " value, int length)");
+                w.Open();
+                w.Line("ref var operationState = ref reader;");
+                EnqueueItems();
+                w.Close();
+            }
+            else
+                EnqueueItems();
             return;
         }
         w.Line("#if NET8_0_OR_GREATER");
@@ -142,14 +147,22 @@ internal static class QueueOwnerFile
         });
         w.Line("global::LuminPack.Code.LuminPackMarshal.SetQueueSize(value, normalizedTail, 0, length);");
         w.Line("#else");
-        w.Line("int remaining = length;");
-        w.Line("do");
-        w.Open();
-        w.Line(scalar + " item = default;");
-        w.Line("operationState.Read(ref " + c.Memory + ".As<" + scalar + ", byte>(ref item), " + c.Memory + ".SizeOf<" + scalar + ">());");
-        w.Line("value.Enqueue(item);");
-        w.Close();
-        w.Line("while (--remaining != 0);");
+        EnqueueItems();
         w.Line("#endif");
+
+        void EnqueueItems()
+        {
+            w.Line("int remaining = length;");
+            w.Line("do");
+            w.Open();
+            w.Line(scalar + " item = default;");
+            if (c.Counted)
+                c.ReadElement("item");
+            else
+                w.Line("operationState.Read(ref " + c.Memory + ".As<" + scalar + ", byte>(ref item), " + c.Memory + ".SizeOf<" + scalar + ">());");
+            w.Line("value.Enqueue(item);");
+            w.Close();
+            w.Line("while (--remaining != 0);");
+        }
     }
 }
