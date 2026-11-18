@@ -175,6 +175,8 @@ internal static class SerializerBinaryEntryShapeRegression
                     if (!failed || managedCopy is not { Id: 41, Name: "previous", Score: 7.5 })
                         throw new Exception("A truncated managed nullable changed the existing value.");
                     CheckManagedNullablePolicies(managed.Value);
+                    CheckManagedNullableArrayFailure<LuminPackUtf16LengthOptions>(managed.Value);
+                    CheckManagedNullableArrayFailure<LuminPackUtf8TokenOptions>(managed.Value);
 
                     var plain = new PlainGraph { Text = new List<string> { "abc" }, Cell = packed };
                     byte[] plainBytes = LuminPackSerializer.Serialize<PlainGraph, LuminPackUtf8TokenOptions>(plain);
@@ -230,6 +232,31 @@ internal static class SerializerBinaryEntryShapeRegression
                             error.GetType().Name == "LuminPackException") { return; }
                         throw new Exception("An enclosing input policy accepted an invalid nullable payload.");
                     }
+                }
+
+                private static void CheckManagedNullableArrayFailure<TProfile>(ManagedCell first)
+                    where TProfile : struct, ILuminPackOptions
+                {
+                    var second = new ManagedCell { Id = 54, Name = "second", Score = 7.25 };
+                    var previous = new ManagedCell { Id = -9, Name = "previous", Score = 19.75 };
+                    ManagedCell?[] source = { first, second };
+                    byte[] wire = LuminPackSerializer.Serialize<ManagedCell?[], TProfile>(source);
+                    byte[] firstRecord = LuminPackSerializer.Serialize<ManagedCell?, TProfile>(first);
+                    if (!wire.AsSpan(4, firstRecord.Length).SequenceEqual(firstRecord))
+                        throw new Exception("The array changed the framing of its nullable elements.");
+
+                    ReadOnlySpan<byte> shortInput = wire.AsSpan(0, wire.Length - 1);
+                    var reader = new LuminPackReader(ref shortInput);
+                    ManagedCell?[] target = { previous, previous };
+                    var alias = target;
+                    bool rejected = false;
+                    try { LuminPackSerializer.Deserialize<ManagedCell?[], TProfile>(ref reader, ref target); }
+                    catch (Exception error) when (error is global::System.IO.InvalidDataException ||
+                        error.GetType().Name == "LuminPackException") { rejected = true; }
+                    if (!rejected || reader.Position != 4 + firstRecord.Length + 1 || !ReferenceEquals(target, alias) ||
+                        target[0] is not { Id: 19, Name: "cell", Score: -3.25 } ||
+                        target[1] is not { Id: -9, Name: "previous", Score: 19.75 })
+                        throw new Exception("A truncated nullable array element changed its reuse, output prefix or cursor publication.");
                 }
 
                 private static void CheckNullReadOutlining(byte[] nullObject)
@@ -347,9 +374,13 @@ internal static class SerializerBinaryEntryShapeRegression
             method.ParameterList.Parameters[1].Type?.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>()
                 .Any(name => name.Identifier.ValueText == "ManagedCell") == true &&
             method.Body?.ToString().Contains("Invalid nullable element marker.", StringComparison.Ordinal) == true);
-        if (managedNullableReader.Body!.ToString().Contains("GetValueRefOrDefaultRef", StringComparison.Ordinal) ||
-            managedNullableReader.Body.ToString().Contains("ReadNativeNullablePayload", StringComparison.Ordinal))
+        string managedReadBody = managedNullableReader.Body!.ToString();
+        if (managedReadBody.Contains("GetValueRefOrDefaultRef", StringComparison.Ordinal) ||
+            managedReadBody.Contains("ReadNativeNullablePayload", StringComparison.Ordinal))
             throw new InvalidOperationException("A managed nullable reader populated nullable storage in place.");
+        if (!managedReadBody.Contains("reader.Cursor = ref isolated.Cursor", StringComparison.Ordinal) ||
+            managedReadBody.Contains("isolated.CopyTo", StringComparison.Ordinal))
+            throw new InvalidOperationException("A compact managed nullable reader did not commit only the isolated cursor.");
         var managedFreshReader = declarations.Single(method => (method.Identifier.ValueText is "ReadFresh" or "RootReadFresh") &&
             method.ReturnType.ToString() is "ManagedCell" or "global::ManagedCell");
         var managedStructReader = declarations.Single(method => (method.Identifier.ValueText is "Read" or "RootRead") &&
@@ -358,7 +389,7 @@ internal static class SerializerBinaryEntryShapeRegression
                 .Any(name => name.Identifier.ValueText == "ManagedCell") == true &&
             method.Body?.ToString().Contains("ReadExisting", StringComparison.Ordinal) == true);
         string freshCall = managedFreshReader.Identifier.ValueText + "<";
-        if (!managedNullableReader.Body.ToString().Contains(freshCall, StringComparison.Ordinal) ||
+        if (!managedReadBody.Contains(freshCall, StringComparison.Ordinal) ||
             !managedStructReader.Body!.ToString().Contains(freshCall, StringComparison.Ordinal))
             throw new InvalidOperationException("The ordinary and nullable struct roots did not share the fresh reader.");
         var capturedRoot = declarations.FirstOrDefault(method => method.Body != null &&

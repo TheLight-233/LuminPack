@@ -206,7 +206,8 @@ internal static class ClosedGenericOwnerFile
                     w.Line("isolated.Cursor = ref " + w.A("Unsafe") + ".Add(ref isolated.Cursor, 1);");
                     w.Line("var item0 = " + w.A("LuminPackSerializer") + ".LuminRoots_" + render.Readable +
                         ".RootReadFresh<TLuminProfile>(ref isolated);");
-                    w.Line("isolated.CopyTo(ref reader);");
+                    // The flat scalar and string payload only advances the cursor in the captured window.
+                    w.Line("reader.Cursor = ref isolated.Cursor;");
                     w.Line("value = item0;");
                     return;
                 }
