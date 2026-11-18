@@ -435,6 +435,53 @@ namespace LuminPack.Core
             OptionState.AddVersionTable(LuminPackVersionField.Fingerprint(_buffer.Slice(start, Position - start)), _buffer.Slice(start, Position - start));
         }
 
+        /// <summary>Maps a dynamic member table using the receiving schema's bounded cache.</summary>
+        /// <param name="cache">The cache owned by that schema.</param>
+        /// <param name="revision">The record revision returned by the header.</param>
+        /// <param name="slots">Receives the incoming member slots.</param>
+        /// <param name="widths">Receives the field widths.</param>
+        /// <param name="present">Receives the local fields supplied by the input.</param>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public void ReadCachedVersionTable(LuminPackVersionTableCache cache, int revision, scoped Span<int> slots, scoped Span<int> widths, scoped Span<byte> present)
+        {
+            if (revision != 2 || widths.Length != slots.Length || present.Length != cache.Fields.Length)
+            {
+                ReadVersionTable(cache.Fields, revision, slots, widths, present);
+                return;
+            }
+
+            int start = Position;
+            ReadOnlySpan<byte> input = _buffer.Slice(start);
+            var entry = cache.Find(input, slots.Length);
+            if (entry is not null)
+            {
+                Advance(entry.Bytes.Length);
+                entry.CopyTo(slots, widths, present);
+                OptionState.AddVersionTable(entry.Fingerprint, entry.Bytes);
+                return;
+            }
+
+            ReadVersionWidths(cache.Fields, slots, widths, present);
+            var table = input.Slice(0, Position - start);
+            if (table.Length <= LuminPackVersionTableCache.MaximumTableBytes && cache.HasSpace)
+            {
+                // Resolve the private snapshot before publishing it to concurrent readers.
+                byte[] copy = table.ToArray();
+                var snapshot = copy.AsSpan();
+                var reader = new LuminPackReader(ref snapshot);
+                var copiedSlots = new int[slots.Length];
+                var copiedWidths = new int[widths.Length];
+                var copiedPresent = new byte[present.Length];
+                reader.ReadVersionWidths(cache.Fields, copiedSlots, copiedWidths, copiedPresent);
+                ValidateVersionFieldEnd(reader.Position, copy.Length);
+                entry = new LuminPackVersionTableCache.Entry(copy, copiedSlots, copiedWidths, copiedPresent);
+                cache.Publish(entry);
+                OptionState.AddVersionTable(entry.Fingerprint, copy);
+            }
+            else
+                OptionState.AddVersionTable(LuminPackVersionField.Fingerprint(table), table);
+        }
+
         /// <summary>Maps the names, type contracts and widths of a revision-2 member table at the cursor.</summary>
         /// <param name = "fields">The generated receiving schema.</param>
         /// <param name = "slots">Receives local member indices, or minus one for unknown fields.</param>

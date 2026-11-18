@@ -196,10 +196,9 @@ internal static partial class BinaryEmitter
         string Policy() => w.A("LuminPackInputPolicy");
         string Reader() => w.A("LuminPackReader");
         var temps = members.Select(member => PayloadEmitter.LocalName(member.Name) + "Temp").ToArray();
-        // Frame-end locals are numbered across the root and its mapped read, as are the saved field limits of the mapped read.
-        int ends = 0, limits = 0;
+        // Frame-end locals are numbered across the root and its mapped read.
+        int ends = 0;
         string End() => ends++ == 0 ? "end" : "end" + ends.ToString(CultureInfo.InvariantCulture);
-        string Limit() => limits++ == 0 ? "previousLength" : "previousLength" + limits.ToString(CultureInfo.InvariantCulture);
         var body = new List<string>();
         for (int index = 0; index < members.Length; index++)
             body.Add(schema.TempTypes[index] + " " + temps[index] + " = default !;");
@@ -297,8 +296,15 @@ internal static partial class BinaryEmitter
         body.Add("global::System.Span<byte> present = stackalloc byte[" + count + "];");
         string tableArguments = schema.Schema + ".Fields, revision2, slots, widths, present";
         body.Add(model.Net8
-            ? "reader2.ReadVersionTable(" + tableArguments + ");"
+            ? "reader2.ReadCachedVersionTable(" + schema.Schema + ".Evolved.Cache, revision2, slots, widths, present);"
             : "reader2.Position = " + Reader() + ".ReadVersionTable(reader2, " + tableArguments + ");");
+        bool limitsFields = schema.Widths.Any(width => width == 255);
+        if (limitsFields)
+        {
+            body.Add("int bufferLength = reader2.Buffer.Length;");
+            body.Add("try");
+            body.Add("{");
+        }
         body.Add("for (int i = 0; i < count2; i++)");
         body.Add("{");
         body.Add("int length = widths[i] >= 0 ? widths[i] : reader2.ReadVersionPayloadLength();");
@@ -311,18 +317,11 @@ internal static partial class BinaryEmitter
             if (schema.Widths[index] == 255)
             {
                 // A variable field is read within a temporary input limit of its recorded payload length.
-                string end = End(), limit = Limit();
+                string end = End();
                 body.Add("int " + end + " = reader2.Position + length;");
-                body.Add("int " + limit + " = reader2.EnterVersionField(length);");
-                body.Add("try");
-                body.Add("{");
+                body.Add("reader2.EnterVersionField(length);");
                 AddMemberRead(body, model, members[index], w, "reader2", temps[index] + "2");
-                body.Add("}");
-                body.Add("finally");
-                body.Add("{");
-                body.Add("reader2.ExitVersionField(" + limit + ");");
-                body.Add("}");
-                body.Add("");
+                body.Add("reader2.ExitVersionField(bufferLength);");
                 body.Add(Reader() + ".ValidateVersionFieldEnd(reader2.Position, " + end + ");");
             }
             else
@@ -345,6 +344,15 @@ internal static partial class BinaryEmitter
         body.Add("\tbreak;");
         body.Add("}");
         body.Add("}");
+        if (limitsFields)
+        {
+            body.Add("}");
+            body.Add("finally");
+            body.Add("{");
+            body.Add("if (reader2.Buffer.Length != bufferLength)");
+            body.Add("\treader2.ExitVersionField(bufferLength);");
+            body.Add("}");
+        }
         body.Add("");
         for (int index = 0; index < members.Length; index++)
         {
@@ -464,6 +472,13 @@ internal static partial class BinaryEmitter
         foreach (string entry in schema.FieldEntries)
             w.Line(entry);
         w.Close(";");
+        if (model.Net8)
+        {
+            w.Line("internal static class Evolved");
+            w.Open();
+            w.Line("internal static readonly global::LuminPack.Core.LuminPackVersionTableCache Cache = new global::LuminPack.Core.LuminPackVersionTableCache(Fields);");
+            w.Close();
+        }
         if (schema.Dynamic)
         {
             w.Line("internal static readonly byte[] Metadata = global::LuminPack.Core.LuminPackVersionField.CreateMetadata(Fields);");
