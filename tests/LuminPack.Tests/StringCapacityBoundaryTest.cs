@@ -1,4 +1,5 @@
 using LuminPack;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Runtime.InteropServices;
 using LuminPack.Core;
@@ -71,6 +72,29 @@ public class StringCapacityBoundaryTest
                 Assert.False(bytes.AsSpan(start + size).ContainsAnyExcept((byte)0xCD));
             }
         }
+    }
+
+    /// <summary>A caller-held cursor can write a compact string into a caller window too short for raw UTF-16.</summary>
+    [Fact]
+    public void CursorStringKeepsAnExactlySizedCompactCallerWindow()
+    {
+        const string value = "abcédef";
+        const int position = 3;
+        int recordLength = sizeof(int) + value.Length;
+        byte[] bytes = Enumerable.Repeat((byte)0xCD, position + recordLength + 2).ToArray();
+        Span<byte> destination = bytes.AsSpan(1, position + recordLength);
+        using var owner = new LuminBufferWriter(true);
+        var writer = new LuminPackWriter(owner);
+        writer.SetSpan(ref destination);
+
+        ref byte end = ref writer.WriteRecordString<LuminPackUtf16LengthOptions>(ref destination[position], value);
+        Assert.True(Unsafe.AreSame(ref end, ref bytes[^1]));
+        Assert.Equal(destination.Length, writer.Position);
+        Assert.Equal((byte)0xCD, bytes[^1]);
+        Assert.False(bytes.AsSpan(0, position + 1).ContainsAnyExcept((byte)0xCD));
+        ReadOnlySpan<byte> record = destination[position..];
+        var reader = new LuminPackReader(ref record);
+        Assert.Equal(value, reader.Read<LuminPackUtf16LengthOptions>(current: null));
     }
 
     /// <summary>Writes beyond a fresh native buffer through computed, span, and supplied-length operations.</summary>

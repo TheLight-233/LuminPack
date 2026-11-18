@@ -761,6 +761,22 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
             Grow(CalculateExpandedCapacity(_capacity, minCapacity, reserveWriteHeadroom: true));
     }
 
+    /// <summary>Plans threshold and capacity growth before replacing the record's storage.</summary>
+    /// <param name="position">The committed record position.</param>
+    /// <param name="required">The validated absolute end of the whole record.</param>
+    internal void EnsureRecordCapacity(int position, int required)
+    {
+        int capacity = _capacity;
+        if (position > _threshold)
+            capacity = CalculateExpandedCapacity(capacity, capacity, reserveWriteHeadroom: false);
+        if (capacity < required)
+            capacity = CalculateExpandedCapacity(capacity, required, reserveWriteHeadroom: true);
+
+        // Either growth request could relocate the window. Calculate their combined target so a
+        // failed rent leaves the committed writer cursor pointing into the still-owned storage.
+        Grow(capacity);
+    }
+
     /// <summary>Grows the logical capacity, preserving every existing byte and clearing the added range.</summary>
     /// <param name="capacity">The new logical capacity.</param>
     /// <remarks>Growth inside the current array keeps its storage; otherwise the bytes move to a larger rented array and the

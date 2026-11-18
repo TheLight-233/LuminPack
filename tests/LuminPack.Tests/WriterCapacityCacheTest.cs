@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using LuminPack.Core;
 using LuminPack.Utility;
 using Xunit;
@@ -90,4 +91,63 @@ public class WriterCapacityCacheTest
         Assert.Equal(1729, BitConverter.ToInt32(writer.GetSpan()));
     }
 
+    /// <summary>A record that crosses the threshold only at its end can keep a sufficient caller window.</summary>
+    [Fact]
+    public void CursorRecordKeepsTheCallerWindowWhenOnlyItsEndCrossesTheThreshold()
+    {
+        using var owner = new LuminBufferWriter(true);
+        var writer = new LuminPackWriter(owner);
+        int capacity = owner.TotalLength;
+        Span<byte> window = new byte[capacity];
+        writer.SetSpan(ref window);
+        int position = (int)writer.BufferCheckLimit - 2;
+
+        ref byte record = ref writer.ReserveRecord(ref window[position], sizeof(int));
+        Assert.True(Unsafe.AreSame(ref record, ref window[position]));
+        Assert.Equal(position, writer.Position);
+        Assert.Equal(capacity, owner.TotalLength);
+    }
+
+    /// <summary>Threshold and capacity growth reserve one complete record and publish the current storage.</summary>
+    [Fact]
+    public void CursorRecordGrowthRefreshesTheCompleteWindow()
+    {
+        using var owner = new LuminBufferWriter(true);
+        var writer = new LuminPackWriter(owner);
+        int capacity = owner.TotalLength;
+        int position = (int)writer.BufferCheckLimit;
+        int length = capacity * 2;
+        Span<byte> window = writer.Buffer;
+        window[0] = 73;
+
+        ref byte record = ref writer.ReserveRecord(ref window[position], length);
+        record = 79;
+        Assert.Equal(position, writer.Position);
+        Assert.True(writer.Buffer.Length >= position + length);
+        Assert.Equal(owner.TotalLength, writer.Buffer.Length);
+        Assert.Equal((int)writer.BufferCheckLimit - 1 - position, writer.RecordRoom(ref record));
+        Assert.Equal((byte)73, writer.Buffer[0]);
+        Assert.Equal((byte)79, owner.GetFullSpan()[position]);
+    }
+
+    /// <summary>An invalid complete width retains the committed cursor and its existing owned window.</summary>
+    [Fact]
+    public void OverflowingCursorRecordKeepsItsCommittedPositionAndStorage()
+    {
+        using var owner = new LuminBufferWriter(true);
+        var writer = new LuminPackWriter(owner);
+        int capacity = owner.TotalLength;
+        int position = (int)writer.BufferCheckLimit;
+        Span<byte> window = writer.Buffer;
+        window[0] = 73;
+
+        bool failed = false;
+        try { writer.ReserveRecord(ref window[position], int.MaxValue); }
+        catch (OverflowException) { failed = true; }
+
+        Assert.True(failed);
+        Assert.Equal(position, writer.Position);
+        Assert.Equal(capacity, owner.TotalLength);
+        Assert.Equal((byte)73, writer.Buffer[0]);
+    }
 }

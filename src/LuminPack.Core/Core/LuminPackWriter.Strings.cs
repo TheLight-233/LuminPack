@@ -306,7 +306,8 @@ namespace LuminPack.Core
                     return;
                 }
 
-                WriteUtf16RecordInShortWindow(value, recordLength);
+                GrownStorage storage = WriteUtf16RecordInShortWindow(Owner, _buffer, Position, _bufferCheckLimit, value, recordLength, out Exception? failure);
+                ApplyStringRecord(storage, failure);
                 return;
             }
 
@@ -447,14 +448,33 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ref byte ReserveRecord(ref byte cursor, int length)
         {
-            nint room = RecordDistance(ref cursor);
-            if (room >= (nint)(uint)length)
+            if ((Unsafe.SizeOf<IntPtr>() == 8 || length >= 0) && RecordDistance(ref cursor) >= (nint)(uint)length)
                 return ref cursor;
-            CommitRecords(ref cursor);
-            if (room < 0 && Owner is { } owner)
-                Apply(GrowForThreshold(owner, Position, Position));
-            EnsureAdditionalCapacity(length);
-            return ref Current;
+            return ref GrowRecord(ref this, ref cursor, length);
+        }
+
+        /// <summary>Publishes the cursor and reserves a complete record outside its calling body.</summary>
+        /// <param name = "writer">The state to refresh after growth.</param>
+        /// <param name = "cursor">The current record position.</param>
+        /// <param name = "length">The record width.</param>
+        /// <returns>The committed cursor over the current storage window.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static ref byte GrowRecord(scoped ref LuminPackWriter writer, ref byte cursor, int length)
+        {
+            writer.CommitRecords(ref cursor);
+            int position = writer.Position;
+            if (position < 0 || length < 0)
+                LuminPackExceptionHelper.ThrowSpanOutOfRange(position);
+            int required = checked(position + length);
+            LuminBufferWriter? owner = writer.Owner;
+            if (owner is not null && writer.RecordDistance(ref cursor) < 0)
+            {
+                owner.EnsureRecordCapacity(position, required);
+                writer.Apply(new GrownStorage(owner, position));
+            }
+            else if (required > writer._buffer.Length)
+                writer.Apply(Grow(owner, position, required, threshold: false));
+            return ref writer.Current;
         }
 
         /// <summary>Writes one complete fixed value at a caller-held cursor.</summary>
@@ -513,7 +533,10 @@ namespace LuminPack.Core
                     return ref Unsafe.Add(ref cursor, (nint)(uint)WriteReservedUtf16Record(ref cursor, value));
                 CommitRecords(ref cursor);
                 if (typeof(TOptions) == typeof(LuminPackDefaultOptions) || typeof(TOptions) == typeof(LuminPackUtf16LengthOptions))
-                    WriteUtf16RecordInShortWindow(value, length);
+                {
+                    GrownStorage storage = WriteUtf16RecordInShortWindow(Owner, _buffer, Position, _bufferCheckLimit, value, length, out Exception? failure);
+                    ApplyStringRecord(storage, failure);
+                }
                 else
                     Write<TOptions>(value);
                 return ref Current;
@@ -794,24 +817,66 @@ namespace LuminPack.Core
         }
 
         /// <summary>Writes a UTF-16 length string when its raw bound did not pass the record check.</summary>
+        /// <param name = "owner">The optional output owner.</param>
+        /// <param name = "buffer">The current storage window, which can still fit the compact string.</param>
+        /// <param name = "position">The committed record position.</param>
+        /// <param name = "checkLimit">The first cursor position requiring an owned-buffer growth check.</param>
         /// <param name = "value">The nullable string.</param>
         /// <param name = "recordLength">The full raw width.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void WriteUtf16RecordInShortWindow(string? value, int recordLength)
+        /// <param name = "failure">An exception to rethrow after publishing a successful capacity growth.</param>
+        /// <returns>The output window and cursor after the complete string record.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static GrownStorage WriteUtf16RecordInShortWindow(LuminBufferWriter? owner, Span<byte> buffer, int position, uint checkLimit, string? value, int recordLength,
+            out Exception? failure)
         {
-            // A remaining window may still fit the compact record. Keep both the encoding and the
-            // growth calls static so neither requires the address of the current writer.
-            int written = WriteUtf16RecordSlow(ref Current, _buffer.Length - Position, value);
-            if (written < 0)
-            {
-                EnsureAdditionalCapacity(recordLength);
-                written = WriteUtf16RecordSlow(ref Current, _buffer.Length - Position, value);
-            }
+            failure = null;
+            if (position < 0)
+                LuminPackExceptionHelper.ThrowSpanOutOfRange(position);
+            ref byte current = ref Unsafe.Add(ref MemoryMarshal.GetReference(buffer), (nint)position);
+            int written = WriteUtf16RecordSlow(ref current, buffer.Length - position, value);
+            if (written >= 0)
+                return CompleteShortWindowString(owner, buffer, checkLimit, position + written, value is not null);
 
-            if (value is null)
-                Advance(written);
-            else
-                AdvanceSafe(written);
+            GrownStorage growth = GrowForCapacity(owner, position, position, recordLength);
+            try
+            {
+                ref byte grown = ref Unsafe.Add(ref MemoryMarshal.GetReference(growth.Buffer), (nint)position);
+                written = WriteUtf16RecordSlow(ref grown, growth.Buffer.Length - position, value);
+                return CompleteShortWindowString(owner, growth.Buffer, growth.CheckLimit, position + written, value is not null);
+            }
+            catch (Exception exception)
+            {
+                // The first growth can return the writer's original array to the pool. Publish its
+                // replacement at the committed cursor before propagating any later failure.
+                failure = exception;
+                return growth;
+            }
+        }
+
+        /// <summary>Applies the original threshold check after a non-null string has been stored.</summary>
+        /// <param name = "owner">The optional output owner.</param>
+        /// <param name = "buffer">The window containing the completed record.</param>
+        /// <param name = "checkLimit">The cached output growth check limit.</param>
+        /// <param name = "end">The absolute end of the complete record.</param>
+        /// <param name = "checkThreshold">Whether the record was non-null.</param>
+        /// <returns>The cursor at the end of the complete string record.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static GrownStorage CompleteShortWindowString(LuminBufferWriter? owner, Span<byte> buffer, uint checkLimit, int end, bool checkThreshold)
+        {
+            if (checkThreshold && owner is not null && (uint)end >= checkLimit)
+                return GrowForThreshold(owner, end, end);
+            return new GrownStorage(buffer, checkLimit, end);
+        }
+
+        /// <summary>Publishes current string storage before propagating any failure after its growth.</summary>
+        /// <param name = "storage">The latest valid window and cursor.</param>
+        /// <param name = "failure">An exception raised after that storage was acquired.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ApplyStringRecord(GrownStorage storage, Exception? failure)
+        {
+            Apply(storage);
+            if (failure is not null)
+                LuminPackExceptionHelper.Rethrow(failure);
         }
 
         #endregion

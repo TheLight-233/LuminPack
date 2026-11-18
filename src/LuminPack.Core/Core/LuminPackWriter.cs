@@ -278,13 +278,20 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void RefreshRecordLimit()
         {
-            uint limit = Math.Min((uint)_buffer.Length, BufferCheckLimit - 1);
 #if NET8_0_OR_GREATER
-            _recordLimit = ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)limit);
+            _recordLimit = ref GetRecordLimit(_buffer, _bufferCheckLimit);
 #else
-            _recordLimit = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)limit), 0);
+            _recordLimit = MemoryMarshal.CreateSpan(ref GetRecordLimit(_buffer, _bufferCheckLimit), 0);
 #endif
         }
+
+        /// <summary>Computes the record limit for one storage window and cached growth threshold.</summary>
+        /// <param name = "buffer">The complete storage window.</param>
+        /// <param name = "checkLimit">The first cursor position requiring an owned-buffer growth check.</param>
+        /// <returns>The end of the unchecked record window.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static ref byte GetRecordLimit(Span<byte> buffer, uint checkLimit)
+            => ref Unsafe.Add(ref MemoryMarshal.GetReference(buffer), (nint)Math.Min((uint)buffer.Length, checkLimit - 1));
 
         /// <summary>Returns the signed distance from the cursor to the record limit.</summary>
         /// <returns>The bytes an unchecked record may use, negative once the threshold is passed.</returns>
@@ -305,22 +312,28 @@ namespace LuminPack.Core
         {
 #if NET8_0_OR_GREATER
             Cursor = ref storage.Cursor;
+            _recordLimit = ref storage.RecordLimit;
 #else
             Cursor = storage.Cursor;
+            _recordLimit = storage.RecordLimit;
 #endif
             _buffer = storage.Buffer;
-            BufferCheckLimit = storage.CheckLimit;
+            _bufferCheckLimit = storage.CheckLimit;
         }
 
-        /// <summary>The cursor fields over grown managed storage, returned by value so growth never receives a writer's address.</summary>
+        /// <summary>The cursor fields over a storage window, returned by the capacity and short-window string helpers.</summary>
         private readonly ref struct GrownStorage
         {
 #if NET8_0_OR_GREATER
             /// <summary>The cursor at the preserved position.</summary>
             public readonly ref byte Cursor;
+            /// <summary>The end of the unchecked record window.</summary>
+            public readonly ref byte RecordLimit;
 #else
             /// <summary>The cursor at the preserved position.</summary>
             public readonly Span<byte> Cursor;
+            /// <summary>A zero-length span carrying the record limit address.</summary>
+            public readonly Span<byte> RecordLimit;
 #endif
             /// <summary>The complete grown storage window.</summary>
             public readonly Span<byte> Buffer;
@@ -331,14 +344,25 @@ namespace LuminPack.Core
             /// <param name = "owner">The owning output buffer.</param>
             /// <param name = "position">The preserved absolute output position.</param>
             public GrownStorage(LuminBufferWriter owner, int position)
+                : this(owner.DangerousGetBuffer(), (uint)owner.BufferCheckLimit + 1, position)
             {
-                Buffer = owner.DangerousGetBuffer();
+            }
+
+            /// <summary>Captures storage and its cursor and limit for publication by the caller.</summary>
+            /// <param name = "buffer">The complete storage window.</param>
+            /// <param name = "checkLimit">The first cursor position requiring an owned-buffer growth check.</param>
+            /// <param name = "position">The absolute output position.</param>
+            public GrownStorage(Span<byte> buffer, uint checkLimit, int position)
+            {
+                Buffer = buffer;
 #if NET8_0_OR_GREATER
                 Cursor = ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)position);
+                RecordLimit = ref GetRecordLimit(buffer, checkLimit);
 #else
                 Cursor = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)position), 1);
+                RecordLimit = MemoryMarshal.CreateSpan(ref GetRecordLimit(buffer, checkLimit), 0);
 #endif
-                CheckLimit = (uint)owner.BufferCheckLimit + 1;
+                CheckLimit = checkLimit;
             }
         }
 
