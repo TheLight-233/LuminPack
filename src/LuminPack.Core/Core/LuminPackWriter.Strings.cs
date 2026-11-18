@@ -1243,7 +1243,7 @@ namespace LuminPack.Core
                 uint bound = sizeof(int) + (uint)value.Length * sizeof(char);
                 if (bound > remaining)
                     break;
-                int written = WriteMediumUtf16RunRecord(ref current, value);
+                int written = WriteMediumUtf16Record(ref current, value);
                 remaining -= (uint)written;
                 current = ref Unsafe.Add(ref current, (nint)(uint)written);
             } while (++i < count);
@@ -1252,13 +1252,13 @@ namespace LuminPack.Core
             return (int)(room - remaining);
         }
 
-        /// <summary>Writes one reserved 17-to-32-character record inside a consecutive string run.</summary>
+        /// <summary>Writes one reserved 17-to-32-character record.</summary>
         /// <param name="record">The record start, with room for the header and the raw UTF-16 payload.</param>
         /// <param name="value">The string, on a 64-bit target with accelerated 256-bit vectors.</param>
         /// <returns>The width of the complete compact or raw record.</returns>
         /// <remarks>Two 16-character blocks cover the whole input and stay in bounds even at length 17.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int WriteMediumUtf16RunRecord(ref byte record, string value)
+        private static int WriteMediumUtf16Record(ref byte record, string value)
         {
             int length = value.Length;
             nuint tail = (nuint)(uint)(length - 16);
@@ -1319,6 +1319,11 @@ namespace LuminPack.Core
                 LuminPackWriter.Write<int>(ref current, value is null ? LuminPackCode.NullCollection : 0);
                 return sizeof(int);
             }
+
+#if NET8_0_OR_GREATER
+            if (Vector256.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && (uint)(value.Length - 17) <= 15)
+                return WriteMediumUtf16Record(ref current, value);
+#endif
 
             int header = StringSerializer.WriteUtf16RecordPayload(ref Unsafe.Add(ref current, sizeof(int)), value);
             LuminPackWriter.Write(ref current, header);
