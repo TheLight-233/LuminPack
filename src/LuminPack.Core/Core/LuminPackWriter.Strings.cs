@@ -531,20 +531,28 @@ namespace LuminPack.Core
                 int length = Utf16RecordBound(value);
                 if (RecordDistance(ref cursor) >= (nint)(uint)length)
                     return ref Unsafe.Add(ref cursor, (nint)(uint)WriteReservedUtf16Record(ref cursor, value));
-                CommitRecords(ref cursor);
                 if (typeof(TOptions) == typeof(LuminPackDefaultOptions) || typeof(TOptions) == typeof(LuminPackUtf16LengthOptions))
-                {
-                    GrownStorage storage = WriteUtf16RecordInShortWindow(Owner, _buffer, Position, _bufferCheckLimit, value, length, out Exception? failure);
-                    ApplyStringRecord(storage, failure);
-                }
-                else
-                    Write<TOptions>(value);
-                return ref Current;
+                    return ref WriteUtf16RecordInShortWindow(ref this, ref cursor, value, length);
             }
 
             CommitRecords(ref cursor);
             Write<TOptions>(value);
             return ref Current;
+        }
+
+        /// <summary>Publishes a caller-held cursor and completes its UTF-16 record outside the hot writer.</summary>
+        /// <param name = "writer">The writer whose window and cursor may change.</param>
+        /// <param name = "cursor">The position at the start of the record.</param>
+        /// <param name = "value">The nullable string.</param>
+        /// <param name = "recordLength">The full raw width.</param>
+        /// <returns>The current cursor after the record.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static ref byte WriteUtf16RecordInShortWindow(scoped ref LuminPackWriter writer, ref byte cursor, string? value, int recordLength)
+        {
+            writer.CommitRecords(ref cursor);
+            GrownStorage storage = WriteUtf16RecordInShortWindow(writer.Owner, writer._buffer, writer.Position, writer._bufferCheckLimit, value, recordLength, out Exception? failure);
+            writer.ApplyStringRecord(storage, failure);
+            return ref writer.Current;
         }
 
         /// <summary>Writes a raw contiguous array record at a caller-held cursor.</summary>
