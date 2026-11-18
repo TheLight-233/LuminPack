@@ -49,6 +49,8 @@ internal static class RectangularArrayOwnerFile
         FormatterStorageModel? layout = element?.Layout;
         string suffix = ReadableTypeName.Of(GeneratedNames.PayloadKey(type));
         string owner = "global::LuminPack." + GeneratedNames.Owner(set.Extension!, item);
+        string? nullablePayload = set.FindFormatter(type)?.Supports("WriteFramedNullableSpan") == true
+            ? (element ?? set.FindFormatter(item))?.NativeNullablePayload : null;
         string[] axes = Enumerable.Range(0, rank).Select(index => index.ToString(CultureInfo.InvariantCulture)).ToArray();
         string[] dimensions = axes.Select(axis => "dimension" + axis).ToArray();
         string array = "new " + ContiguousOwnerFile.WithRank(item, "[" + string.Join(", ", dimensions) + "]");
@@ -103,6 +105,12 @@ internal static class RectangularArrayOwnerFile
                 w.Line("if (length != 0)");
                 w.Open();
                 First(w, item);
+                if (nullablePayload != null)
+                {
+                    // Rectangular nullable elements carry individual markers. The reserved run keeps those bytes as-is.
+                    w.Line("if (!writer.TryWriteFramedNullableSpan<" + nullablePayload + ">(" + Marshal + ".CreateReadOnlySpan(ref first, length)))");
+                    w.Open();
+                }
                 w.Line("int index = 0;");
                 w.Line("do");
                 w.Open();
@@ -110,6 +118,8 @@ internal static class RectangularArrayOwnerFile
                 w.Line(owner + ".Write<" + Profile + ">(ref writer, in " + Unsafe + ".Add(ref first, (nint)(uint)index));");
                 w.Close();
                 w.Line("while (++index < length);");
+                if (nullablePayload != null)
+                    w.Close();
                 w.Close();
             }
             w.Line("writer.CheckBuffer();");

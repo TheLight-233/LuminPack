@@ -100,6 +100,22 @@ internal static class FormatterRuntimeTraits
                 SymbolEqualityComparer.Default.Equals(method.ReturnType, collection.Construct(method.TypeParameters[1])));
     }
 
+    /// <summary>Checks for the bounded marker-prefixed nullable writer on the referenced binary state.</summary>
+    /// <param name="compilation">The referenced runtime metadata.</param>
+    /// <returns>Whether the generator can emit the bounded span fast path.</returns>
+    internal static bool HasFramedNullableSpanWriter(Compilation compilation)
+    {
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        var nullable = compilation.GetSpecialType(SpecialType.System_Nullable_T);
+        var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
+        return writer is not null && span is not null &&
+            writer.GetMembers("TryWriteFramedNullableSpan").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.ReturnType.SpecialType == SpecialType.System_Boolean && method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+                method.TypeParameters[0].ConstraintTypes.IsEmpty && method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, span.Construct(nullable.Construct(method.TypeParameters[0]))));
+    }
+
     /// <summary>Checks the optional owning reader for an exact scalar sorted list.</summary>
     /// <param name="compilation">The referenced framework and Core metadata.</param>
     /// <param name="list">The selected exact framework list.</param>

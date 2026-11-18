@@ -23,6 +23,9 @@ internal static class FormatterCapabilities
             if (array.Rank == 1 && array.ElementType.SpecialType == SpecialType.System_String &&
                 FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteStrings", array.ElementType))
                 result.Add("WriteArrayStrings");
+            if (array.Rank > 1 && array.ElementType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } &&
+                FormatterRuntimeTraits.HasFramedNullableSpanWriter(compilation))
+                result.Add("WriteFramedNullableSpan");
         }
         if (type is not INamedTypeSymbol { IsGenericType: true } named)
             return result.ToArray();

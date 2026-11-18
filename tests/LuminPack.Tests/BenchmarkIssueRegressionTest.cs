@@ -1238,6 +1238,42 @@ public sealed class BenchmarkIssueRegressionTest
         Assert.Equal(2, Assert.IsType<BenchHealthComponent>(restoredSnapshot.Entities[2].Components[2]).Hp - 100);
     }
 
+    /// <summary>Checks native nullable blocks and framed rectangular elements against their existing wire representations.</summary>
+    [Fact]
+    public void NullableCollectionShapesRoundTripWithExistingWire()
+    {
+        int?[] elements = [8, null, -5, 2];
+        byte[] native = LuminPackSerializer.Serialize(elements);
+        IList<int?> list = new List<int?>(elements);
+        IReadOnlyList<int?> wrapper = new ReadOnlyCollection<int?>(list);
+        Assert.Equal(native, LuminPackSerializer.Serialize(list));
+        Assert.Equal(native, LuminPackSerializer.Serialize(wrapper));
+        Assert.Equal(native, LuminPackSerializer.Serialize(new Collection<int?>(list)));
+
+        var queue = new Queue<int?>(4);
+        queue.Enqueue(100);
+        queue.Enqueue(200);
+        queue.Enqueue(elements[0]);
+        queue.Enqueue(elements[1]);
+        queue.Dequeue();
+        queue.Dequeue();
+        queue.Enqueue(elements[2]);
+        queue.Enqueue(elements[3]);
+        byte[] queueBytes = LuminPackSerializer.Serialize(queue);
+        Assert.Equal(native[..sizeof(int)], queueBytes[..sizeof(int)]);
+        Assert.Equal(new byte[2 * sizeof(int)], queueBytes[sizeof(int)..(3 * sizeof(int))]);
+        Assert.Equal(native, queueBytes[(3 * sizeof(int))..]);
+
+        var set = new HashSet<int?> { 8, 100, null, -5, 2 };
+        Assert.True(set.Remove(100));
+        Assert.Equal(LuminPackSerializer.Serialize(set.ToArray()), LuminPackSerializer.Serialize(set));
+
+        int?[,] matrix = { { elements[0], elements[1] }, { elements[2], elements[3] } };
+        byte[] matrixBytes = LuminPackSerializer.Serialize(matrix);
+        byte[] expectedRecords = elements.SelectMany(static item => LuminPackSerializer.Serialize(item)).ToArray();
+        Assert.Equal(expectedRecords, matrixBytes[(1 + 3 * sizeof(int))..]);
+    }
+
     /// <summary>Round-trips a large bit array without faulting on read.</summary>
     [Fact]
     public void LargeBitArrayRoundTrips()

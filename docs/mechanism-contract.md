@@ -170,6 +170,7 @@ The history of individual approvals lives in Git. When this document, the code a
 - **Medium UTF-16 record writes**. On accelerated 64-bit targets, complete binary UTF-16 length records of 17 to 32 characters can use the bounded 256-bit record kernel already used by contiguous runs. Both compact Latin-1 and raw UTF-16 preserve their original layouts.
 - **Binary interface collection staging**. Exact framework wrappers can expose validated backing storage to the existing contiguous writers. A framework grouping may lease a temporary array for `ICollection<T>.CopyTo` and write the checked element span in enumeration order. Unknown implementations keep the public enumeration and its publication semantics.
 - **Bounded collection staging**. Synchronous collection operations with a known writable prefix can use one exclusive staging slot per closed element type and thread. Rent removes the array from the slot. Return clears all possibly written reference slots and retains at most 4096 elements and 64 KiB; larger requests use the existing shared pool. Keep enclosing `finally` cleanup and collection traversal and construction rules.
+- **Rectangular nullable writes**. Zero-based rectangular arrays whose elements have a native standalone nullable payload can write the existing marker-prefixed elements inside a proven output window. The array dimensions and per-element null markers are unchanged. Other element contracts or short windows use the existing operation.
 
 ### Options and generation
 
