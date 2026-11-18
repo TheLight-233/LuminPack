@@ -71,11 +71,37 @@ internal static partial class TypeModelFactory
 
             EntryShape write = EntryWriteShape(type, member, payload);
             bool stateless = payload == null ? IsStatelessMember(member) : IsStatelessPayload(payload);
-            bool nullObjectRead = payload is RecordModel
+            bool nullObject = payload is RecordModel
                 { Callbacks: null, Recursive: false, Versioned: false, SequenceBase: null, Rejection: null } &&
                 !payload.Policy.TrackReferences && payload.Policy.Bound == null && !payload.Policy.Limits.Explicit;
-            return new EntryShape(write.Kind, write.Element, write.Width, stateless, nullObjectRead, HasRetainedDirectWrite);
+            return new EntryShape(write.Kind, write.Element, write.Width, stateless, nullObject, HasRetainedDirectWrite,
+                outlineNonNullRead: nullObject && HasLargeRootRead(payload!));
         }
+
+        /// <summary>Estimates when a positional reader has enough work to outline the nonnull path.</summary>
+        /// <param name="payload">The normalized record or nested payload.</param>
+        /// <returns>Whether the payload has a wide record body, collection read or Union dispatch.</returns>
+        private static bool HasLargeRootRead(TypeModel payload) =>
+            // Member count is a conservative proxy for the size of a lowered record, independent of the target JIT.
+            payload.Members.Length >= 8 || payload.Members.Any(member => member switch
+            {
+                CollectionMember or Model.DictionaryMember or PayloadMember { Nested: UnionModel } => true,
+                PayloadMember { Shape: PayloadShape.Inline, Nested: { } nested } => HasLargeRootRead(nested),
+                SpecialMember { Formatter: { } formatter } => HasLargeFormatterRead(formatter),
+                _ => false,
+            });
+
+        /// <summary>Recognizes collection and Union reads behind shared formatter contracts.</summary>
+        /// <param name="formatter">The normalized formatter and its static dependencies.</param>
+        /// <returns>Whether the formatter reaches a collection read or a Union dispatch.</returns>
+        private static bool HasLargeFormatterRead(FormatterModel formatter) =>
+            formatter.Payload is UnionModel ||
+            formatter.Definition is FormatterDefinitions.Array or FormatterDefinitions.CompilerUnion or FormatterDefinitions.GenericUnion or
+                GenericIdentity.Grouping or GenericIdentity.Lookup ||
+            FormatterDefinitions.TryContiguous(formatter.Definition, out _) ||
+            FormatterRegistry.FindSequence(formatter.Definition) != null ||
+            FormatterRegistry.FindDictionary(formatter.Type) != null ||
+            formatter.Arguments.Any(HasLargeFormatterRead);
 
         private bool? _hasRetainedDirectWrite;
 

@@ -394,7 +394,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             else if (shape.StatelessRead)
                 binaryRead = shape.Kind == EntryKind.FixedEnum ? StatelessRead.Replace("%ENUMCHECK%", EnumCheck) : StatelessRead.Replace("%ENUMCHECK%", string.Empty);
         }
-        if (shape.NullObjectRead && api is SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef)
+        if (shape.OutlineNonNullRead && api is SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef)
         {
             const string cap = "                        LuminPackInputPolicy.CheckInput(buffer.Length, %LIMIT%);\n";
             binaryRead = NullObjectSpanRead + "\n" +
@@ -516,7 +516,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             _ => null,
         };
         if (size == null)
-            return shape.NullObjectRead
+            return shape.NullObject
                 ? "                if (value is null) return new byte[] { LuminPackCode.NullObject };\n" +
                     "                return WriteNonNull(in value);\n\n" +
                     "                [MethodImpl(MethodImplOptions.NoInlining)]\n" +
@@ -594,7 +594,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                 "                    if (!Unsafe.IsNullRef(ref destination))\n                    {\n" + Indent(Indent(fixedRoot.Store)) +
                 "                        writerBuffer.CompleteWrite(length);\n                        return;\n                    }\n                }\n";
         }
-        else if (shape.NullObjectRead)
+        else if (shape.NullObject)
             hot = RetainedNullRoot;
         else
             return BinaryBufferWrite;

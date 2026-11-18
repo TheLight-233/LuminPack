@@ -30,6 +30,15 @@ internal static class SerializerBinaryEntryShapeRegression
 
             [LuminPackable] public sealed class PlainGraph { public List<string> Text; public PackedCell? Cell; }
             [LuminPackable] public sealed class ReadBoundaryCell { public int Number; }
+            [LuminPackable] public sealed class TextReadRoot { public string Text; }
+            [LuminPackable] public sealed class WideReadRecord
+            {
+                public int A; public int B; public int C; public int D;
+                public int E; public int F; public int G; public int H;
+            }
+            [LuminPackable, LuminPackUnion(1, typeof(ReadCase))] public abstract partial class ReadUnion { }
+            [LuminPackable] public sealed partial class ReadCase : ReadUnion { public int Number; }
+            [LuminPackable] public sealed class UnionReadGraph { public ReadUnion Value; }
             [LuminPackable(GeneratorType.VersionTolerant)] public sealed class VersionCell { public int Value; }
             [LuminPackable] public sealed class VersionGraph { public List<VersionCell> Cells; }
             public sealed class ObservedCulture : global::System.Globalization.CultureInfo
@@ -158,6 +167,7 @@ internal static class SerializerBinaryEntryShapeRegression
                         !ReferenceEquals(existingCell, cellAlias) ||
                         LuminPackSerializer.Deserialize<ReadBoundaryCell>(nullObject) is not null)
                         throw new Exception("The ordinary root null marker changed target publication.");
+                    CheckNullReadOutlining(nullObject);
                     var version = new VersionGraph { Cells = new List<VersionCell> { new VersionCell { Value = 17 }, new VersionCell { Value = 31 } } };
                     var versionBytes = LuminPackSerializer.Serialize(version);
                     if (LuminPackSerializer.Deserialize<VersionGraph>(versionBytes).Cells[1].Value != 31)
@@ -165,6 +175,36 @@ internal static class SerializerBinaryEntryShapeRegression
                     var customBytes = LuminPackSerializer.Serialize(new CustomGraph { Cell = new CustomCell { Value = 71 } });
                     if (LuminPackSerializer.Deserialize<CustomGraph>(customBytes).Cell.Value != 71)
                         throw new Exception("Nested Custom read changed data.");
+                }
+
+                private static void CheckNullReadOutlining(byte[] nullObject)
+                {
+                    var text = LuminPackSerializer.Serialize(new TextReadRoot { Text = "value" });
+                    if (LuminPackSerializer.Deserialize<TextReadRoot>(text).Text != "value")
+                        throw new Exception("The compact string root changed its payload.");
+
+                    var wide = LuminPackSerializer.Serialize(new WideReadRecord { A = -17, H = 39 });
+                    var wideCopy = LuminPackSerializer.Deserialize<WideReadRecord>(wide);
+                    if (wideCopy.A != -17 || wideCopy.H != 39)
+                        throw new Exception("The outlined record root changed its payload.");
+
+                    var graph = new UnionReadGraph { Value = new ReadCase { Number = 31 } };
+                    var copy = LuminPackSerializer.Deserialize<UnionReadGraph>(LuminPackSerializer.Serialize(graph));
+                    if (copy.Value is not ReadCase { Number: 31 })
+                        throw new Exception("The outlined root changed Union dispatch.");
+
+                    var existing = new PlainGraph();
+                    var target = existing;
+                    if (LuminPackSerializer.Deserialize<PlainGraph, LuminPackUtf8TokenOptions>(nullObject, ref target) != 1 ||
+                        !ReferenceEquals(existing, target) ||
+                        LuminPackSerializer.Deserialize<PlainGraph, LuminPackUtf8TokenOptions>(nullObject) is not null)
+                        throw new Exception("The outlined root null marker changed target publication.");
+
+                    bool failed = false;
+                    try { LuminPackSerializer.Deserialize<PlainGraph, LuminPackUtf8TokenOptions>(ReadOnlySpan<byte>.Empty, ref target); }
+                    catch { failed = true; }
+                    if (!failed || !ReferenceEquals(existing, target))
+                        throw new Exception("The outlined root accepted an empty input or changed its target.");
                 }
 
                 private static void CheckFixedArray(LuminBufferWriter buffer)
@@ -249,11 +289,12 @@ internal static class SerializerBinaryEntryShapeRegression
             throw new InvalidOperationException("The positional root did not reserve its captured vector and list together.\n" + capturedRoot);
         static string? Operation(InvocationExpressionSyntax call) => (call.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.ValueText;
         var methods = declarations.Where(method => method.Identifier.ValueText.StartsWith("LuminIntercept_", StringComparison.Ordinal)).ToArray();
+        VerifyNullReadBoundaries(methods);
         var native = methods.Where(method => method.Identifier.ValueText.StartsWith("LuminIntercept_NativeCell_", StringComparison.Ordinal)).ToArray();
         var fixedArray = methods.Single(method => method.ReturnType.ToString() == "byte[]" &&
             method.ParameterList.Parameters[0].Type!.ToString().EndsWith("ReadBoundaryCell[]", StringComparison.Ordinal));
         var plain = methods.Single(method => method.Identifier.ValueText.StartsWith("LuminIntercept_PlainGraph_", StringComparison.Ordinal) &&
-            method.ParameterList.Parameters[0].Type!.ToString() == "ReadOnlySpan<byte>");
+            method.ParameterList.Parameters.Count == 2 && method.ParameterList.Parameters[0].Type!.ToString() == "ReadOnlySpan<byte>");
         if (!native.Any(method => method.ToString().Contains("LuminPackReader.ReadComplete", StringComparison.Ordinal)) ||
             !native.Any(method => method.ToString().Contains("AllocateUninitializedArray<byte>", StringComparison.Ordinal)) ||
             !native.Any(method => method.ToString().Contains("TryBeginFixedRoot", StringComparison.Ordinal)) ||
@@ -275,6 +316,24 @@ internal static class SerializerBinaryEntryShapeRegression
                 .Where(item => item.Severity == DiagnosticSeverity.Error)));
         Assembly.Load(image.ToArray()).GetType("Cases")!.GetMethod("Run")!.Invoke(null, null);
         Console.WriteLine("Passed binary root entry shapes and collection read inlining boundaries.");
+    }
+
+    /// <summary>Checks where ordinary binary span roots separate the null marker from the main reader.</summary>
+    /// <param name="interceptors">The generated interceptor method declarations.</param>
+    private static void VerifyNullReadBoundaries(MethodDeclarationSyntax[] interceptors)
+    {
+        foreach (var (type, outlined) in new[]
+        {
+            ("ReadBoundaryCell", false), ("TextReadRoot", false), ("WideReadRecord", true),
+            ("PlainGraph", true), ("UnionReadGraph", true),
+        })
+        {
+            var reads = interceptors.Where(method => method.Identifier.ValueText.StartsWith("LuminIntercept_" + type + "_", StringComparison.Ordinal) &&
+                method.ParameterList.Parameters[0].Type?.ToString() == "ReadOnlySpan<byte>").ToArray();
+            if (reads.Length == 0 || reads.Any(method => method.DescendantNodes().OfType<LocalFunctionStatementSyntax>()
+                    .Any(local => local.Identifier.ValueText == "ReadNonNull") != outlined))
+                throw new InvalidOperationException(type + " has the wrong binary null read boundary.");
+        }
     }
 
     /// <summary>Checks the inlining flags on the published binary collection bodies themselves.</summary>

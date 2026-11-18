@@ -175,8 +175,11 @@ internal readonly struct EntryShape : IEquatable<EntryShape>
     /// <summary>Whether binary span reads can omit the operation-state lease.</summary>
     internal readonly bool StatelessRead;
 
-    /// <summary>Whether a span read can consume an ordinary null object marker directly.</summary>
-    internal readonly bool NullObjectRead;
+    /// <summary>Whether the ordinary null marker can be written or consumed directly.</summary>
+    internal readonly bool NullObject;
+
+    /// <summary>Whether the ordinary object span entry outlines its nonnull reader.</summary>
+    internal readonly bool OutlineNonNullRead;
 
     /// <summary>Whether the runtime exposes direct storage access for an empty retained writer.</summary>
     internal readonly bool RetainedDirect;
@@ -186,24 +189,27 @@ internal readonly struct EntryShape : IEquatable<EntryShape>
     /// <param name="element">The collection element or its formatter contract.</param>
     /// <param name="width">The exact portable width, if one is available.</param>
     /// <param name="statelessRead">Whether a binary span read needs no operation state.</param>
-    /// <param name="nullObjectRead">Whether a null object marker has no reader side effects.</param>
+    /// <param name="nullObject">Whether the entry can handle an ordinary null marker directly.</param>
     /// <param name="retainedDirect">Whether the runtime exports the retained root destination check.</param>
+    /// <param name="outlineNonNullRead">Whether the ordinary object span entry outlines its nonnull reader.</param>
     internal EntryShape(EntryKind kind, string? element = null, int? width = null, bool statelessRead = false,
-        bool nullObjectRead = false, bool retainedDirect = false)
+        bool nullObject = false, bool retainedDirect = false, bool outlineNonNullRead = false)
     {
         Kind = kind;
         Element = element;
         Width = width;
         StatelessRead = statelessRead;
-        NullObjectRead = nullObjectRead;
+        NullObject = nullObject;
         RetainedDirect = retainedDirect;
+        OutlineNonNullRead = outlineNonNullRead;
     }
 
     /// <summary>Compares this value with the supplied value.</summary>
     /// <param name="other">The value to compare with this instance.</param>
     /// <returns>Whether the values compare equal.</returns>
     public bool Equals(EntryShape other) => Kind == other.Kind && Element == other.Element && Width == other.Width &&
-        StatelessRead == other.StatelessRead && NullObjectRead == other.NullObjectRead && RetainedDirect == other.RetainedDirect;
+        StatelessRead == other.StatelessRead && NullObject == other.NullObject && RetainedDirect == other.RetainedDirect &&
+        OutlineNonNullRead == other.OutlineNonNullRead;
 
     /// <summary>Compares this value with the supplied value.</summary>
     /// <param name="obj">The obj supplied to <c>Equals</c>.</param>
@@ -213,7 +219,7 @@ internal readonly struct EntryShape : IEquatable<EntryShape>
     /// <summary>Computes a hash code from this value's comparison fields.</summary>
     /// <returns>The hash code.</returns>
     public override int GetHashCode() => unchecked((int)Kind * 397 ^ (Element?.GetHashCode() ?? Width.GetValueOrDefault()) ^
-        StatelessRead.GetHashCode() ^ (NullObjectRead ? 2 : 0) ^ (RetainedDirect ? 4 : 0));
+        StatelessRead.GetHashCode() ^ (NullObject ? 2 : 0) ^ (RetainedDirect ? 4 : 0) ^ (OutlineNonNullRead ? 8 : 0));
 }
 
 /// <summary>Normalized root facts shared by all facade calls of one payload.</summary>
