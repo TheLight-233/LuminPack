@@ -10,7 +10,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class HashSetOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.Add(item);",
-        readInlining: "NoInlining", outlineJson: true);
+        jsonBefore: PrepareJson, readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -19,6 +19,29 @@ internal static class HashSetOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec, nonEmptyRawHeaderBytes: sizeof(int), directRawWrite: WriteDirect);
+
+    /// <summary>Uses a bounded structural hint to size a fresh set before reading its first element.</summary>
+    /// <param name="c">The JSON owner being emitted.</param>
+    private static void PrepareJson(EnumerableOwnerContext c)
+    {
+        var w = c.W;
+        w.Line("if (value is null)");
+        if (c.Supports("HashSetJsonCapacity"))
+        {
+            const string options = "global::LuminPack.Option.";
+            w.Open();
+            w.Line("int capacity = typeof(TLuminProfile) == typeof(" + options + "LuminPackUtf16LengthOptions) ||");
+            w.Line("    typeof(TLuminProfile) == typeof(" + options + "LuminPackUtf8LengthOptions) ||");
+            w.Line("    typeof(TLuminProfile) == typeof(" + options + "LuminPackDefaultOptions)");
+            w.Line("    ? reader.GetArrayCapacityHint<TLuminProfile>(128) : 0;");
+            w.Line("value = new " + c.Sequence + "((uint)capacity <= 4096u ? capacity : 0);");
+            w.Close();
+        }
+        else
+            w.Indented(() => w.Line("value = new " + c.Sequence + "();"));
+        w.Line("else");
+        w.Indented(() => w.Line("value.Clear();"));
+    }
 
     /// <summary>Writes a nonempty or empty raw set to its fixed destination without copying writer state.</summary>
     /// <param name="c">The case or formatter context in scope.</param>

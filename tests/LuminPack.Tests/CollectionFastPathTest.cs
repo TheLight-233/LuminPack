@@ -21,6 +21,31 @@ public class CollectionFastPathTest
     /// <returns>The integers.</returns>
     private static int[] Ints(int length) => Enumerable.Range(0, length).Select(i => i * 7919 % 100003 - 50000).ToArray();
 
+    /// <summary>Checks fresh set sizing and the bounded fallback for a large run of duplicate JSON elements.</summary>
+    [Fact]
+    public void JsonHashSetCapacityHintRetainsSetSemantics()
+    {
+        int[] items = Enumerable.Range(0, 256).ToArray();
+        string json = "[" + string.Join(",", items) + "]";
+        HashSet<int>? target = null;
+        LuminPackSerializer.DeserializeJson(json, ref target);
+        Assert.True(target!.SetEquals(items));
+
+        var comparer = EqualityComparer<int>.Create((left, right) => left % 16 == right % 16, value => value % 16);
+        target = new HashSet<int>(comparer) { -1 };
+        var retained = target;
+        LuminPackSerializer.DeserializeJson(json, ref target);
+        Assert.Same(retained, target);
+        Assert.Same(comparer, target.Comparer);
+        Assert.Equal(16, target.Count);
+
+        target = null;
+        string duplicates = "[" + string.Join(",", Enumerable.Repeat("1", 4097)) + "]";
+        LuminPackSerializer.DeserializeJson(duplicates, ref target);
+        Assert.Equal(1, Assert.Single(target!));
+        Assert.InRange(target!.EnsureCapacity(0), 1, 16);
+    }
+
     /// <summary>Creates strings including null entries.</summary>
     /// <param name="length">The element count.</param>
     /// <returns>The strings.</returns>

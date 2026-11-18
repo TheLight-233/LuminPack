@@ -54,6 +54,10 @@ internal static class FormatterCapabilities
             FormatterOrderedCollectionTraits.Capture(compilation, named, definition == "System.Collections.Generic.Stack", result);
         if (definition == "System.Collections.Generic.Queue" && FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))
             result.Add("QueueJsonCapacity");
+        if (definition == "System.Collections.Generic.HashSet" && modern && !unity &&
+            named.TypeArguments[0].SpecialType is SpecialType.System_Int32 or SpecialType.System_Int64 or SpecialType.System_String &&
+            FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))
+            result.Add("HashSetJsonCapacity");
         if (definition == "System.Collections.Generic.LinkedList")
         {
             var element = named.TypeArguments[0];
