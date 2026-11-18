@@ -12,6 +12,18 @@ internal static class DirectInlining
 {
     private const int Limit = 16;
 
+    /// <summary>Identifies a compact positional body composed of inline scalar and string operations.</summary>
+    /// <param name="model">The candidate record.</param>
+    /// <param name="read">Whether the reader's inlining budget applies.</param>
+    /// <returns>Whether the corresponding operation and its state accesses are eligible to inline.</returns>
+    internal static bool FlatRecord(PayloadRenderModel model, bool read) =>
+        RenderModelFactory.Covered(model) && !model.Circle && !model.Recursive && !model.UnionRoot &&
+        model.SequenceBase == null && model.Bounded == null && model.Rejection == null && model.Redirect == null &&
+        model.Limits?.Bounded != true && model.TypeParameters.Length == 0 &&
+        model.Members.All(member => !member.Volatile && !member.Property && member.ScopeProfile == null &&
+            (member.Kind == RenderMemberKind.Text || member.IsFixed && !member.Raw)) &&
+        (read ? Read(model, 0) : Write(model, union: false, sizes: 0));
+
     /// <summary>Whether a root write keeps its aggressive inlining hint.</summary>
     /// <param name="model">The covered type.</param>
     /// <param name="union">Whether the root is the Union payload write.</param>

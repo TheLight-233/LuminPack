@@ -354,9 +354,15 @@ try
     }
     if (args is ["--verify-inlining"])
     {
+        SerializerIssueRegression.RunTraversalBoundaries(references);
         SerializerBinaryInliningRegression.Run(references);
         SerializerCollectionInliningRegression.Run(references);
         SerializerUnionInliningRegression.Run(references);
+        return 0;
+    }
+    if (args is ["--verify-traversal-boundaries"])
+    {
+        SerializerIssueRegression.RunTraversalBoundaries(references);
         return 0;
     }
     if (args is ["--verify-static-kernels"])
@@ -453,6 +459,7 @@ try
     SerializerPartitionRegression.Run(references);
     SerializerSharedFacadeRegression.Run(references);
     SerializerWideReadRegression.Run(references);
+    SerializerIssueRegression.RunTraversalBoundaries(references);
     SerializerBinaryInliningRegression.Run(references);
     SerializerCollectionInliningRegression.Run(references);
     SerializerUnionInliningRegression.Run(references);

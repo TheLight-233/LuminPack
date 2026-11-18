@@ -745,10 +745,7 @@ internal static class PairedDictionaryOwnerTemplate
             fact.Element, fact.ForwardedValue, fact.Contract, set, nativeEntries, checkedUnion);
         bool optimizeTreeWrite = context.OptimizeBinaryTraversal &&
             (context.Supports("CopyImmutableHashTree") || context.Supports("CopyImmutableSortedTree"));
-        bool localReader = (fact.Element == null && !fact.ForwardedValue && fact.Contract == null) ||
-            (set.Options?.Net8 == true &&
-                (dictionary.StartsWith("global::System.Collections.Generic.Dictionary<", StringComparison.Ordinal) ||
-                 dictionary.StartsWith("global::System.Collections.Generic.SortedList<", StringComparison.Ordinal)));
+        bool localReader = fact.Element == null && !fact.ForwardedValue && fact.Contract == null;
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);

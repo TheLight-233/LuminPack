@@ -1319,7 +1319,7 @@ internal static partial class BinaryEmitter
     {
         var child = member.Nested;
         string input = owner + "." + member.Name;
-        bool outline = HasVariableNestedMembers(child);
+        bool outline = OutlineNestedRecord(child, read: false);
         if (outline)
         {
             string helper = RoleName(names, "WriteNested");
@@ -1334,12 +1334,15 @@ internal static partial class BinaryEmitter
             body.Add("}");
     }
 
-    /// <summary>Whether the nested record can consume the caller's budget with string or child traversal operations.</summary>
+    /// <summary>Whether the nested record has compound operations or text work beyond the flat inlining budget.</summary>
     /// <param name="child">The nested record's compiled shape.</param>
+    /// <param name="read">Whether the reader's inlining budget applies.</param>
     /// <returns>Whether member calls outline the existing child operation.</returns>
-    private static bool HasVariableNestedMembers(PayloadRenderModel child) => child.Net8 &&
-        child.Members.Any(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.Dictionary or RenderMemberKind.List ||
-            member.Nested != null && HasVariableNestedMembers(member.Nested));
+    private static bool OutlineNestedRecord(PayloadRenderModel child, bool read) => child.Net8 &&
+        !DirectInlining.FlatRecord(child, read) &&
+        child.Members.Any(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.Dictionary or RenderMemberKind.List or
+            RenderMemberKind.NestedList ||
+            member.Nested != null && OutlineNestedRecord(member.Nested, read));
 
     /// <summary>Writes the existing child operation using the member value already selected by the caller.</summary>
     /// <param name="body">The generated operation body.</param>
@@ -3139,7 +3142,7 @@ internal static partial class BinaryEmitter
         string local = RoleName(names, "nestedValue");
         string profile = HasReadProfile(child) ? "<" + Profile + ">" : string.Empty;
         string root = BinaryRoot(w, child);
-        bool outline = HasVariableNestedMembers(child);
+        bool outline = OutlineNestedRecord(child, read: true);
         string call = root + (objectFraming ? "RootRead" : "RootReadUnion") + profile;
         if (outline)
         {
