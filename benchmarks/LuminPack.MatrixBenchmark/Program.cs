@@ -9,6 +9,8 @@ internal static class Program
 {
     private const int WarmupMinCalls = 256;
     private const int WarmupMilliseconds = 15;
+    private const int TieredWarmupLimitMilliseconds = 2_000;
+    private const int StableWarmupRounds = 2;
 
     private sealed record Operation(string Library, string Name, Action Invoke);
 
@@ -19,7 +21,7 @@ internal static class Program
         internal long Calls;
         internal double Milliseconds;
     }
-    private sealed record Measurement(string Operation, string Library, int Round, double Nanoseconds, double AllocatedBytes);
+    private sealed record Measurement(string Operation, string Library, int Round, double Nanoseconds, double AllocatedBytes, long JitCompiledMethodsBefore, long JitCompiledMethodsAfter);
 
     /// <summary>Runs the command-line program with the supplied arguments.</summary>
     /// <param name="args">The command-line arguments.</param>
@@ -43,6 +45,14 @@ internal static class Program
         var fixtures = scene == "main"
             ? Fixtures.MainCases().Where(fixture => fixture.Name != (json ? "SerializeBenchmark" : "JsonBenchmark")).ToArray()
             : Fixtures.CollectionCases();
+        // Optional comma-separated case names restrict a targeted run; the full matrix runs when the variable is unset.
+        string? caseFilter = Environment.GetEnvironmentVariable("LUMINPACK_MATRIX_CASES");
+        if (!string.IsNullOrWhiteSpace(caseFilter))
+        {
+            var names = new HashSet<string>(caseFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            fixtures = fixtures.Where(fixture => names.Contains(fixture.Name)).ToArray();
+        }
+        bool tiered = Environment.GetEnvironmentVariable("DOTNET_TieredCompilation") == "1";
         using var output = new StreamWriter(args[3]) { AutoFlush = true };
         void Emit(object row) => output.WriteLine(JsonSerializer.Serialize(row));
         Emit(new
@@ -58,7 +68,7 @@ internal static class Program
             ProcessorCount = Environment.ProcessorCount,
             Rounds = rounds,
             TieredCompilation = Environment.GetEnvironmentVariable("DOTNET_TieredCompilation") ?? "0",
-            WarmupStrategy = rounds == 0 ? null : "interleaved-active-time",
+            WarmupStrategy = rounds == 0 ? null : tiered ? "interleaved-jit-stability" : "interleaved-active-time",
             WarmupMinCalls = rounds == 0 ? 0 : WarmupMinCalls,
             WarmupMinMilliseconds = rounds == 0 ? 0 : WarmupMilliseconds,
             References = json
@@ -106,7 +116,7 @@ internal static class Program
             var measurements = new List<Measurement>();
             foreach (var group in work.GroupBy(item => item.Name))
             {
-                var warmup = WarmUp(group, random);
+                var warmup = WarmUp(group, random, tiered);
                 foreach (var state in warmup)
                 {
                     var operation = state.Operation;
@@ -120,15 +130,18 @@ internal static class Program
                     foreach (var entry in operations)
                     {
                         long allocated = GC.GetAllocatedBytesForCurrentThread();
+                        long jitBefore = JitInfo.GetCompiledMethodCount(currentThread: false);
                         double elapsed = Measure(entry.Operation.Invoke, entry.Count);
+                        long jitAfter = JitInfo.GetCompiledMethodCount(currentThread: false);
                         long bytes = GC.GetAllocatedBytesForCurrentThread() - allocated;
-                        measurements.Add(new(entry.Operation.Name, entry.Operation.Library, round, elapsed, (double)bytes / entry.Count));
+                        measurements.Add(new(entry.Operation.Name, entry.Operation.Library, round, elapsed, (double)bytes / entry.Count, jitBefore, jitAfter));
                     }
                 }
             }
 
             foreach (var sample in measurements)
-                Emit(new { Kind = "Sample", Case = fixture.Name, sample.Operation, sample.Library, sample.Round, sample.Nanoseconds, sample.AllocatedBytes });
+                Emit(new { Kind = "Sample", Case = fixture.Name, sample.Operation, sample.Library, sample.Round, sample.Nanoseconds, sample.AllocatedBytes,
+                sample.JitCompiledMethodsBefore, sample.JitCompiledMethodsAfter });
         }
 
         return failed ? 1 : 0;
@@ -143,25 +156,39 @@ internal static class Program
     /// <summary>Warms each library on the same operation in shuffled batches before final calibration.</summary>
     /// <param name="operations">The supported library operations in this comparison.</param>
     /// <param name="random">The instance that shuffles execution order.</param>
+    /// <param name="tiered">Whether to require stable JIT counts after the minimum warmup time.</param>
     /// <returns>The warmup observations for the comparison.</returns>
-    private static WarmupState[] WarmUp(IEnumerable<Operation> operations, Random random)
+    private static WarmupState[] WarmUp(IEnumerable<Operation> operations, Random random, bool tiered)
     {
         var states = operations.Select(operation => new WarmupState(operation, Calibrate(operation.Invoke))).ToArray();
-        int remaining = states.Length;
-        do
+        long start = Stopwatch.GetTimestamp();
+        int stableRounds = 0;
+        while (true)
         {
+            long compiled = tiered ? JitInfo.GetCompiledMethodCount(currentThread: false) : 0;
+            bool warmed = true;
             random.Shuffle(states.AsSpan());
             foreach (var state in states)
             {
-                if (state.Calls >= WarmupMinCalls && state.Milliseconds >= WarmupMilliseconds)
+                if (!tiered && state.Calls >= WarmupMinCalls && state.Milliseconds >= WarmupMilliseconds)
                     continue;
                 state.Milliseconds += Measure(state.Operation.Invoke, state.BatchSize) * state.BatchSize / 1_000_000;
                 state.Calls += state.BatchSize;
-                if (state.Calls >= WarmupMinCalls && state.Milliseconds >= WarmupMilliseconds)
-                    remaining--;
+                warmed &= state.Calls >= WarmupMinCalls && state.Milliseconds >= WarmupMilliseconds;
+            }
+
+            if (!tiered && warmed)
+                break;
+            if (tiered)
+            {
+                stableRounds = warmed && JitInfo.GetCompiledMethodCount(currentThread: false) == compiled
+                    ? stableRounds + 1
+                    : 0;
+                if (stableRounds >= StableWarmupRounds ||
+                    Stopwatch.GetElapsedTime(start).TotalMilliseconds >= TieredWarmupLimitMilliseconds)
+                    break;
             }
         }
-        while (remaining != 0);
         return states;
     }
 

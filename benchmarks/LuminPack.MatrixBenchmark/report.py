@@ -64,6 +64,11 @@ def load_process(path):
     return environment, timing, validated, issues
 
 
+def quiet_rounds(samples):
+    return {sample["Round"]: sample for sample in samples
+            if sample.get("JitCompiledMethodsBefore") == sample.get("JitCompiledMethodsAfter")}
+
+
 def main(directory):
     processes = defaultdict(list)
     for path in sorted(directory.glob("*.jsonl")):
@@ -92,6 +97,8 @@ def main(directory):
     pairs = []
     unsupported = []
     drift = []
+    interrupted_samples = 0
+    missing_stable_pairs = 0
     for (fmt, scene), runs in sorted(processes.items()):
         _, environment, first, validated, issues = runs[0]
         if len(runs) != (3 if environment["Rounds"] else 1):
@@ -118,13 +125,17 @@ def main(directory):
                 if abs(change) >= 20:
                     drift.append((fmt, scene, process, case, operation, library, early, late, change))
 
-        def medians(key, field):
-            return [statistics.median(row[field] for row in timing[key]) for _, _, timing, _, _ in runs]
-
+        stable = [{key: quiet_rounds(samples) for key, samples in timing.items()}
+                  for _, _, timing, _, _ in runs]
+        interrupted_samples += sum(len(timing[key]) - len(quiet[key])
+                                   for (_, _, timing, _, _), quiet in zip(runs, stable) for key in first)
         for key in sorted(first):
             case, operation, library = key
-            times = medians(key, "Nanoseconds")
-            allocations = medians(key, "AllocatedBytes")
+            samples_by_process = [quiet[key].values() for quiet in stable]
+            if not all(samples_by_process):
+                continue
+            times = [statistics.median(row["Nanoseconds"] for row in samples) for samples in samples_by_process]
+            allocations = [statistics.median(row["AllocatedBytes"] for row in samples) for samples in samples_by_process]
             operations.append((fmt, scene, case, operation, library, statistics.median(times),
                                min(times), max(times), statistics.median(allocations), validated[case, library]))
 
@@ -134,8 +145,19 @@ def main(directory):
                 for case, action, lib in sorted(first):
                     if lib != "LuminPack" or operation not in (action, "all") or (case, action, reference) not in first:
                         continue
-                    ratios = [a / b for a, b in zip(medians((case, action, lib), "Nanoseconds"),
-                                                   medians((case, action, reference), "Nanoseconds"))]
+                    ratios = []
+                    for quiet in stable:
+                        lumin = quiet[case, action, lib]
+                        other = quiet[case, action, reference]
+                        common = lumin.keys() & other.keys()
+                        if not common:
+                            break
+                        ratios.append(statistics.median(lumin[round_]["Nanoseconds"] for round_ in common) /
+                                      statistics.median(other[round_]["Nanoseconds"] for round_ in common))
+                    if len(ratios) != len(stable):
+                        if operation != "all":
+                            missing_stable_pairs += 1
+                        continue
                     values.append(statistics.median(ratios))
                     if operation != "all":
                         pairs.append((fmt, scene, case, action, reference, values[-1], min(ratios), max(ratios)))
@@ -143,13 +165,16 @@ def main(directory):
                     means = f"{statistics.geometric_mean(values):.3f} | {statistics.mean(values):.3f}" if values else "— | —"
                     report.append(f"| {fmt} | {scene} | {reference} | {operation} | {len(values)} | {means} |")
 
-    if not operations:
+    if not operations and all(not env["Rounds"] for runs in processes.values() for _, env, _, _, _ in runs):
         report = ["# Serialization benchmark matrix validation", "",
                   "This run validated fixtures without collecting timing samples."]
     elif drift:
         report += ["", f"**Stability warning:** {len(drift)} measurements shifted by at least 20% between "
-                         "the first and last three rounds of a process. See stability.csv. All rounds remain in the results.",
+                         "the first and last three rounds of a process. See stability.csv for the raw-round drift check.",
                    "The drift detector flags observations for investigation and does not identify their cause."]
+    if interrupted_samples:
+        report += ["", f"Global JIT activity excluded {interrupted_samples} timing samples. "
+                         f"{missing_stable_pairs} comparisons had no common quiet round in at least one process."]
     report += ["", "| Format | Scenario | Reference | Validated LuminPack fixtures | Validated reference fixtures |",
                "|---|---|---|---:|---:|"]
     report += [f"| {fmt} | {scene} | {library} | {primary} | {reference} |"
