@@ -1263,16 +1263,58 @@ namespace LuminPack.Core
             {
                 string? value = Unsafe.Add(ref first, (nint)(uint)i);
                 // A string holds at most 0x3FFFFFDF characters, so the raw bound fits uint.
-                uint bound = sizeof(int) + (value is null ? 0u : (uint)value.Length * sizeof(char));
+                int length = value?.Length ?? 0;
+                uint bound = sizeof(int) + (uint)length * sizeof(char);
                 if (bound > remaining)
                     break;
-                int written = WriteUtf16Record(ref current, value, outlineMedium: true);
+                int written = WriteUtf16SpanRecord(ref current, value, length);
                 remaining -= (uint)written;
                 current = ref Unsafe.Add(ref current, (nint)(uint)written);
             } while (++i < count);
 
             index = i;
             return (int)(room - remaining);
+        }
+
+        /// <summary>Writes a mixed-width span element within its validated raw bound.</summary>
+        /// <param name="current">The start of the element record.</param>
+        /// <param name="value">The original string, including null or empty.</param>
+        /// <param name="length">The length used to prove the raw bound, or zero for null.</param>
+        /// <returns>The complete written width.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int WriteUtf16SpanRecord(ref byte current, string? value, int length)
+        {
+            if (length == 0)
+            {
+                Write(ref current, value is null ? LuminPackCode.NullCollection : 0);
+                return sizeof(int);
+            }
+
+            ref byte payload = ref Unsafe.Add(ref current, sizeof(int));
+            int header;
+#if NET8_0_OR_GREATER
+            if (Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && (uint)(length - 1) <= 15)
+            {
+                int compactHeader = StringSerializer.TryWriteShortUtf16RecordPayload(ref payload, value!, length);
+                if (compactHeader != 0)
+                {
+                    Write(ref current, compactHeader);
+                    return sizeof(int) + length;
+                }
+            }
+
+            if (Vector256.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && (uint)(length - 17) <= 47)
+            {
+                if (length <= 32)
+                    return WriteMediumUtf16Record(ref current, value!, length);
+                header = StringSerializer.WriteMediumUtf16RecordPayload256(ref payload, ref Unsafe.AsRef(in value!.GetPinnableReference()),
+                    length, outlineRaw: true);
+            }
+            else
+#endif
+                header = StringSerializer.WriteUtf16RecordPayloadSlow(ref payload, value!);
+            Write(ref current, header);
+            return sizeof(int) + StringSerializer.Utf16RecordPayload(header);
         }
 
 #if NET8_0_OR_GREATER
@@ -1302,7 +1344,7 @@ namespace LuminPack.Core
                 uint bound = sizeof(int) + (uint)value.Length * sizeof(char);
                 if (bound > remaining)
                     break;
-                int written = WriteMediumUtf16Record(ref current, value);
+                int written = WriteMediumUtf16Record(ref current, value, value.Length);
                 remaining -= (uint)written;
                 current = ref Unsafe.Add(ref current, (nint)(uint)written);
             } while (++i < count);
@@ -1314,14 +1356,14 @@ namespace LuminPack.Core
         /// <summary>Writes one reserved 17-to-32-character record.</summary>
         /// <param name="record">The record start, with room for the header and the raw UTF-16 payload.</param>
         /// <param name="value">The string, on a 64-bit target with accelerated 256-bit vectors.</param>
+        /// <param name="length">The string's length.</param>
         /// <returns>The width of the complete compact or raw record.</returns>
         /// <remarks>Two 16-character blocks cover the whole input and stay in bounds even at length 17.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int WriteMediumUtf16Record(ref byte record, string value)
+        private static int WriteMediumUtf16Record(ref byte record, string value, int length)
         {
-            int length = value.Length;
             nuint tail = (nuint)(uint)(length - 16);
-            ref ushort chars = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(value.AsSpan()));
+            ref ushort chars = ref Unsafe.As<char, ushort>(ref Unsafe.AsRef(in value.GetPinnableReference()));
             ref byte payload = ref Unsafe.Add(ref record, sizeof(int));
             var head = Vector256.LoadUnsafe(ref chars);
             var end = Vector256.LoadUnsafe(ref chars, tail);
@@ -1382,7 +1424,7 @@ namespace LuminPack.Core
 
 #if NET8_0_OR_GREATER
             if (!outlineMedium && Vector256.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && (uint)(value.Length - 17) <= 15)
-                return WriteMediumUtf16Record(ref current, value);
+                return WriteMediumUtf16Record(ref current, value, value.Length);
 #endif
 
             int header = StringSerializer.WriteUtf16RecordPayload(ref Unsafe.Add(ref current, sizeof(int)), value);

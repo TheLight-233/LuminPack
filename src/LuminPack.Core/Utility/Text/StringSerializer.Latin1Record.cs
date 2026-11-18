@@ -168,53 +168,59 @@ public static partial class StringSerializer
         int length = value.Length;
         if (Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && (uint)(length - 1) <= 15)
         {
-            ref ushort chars = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(value.AsSpan()));
-            if (length < 4)
-            {
-                // One to three characters: one or two characters fit four bytes and three fit eight, where the
-                // string's terminating null supplies the remaining code unit, so no read leaves the string.
-                ulong head = length == 3
-                    ? LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref chars))
-                    : LuminPackReader.Read<uint>(ref Unsafe.As<ushort, byte>(ref chars));
-                if ((head & 0xFF00FF00FF00FF00UL) == 0)
-                {
-                    // The destination has room for two bytes per character: two for one character, four otherwise.
-                    uint packed = PackLatin1(head);
-                    if (length == 1)
-                        LuminPackWriter.Write(ref destination, (ushort)packed);
-                    else
-                        LuminPackWriter.Write(ref destination, packed);
-                    return Latin1Header(length);
-                }
-            }
-            else if (length >= 8)
-            {
-                var first = Vector128.LoadUnsafe(ref chars);
-                var last = Vector128.LoadUnsafe(ref chars, (nuint)(uint)(length - 8));
-                if (((first | last) & Vector128.Create((ushort)0xFF00)) == Vector128<ushort>.Zero)
-                {
-                    var narrowed = StringSerializer.NarrowValidatedLatin1(first, last).AsUInt64();
-                    LuminPackWriter.Write(ref destination, narrowed.ToScalar());
-                    LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(length - 8)), narrowed.GetElement(1));
-                    return Latin1Header(length);
-                }
-            }
-            else
-            {
-                ulong head = LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref chars));
-                ulong tail = LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)(length - 4))));
-                if (((head | tail) & 0xFF00FF00FF00FF00UL) == 0)
-                {
-                    WritePackedLatin1(ref destination, (nuint)(uint)(length - 4), head, tail);
-                    return Latin1Header(length);
-                }
-            }
+            int header = TryWriteShortUtf16RecordPayload(ref destination, value, length);
+            if (header != 0)
+                return header;
         }
 #endif
         return WriteUtf16RecordPayloadSlow(ref destination, value);
     }
 
 #if NET8_0_OR_GREATER
+    /// <summary>Writes a 1-to-16-character Latin-1 payload within the ordinary record's raw proof.</summary>
+    /// <param name="destination">The first payload byte, followed by room for the raw form.</param>
+    /// <param name="value">The string, on a 64-bit target with accelerated 128-bit vectors.</param>
+    /// <param name="length">The string's validated length, from 1 to 16.</param>
+    /// <returns>The compact record header, or zero when a code unit is above U+00FF.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static int TryWriteShortUtf16RecordPayload(ref byte destination, string value, int length)
+    {
+        ref ushort chars = ref Unsafe.As<char, ushort>(ref Unsafe.AsRef(in value.GetPinnableReference()));
+        if (length < 4)
+        {
+            // One or two characters fit four bytes. Three use the string's terminating null.
+            ulong head = length == 3
+                ? LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref chars))
+                : LuminPackReader.Read<uint>(ref Unsafe.As<ushort, byte>(ref chars));
+            if ((head & 0xFF00FF00FF00FF00UL) != 0)
+                return 0;
+            uint packed = PackLatin1(head);
+            if (length == 1)
+                LuminPackWriter.Write(ref destination, (ushort)packed);
+            else
+                LuminPackWriter.Write(ref destination, packed);
+        }
+        else if (length >= 8)
+        {
+            var first = Vector128.LoadUnsafe(ref chars);
+            var last = Vector128.LoadUnsafe(ref chars, (nuint)(uint)(length - 8));
+            if (((first | last) & Vector128.Create((ushort)0xFF00)) != Vector128<ushort>.Zero)
+                return 0;
+            var narrowed = StringSerializer.NarrowValidatedLatin1(first, last).AsUInt64();
+            LuminPackWriter.Write(ref destination, narrowed.ToScalar());
+            LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(length - 8)), narrowed.GetElement(1));
+        }
+        else
+        {
+            ulong head = LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref chars));
+            ulong tail = LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)(length - 4))));
+            if (((head | tail) & 0xFF00FF00FF00FF00UL) != 0)
+                return 0;
+            WritePackedLatin1(ref destination, (nuint)(uint)(length - 4), head, tail);
+        }
+        return Latin1Header(length);
+    }
+
     /// <summary>Writes the compact payload of a 1 to 16 character Latin-1 string, or nothing for other text.</summary>
     /// <param name="destination">The first payload byte, followed by room for <c>2 * value.Length</c> bytes.</param>
     /// <param name="value">A string of 1 to 16 characters, on a 64-bit target with accelerated 128-bit vectors.</param>
@@ -282,19 +288,13 @@ public static partial class StringSerializer
 #if NET8_0_OR_GREATER
         if (Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && (uint)(length - 17) <= 47)
         {
-            if (TryNarrowLatin1Medium(ref Unsafe.As<char, ushort>(ref source), ref destination, length))
-                return Latin1Header(length);
             if (Vector256.IsHardwareAccelerated && length > 32)
-            {
-                // The raw record is 66 to 128 bytes. Constant head and tail widths let the JIT
-                // finish the copy inline after the vectorized classification fails.
-                int rawBytes = length * sizeof(char);
-                ref byte first = ref Unsafe.As<char, byte>(ref source);
-                nuint tail = (nuint)(uint)(rawBytes - 64);
-                LuminPackMarshal.CopyBlockUnaligned(ref destination, ref first, 64);
-                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref destination, tail), ref Unsafe.Add(ref first, tail), 64);
-                return rawBytes;
-            }
+                return WriteMediumUtf16RecordPayload256(ref destination, ref source, length);
+            ref ushort chars = ref Unsafe.As<char, ushort>(ref source);
+            if (length <= 32
+                ? TryNarrowLatin1Medium128(ref chars, ref destination, length)
+                : TryNarrowLatin1Long(ref chars, ref destination, (nuint)(uint)length))
+                return Latin1Header(length);
         }
         else
 #endif
@@ -414,39 +414,71 @@ public static partial class StringSerializer
     /// <summary>Narrows 17 to 64 characters with a leading and an overlapping trailing block and no loop.</summary>
     /// <param name="source">The first character.</param>
     /// <param name="destination">Room for <paramref name="length"/> bytes.</param>
-    /// <param name="length">The character count, from 17 to 64.</param>
+    /// <param name="length">The character count, from 17 to 32.</param>
     /// <returns>Whether every character narrowed; on false nothing was written.</returns>
     /// <remarks>Straight-line blocks keep the outlined record writer free of a loop whose layout would rely on
     /// synthesized profile data; longer strings use the separately profiled loop.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool TryNarrowLatin1Medium(ref ushort source, ref byte destination, int length)
+    private static bool TryNarrowLatin1Medium128(ref ushort source, ref byte destination, int length)
     {
-        if (length <= 32)
+        nuint back = (nuint)(uint)(length - 16);
+        var a = Vector128.LoadUnsafe(ref source);
+        var b = Vector128.LoadUnsafe(ref source, 8);
+        var c = Vector128.LoadUnsafe(ref source, back);
+        var d = Vector128.LoadUnsafe(ref source, back + 8);
+        if (((a | b | c | d) & Vector128.Create((ushort)0xFF00)) != Vector128<ushort>.Zero)
+            return false;
+        StringSerializer.NarrowValidatedLatin1(a, b).StoreUnsafe(ref destination);
+        StringSerializer.NarrowValidatedLatin1(c, d).StoreUnsafe(ref destination, back);
+        return true;
+    }
+
+    /// <summary>Writes the compact or raw payload of a 33-to-64-character UTF-16 length record.</summary>
+    /// <param name="destination">The first payload byte, followed by room for the raw UTF-16 form.</param>
+    /// <param name="source">The first character, on a 64-bit target with accelerated 256-bit vectors.</param>
+    /// <param name="length">The character count, from 33 to 64.</param>
+    /// <param name="outlineRaw">Whether the calling traversal keeps the raw copy outside its compact path.</param>
+    /// <returns>The compact Latin-1 header or the raw UTF-16 byte count.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static int WriteMediumUtf16RecordPayload256(ref byte destination, ref char source, int length, bool outlineRaw = false)
+    {
+        ref ushort chars = ref Unsafe.As<char, ushort>(ref source);
+        nuint tail = (nuint)(uint)(length - 32);
+        var head = Vector256.LoadUnsafe(ref chars);
+        var headEnd = Vector256.LoadUnsafe(ref chars, 16);
+        var tailStart = Vector256.LoadUnsafe(ref chars, tail);
+        var tailEnd = Vector256.LoadUnsafe(ref chars, tail + 16);
+        if (((head | headEnd | tailStart | tailEnd) & Vector256.Create((ushort)0xFF00)) == Vector256<ushort>.Zero)
         {
-            nuint back = (nuint)(uint)(length - 16);
-            var a = Vector128.LoadUnsafe(ref source);
-            var b = Vector128.LoadUnsafe(ref source, 8);
-            var c = Vector128.LoadUnsafe(ref source, back);
-            var d = Vector128.LoadUnsafe(ref source, back + 8);
-            if (((a | b | c | d) & Vector128.Create((ushort)0xFF00)) != Vector128<ushort>.Zero)
-                return false;
-            StringSerializer.NarrowValidatedLatin1(a, b).StoreUnsafe(ref destination);
-            StringSerializer.NarrowValidatedLatin1(c, d).StoreUnsafe(ref destination, back);
-            return true;
+            StringSerializer.NarrowValidatedLatin1(head, headEnd).StoreUnsafe(ref destination);
+            StringSerializer.NarrowValidatedLatin1(tailStart, tailEnd).StoreUnsafe(ref destination, tail);
+            return Latin1Header(length);
         }
 
-        if (!Vector256.IsHardwareAccelerated)
-            return TryNarrowLatin1Long(ref source, ref destination, (nuint)(uint)length);
-        nuint tail = (nuint)(uint)(length - 32);
-        var e = Vector256.LoadUnsafe(ref source);
-        var f = Vector256.LoadUnsafe(ref source, 16);
-        var g = Vector256.LoadUnsafe(ref source, tail);
-        var h = Vector256.LoadUnsafe(ref source, tail + 16);
-        if (((e | f | g | h) & Vector256.Create((ushort)0xFF00)) != Vector256<ushort>.Zero)
-            return false;
-        StringSerializer.NarrowValidatedLatin1(e, f).StoreUnsafe(ref destination);
-        StringSerializer.NarrowValidatedLatin1(g, h).StoreUnsafe(ref destination, tail);
-        return true;
+        return outlineRaw
+            ? CopyMediumUtf16PayloadOutlined(ref destination, ref source, length)
+            : CopyMediumUtf16Payload(ref destination, ref source, length);
+    }
+
+    /// <inheritdoc cref="CopyMediumUtf16Payload"/>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int CopyMediumUtf16PayloadOutlined(ref byte destination, ref char source, int length)
+        => CopyMediumUtf16Payload(ref destination, ref source, length);
+
+    /// <summary>Copies the raw medium payload with two complete bounded 64-byte blocks.</summary>
+    /// <param name="destination">The first payload byte, followed by room for the raw UTF-16 form.</param>
+    /// <param name="source">The first character, on a 64-bit target with accelerated 256-bit vectors.</param>
+    /// <param name="length">The character count, from 33 to 64.</param>
+    /// <returns>The raw UTF-16 byte count.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int CopyMediumUtf16Payload(ref byte destination, ref char source, int length)
+    {
+        int bytes = length * sizeof(char);
+        ref byte first = ref Unsafe.As<char, byte>(ref source);
+        nuint rawTail = (nuint)(uint)(bytes - 64);
+        LuminPackMarshal.CopyBlockUnaligned(ref destination, ref first, 64);
+        LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref destination, rawTail), ref Unsafe.Add(ref first, rawTail), 64);
+        return bytes;
     }
 
     /// <summary>Narrows more than sixteen characters with whole vectors and an overlapping final block.</summary>

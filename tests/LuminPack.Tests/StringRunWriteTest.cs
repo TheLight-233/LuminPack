@@ -73,6 +73,46 @@ public sealed class StringRunWriteTest
         }
     }
 
+    /// <summary>Checks medium compact and raw records across both raw and exact compact output bounds.</summary>
+    [Fact]
+    public void MixedMediumStringSpansKeepCompleteRecordsAndCanaries()
+    {
+        var items = new List<string?> { "short", null, "" };
+        for (int length = 16; length <= 65; length++)
+        {
+            string compact = new string('é', length);
+            items.Add(compact);
+            foreach (int offset in new[] { 0, length / 2, length - 1 })
+            {
+                char[] raw = compact.ToCharArray();
+                raw[offset] = '\u4E2D';
+                items.Add(new string(raw));
+            }
+        }
+
+        string?[] values = items.ToArray();
+        byte[] expected = Records(values).ToArray();
+        foreach (int capacity in new[] { expected.Length, values.Sum(LuminPackWriter.Utf16RecordBound) })
+        {
+            byte[] storage = Enumerable.Repeat((byte)0xA5, capacity + 10).ToArray();
+            Span<byte> destination = storage.AsSpan(5, capacity);
+            var writer = new LuminPackWriter(ref destination);
+            writer.WriteStrings<LuminPackUtf16LengthOptions>(values);
+
+            Assert.Equal(expected.Length, writer.Position);
+            Assert.Equal(expected, writer.GetSpan().ToArray());
+            Assert.False(storage.AsSpan(0, 5).ContainsAnyExcept((byte)0xA5));
+            Assert.False(storage.AsSpan(5 + capacity).ContainsAnyExcept((byte)0xA5));
+
+            ReadOnlySpan<byte> input = writer.GetSpan();
+            var reader = new LuminPackReader(ref input);
+            var decoded = new string?[values.Length];
+            reader.ReadStrings<LuminPackUtf16LengthOptions>(decoded);
+            Assert.Equal(values, decoded);
+            Assert.Equal(expected.Length, reader.Position);
+        }
+    }
+
     /// <summary>Checks the cursor, published slots and retained references at every truncation of a mixed string run.</summary>
     [Fact]
     public void StringSpanReadsPublishTheSamePrefixAsSingleRecords()
