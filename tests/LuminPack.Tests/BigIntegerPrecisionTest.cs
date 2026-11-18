@@ -260,6 +260,26 @@ public class BigIntegerPrecisionTest
         }
     }
 
+    /// <summary>Checks the signed payload in an empty retained window, on append and across buffer growth.</summary>
+    [Fact]
+    public void RetainedSignedRecordsMatchTheirAllocatingWire()
+    {
+        using var output = new LuminBufferWriter(true);
+        foreach (var value in new[] { BigInteger.Zero, 127, 128, -129, -(BigInteger.One << 270000) })
+        {
+            byte[] record = LuminPackSerializer.Serialize(value);
+            Assert.Equal(value.ToByteArray(), record.AsSpan(sizeof(int)).ToArray());
+            Assert.Equal(record.Length - sizeof(int), BinaryPrimitives.ReadInt32LittleEndian(record));
+            output.ResetWrittenCount();
+            LuminPackSerializer.Serialize(value, output);
+            Assert.Equal(record, output.GetSpan().ToArray());
+            LuminPackSerializer.Serialize(value, output);
+            Assert.Equal(record.Length * 2, output.GetSpan().Length);
+            Assert.Equal(record, output.GetSpan()[..record.Length].ToArray());
+            Assert.Equal(record, output.GetSpan()[record.Length..].ToArray());
+        }
+    }
+
     /// <summary>Checks a custom culture's sign cannot alter the decimal string wire or its interpretation.</summary>
     [Fact]
     public void JsonDigitsAreIndependentOfTheCurrentCulture()

@@ -481,7 +481,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             return RawWrite;
         if (FixedRoot(shape) is { } fixedRoot)
         {
-            if (shape.Kind != EntryKind.RawArray)
+            if (shape.Kind is not (EntryKind.RawArray or EntryKind.BigInteger))
                 return fixedRoot.Prepare + "                var buffer = new byte[length];\n" +
                     "                ref byte destination = ref MemoryMarshal.GetArrayDataReference(buffer);\n" +
                     fixedRoot.Store + "                return buffer;\n";
@@ -494,8 +494,6 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             return FixedObjectArrayWrite.Replace("%ELEMENTOWNER%", FixedObjectOwner(shape.Element!)) + "\n" +
                 "                [MethodImpl(MethodImplOptions.NoInlining)]\n" +
                 "                static byte[] WriteOversized(in %TYPE% value)\n                {\n" + Indent(PooledWrite) + "                }\n";
-        if (shape.Kind == EntryKind.BigInteger)
-            return BigIntegerWrite;
         if (shape.Kind == EntryKind.TimeZoneSnapshot)
             return TimeZoneSnapshotWrite + PooledWrite;
         if (shape.Kind == EntryKind.PackedPriorityQueue)
@@ -559,6 +557,11 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                 return ("                var record = value;\n                int length = record is null ? 1 : " + width + ";\n",
                     "                if (record is null) destination = LuminPackCode.NullObject;\n" +
                     "                else " + owner + "." + write + "(ref destination, record);\n");
+            case EntryKind.BigInteger:
+                return ("                int byteCount = value.GetByteCount();\n" +
+                    "                int length = checked(sizeof(int) + byteCount);\n",
+                    "                LuminPackWriter.Write(ref destination, byteCount);\n" +
+                    "                value.TryWriteBytes(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref destination, sizeof(int)), byteCount), out _);\n");
             case EntryKind.RawArray:
                 return ("                var items = value;\n" +
                     "                int length = LuminPackWriter.SpanRecordBound<" + shape.Element + ">(items is null, items?.Length ?? 0);\n",
@@ -1013,14 +1016,6 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     private const string RawWrite = """
                         var buffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(Unsafe.SizeOf<%TYPE%>());
                         LuminPackWriter.Write(ref MemoryMarshal.GetArrayDataReference(buffer), in value);
-                        return buffer;
-        """ + "\n";
-
-    private const string BigIntegerWrite = """
-                        int byteCount = value.GetByteCount();
-                        var buffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(checked(sizeof(int) + byteCount));
-                        LuminPackWriter.Write(ref MemoryMarshal.GetArrayDataReference(buffer), byteCount);
-                        value.TryWriteBytes(buffer.AsSpan(sizeof(int)), out _);
                         return buffer;
         """ + "\n";
 
