@@ -17,8 +17,15 @@ public static partial class LuminPackCollectionAccess
     /// <returns>Whether the dictionary supports lookup by decoded key.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static bool TryBeginConcurrentDictionaryKeyRefill<TValue>(ConcurrentDictionary<string, TValue> map, int count,
-        out ConcurrentDictionaryKeyRefill<TValue> refill) where TValue : class?
+        out ConcurrentDictionaryKeyRefill<TValue> refill)
     {
+        // Shared generic owners call this without a reference-type constraint; value types keep the ordered refill.
+        if (typeof(TValue).IsValueType)
+        {
+            refill = default;
+            return false;
+        }
+
         var comparer = map.Comparer;
         if (map.Count == count &&
             (ReferenceEquals(comparer, EqualityComparer<string>.Default) || ReferenceEquals(comparer, StringComparer.Ordinal)) &&
@@ -36,7 +43,7 @@ public static partial class LuminPackCollectionAccess
 /// <summary>Refills an existing string-keyed dictionary while staging the record for a possible set change.</summary>
 /// <typeparam name="TValue">The dictionary value type.</typeparam>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public struct ConcurrentDictionaryKeyRefill<TValue> : IDisposable where TValue : class?
+public struct ConcurrentDictionaryKeyRefill<TValue> : IDisposable
 {
     [ThreadStatic]
     private static HashSet<string>? _cachedKeys;
