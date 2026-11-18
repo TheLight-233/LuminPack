@@ -45,7 +45,7 @@ internal static class FormatterStorageEmitter
                 return;
             foreach (FormatterStorageField field in current.Fields)
                 Emit(field.Storage);
-            if (!current.Direct)
+            if (!current.Direct && current.NullablePayload == null)
             {
                 if (current.Attribute != null)
                     w.Line(current.Attribute);
@@ -66,7 +66,9 @@ internal static class FormatterStorageEmitter
             if (current.Volatile)
                 return;
             string inline = w.MethodImpl("AggressiveInlining");
-            w.Line("private readonly struct " + Layout(current) + " : global::LuminPack.Utility." + (current.Tagged ? "ILuminStorageLayout" : "ILuminPortableLayout"));
+            string layoutContract = current.NullablePayload != null ? "ILuminNullableStorageLayout" :
+                current.Tagged ? "ILuminStorageLayout" : "ILuminPortableLayout";
+            w.Line("private readonly struct " + Layout(current) + " : global::LuminPack.Utility." + layoutContract);
             w.Open();
             w.Line("public int WireSize { " + inline + " get => " + current.WireSize.ToString(CultureInfo.InvariantCulture) + "; }");
             w.Line("public void Describe(global::System.Span<int> storageOffsets)");
@@ -122,11 +124,41 @@ internal static class FormatterStorageEmitter
                 }
 
                 w.Close();
+                if (current.NullablePayload != null)
+                    DescribeModelByte(w, current);
             }
 
             w.Close();
             w.Blank();
         }
+    }
+
+    /// <summary>Emits a single modeled byte lookup for validation of raw nullable layout fields.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="model">The nullable's verified storage descriptor and known wire models.</param>
+    private static void DescribeModelByte(CodeWriter w, FormatterStorageModel model)
+    {
+        w.Line("public int ModelByteOffset(int tag, int dataByte)");
+        w.Open();
+        for (int index = 0; index < model.ModelOffsets.Length; index++)
+        {
+            w.Line("if (tag == " + (index + 1) + ")");
+            w.Open();
+            int[] offsets = model.ModelOffsets[index];
+            for (int end = 0; end < offsets.Length;)
+            {
+                int start = end++;
+                while (end < offsets.Length && offsets[end] == offsets[end - 1] + 1)
+                    end++;
+                string current = "dataByte - " + start;
+                w.Line("if ((uint)(" + current + ") < " + (end - start) + "u)");
+                w.Indented(() => w.Line("return " + offsets[start] + " + (" + current + ");"));
+            }
+            w.Line("return -1;");
+            w.Close();
+        }
+        w.Line("return -1;");
+        w.Close();
     }
 
     /// <summary>Transfers a single value using its packed wire, including when its collections use a layout tag.</summary>
@@ -272,6 +304,17 @@ internal static class FormatterStorageEmitter
         {
             leaf(model, expression, isVolatile);
             local++;
+            return;
+        }
+
+        if (model.NullablePayload is { } payload)
+        {
+            leaf(model.Fields[0].Storage, Unsafe + ".As<" + model.Type + ", bool>(ref " + expression + ")", isVolatile);
+            local++;
+            string value = "nullablePayload" + local++;
+            w.Line("ref " + payload + " " + value + " = ref " + Unsafe +
+                ".AsRef(in global::System.Nullable.GetValueRefOrDefaultRef(in " + expression + "));");
+            Visit(w, model.Fields[1].Storage, value, ref local, leaf, isVolatile);
             return;
         }
 

@@ -14,6 +14,11 @@ try
         SerializerIssueRegression.RunUnion(references);
         return 0;
     }
+    if (args is ["--verify-rectangular-nullable-wire"])
+    {
+        SerializerIssueRegression.RunRectangularNullableWire(references);
+        return 0;
+    }
     if (args is ["--verify-union-byte-payload"])
     {
         SerializerIssueRegression.RunUnionBytePayload(references);
@@ -426,6 +431,7 @@ try
         return 0;
     }
     SerializerIssueRegression.RunUnion(references);
+    SerializerIssueRegression.RunRectangularNullableWire(references);
     SerializerIssueRegression.RunUnionBytePayload(references);
     SerializerIssueRegression.RunFrameworkCollections(references);
     SerializerIssueRegression.RunFixedRecordReservations(references);

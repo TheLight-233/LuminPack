@@ -145,7 +145,9 @@ internal static partial class TypeModelFactory
                             Payload: RecordModel { Versioned: false, Derived: false, Constructor: null, Callbacks: null, Rent: null, Rejection: null } } &&
                         array.ElementType is INamedTypeSymbol declaration && OptionSwitch(declaration, "ReuseRectangularArraySlots", true);
                 }
-                return new FormatterModel(spelling, FormatterDefinitions.Array, new[] { element }, rank: array.Rank, reuseArraySlots: reuseArraySlots);
+                var nullable = RectangularNullableStorage(array, element);
+                return new FormatterModel(spelling, FormatterDefinitions.Array, new[] { element }, rank: array.Rank,
+                    reuseArraySlots: reuseArraySlots, rectangularNullableStorage: nullable.Layout, rectangularNullableEncoding: nullable.Encoding);
             }
 
             if (type is not INamedTypeSymbol named)
@@ -292,13 +294,75 @@ internal static partial class TypeModelFactory
             return plan == null ? null : NormalizeStorage(plan);
         }
 
+        /// <summary>Models a rectangular nullable's flag and payload independently of its standalone formatter.</summary>
+        /// <param name="array">The closed array shape.</param>
+        /// <param name="element">The existing nullable element contract.</param>
+        /// <returns>The verified storage candidate and its rectangular binary encoding.</returns>
+        private (FormatterStorageModel? Layout, int Encoding) RectangularNullableStorage(IArrayTypeSymbol array, FormatterModel element)
+        {
+            if (array.Rank <= 1 || !Options.Net8 || Options.Unity ||
+                array.ElementType is not INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable ||
+                nullable.TypeArguments[0] is not INamedTypeSymbol { IsUnmanagedType: true } payload ||
+                element is not { Definition: GenericIdentity.Nullable, Arguments.Length: 1 })
+                return default;
+            FormatterModel value = element.Arguments[0];
+            if (element.NativeNullablePayload == null &&
+                (value.Layout is not { Tagged: true, Volatile: false } ||
+                 !(value.Definition == GenericIdentity.ValueTuple || value.Payload is StructModel { Versioned: false }) ||
+                 ContainsCustomContract(payload, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default))))
+                return default;
+
+            int strategy = NullableRectangularStrategy(payload);
+            if (strategy == 1 || !FormatterRuntimeTraits.HasNullableRectangleStorage(_compilation))
+                return default;
+
+            if (AnalyzePortable(payload, strict: true) is not { WireSize: > 0 } payloadPlan || HasVolatile(payloadPlan) ||
+                // The raw reader validates a scalar Boolean payload and the outer presence flag.
+                payloadPlan.Fields != null && ContainsBooleanStorage(payloadPlan))
+                return default;
+
+            ITypeSymbol boolean = _compilation.GetSpecialType(SpecialType.System_Boolean);
+            var plan = new PortablePlan
+            {
+                Type = nullable,
+                Fields = new[]
+                {
+                    new PortablePlanField { Type = boolean, Name = "hasValue" },
+                    new PortablePlanField { Type = payload, Name = "value" }
+                },
+                Children = new[] { AnalyzePortable(boolean, strict: true)!, payloadPlan },
+                WireSize = checked(1 + payloadPlan.WireSize),
+                Tagged = true
+            };
+            plan.Models = BuildModels(plan);
+            foreach (PortableStorageModel model in plan.Models)
+            {
+                if (model.Size <= 0)
+                    return default;
+                var used = new HashSet<int>();
+                foreach (int offset in model.Offsets)
+                    if ((uint)offset >= (uint)model.Size || !used.Add(offset))
+                        return default;
+            }
+            return (NormalizeStorage(plan, FormatterSpelling(payload)), strategy == 2 ? 2 : 1);
+        }
+
+        /// <summary>Detects Boolean domains which need extra validation before publishing a compound raw value.</summary>
+        /// <param name="plan">The supported compiler storage model.</param>
+        /// <returns>Whether the storage contains a Boolean leaf.</returns>
+        private static bool ContainsBooleanStorage(PortablePlan plan) =>
+            plan.Type.SpecialType == SpecialType.System_Boolean ||
+            plan.Type is INamedTypeSymbol { EnumUnderlyingType.SpecialType: SpecialType.System_Boolean } ||
+            (plan.Children != null && plan.Children.Any(ContainsBooleanStorage));
+
         /// <summary>Copies compiler storage plans into value-equal renderer input.</summary>
         /// <param name = "plan">The plan used by this operation.</param>
+        /// <param name="nullablePayload">The wrapper payload whose actual CLR field address will be verified.</param>
         /// <returns>The normalized result of the operation.</returns>
-        private static FormatterStorageModel NormalizeStorage(PortablePlan plan)
+        private static FormatterStorageModel NormalizeStorage(PortablePlan plan, string? nullablePayload = null)
         {
             var fields = plan.Fields == null ? Array.Empty<FormatterStorageField>() : plan.Fields.Select((field, index) => new FormatterStorageField(NormalizeStorage(plan.Children![index]), field.Offset, field.IsVolatile, field.Name)).ToArray();
-            return new FormatterStorageModel(FormatterSpelling(plan.Type), plan.Type is INamedTypeSymbol named ? LayoutAttribute(named) : null, fields, plan.WireSize, plan.Tagged, HasVolatile(plan), plan.Models.Select(model => model.Size).ToArray(), plan.Models.Select(model => model.Offsets).ToArray(), direct: IsValueTuple(plan.Type), aggregate: plan.Fields != null);
+            return new FormatterStorageModel(FormatterSpelling(plan.Type), plan.Type is INamedTypeSymbol named ? LayoutAttribute(named) : null, fields, plan.WireSize, plan.Tagged, HasVolatile(plan), plan.Models.Select(model => model.Size).ToArray(), plan.Models.Select(model => model.Offsets).ToArray(), direct: IsValueTuple(plan.Type), aggregate: plan.Fields != null, nullablePayload: nullablePayload);
         }
 
         /// <summary>Checks the runtime reference's public formatted-scalar writer overload.</summary>

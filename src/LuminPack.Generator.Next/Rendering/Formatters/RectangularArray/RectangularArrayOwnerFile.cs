@@ -6,13 +6,14 @@ using LuminPack.SourceGenerator.Next.Model;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
-/// <summary>Renders row-major rectangular arrays with the legacy binary and JSON shapes.</summary>
+/// <summary>Renders row-major rectangular arrays with their modeled binary storage and JSON shape.</summary>
 internal static class RectangularArrayOwnerFile
 {
     private const string Unsafe = "global::System.Runtime.CompilerServices.Unsafe";
     private const string Marshal = "global::System.Runtime.InteropServices.MemoryMarshal";
     private const string PackMarshal = "global::LuminPack.Code.LuminPackMarshal";
     private const string Error = "global::LuminPack.Code.LuminPackExceptionHelper";
+    private const string NullableRectangle = "global::LuminPack.Code.LuminPackNullableRectangle";
     private const string Profile = "TLuminProfile";
 
     /// <summary>Renders the four independently selectable operations of a closed rectangular array.</summary>
@@ -43,14 +44,23 @@ internal static class RectangularArrayOwnerFile
     private static string Render(SharedFormatterSet set, string type, string item, int rank, bool reuseArraySlots,
         GeneratedOperations operations, FormatterModel? element = null)
     {
+        FormatterModel? arrayContract = set.FindFormatter(type);
+        FormatterModel? elementContract = element ?? arrayContract?.Arguments[0];
         bool text = item == "string";
-        bool raw = element != null ? element.RawCollection && element.Definition != GenericIdentity.Nullable :
-            !text && GenericIdentity.NullableScalar(item) == null;
-        FormatterStorageModel? layout = element?.Layout;
+        bool nullableElement = elementContract?.Definition == GenericIdentity.Nullable || GenericIdentity.NullableScalar(item) != null;
+        bool raw = !nullableElement && (element?.RawCollection ?? !text);
+        // The rectangular nullable plan owns the wrapper layout. Without it the element formatter owns its marker and payload.
+        FormatterStorageModel? layout = nullableElement ? null : element?.Layout;
         string suffix = ReadableTypeName.Of(GeneratedNames.PayloadKey(type));
         string owner = "global::LuminPack." + GeneratedNames.Owner(set.Extension!, item);
-        string? nullablePayload = set.FindFormatter(type)?.Supports("WriteFramedNullableSpan") == true
-            ? (element ?? set.FindFormatter(item))?.NativeNullablePayload : null;
+        string? nullablePayload = arrayContract?.Supports("WriteFramedNullableSpan") == true
+            ? (elementContract ?? set.FindFormatter(item))?.NativeNullablePayload : null;
+        FormatterStorageModel? nullableStorage = arrayContract?.RectangularNullableStorage;
+        int nullableEncoding = arrayContract?.RectangularNullableEncoding ?? 0;
+        string? storageArguments = nullableEncoding != 0 && nullableStorage is { NullablePayload: { } nullableArgument }
+            ? "<" + nullableArgument + ", " + FormatterStorageEmitter.Layout(nullableStorage) + ">" : null;
+        string encoding = nullableEncoding.ToString(CultureInfo.InvariantCulture);
+        string hasTag = nullableEncoding == 1 && storageArguments != null && nullableStorage!.ModelSizes.Length > 1 ? "true" : "false";
         string[] axes = Enumerable.Range(0, rank).Select(index => index.ToString(CultureInfo.InvariantCulture)).ToArray();
         string[] dimensions = axes.Select(axis => "dimension" + axis).ToArray();
         string array = "new " + ContiguousOwnerFile.WithRank(item, "[" + string.Join(", ", dimensions) + "]");
@@ -61,7 +71,13 @@ internal static class RectangularArrayOwnerFile
             (w, context) => JsonRead(w, context.JsonReader),
             w =>
             {
-                if (layout != null)
+                if (storageArguments != null)
+                {
+                    FormatterStorageEmitter.Support(w, nullableStorage!);
+                    if ((operations & GeneratedOperations.BinaryRead) != 0)
+                        NullableReadSupport(w);
+                }
+                else if (layout != null)
                     FormatterStorageEmitter.Support(w, layout);
             },
             outlineJson: true, outlineBinaryWrite: !raw && layout == null,
@@ -83,6 +99,14 @@ internal static class RectangularArrayOwnerFile
             foreach (string axis in axes)
                 w.Line("writer.Write(value.GetLength(" + axis + "));");
             w.Line("writer.WriteCollectionHeader(value.Length);");
+            if (storageArguments != null)
+            {
+                First(w, item);
+                w.Line(NullableRectangle + ".Write" + storageArguments + "(ref writer, " + Marshal +
+                    ".CreateReadOnlySpan(ref first, value.Length), " + encoding + ", " + hasTag + ");");
+                w.Line("writer.CheckBuffer();");
+                return;
+            }
             if (text)
             {
                 First(w, item);
@@ -173,7 +197,8 @@ internal static class RectangularArrayOwnerFile
                 w.Line("int " + dimensions[axis] + " = global::LuminPack.Core.LuminPackReader.Read<int>(ref " +
                     Unsafe + ".Add(ref dimensions, " + offset + "));");
             }
-            w.Line("if (!reader.TryReadCollectionHead(out var length" + (layout != null ? ", 0" : "") + ")) " + Error + ".ThrowInvalidCollection();");
+            w.Line("if (!reader.TryReadCollectionHead(out var length" + (layout != null || storageArguments != null ? ", 0" : "") + ")) " +
+                Error + ".ThrowInvalidCollection();");
             if (rank == 2)
             {
                 // Two nonnegative Int32 dimensions fit in an Int64 product, even when either dimension is zero.
@@ -192,6 +217,12 @@ internal static class RectangularArrayOwnerFile
                 foreach (string dimension in dimensions)
                     AccumulateDimension(w, dimension);
                 w.Line("if (expectedLength != length) " + Error + ".ThrowMultiDimensionalArrayLengthMismatch();");
+            }
+            if (storageArguments != null)
+            {
+                w.Line("value = LuminRoots_" + suffix + ".ReadNullablePayload(ref reader, length, " +
+                    string.Join(", ", dimensions) + ");");
+                return;
             }
             if (layout != null)
                 FormatterStorageEmitter.Validate(w, layout, "length");
@@ -259,7 +290,7 @@ internal static class RectangularArrayOwnerFile
                 return;
             }
             w.Line("if (length == 0) return;");
-            if (set.FindFormatter(type)?.Supports("ReadFramedNullableInt32s") == true && !raw)
+            if (arrayContract?.Supports("ReadFramedNullableInt32s") == true && !raw)
             {
                 w.Line("reader.ReadFramedNullableInt32s(" + Marshal + ".CreateSpan(ref first, length));");
                 return;
@@ -270,6 +301,27 @@ internal static class RectangularArrayOwnerFile
             w.Line(owner + ".Read<" + Profile + ">(ref reader, ref " + Unsafe + ".Add(ref first, (nint)(uint)index));");
             w.Close();
             w.Line("while (++index < length);");
+        }
+
+        void NullableReadSupport(CodeWriter w)
+        {
+            // Checked reader copies invoke this closed helper after their own shape and count validation.
+            w.Line(w.MethodImpl("AggressiveInlining"));
+            w.Line("internal static " + type + " ReadNullablePayload(scoped ref LuminPackReader reader, int length, " +
+                string.Join(", ", dimensions.Select(dimension => "int " + dimension)) + ")");
+            w.Open();
+            w.Line(NullableRectangle + ".Validate" + storageArguments + "(ref reader, length, " + encoding + ", " +
+                hasTag + ", out byte storageTag);");
+            w.Line("var replacement = " + array + ";");
+            w.Line("if (length != 0)");
+            w.Open();
+            First(w, item, "replacement");
+            w.Line(NullableRectangle + ".Read" + storageArguments + "(ref reader, " + Marshal + ".CreateSpan(ref first, length), " +
+                encoding + ", storageTag);");
+            w.Close();
+            w.Line("return replacement;");
+            w.Close();
+            w.Blank();
         }
 
         void JsonWrite(CodeWriter w)
@@ -426,9 +478,10 @@ internal static class RectangularArrayOwnerFile
     /// <summary>Writes the first row-major element address after the caller validates the shape.</summary>
     /// <param name="w">The source writer.</param>
     /// <param name="item">The element type.</param>
-    private static void First(CodeWriter w, string item) =>
+    /// <param name="array">The row-major array that owns the element storage.</param>
+    private static void First(CodeWriter w, string item, string array = "value") =>
         w.Line("ref var first = ref " + Unsafe + ".As<byte, " + item + ">(ref " + PackMarshal +
-            ".DangerousGetArrayDataReference<" + item + ">(value));");
+            ".DangerousGetArrayDataReference<" + item + ">(" + array + "));");
 
     /// <summary>Validates a dimension and accumulates its contribution to the element count.</summary>
     /// <param name="w">The source writer.</param>

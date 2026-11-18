@@ -130,6 +130,7 @@ public partial struct Packet
 ```
 
 - 结构体自己的设置覆盖程序集设置。引用程序集保持各自的声明。
+- 在 .NET 8 及以上，Next 对符合条件的多维 `Nullable<T>` 数组应用底层类型的布局设置。内置标量元素使用消费程序集的设置。`Native` 以行优先顺序整块写入可空值的完整存储。`Tagged` 只在非空块存在多种建模布局时写一个布局标签。`Packed` 和不符合条件的元素使用逐元素的可空值编码。
 - 字段展开包含 private 字段、被忽略的字段和自动属性的 backing field，并递归展开嵌套结构体；`LuminPackOrder` 不影响它。`long` 总是占 8 字节。
 - 在 .NET 8+ 上，tagged 或 packed 结构体的集合使用 SIMD 加速转换；其他平台（包括 IL2CPP）按字段逐个处理，产生相同的字节。
 - `Packed` 遇到原生整数、指针、fixed buffer、InlineArray、运行时大小的向量、`Custom` 存储以及无法分析的布局时会报诊断。

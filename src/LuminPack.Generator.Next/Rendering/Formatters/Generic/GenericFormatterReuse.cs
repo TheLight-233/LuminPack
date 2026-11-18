@@ -276,6 +276,9 @@ internal static class GenericFormatterReuse
             }
             if (model is not { Arguments.Length: 1 })
                 return false;
+            // The rectangular nullable wire needs either its exact storage descriptor or its own closed element formatter.
+            if (shape.Rank > 1 && model.Arguments[0].Definition == GenericIdentity.Nullable)
+                return false;
             Category category = ClassifySequence(model.Arguments[0]);
             // A laid-out element keeps its closed block transfer unless the runtime declares the block interfaces.
             if (category is Category.None or Category.Text || model.Arguments[0].Layout != null && _mode < 2)

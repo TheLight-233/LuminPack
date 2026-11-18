@@ -123,7 +123,16 @@ internal static partial class SerializerIssueRegression
     /// <param name="source">Consumer source.</param>
     /// <param name="name">Unique compilation name.</param>
     /// <param name="inspect">An optional assertion over the emitted source.</param>
-    private static void Execute(MetadataReference[] references, string source, string name, Action<GeneratorDriverRunResult>? inspect = null)
+    private static void Execute(MetadataReference[] references, string source, string name, Action<GeneratorDriverRunResult>? inspect = null) =>
+        CompileConsumer(references, source, name, inspect).GetType("Entry")!.GetMethod("Check")!.Invoke(null, null);
+
+    /// <summary>Compiles a Next consumer for independently bound serializer entry points.</summary>
+    /// <param name="references">Platform and runtime references.</param>
+    /// <param name="source">Consumer source.</param>
+    /// <param name="name">Unique compilation name.</param>
+    /// <param name="inspect">An optional assertion over the emitted source.</param>
+    /// <returns>The generated consumer assembly.</returns>
+    private static Assembly CompileConsumer(MetadataReference[] references, string source, string name, Action<GeneratorDriverRunResult>? inspect = null)
     {
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
         var compilation = TestCompilation.Create("IssueRegression" + name, [CSharpSyntaxTree.ParseText(source, parse, "Models.cs")], references,
@@ -135,6 +144,6 @@ internal static partial class SerializerIssueRegression
         if (!result.Success || diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error))
             throw new InvalidOperationException(string.Join(Environment.NewLine, diagnostics.Concat(result.Diagnostics).Where(item => item.Severity == DiagnosticSeverity.Error)));
         inspect?.Invoke(driver.GetRunResult());
-        Assembly.Load(image.ToArray()).GetType("Entry")!.GetMethod("Check")!.Invoke(null, null);
+        return Assembly.Load(image.ToArray());
     }
 }

@@ -134,6 +134,25 @@ internal static class FormatterRuntimeTraits
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, span));
     }
 
+    /// <summary>Recognizes the Core operations for checked rectangular nullable storage blocks.</summary>
+    /// <param name="compilation">The consuming compilation and its Core reference.</param>
+    /// <returns>Whether the selected runtime exposes the complete block contract.</returns>
+    internal static bool HasNullableRectangleStorage(Compilation compilation)
+    {
+        var operations = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackNullableRectangle");
+        var layout = compilation.GetTypeByMetadataName("LuminPack.Utility.ILuminNullableStorageLayout");
+        return operations is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } &&
+            layout is { TypeKind: TypeKind.Interface, DeclaredAccessibility: Accessibility.Public } &&
+            Has("Write", 4) && Has("Validate", 5) && Has("Read", 4);
+
+        bool Has(string name, int count) => operations!.GetMembers(name).OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 2, ReturnsVoid: true } &&
+            method.Parameters.Length == count && method.Parameters[0].RefKind == RefKind.Ref &&
+            method.TypeParameters[0].HasUnmanagedTypeConstraint && method.TypeParameters[1].HasValueTypeConstraint &&
+            method.TypeParameters[1].ConstraintTypes.Length == 1 &&
+            SymbolEqualityComparer.Default.Equals(method.TypeParameters[1].ConstraintTypes[0], layout));
+    }
+
     /// <summary>Checks the referenced runtime for the present nullable native-payload reader.</summary>
     /// <param name="compilation">The consuming compilation's runtime metadata.</param>
     /// <returns>Whether the exact advancing reader entry is available.</returns>

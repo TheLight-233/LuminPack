@@ -41,6 +41,19 @@ internal static partial class TypeModelFactory
 
     private sealed partial class Session
     {
+        /// <summary>Resolves the declared storage strategy of a rectangular nullable array's payload.</summary>
+        /// <param name="payload">The reference-free value wrapped by the nullable element.</param>
+        /// <returns>The existing Tagged, Packed, or Native strategy value.</returns>
+        private int NullableRectangularStrategy(INamedTypeSymbol payload)
+        {
+            if (ReadStructLayoutOption(payload.GetAttributes()) is int declared)
+                return declared;
+            var assembly = payload.ContainingAssembly;
+            if (payload.SpecialType != SpecialType.None || FrameworkScalarBody.Contains(FormatterName(payload)))
+                assembly = _compilation.Assembly;
+            return ReadStructLayoutOption(assembly.GetAttributes()) ?? 0;
+        }
+
         /// <summary>Determines the read and write shapes independently from the published root contract.</summary>
         /// <param name="type">The closed root type.</param>
         /// <returns>The closed entry shape.</returns>
