@@ -1,3 +1,4 @@
+using System;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
@@ -75,6 +76,23 @@ internal static class HashSetOwnerFile
         w.Line("int position = operationState.Position;");
         w.Line("operationState.WriteCollectionHeader(expected);");
         w.Line("int written = 0;");
+        WriteLiveEntries(w, () =>
+        {
+            c.WriteElement("item");
+            w.Line("written++;");
+        });
+        // Remove and Clear can succeed without invalidating a modern HashSet enumerator.
+        w.Line("if (written != expected) operationState.EndCollection(position, written);");
+        w.Line("operationState.CheckBuffer();");
+        w.Line("goto operationComplete_RootWrite;");
+        w.Close();
+    }
+
+    /// <summary>Writes each live item in the checked layout view's current enumeration order.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="writeItem">Emits the original element operation for the captured item.</param>
+    internal static void WriteLiveEntries(CodeWriter w, Action writeItem)
+    {
         w.Line("for (int index = 0; ; index++)");
         w.Open();
         w.Line("if (version != view._version)");
@@ -83,13 +101,7 @@ internal static class HashSetOwnerFile
         w.Line("ref var entry = ref view._entries[index];");
         w.Line("if (entry.Next < -1) continue;");
         w.Line("var item = entry.Value;");
-        c.WriteElement("item");
-        w.Line("written++;");
-        w.Close();
-        // Remove and Clear can succeed without invalidating a modern HashSet enumerator.
-        w.Line("if (written != expected) operationState.EndCollection(position, written);");
-        w.Line("operationState.CheckBuffer();");
-        w.Line("goto operationComplete_RootWrite;");
+        writeItem();
         w.Close();
     }
 

@@ -902,6 +902,22 @@ internal static class EnumerableOwnerTemplate
                     {
                         bool scopedFallback = context.Supports("CopyImmutableHashTree") || context.Supports("CopyImmutableSortedTree") ||
                             context.Supports("CopyImmutableListTree");
+                        bool entryTraversal = fact.Family.Kind == CollectionKind.HashSet && context.Supports("JsonHashSetTraversal");
+                        if (entryTraversal)
+                        {
+                            w.Line("if (global::LuminPack.Code.LuminPackMarshal.TryGetHashSetTraversal(value, out var view))");
+                            w.Open();
+                            w.Line("int version = view._version;");
+                            w.Line("bool isFirst = true;");
+                            HashSetOwnerFile.WriteLiveEntries(w, () => JsonSequenceElementWriter.Emit(w, set, sequence, scalar, elementOwner, utf8Only: true));
+                            w.Close();
+                            w.Line("else");
+                            w.Indented(() => w.Line("WriteEnumerated(ref writer, value);"));
+                            w.Blank();
+                            w.Line(w.MethodImpl("NoInlining"));
+                            w.Line("static void WriteEnumerated(scoped ref " + jsonWriter + " writer, " + sequence + " value)");
+                            w.Open();
+                        }
                         if (scopedFallback)
                             w.Open();
                         w.Line("bool isFirst = true;");
@@ -922,6 +938,8 @@ internal static class EnumerableOwnerTemplate
                         }
                         w.Close();
                         if (scopedFallback)
+                            w.Close();
+                        if (entryTraversal)
                             w.Close();
                     }
                     w.Blank();

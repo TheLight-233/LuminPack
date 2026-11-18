@@ -47,6 +47,9 @@ internal static class FormatterCapabilities
             named.TypeArguments[0].IsReferenceType && named.TypeArguments[0].SpecialType != SpecialType.System_String &&
             FormatterOrderedCollectionTraits.HasHashSetTraversal(compilation))
             result.Add("HashSetTraversal");
+        if (definition == "System.Collections.Generic.HashSet" && modern && !unity &&
+            FormatterOrderedCollectionTraits.HasHashSetTraversal(compilation))
+            result.Add("JsonHashSetTraversal");
         if (definition is "System.Collections.Generic.Queue" or "System.Collections.Generic.Stack")
             FormatterOrderedCollectionTraits.Capture(compilation, named, definition == "System.Collections.Generic.Stack", result);
         if (definition == "System.Collections.Generic.Queue" && FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))

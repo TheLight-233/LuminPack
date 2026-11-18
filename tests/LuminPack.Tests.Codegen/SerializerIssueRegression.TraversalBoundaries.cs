@@ -20,6 +20,7 @@ internal static partial class SerializerIssueRegression
             [LuminPackable] public sealed class CompoundTraversalChild { public List<string> Items; }
             [LuminPackable] public sealed class ScalarPrefix { public short Id; public List<TraversalParent> Items; }
             [LuminPackable] public sealed class FieldRunPrefix { public int A; public int B; public List<TraversalParent> Items; }
+            public sealed class DerivedHashSet : HashSet<int> { }
             [LuminPackable] public sealed class TraversalParent
             {
                 public FlatTraversalChild Flat;
@@ -62,6 +63,7 @@ internal static partial class SerializerIssueRegression
 
                     CheckConcurrentPairs<LuminPackUtf16LengthOptions>();
                     CheckConcurrentPairs<LuminPackUtf8LengthOptions>();
+                    CheckJsonHashTraversal();
                 }
 
                 private static void CheckConcurrentPairs<TProfile>() where TProfile : struct, ILuminPackOptions
@@ -90,6 +92,19 @@ internal static partial class SerializerIssueRegression
                     LuminPackSerializer.Serialize<ConcurrentDictionary<string, string>, TProfile>(source, actual);
                     if (!actual.GetSpan().SequenceEqual(writer.GetSpan()))
                         throw new Exception("Concurrent string pairs changed bytes across output windows.");
+                }
+
+                private static void CheckJsonHashTraversal()
+                {
+                    var sparse = new HashSet<int> { 1, 2, 3, 4 };
+                    sparse.Remove(2);
+                    HashSet<int> derived = new DerivedHashSet { 4, 1, 9 };
+                    foreach (var values in new[] { sparse, derived, new HashSet<int>() })
+                    {
+                        string expected = "[" + string.Join(",", values) + "]";
+                        if (LuminPackSerializer.SerializeJson(values) != expected)
+                            throw new Exception("HashSet JSON differs from framework enumeration.");
+                    }
                 }
             }
             """;
@@ -142,6 +157,11 @@ internal static partial class SerializerIssueRegression
             CheckJsonTier("QueueOfLongFormatter", "ReadJson", fullOptimization: false);
             CheckJsonTier("HashSetOfIntFormatter", "WriteJson", fullOptimization: true);
             CheckJsonTier("HashSetOfStringFormatter", "ReadJson", fullOptimization: true);
+            var hashWrite = owners.Single(owner => owner.Identifier.ValueText == "HashSetOfIntFormatter")
+                .Members.OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == "WriteJson" && method.Body != null);
+            if (!hashWrite.ToString().Contains("TryGetHashSetTraversal", StringComparison.Ordinal) ||
+                !hashWrite.ToString().Contains("version != view._version", StringComparison.Ordinal))
+                throw new InvalidOperationException("The JSON HashSet writer lost its checked traversal.");
 
             void CheckJsonTier(string formatter, string operation, bool fullOptimization)
             {
