@@ -41,12 +41,6 @@ internal static class ContiguousOwnerFile
             ? RenderModelFactory.Create(union, set.Options) : null);
         if (freshUnion is { UnionRoot: false })
             freshUnion = null;
-        PayloadRenderModel? freshClosedArrayUnion = shape == ContiguousShape.Array &&
-            element.Definition == FormatterDefinitions.GenericUnion && element.Payload is UnionModel { ClosedWriteSlot: not null } closed &&
-            set.Options?.Net8 == true ? RenderModelFactory.Create(closed, set.Options) : null;
-        if (freshClosedArrayUnion != null && Array.Exists(freshClosedArrayUnion.UnionCases,
-                item => UnionEmitter.NeedsCheckedCase(freshClosedArrayUnion, item)))
-            freshClosedArrayUnion = null;
         bool scalarElements = shape == ContiguousShape.ReadOnlySequence;
         // A sequence of reference-free elements writes its count first and copies each segment's storage, as the original did.
         bool rawSequence = scalarElements && element.RawCollection && element.Layout == null;
@@ -308,7 +302,19 @@ internal static class ContiguousOwnerFile
                 w.Line("if (freshLength < 0)");
                 w.Indented(() => w.Line("return;"));
                 w.Line("var freshItems = reader.CreateFreshListArray<" + element.Type + ">(freshLength, out value);");
-                ReadFreshUnionItems(w, freshUnion, "freshLength");
+                w.Line("if (freshLength != 0)");
+                w.Open();
+                w.Line("ref var first = ref " + Marshal + ".GetNotNullArrayReference(freshItems);");
+                w.Line("int i = 0;");
+                w.Line("do");
+                w.Open();
+                w.Line(element.Type + " item = default!;");
+                UnionEmitter.FreshElementRead(freshUnion, w, "item", "freshEnd");
+                w.Line("freshEnd:");
+                w.Line(Unsafe + ".Add(ref first, (nint)(uint)i) = item;");
+                w.Close();
+                w.Line("while (++i < freshLength);");
+                w.Close();
                 w.Line("return;");
                 w.Close();
                 w.Blank();
@@ -319,16 +325,6 @@ internal static class ContiguousOwnerFile
             w.Line("value = " + empty + ";");
             w.Line("return;");
             w.Close();
-            if (freshClosedArrayUnion != null)
-            {
-                w.Line("if (value is null || value.Length != length || value.GetType() != typeof(" + model.Type + "))");
-                w.Open();
-                w.Line("var freshItems = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
-                w.Line("value = freshItems;");
-                ReadFreshUnionItems(w, freshClosedArrayUnion, "length");
-                w.Line("return;");
-                w.Close();
-            }
             if (layout != null)
                 FormatterStorageEmitter.Validate(w, layout, "length");
             bool directRawSlice = raw && element.Type != "bool" &&
@@ -362,23 +358,6 @@ internal static class ContiguousOwnerFile
             Publish(w);
         }
 
-        void ReadFreshUnionItems(CodeWriter w, PayloadRenderModel dispatch, string count)
-        {
-            w.Line("if (" + count + " != 0)");
-            w.Open();
-            w.Line("ref var first = ref " + Marshal + ".GetNotNullArrayReference(freshItems);");
-            w.Line("int i = 0;");
-            w.Line("do");
-            w.Open();
-            w.Line(element.Type + " item = default!;");
-            UnionEmitter.FreshElementRead(dispatch, w, "item", "freshEnd");
-            w.Line("freshEnd:");
-            w.Line(Unsafe + ".Add(ref first, (nint)(uint)i) = item;");
-            w.Close();
-            w.Line("while (++i < " + count + ");");
-            w.Close();
-        }
-
         void ReadReadOnlyStringPrefix(CodeWriter w)
         {
             // A checked first read cheaply rejects changing inputs before populating the remaining fresh slots.
@@ -410,8 +389,7 @@ internal static class ContiguousOwnerFile
             switch (shape)
             {
                 case ContiguousShape.Array:
-                    if (freshClosedArrayUnion == null)
-                        w.Line("if (value is null || value.Length != length || value.GetType() != typeof(" + model.Type + ")) value = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
+                    w.Line("if (value is null || value.Length != length || value.GetType() != typeof(" + model.Type + ")) value = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
                     w.Line("var items = " + Marshal + ".CreateSpan(ref " + Marshal + ".GetNotNullArrayReference(value), length);");
                     break;
                 case ContiguousShape.List:

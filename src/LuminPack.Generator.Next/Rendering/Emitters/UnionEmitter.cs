@@ -396,22 +396,19 @@ internal static class UnionEmitter
     /// <param name="reuse">Whether to reuse the existing destination.</param>
     /// <param name="reader">The reader positioned at the input value.</param>
     /// <param name="counters">The counters supplied to <c>ReadArms</c>.</param>
-    /// <param name="dispatch">The selected dispatch labels and verification.</param>
     /// <param name="freshTarget">The fresh target supplied to <c>ReadArms</c>.</param>
     /// <param name="freshExit">The fresh exit supplied to <c>ReadArms</c>.</param>
     /// <param name="blocks">The checked block reads that same-width fixed cases share, or null to expand every case.</param>
     private static void ReadArms(PayloadRenderModel model, CodeWriter w, bool reuse, string reader, SwitchCounters counters,
-        string? freshTarget = null, string? freshExit = null, SharedBlocks? blocks = null, ReadDispatch dispatch = default)
+        string? freshTarget = null, string? freshExit = null, SharedBlocks? blocks = null)
     {
         string target = freshTarget ?? "value";
         string exit = freshExit ?? "return;";
         foreach (var item in model.UnionCases)
         {
             int member = counters.Members++;
-            w.Line("case " + dispatch.Label(item) + ":");
+            w.Line("case " + NameHash(item) + ":");
             w.Open();
-            if (dispatch.Dense)
-                w.Line("if (tag != " + NameHash(item) + ") goto default;");
             if (item.OwnEntry)
             {
                 w.Line(item.Type + " member" + Number(member) + " = " + (reuse
@@ -501,89 +498,11 @@ internal static class UnionEmitter
         var blocks = SharedBlocks.Plan(model, w, reuse: false, reader, label + "Block");
         blocks.Declare(model, w, reuse: false);
         w.Line("// Union cases");
-        ReadDispatch dispatch = ReadDispatch.Create(model.UnionCases);
-        w.Line("switch (" + dispatch.Expression + ")");
+        w.Line("switch (tag)");
         w.Open();
-        ReadArms(model, w, false, reader, new SwitchCounters(), target, "goto " + label + ";", blocks, dispatch);
+        ReadArms(model, w, false, reader, new SwitchCounters(), target, "goto " + label + ";", blocks);
         w.Close();
         blocks.Emit(w, reader, reuse: false, target, "goto " + label + ";");
-    }
-
-    /// <summary>Maps known hashes to a dense switch while retaining validation of the full hash in every case.</summary>
-    private readonly struct ReadDispatch
-    {
-        private readonly uint _multiplier;
-        private readonly int _shift;
-
-        /// <summary>Captures a proven collision-free projection for the known hashes.</summary>
-        /// <param name="multiplier">The unsigned multiplier used before taking the high bits.</param>
-        /// <param name="shift">The number of low bits to discard.</param>
-        private ReadDispatch(uint multiplier, int shift)
-        {
-            _multiplier = multiplier;
-            _shift = shift;
-        }
-
-        internal bool Dense => _multiplier != 0;
-
-        internal string Expression => Dense
-            ? "unchecked(tag * 0x" + _multiplier.ToString("X8", CultureInfo.InvariantCulture) + "u) >> " +
-                _shift.ToString(CultureInfo.InvariantCulture)
-            : "tag";
-
-        /// <summary>Formats a known case's label under this projection.</summary>
-        /// <param name="item">The known Union case.</param>
-        /// <returns>The dense index or the original hash literal.</returns>
-        internal string Label(UnionRenderCase item) => Dense
-            ? Index(item.NameHash, _multiplier, _shift).ToString(CultureInfo.InvariantCulture) + "u"
-            : NameHash(item);
-
-        /// <summary>Searches a bounded set of dense projections for known cases.</summary>
-        /// <param name="cases">The emitted case table.</param>
-        /// <returns>A collision-free projection, or the original sparse switch plan.</returns>
-        internal static ReadDispatch Create(UnionRenderCase[] cases)
-        {
-            int count = cases.Length;
-            if (count is < 6 or > 32)
-                return default;
-
-            int bits = 3;
-            while (1 << bits < count)
-                bits++;
-
-            uint sequence = 0x9E3779B9u;
-            // One word suffices for occupancy. Keep the switch within twice the number of cases so a sparse
-            // projection cannot replace the original comparison tree with another one plus a multiply.
-            for (; bits <= 6 && 1 << bits <= count * 2; bits++)
-            {
-                int shift = 32 - bits;
-                for (int attempt = 0; attempt < 512; attempt++)
-                {
-                    sequence = unchecked(sequence * 1664525u + 1013904223u);
-                    uint multiplier = sequence | 1u;
-                    ulong used = 0;
-                    int added = 0;
-                    foreach (UnionRenderCase item in cases)
-                    {
-                        ulong bit = 1ul << Index(item.NameHash, multiplier, shift);
-                        if ((used & bit) != 0)
-                            break;
-                        used |= bit;
-                        added++;
-                    }
-                    if (added == count)
-                        return new ReadDispatch(multiplier, shift);
-                }
-            }
-            return default;
-        }
-
-        /// <summary>Projects a hash using the same wrapping arithmetic as the emitted switch.</summary>
-        /// <param name="tag">The original case hash.</param>
-        /// <param name="multiplier">The unsigned multiplier.</param>
-        /// <param name="shift">The number of low bits to discard.</param>
-        /// <returns>An unsigned switch index represented as an integer.</returns>
-        private static int Index(uint tag, uint multiplier, int shift) => (int)(unchecked(tag * multiplier) >> shift);
     }
 
     /// <summary>The checked block reads of one case switch that two or more fixed cases of the same payload width share.</summary>
