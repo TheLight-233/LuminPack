@@ -3,6 +3,7 @@ using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using LuminPack.Code;
 using LuminPack.Security;
 
 namespace LuminPack.Core;
@@ -17,26 +18,31 @@ public ref partial struct LuminPackReader
     {
         const int recordWidth = 1 + sizeof(int);
         ref byte cursor = ref Cursor;
-        long remaining = (long)Unsafe.ByteOffset(ref cursor, ref _end);
-        ref byte destination = ref Unsafe.As<int?, byte>(ref MemoryMarshal.GetReference(values));
-        long offset = (long)Unsafe.ByteOffset(ref cursor, ref destination);
+        ref byte end = ref _end;
+        long remaining = (long)Unsafe.ByteOffset(ref cursor, ref end);
+        ref int? first = ref MemoryMarshal.GetReference(values);
+        long offset = (long)Unsafe.ByteOffset(ref cursor, ref Unsafe.As<int?, byte>(ref first));
         int index = 0;
         if ((ulong)remaining <= (uint)_buffer.Length &&
             (offset >= remaining || offset <= -(long)values.Length * Unsafe.SizeOf<int?>()))
         {
-            while (index < values.Length && remaining >= recordWidth)
+            while (index < values.Length && (long)Unsafe.ByteOffset(ref cursor, ref end) >= recordWidth)
             {
-                // A full record is readable. Zero encodes present and 255 encodes null.
-                int present = unchecked((byte)(cursor + 1));
-                if (present > 1)
+                byte marker = cursor;
+                ref int? slot = ref Unsafe.Add(ref first, (nint)(uint)index);
+                if (marker == 0)
+                {
+                    slot = Read<int>(ref Unsafe.Add(ref cursor, 1));
+                    cursor = ref Unsafe.Add(ref cursor, recordWidth);
+                }
+                else if (marker == LuminPackCode.NullObject)
+                {
+                    slot = null;
+                    cursor = ref Unsafe.Add(ref cursor, 1);
+                }
+                else
                     break;
-                int payload = Read<int>(ref Unsafe.Add(ref cursor, 1)) & -present;
-                ref int? slot = ref values[index++];
-                slot = payload;
-                Unsafe.As<int?, bool>(ref slot) = present != 0;
-                int width = 1 + present * sizeof(int);
-                cursor = ref Unsafe.Add(ref cursor, width);
-                remaining -= width;
+                index++;
             }
             Cursor = ref cursor;
         }
