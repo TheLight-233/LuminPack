@@ -21,7 +21,7 @@ internal static partial class TypeModelFactory
         "global::System.Runtime.InteropServices.GCHandle",
     };
 
-    /// <summary>Classifies the allocating entry of a closed root payload, as the original concrete facade did.</summary>
+    /// <summary>Classifies the allocating write and span read of a closed root payload.</summary>
     /// <param name="type">The closed payload.</param>
     /// <param name="compilation">The consuming compilation.</param>
     /// <param name="options">The project facts.</param>
@@ -40,49 +40,75 @@ internal static partial class TypeModelFactory
 
     private sealed partial class Session
     {
-        /// <summary>Handles entry shape of for <c>Session</c>.</summary>
-        /// <param name="type">The type being analyzed or emitted.</param>
-        /// <returns>The resulting <c>EntryShape</c>.</returns>
+        /// <summary>Determines the read and write shapes independently from the published root contract.</summary>
+        /// <param name="type">The closed root type.</param>
+        /// <returns>The closed entry shape.</returns>
         internal EntryShape EntryShapeOf(ITypeSymbol type)
         {
             // Entries stage their input when the reader cannot hold a managed span: before .NET 8 or against a netstandard Core.
-            if (!Options.Net8 || ReaderTargetsNetStandard())
+            if (!Options.Net8 || Options.PointerCursor || ReaderTargetsNetStandard())
                 return EntryShape.Pooled;
+            MemberModel? member = ClassifyRoot(type);
+            TypeModel? payload = (member as SpecialMember)?.Formatter?.Payload;
+            if (member == null && type is INamedTypeSymbol named && (IsPackable(named) || Marked(named)) &&
+                Create(named, depth: 0) is { IsComplete: true } declared)
+                payload = declared.Model;
+
+            EntryShape write = EntryWriteShape(type, member, payload);
+            bool stateless = payload == null ? IsStatelessMember(member) : IsStatelessPayload(payload);
+            return new EntryShape(write.Kind, write.Element, write.Width, stateless);
+        }
+
+        /// <summary>Selects an allocating write only when its width matches the published writer's representation.</summary>
+        /// <param name="type">The closed root type.</param>
+        /// <param name="member">The normalized shared root, if one is published.</param>
+        /// <param name="payload">The normalized payload, if one is published.</param>
+        /// <returns>The write shape before the separate reader-state proof.</returns>
+        private EntryShape EntryWriteShape(ITypeSymbol type, MemberModel? member, TypeModel? payload)
+        {
             bool containsReferences = !CanUseUnmanagedSerialization(type);
             string name = FormatterName(type);
-            if (KnownValueTypes.Contains(name) && !containsReferences)
+            if (!containsReferences && (KnownValueTypes.Contains(name) || payload is StructModel
+                { Storage: StructStorage.RawUnmanaged, StoragePlan: null, Layout: null, Versioned: false, Rejection: null }))
                 return new EntryShape(EntryKind.RawScalar);
+            if (payload is StructModel { Storage: StructStorage.PortableUnmanaged, Layout: { Complete: true } layout, Rejection: null })
+                return new EntryShape(EntryKind.FixedWidthRecord, width: layout.WireSize);
             if (name == "global::System.TimeZoneInfo")
                 return new EntryShape(EntryKind.TimeZoneSnapshot);
             if (type is INamedTypeSymbol { Name: "PriorityQueue", TypeArguments.Length: 2 } heap &&
                 IsFrameworkCollection(heap, "System.Collections.Generic.PriorityQueue`2") &&
                 FormatterOrderedCollectionTraits.HasPriorityAllocatingWriter(_compilation, heap))
                 return new EntryShape(EntryKind.PackedPriorityQueue);
+            if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            {
+                ITypeSymbol element = nullable.TypeArguments[0];
+                if (IsKnownScalar(element))
+                    return new EntryShape(EntryKind.NullableDirect, FormatterName(element));
+                if (member is SpecialMember { Formatter.Arguments.Length: 1 } nullableMember)
+                {
+                    FormatterModel argument = nullableMember.Formatter!.Arguments[0];
+                    if (argument is { Definition: FormatterDefinitions.Scalar, Raw: true } || argument.Payload is StructModel
+                        { Storage: StructStorage.RawUnmanaged, StoragePlan: null, Layout: null, Rejection: null })
+                        return new EntryShape(EntryKind.NullableDirect, FormatterName(element));
+                    if (argument.Payload is StructModel
+                        { Storage: StructStorage.PortableUnmanaged, Layout: { Complete: true } itemLayout, Rejection: null })
+                        return new EntryShape(EntryKind.NullableDirect, FormatterName(element), itemLayout.WireSize);
+                }
+                return EntryShape.Pooled;
+            }
             bool fixedEnum = type.TypeKind == TypeKind.Enum && !containsReferences;
             bool fixedRecord = IsFixedRecord(type) || fixedEnum;
             if (fixedRecord || IsDirectRecord(type))
             {
                 if (fixedEnum)
                     return new EntryShape(EntryKind.FixedEnum);
-                if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
-                    return new EntryShape(EntryKind.NullableDirect, FormatterName(nullable.TypeArguments[0]));
                 if (name == "global::System.Numerics.BigInteger")
                     return new EntryShape(EntryKind.BigInteger);
                 if (!fixedRecord && type is INamedTypeSymbol compound)
                 {
-                    if (name is "global::System.Text.StringBuilder" or "global::System.Collections.BitArray" or "global::System.Version" &&
-                        IsFrameworkCollection(compound, name.Substring("global::".Length)))
-                        return new EntryShape(EntryKind.StatelessSpanRecord);
                     string definition = compound.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + compound.Name;
                     if (definition is GenericIdentity.Tuple or GenericIdentity.ValueTuple or GenericIdentity.KeyValuePair or GenericIdentity.Lazy)
                         return new EntryShape(EntryKind.CompoundDirect);
-                    if (definition is "System.Memory" or "System.ReadOnlyMemory" or "System.ArraySegment" &&
-                        IsFrameworkCollection(compound, definition + "`1"))
-                        return new EntryShape(EntryKind.StatelessSpanRecord);
-                    if ((definition is "System.Collections.Generic.Queue" or "System.Collections.Generic.LinkedList") &&
-                        compound.TypeArguments.Length == 1 && IsKnownScalar(compound.TypeArguments[0]) &&
-                        IsFrameworkCollection(compound, definition + "`1"))
-                        return new EntryShape(EntryKind.StatelessSpanRecord);
                 }
                 return new EntryShape(fixedRecord ? EntryKind.FixedRecord : EntryKind.DirectRecord);
             }
@@ -93,9 +119,8 @@ internal static partial class TypeModelFactory
             {
                 string definition = collection.OriginalDefinition.ToDisplayString();
                 ITypeSymbol element = collection.TypeArguments[0];
-                bool statelessRead = definition is "System.Collections.Generic.IEnumerable<T>" or "System.Collections.Generic.ICollection<T>" or
-                    "System.Collections.Generic.IReadOnlyList<T>";
-                bool exactCollection = (statelessRead || definition == "System.Collections.Generic.IReadOnlyCollection<T>") &&
+                bool exactCollection = definition is "System.Collections.Generic.IEnumerable<T>" or "System.Collections.Generic.ICollection<T>" or
+                    "System.Collections.Generic.IReadOnlyList<T>" or "System.Collections.Generic.IReadOnlyCollection<T>" &&
                     IsFrameworkCollection(collection, "System.Collections.Generic." + collection.Name + "`1");
                 if (exactCollection || definition is "System.Collections.Generic.IList<T>" or "System.Collections.Generic.ISet<T>" or
                     "System.Collections.Generic.IReadOnlySet<T>")
@@ -106,16 +131,58 @@ internal static partial class TypeModelFactory
                          FrameworkScalarBody.Contains(spelling)) && KnownValueTypes.Contains(spelling) && CanUseUnmanagedSerialization(element))
                     {
                         if (exactCollection)
-                            return new EntryShape(statelessRead ? EntryKind.ExactListStatelessRead : EntryKind.ExactListForReadOnlyCollection, spelling);
+                            return new EntryShape(EntryKind.ExactCapturedList, spelling);
                         EntryKind kind = definition == "System.Collections.Generic.IList<T>" ? EntryKind.ExactList :
                             FormatterRuntimeTraits.CanGroupSmallHashSetWrites(element, _compilation) ? EntryKind.ExactSmallHashSet : EntryKind.ExactHashSet;
                         return new EntryShape(kind, spelling);
                     }
                 }
-                if (statelessRead && IsKnownScalar(element))
-                    return new EntryShape(EntryKind.StatelessRead);
             }
             return EntryShape.Pooled;
+        }
+
+        /// <summary>Proves a generated payload can be read without a preinitialized operation context.</summary>
+        /// <param name="payload">The fully modeled generated payload.</param>
+        /// <returns>Whether all its binary readers are known to leave optional state unused.</returns>
+        private static bool IsStatelessPayload(TypeModel payload) => payload switch
+        {
+            // The raw and portable binary operations do not visit the modeled JSON members.
+            StructModel { Storage: StructStorage.RawUnmanaged or StructStorage.PortableUnmanaged } => true,
+            StructModel { Versioned: false } => payload.Members.All(IsStatelessMember),
+            RecordModel { Versioned: false, SequenceBase: null } => payload.Members.All(IsStatelessMember),
+            // A Union may dispatch a registered case; reference-tracked nodes always share a table.
+            _ => false,
+        };
+
+        /// <summary>Follows the binary dependencies carried by a specialized or forwarded member.</summary>
+        /// <param name="member">The member or shared root contract.</param>
+        /// <returns>Whether the modeled reader proves state is unnecessary.</returns>
+        private static bool IsStatelessMember(MemberModel? member) => member switch
+        {
+            ScalarMember or TextMember or CultureInfoMember => true,
+            SpecialMember { Formatter: { } formatter } => IsStatelessFormatter(formatter),
+            SpecialMember special => FormatterRegistry.HasStandalone(special.Declared.Replace("global::", string.Empty)),
+            PayloadMember { Shape: not PayloadShape.ReferenceTracked, Nested: { } nested } => IsStatelessPayload(nested),
+            CollectionMember { Nested: { } nested } => IsStatelessPayload(nested),
+            CollectionMember { ForwardedElement: { } forwarded } => IsStatelessMember(forwarded),
+            CollectionMember { Scalar: not null } => true,
+            DictionaryMember dictionary => (dictionary.KeyText || dictionary.KeyType != null) &&
+                (dictionary.Nested is { } nested ? IsStatelessPayload(nested) : dictionary.ForwardedValue is { } forwarded
+                    ? IsStatelessMember(forwarded) : dictionary.ValueText || dictionary.ValueType != null),
+            _ => false,
+        };
+
+        /// <summary>Follows the binary dependencies of a general formatter owner.</summary>
+        /// <param name="formatter">The formatter's normalized contract.</param>
+        /// <returns>Whether the owner and its children are statically known to be state free.</returns>
+        private static bool IsStatelessFormatter(FormatterModel formatter)
+        {
+            // Opaque registrations, unresolved recursive references and runtime-selected objects keep the lease.
+            if (formatter.Definition is FormatterDefinitions.Registered or FormatterDefinitions.GenericUnion or FormatterDefinitions.Object)
+                return false;
+            if (formatter.Definition == FormatterDefinitions.PayloadReference)
+                return formatter.Payload is { } payload && IsStatelessPayload(payload);
+            return formatter.Arguments.All(IsStatelessFormatter);
         }
 
         /// <summary>Recognizes the actual framework definition rather than a source or reference with the same type name.</summary>
@@ -187,8 +254,7 @@ internal static partial class TypeModelFactory
                     "System.Collections.Generic.Stack<T>" or "System.Collections.Generic.Queue<T>" or "System.Collections.Generic.LinkedList<T>" or
                     "System.Collections.Generic.SortedSet<T>" or "System.Collections.Immutable.ImmutableHashSet<T>" or
                     "System.Collections.Immutable.ImmutableSortedSet<T>" or "System.ArraySegment<T>" or "System.Memory<T>" or
-                    "System.ReadOnlyMemory<T>" or "System.Collections.Immutable.ImmutableArray<T>" ||
-                named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+                    "System.ReadOnlyMemory<T>" or "System.Collections.Immutable.ImmutableArray<T>")
                 return IsKnownScalar(named.TypeArguments[0]);
             if (named.TypeArguments.Length == 1 && definition == "System.Lazy<T>")
                 return IsKnownScalar(named.TypeArguments[0]);

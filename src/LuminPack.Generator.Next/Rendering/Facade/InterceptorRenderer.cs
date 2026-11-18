@@ -313,22 +313,9 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         bool binaryShape = api is SerializerApi.SerializeArray or SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef or
             SerializerApi.DeserializeStream or SerializerApi.DeserializeStreamValue;
         var bodyKey = (Api: api, Shape: binaryShape ? bound.Shape : EntryShape.Pooled, Measured: binaryShape && measured);
-        if (bodyKey.Shape.Kind == EntryKind.StatelessSpanRecord)
-        {
-            // These framework readers need no operation state for a complete input span. Keep the measured
-            // direct-record selection for allocating writes and the existing selection for explicit profiles and streams.
-            bool span = !bound.OpenProfile && api is (SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef);
-            bodyKey.Shape = new EntryShape(span ? EntryKind.StatelessRead : EntryKind.DirectRecord);
-        }
-        if (bodyKey.Shape.Kind == EntryKind.CompoundDirect)
-        {
-            // The same fixed element proof permits a checked span reader without operation state. The exact writer still
-            // encodes strings under its fixed UTF-16 length profile.
-            bool acceptsProfile = api is SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef ||
-                api == SerializerApi.SerializeArray && profile == RootEntry.DefaultProfile;
-            if (!bodyKey.Measured || bound.OpenProfile || !acceptsProfile)
-                bodyKey = (api, EntryShape.Pooled, false);
-        }
+        // The compound's exact writer encodes strings under its fixed profile. Read state follows the formatter graph.
+        if (api == SerializerApi.SerializeArray && bodyKey.Shape.Kind == EntryKind.CompoundDirect && profile != RootEntry.DefaultProfile)
+            bodyKey = (api, EntryShape.Pooled, false);
         if (!documentBodies.TryGetValue(bodyKey, out string? body))
         {
             body = DocumentBody(bodyKey.Api, bodyKey.Shape, bodyKey.Measured);
@@ -399,10 +386,9 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         string binaryRead = BinarySpanRead;
         if (api is SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef or SerializerApi.DeserializeStream or SerializerApi.DeserializeStreamValue)
         {
-            bool needsMeasure = shape.Kind is EntryKind.FixedRecord or EntryKind.DirectRecord or EntryKind.CompoundDirect;
             if (shape.Kind == EntryKind.RawScalar)
                 binaryRead = RawRead;
-            else if (shape.StatelessRead && (!needsMeasure || measured))
+            else if (shape.StatelessRead)
                 binaryRead = shape.Kind == EntryKind.FixedEnum ? StatelessRead.Replace("%ENUMCHECK%", EnumCheck) : StatelessRead.Replace("%ENUMCHECK%", string.Empty);
         }
         string statements = api switch
@@ -489,13 +475,15 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             return TimeZoneSnapshotWrite + PooledWrite;
         if (shape.Kind == EntryKind.PackedPriorityQueue)
             return PackedPriorityQueueWrite + PooledWrite;
-        if (shape.Kind is EntryKind.ExactList or EntryKind.ExactListStatelessRead or EntryKind.ExactListForReadOnlyCollection or
+        if (shape.Kind is EntryKind.ExactList or EntryKind.ExactCapturedList or
             EntryKind.ExactHashSet or EntryKind.ExactSmallHashSet)
             return ExactInterfaceWrite(shape);
         string? size = shape.Kind switch
         {
             EntryKind.FixedEnum => "                int directLength = Unsafe.SizeOf<%TYPE%>();\n",
-            EntryKind.NullableDirect => "                int directLength = value.HasValue ? 1 + Unsafe.SizeOf<" + shape.Element + ">() : 1;\n",
+            EntryKind.NullableDirect => "                int directLength = value.HasValue ? 1 + " +
+                (shape.Width?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "Unsafe.SizeOf<" + shape.Element + ">()") + " : 1;\n",
+            EntryKind.FixedWidthRecord => "                int directLength = " + shape.Width!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + ";\n",
             EntryKind.RawSequence => "                int directLength = checked(sizeof(int) + checked((int)value.Length) * Unsafe.SizeOf<" + shape.Element + ">());\n",
             EntryKind.FixedRecord or EntryKind.DirectRecord when measured => MeasureRecord,
             EntryKind.CompoundDirect when measured => MeasureRecord,
@@ -503,7 +491,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         };
         if (size == null)
             return PooledWrite;
-        bool exact = shape.Kind is EntryKind.FixedEnum or EntryKind.NullableDirect or EntryKind.FixedRecord;
+        bool exact = shape.Kind is EntryKind.FixedEnum or EntryKind.NullableDirect or EntryKind.FixedRecord or EntryKind.FixedWidthRecord;
         if (shape.Kind == EntryKind.CompoundDirect)
             return size + "                var directBuffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(directLength);\n" +
                 DirectWrite.Replace("%WRITE%", "%WRITEDIRECT%") + "                return directBuffer;\n";
@@ -517,7 +505,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     /// <returns>The resulting text.</returns>
     private static string ExactInterfaceWrite(EntryShape shape)
     {
-        bool captureList = shape.Kind is EntryKind.ExactListStatelessRead or EntryKind.ExactListForReadOnlyCollection;
+        bool captureList = shape.Kind == EntryKind.ExactCapturedList;
         bool list = shape.Kind == EntryKind.ExactList || captureList;
         string implementation = "global::System.Collections.Generic." + (list ? "List" : "HashSet") + "<" + shape.Element + ">";
         const string marshal = "global::LuminPack.Code.LuminPackMarshal";

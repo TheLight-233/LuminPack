@@ -89,6 +89,11 @@ try
         SerializerInterceptorRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-binary-entry-shapes"])
+    {
+        SerializerBinaryEntryShapeRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-immutable-scalar-set-reuse"])
     {
         SerializerImmutableScalarSetReuseRegression.Run(references);

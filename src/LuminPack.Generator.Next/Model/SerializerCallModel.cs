@@ -87,28 +87,31 @@ internal enum SerializerApi
     DeserializeJsonReader,
 }
 
-/// <summary>The allocating-entry form the original concrete facade selected for a closed payload.</summary>
+/// <summary>The allocating write selected for a closed payload.</summary>
 internal enum EntryKind
 {
     /// <summary>Pooled output and thread-static reader state.</summary>
     Pooled,
 
-    /// <summary>A known reference-free scalar copied as its complete storage.</summary>
+    /// <summary>A reference-free value copied as its complete storage.</summary>
     RawScalar,
 
     /// <summary>A record of fixed-width primitive members, measured and written into an exact array.</summary>
     FixedRecord,
 
+    /// <summary>A portable record with a constant wire width independent of its native layout.</summary>
+    FixedWidthRecord,
+
     /// <summary>A record measured into an exact array, with pooled output when the measure was not exact.</summary>
     DirectRecord,
 
-    /// <summary>A measured framework compound with an exact UTF-16 length writer and a stateless binary reader.</summary>
+    /// <summary>A measured framework compound with an exact UTF-16 length writer.</summary>
     CompoundDirect,
 
     /// <summary>An enum written at its native width.</summary>
     FixedEnum,
 
-    /// <summary>A nullable known scalar: a marker byte and the value.</summary>
+    /// <summary>A nullable fixed-width value: a marker byte and the value.</summary>
     NullableDirect,
 
     /// <summary>A sequence of known scalars, sized by its length.</summary>
@@ -117,23 +120,14 @@ internal enum EntryKind
     /// <summary>A count-prefixed two's-complement big integer.</summary>
     BigInteger,
 
-    /// <summary>An interface sequence of known scalars, read without reference-tracking state.</summary>
-    StatelessRead,
-
-    /// <summary>A framework record that needs no reference-tracking state for span reads.</summary>
-    StatelessSpanRecord,
-
     /// <summary>A UTF-16 length-prefixed time zone snapshot sized from its cached text.</summary>
     TimeZoneSnapshot,
 
     /// <summary>An exact built-in list implementation of a scalar interface.</summary>
     ExactList,
 
-    /// <summary>An exact list write of a collection that retains its stateless binary read.</summary>
-    ExactListStatelessRead,
-
-    /// <summary>An exact list write of a read-only collection that retains its pooled binary read.</summary>
-    ExactListForReadOnlyCollection,
+    /// <summary>An exact interface list write that captures the span before allocating the output.</summary>
+    ExactCapturedList,
 
     /// <summary>An exact built-in hash set implementation of a scalar interface.</summary>
     ExactHashSet,
@@ -145,7 +139,7 @@ internal enum EntryKind
     PackedPriorityQueue,
 }
 
-/// <summary>The entry form of a closed payload and its element spelling where the form needs one.</summary>
+/// <summary>The write and read forms of a closed binary entry.</summary>
 internal readonly struct EntryShape : IEquatable<EntryShape>
 {
     internal static readonly EntryShape Pooled = new(EntryKind.Pooled);
@@ -154,23 +148,29 @@ internal readonly struct EntryShape : IEquatable<EntryShape>
 
     internal readonly string? Element;
 
+    /// <summary>The wire width when known independently of the element's native storage.</summary>
+    internal readonly int? Width;
+
+    /// <summary>Whether binary span reads can omit the operation-state lease.</summary>
+    internal readonly bool StatelessRead;
+
     /// <summary>Initializes a <c>EntryShape</c> from the supplied data.</summary>
     /// <param name="kind">The kind supplied to <c>EntryShape</c>.</param>
     /// <param name="element">The collection element or its formatter contract.</param>
-    internal EntryShape(EntryKind kind, string? element = null)
+    /// <param name="width">The exact portable width, if one is available.</param>
+    /// <param name="statelessRead">Whether a binary span read needs no operation state.</param>
+    internal EntryShape(EntryKind kind, string? element = null, int? width = null, bool statelessRead = false)
     {
         Kind = kind;
         Element = element;
+        Width = width;
+        StatelessRead = statelessRead;
     }
-
-    /// <summary>Whether the binary reads construct a plain reader without leasing reference-tracking state.</summary>
-    internal bool StatelessRead => Kind is EntryKind.FixedRecord or EntryKind.DirectRecord or EntryKind.CompoundDirect or
-        EntryKind.FixedEnum or EntryKind.NullableDirect or EntryKind.BigInteger or EntryKind.StatelessRead or EntryKind.ExactListStatelessRead;
 
     /// <summary>Compares this value with the supplied value.</summary>
     /// <param name="other">The value to compare with this instance.</param>
     /// <returns>Whether the values compare equal.</returns>
-    public bool Equals(EntryShape other) => Kind == other.Kind && Element == other.Element;
+    public bool Equals(EntryShape other) => Kind == other.Kind && Element == other.Element && Width == other.Width && StatelessRead == other.StatelessRead;
 
     /// <summary>Compares this value with the supplied value.</summary>
     /// <param name="obj">The obj supplied to <c>Equals</c>.</param>
@@ -179,7 +179,7 @@ internal readonly struct EntryShape : IEquatable<EntryShape>
 
     /// <summary>Computes a hash code from this value's comparison fields.</summary>
     /// <returns>The hash code.</returns>
-    public override int GetHashCode() => (int)Kind;
+    public override int GetHashCode() => unchecked((int)Kind * 397 ^ (Element?.GetHashCode() ?? Width.GetValueOrDefault()) ^ StatelessRead.GetHashCode());
 }
 
 /// <summary>Normalized root facts shared by all facade calls of one payload.</summary>
