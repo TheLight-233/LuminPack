@@ -430,6 +430,29 @@ public class CollectionFastPathTest
         Assert.ThrowsAny<ArgumentException>(() => global::LuminPackUnitTest.ConcreteReads.Read<SortedList<int, int>>(duplicate, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SortedList<int, int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
+    /// <summary>Checks ordered appends, unordered insertion, and duplicate failure publication in fresh JSON lists.</summary>
+    [Fact]
+    public void SortedListJsonOrderedAppendPreservesInsertion()
+    {
+        SortedList<string, int>? target = null;
+        LuminPackSerializer.DeserializeJson("[[\"a\",1],[\"b\",2],[\"d\",4],[\"c\",3]]", ref target);
+        Assert.Equal(new[] { "a", "b", "c", "d" }, target!.Keys);
+        Assert.Equal(new[] { 1, 2, 3, 4 }, target.Values);
+
+        target = null;
+        Assert.ThrowsAny<ArgumentException>(() => LuminPackSerializer.DeserializeJson("[[\"a\",1],[\"b\",2],[\"b\",3],[\"c\",4]]", ref target));
+        Assert.Equal(new[] { "a", "b" }, target!.Keys);
+        Assert.Equal(new[] { 1, 2 }, target.Values);
+
+        var comparer = Comparer<string>.Create((left, right) => StringComparer.Ordinal.Compare(right, left));
+        target = new SortedList<string, int>(comparer) { ["old"] = 7 };
+        var retained = target;
+        LuminPackSerializer.DeserializeJson("[[\"a\",1],[\"b\",2]]", ref target);
+        Assert.Same(retained, target);
+        Assert.Same(comparer, target.Comparer);
+        Assert.Equal(new[] { "b", "a" }, target.Keys);
+    }
+
     /// <summary>Checks immutable collections and their interfaces round trip with reference and raw elements.</summary>
     [Fact]
     public void ImmutableCollectionsRoundTrip()

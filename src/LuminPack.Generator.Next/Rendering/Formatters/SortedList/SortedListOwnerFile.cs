@@ -12,6 +12,9 @@ internal static partial class SortedListOwnerFile
     private const string ArrayReference = "global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference";
     private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(Write, c => Read(c, seedKeys: true),
         "value.Add(key!, itemValue);", outlineJson: true, capturesJsonPairs: true);
+    private static readonly PairedDictionarySpec OrderedJsonSpec = new PairedDictionarySpec(Write, c => Read(c, seedKeys: true),
+        "if (!appendOrdered || !global::LuminPack.Code.LuminPackCollectionAccess.TryAppendSortedListOrdered(value, key!, itemValue, true)) value.Add(key!, itemValue);",
+        PrepareOrderedJson, outlineJson: true, capturesJsonPairs: true);
     private static readonly PairedDictionarySpec InputSpec = new PairedDictionarySpec(Write, c => Read(c, seedKeys: false),
         "value.Add(key!, itemValue);", outlineJson: true, capturesJsonPairs: true);
 
@@ -20,8 +23,31 @@ internal static partial class SortedListOwnerFile
     /// <param name="fact">The closed dictionary owner.</param>
     /// <param name="operations">The operations requested for this owner.</param>
     /// <returns>The complete source.</returns>
-    internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations) =>
-        PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec);
+    internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations)
+    {
+        bool knownEntries = fact.Key is "string" or "int" && fact.Value is "string" or "int" or "long";
+        bool orderedJson = knownEntries && set.FindFormatter(fact.DeclaredType)?.Supports("AppendSortedList") == true;
+        return PairedDictionaryOwnerTemplate.Render(set, fact, operations, orderedJson ? OrderedJsonSpec : Spec);
+    }
+
+    /// <summary>Prepares the existing create-or-clear path and enables ordered appends only for a fresh, known codec.</summary>
+    /// <param name="c">The JSON owner being emitted.</param>
+    private static void PrepareOrderedJson(PairedDictionaryContext c)
+    {
+        var w = c.W;
+        const string options = "global::LuminPack.Option.";
+        w.Line("bool appendOrdered = false;");
+        w.Line("if (value is null)");
+        w.Open();
+        w.Line("value = new " + c.Dictionary + "();");
+        w.Line("appendOrdered = (typeof(TLuminProfile) == typeof(" + options + "LuminPackUtf16LengthOptions) ||");
+        w.Line("    typeof(TLuminProfile) == typeof(" + options + "LuminPackUtf8LengthOptions) ||");
+        w.Line("    typeof(TLuminProfile) == typeof(" + options + "LuminPackDefaultOptions)) &&");
+        w.Line("    global::LuminPack.Code.LuminPackCollectionAccess.CanAppendSortedListOrdered(value);");
+        w.Close();
+        w.Line("else");
+        w.Indented(() => w.Line("value.Clear();"));
+    }
 
     /// <summary>Renders the original parser for the enclosed input policy projection.</summary>
     /// <param name="set">The shared publication facts.</param>
