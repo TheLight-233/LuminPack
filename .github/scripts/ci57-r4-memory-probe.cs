@@ -97,6 +97,13 @@ internal static class Ci57MemoryProbe
     }
 
     /// <summary>Times one method over rotating targets.</summary>
+    /// <typeparam name="T">The copy implementation to measure.</typeparam>
+    /// <param name="source">The source buffer.</param>
+    /// <param name="offset">The first source byte to copy.</param>
+    /// <param name="targets">The destination buffers in rotation order.</param>
+    /// <param name="length">The number of bytes copied per call.</param>
+    /// <param name="calls">The number of timed calls.</param>
+    /// <returns>The elapsed nanoseconds per call.</returns>
     private static double Time<T>(byte[] source, int offset, byte[][] targets, int length, int calls) where T : ICopy
     {
         ref byte first = ref source[offset];
@@ -110,18 +117,21 @@ internal static class Ci57MemoryProbe
     /// <summary>The production kernel for a reused destination.</summary>
     private readonly struct LuminCopy : ICopy
     {
+        /// <inheritdoc/>
         public static void Copy(ref byte target, ref byte source, uint length) => LuminPackMarshal.CopyBlockUnaligned(ref target, ref source, length);
     }
 
     /// <summary>The runtime block copy (<c>cpblk</c>, which reaches <c>Buffer.Memmove</c>).</summary>
     private readonly struct RuntimeCopy : ICopy
     {
+        /// <inheritdoc/>
         public static void Copy(ref byte target, ref byte source, uint length) => Unsafe.CopyBlockUnaligned(ref target, ref source, length);
     }
 
     /// <summary>The production 256-bit medium kernel, measurable outside its production size range.</summary>
     private readonly struct Medium256 : ICopy
     {
+        /// <inheritdoc/>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void Copy(ref byte destination, ref byte source, uint count)
         {
@@ -150,6 +160,7 @@ internal static class Ci57MemoryProbe
     /// <summary>A 512-bit variant: 64-byte aligned stores, four vectors per iteration, overlapping head and tail.</summary>
     private readonly struct Wide512 : ICopy
     {
+        /// <inheritdoc/>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void Copy(ref byte destination, ref byte source, uint count)
         {
@@ -178,6 +189,7 @@ internal static class Ci57MemoryProbe
     /// <summary>A 128-bit variant for targets without wide vectors (Arm64 AdvSimd, SSE-only x64).</summary>
     private readonly struct Vector128x4 : ICopy
     {
+        /// <inheritdoc/>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void Copy(ref byte destination, ref byte source, uint count)
         {
@@ -252,5 +264,7 @@ internal static class Ci57MemoryProbe
     }
 
     /// <summary>Writes one JSON Lines record.</summary>
+    /// <typeparam name="T">The record type.</typeparam>
+    /// <param name="record">The record to serialize.</param>
     private static void Emit<T>(T record) => Console.WriteLine(JsonSerializer.Serialize(record));
 }
