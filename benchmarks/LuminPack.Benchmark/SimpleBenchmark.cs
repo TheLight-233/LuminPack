@@ -216,7 +216,7 @@ public class SimpleBenchmark
     [BenchmarkCategory("Serialize")]
     public void LuminPackSerialize()
     {
-        luminBufferWriter.ResetCore();
+        luminBufferWriter.ResetWrittenCount();
         LuminPackSerializer.Serialize(myClass, luminBufferWriter);
     }
 

@@ -124,7 +124,7 @@ internal static class SerializerDocumentation
         if (buffer)
             Line(xml, method.Indent, read ?
                 "<para>The caller exclusively owns the reusable buffer and its reference state for this operation.</para>" :
-                "<para>Appends at the caller-owned buffer's cursor without resetting payload or reference state. Call ResetForReuse before an independent session or after failure; partial output and reference state can remain after an exception.</para>");
+                "<para>Appends at the caller-owned buffer's cursor without resetting payload or reference state. Call Reset before an independent session or after failure; partial output and reference state can remain after an exception.</para>");
         if (arbitrary)
             Line(xml, method.Indent, "<para>Advances the supplied IBufferWriter by the produced byte count. The destination remains caller-owned.</para>");
         if (reused)

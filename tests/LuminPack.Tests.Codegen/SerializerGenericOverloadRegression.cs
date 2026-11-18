@@ -87,7 +87,7 @@ internal static class SerializerGenericOverloadRegression
                         GenericPayload restored = null!;
                         LuminPackSerializer.Deserialize<GenericPayload, TProfile>(buffer, ref restored);
                         Validate(value, restored);
-                        buffer.ResetCore();
+                        buffer.ResetWrittenCount();
                         LuminPackSerializer.SerializeJson<GenericPayload, TProfile>(value, buffer);
                         if (!buffer.GetSpan().SequenceEqual(jsonBytes))
                             throw new Exception("Buffer-owned JSON fallback ignored its encoding.");
@@ -356,8 +356,10 @@ internal static class SerializerGenericOverloadRegression
             method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "LuminBufferWriter")).ToArray();
         Require(entries.Length >= 4, "Shared binary/JSON default and compiled-profile append entries are missing.");
         foreach (var entry in entries)
-            Require(!entry.ToString().Contains("ResetCore(", StringComparison.Ordinal) &&
-                !entry.ToString().Contains("ResetOperationState(", StringComparison.Ordinal) &&
+            Require(!entry.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(invocation =>
+                invocation.Expression is MemberAccessExpressionSyntax member &&
+                member.Name.Identifier.ValueText is "Reset" or "ResetWrittenCount" or "ResetAndRelease" or
+                    "ResetCore" or "ResetForReuse" or "ResetOperationState") &&
                 !entry.DescendantNodes().OfType<CatchClauseSyntax>().Any(),
                 "A caller-buffer write entry still clears or catches the caller's session.");
         var boundEntries = entries.Where(method => method.DescendantNodes().OfType<ObjectCreationExpressionSyntax>()

@@ -160,8 +160,8 @@ public partial class JsonFormattedScalarTest
     /// <param name="output">The reusable destination.</param>
     private static void WriteVersionPair(Version value, LuminBufferWriter output)
     {
-        output.ResetCore(); LuminPackSerializer.SerializeJson<Version, LuminPackUtf8LengthOptions>(value, output);
-        output.ResetCore(); LuminPackSerializer.SerializeJson<Version, LuminPackUtf16LengthOptions>(value, output);
+        output.ResetWrittenCount(); LuminPackSerializer.SerializeJson<Version, LuminPackUtf8LengthOptions>(value, output);
+        output.ResetWrittenCount(); LuminPackSerializer.SerializeJson<Version, LuminPackUtf16LengthOptions>(value, output);
     }
 
     /// <summary>Compares complete generated reads with the allocation required by the original BCL constructor.</summary>

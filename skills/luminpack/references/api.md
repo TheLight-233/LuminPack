@@ -77,11 +77,13 @@ using var output = new LuminBufferWriter(true);     // LuminPack.Utility; pooled
 LuminPackSerializer.Serialize(a, output);
 LuminPackSerializer.Serialize(b, output);           // appended after a, shares reference state
 ReadOnlySpan<byte> written = output.GetSpan();
-output.ResetForReuse();                             // clear content + reference tables, keep capacity
+output.Reset();                                     // reset count and both operation states, keep capacity
 ```
 
-- `Reset()`: also returns non-empty pooled storage. `ResetCore()`: content only, keeps reference tables.
-- After a failed write, reset before the next independent write.
+- `Reset()` resets the written count and live cursor and clears the reader and writer operation states. The array rental stays with the writer.
+- `ResetWrittenCount()` resets the written count and live cursor while preserving the operation states and storage.
+- `ResetAndRelease()` also returns the current array rental and leaves the writer usable. Dispose a directly constructed writer or call `LuminBufferWriterPool.Return(writer)` when finished with a rented writer.
+- After a failed write, call `Reset()` before the next independent write.
 - Appended JSON documents have no separator.
 
 ## Registration

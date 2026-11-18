@@ -100,7 +100,7 @@ Person result = await LuminPackSerializer.DeserializeAsync<Person>(stream, cance
 <a id="reusing-a-buffer"></a>
 ## 复用缓冲区
 
-接收 `LuminBufferWriter` 的重载从当前游标追加，保留之前写入的所有内容，包括引用跟踪状态。缓冲区由你持有，何时重置由你决定：
+接收 `LuminBufferWriter` 的重载从当前游标追加，并保留当前操作状态。在同一缓冲区中开始写入独立记录前，调用 `Reset()`。
 
 ```csharp
 using var output = new LuminPack.Utility.LuminBufferWriter(true);
@@ -108,18 +108,20 @@ LuminPackSerializer.Serialize(person, output);
 int firstEnd = output.CurrentIndex;
 LuminPackSerializer.Serialize(person, output);   // output.GetSpan() 中按顺序包含两条记录
 
-output.ResetForReuse();                          // 清空内容和引用表，保留容量
+output.Reset();                                  // 重置写入计数和操作状态，保留容量
 LuminPackSerializer.Serialize(person, output);
 ```
 
 | 方法 | 作用 |
 | --- | --- |
-| `ResetForReuse()` | 清空内容和读写两张引用表，保留原生容量。 |
-| `Reset()` | 清空内容和两张引用表，并归还非空的池化数组。 |
-| `ResetCore()` | 只清空内容，保留引用表。复制/压缩的 `AndReset` 方法行为相同。 |
+| `Reset()` | 重置写入计数和当前游标，清除读写操作状态，保留容量。 |
+| `ResetWrittenCount()` | 重置写入计数和当前游标，保留容量和读写操作状态。 |
 
-- 写入抛出异常后，已写入的字节和引用状态仍然保留；开始下一次独立写入前调用 `ResetForReuse()`。
-- 只想重新开始写入、同时保留读取状态时，依次调用 `output.ResetCore()` 和 `output.WriterState.ResetOperationState()`。
+调用 `ResetAndRelease()` 会清除读写操作状态并归还当前数组，writer 仍可继续使用。用完后，自行构造的 writer 应调用 `Dispose()`，从池中租用的 writer 则调用 `LuminBufferWriterPool.Return(writer)`。
+
+- 写入抛出异常后，已写入的字节和引用状态仍然保留。开始下一次独立写入前调用 `Reset()`。
+- 需要重新开始写入并保留读取状态时，依次调用 `output.ResetWrittenCount()` 和 `output.WriterState.ResetOperationState()`。
+- 名称以 `AndReset` 结尾的复制与压缩方法在成功后重置写入计数和游标，并保留读写操作状态。
 - 追加的 JSON 文档之间不会插入分隔符，请自己记录边界。
 - 返回 `byte[]`、`string` 的重载以及流、`IBufferWriter<byte>` 重载自己管理缓冲区和状态。
 

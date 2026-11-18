@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LuminPack.Code;
@@ -374,7 +375,7 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     /// <param name="source">The complete input payload.</param>
     public void LoadSpan(ReadOnlySpan<byte> source)
     {
-        ResetCore();
+        ResetWrittenCount();
         EnsureCapacity(source.Length);
         source.CopyTo(GetFullSpan());
         CompleteWrite(source.Length);
@@ -386,7 +387,7 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     public void LoadSequence(in ReadOnlySequence<byte> source)
     {
         int length = checked((int)source.Length);
-        ResetCore();
+        ResetWrittenCount();
         EnsureCapacity(length);
         source.CopyTo(GetFullSpan().Slice(0, length));
         CompleteWrite(length);
@@ -506,7 +507,7 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
 
         var result = AllocateUninitializedArray<byte>(length);
         GetSpan().CopyTo(result);
-        ResetCore();
+        ResetWrittenCount();
         return result;
     }
 
@@ -574,7 +575,7 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
         }
         finally
         {
-            ResetCore();
+            ResetWrittenCount();
         }
     }
 
@@ -601,7 +602,7 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
         }
         finally
         {
-            ResetCore();
+            ResetWrittenCount();
         }
     }
 
@@ -617,7 +618,7 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
         writer.EnsureAdditionalCapacity(length);
         CopyBlockUnaligned(ref writer.CurrentReference, ref Data, (uint)length);
         writer.Advance(length);
-        ResetCore();
+        ResetWrittenCount();
     }
 
     /// <summary>Asynchronously copies the published payload to a stream and then resets this buffer's payload.</summary>
@@ -632,33 +633,42 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
             return;
 
         await stream.WriteAsync(new ReadOnlyMemory<byte>(_buffer, _offset, length), cancellationToken).ConfigureAwait(false);
-        ResetCore();
+        ResetWrittenCount();
     }
 
     #endregion
 
     #region Reset and lifetime
 
-    /// <summary>Resets the published byte count without releasing the storage or changing <see cref="WriterState"/>.</summary>
-    /// <remarks>This low-level reset does not clear reference state. Use <see cref="ResetForReuse"/> for an independent session,
-    /// or <see cref="LuminBufferWriterPool.Return"/> when returning a pooled buffer.</remarks>
+    /// <summary>Resets the written byte count and detaches the live cursor.</summary>
+    /// <remarks>The backing storage and both operation states are retained. Use <see cref="Reset"/> to start an independent session.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void ResetCore()
+    public void ResetWrittenCount()
     {
         _writtenCount = 0;
         _liveIndex = 0;
     }
 
-    /// <summary>Clears the payload and both reference tables while retaining the storage capacity for reuse.</summary>
+    /// <summary>Resets the written count and both operation states while retaining the storage capacity for reuse.</summary>
     /// <remarks>Call this before starting an independent serialization session or after a failed append.
     /// Serialization into this buffer never resets its contents or reference tables automatically.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void ResetForReuse()
+    public void Reset()
     {
-        ResetCore();
+        ResetWrittenCount();
         if (WriterState.HasOperationState | ReaderState.HasOperationState)
             ResetOperationStates();
     }
+
+    /// <inheritdoc cref="ResetWrittenCount"/>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ResetCore() => ResetWrittenCount();
+
+    /// <inheritdoc cref="Reset"/>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ResetForReuse() => Reset();
 
     /// <summary>Clears the buffer's reader and writer tables after a stateful operation.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -672,16 +682,15 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void ResetForPool()
     {
-        ResetForReuse();
+        Reset();
     }
 
-    /// <summary>Clears both reference tables and returns a nonempty payload's storage to the array pool.</summary>
-    /// <remarks>This does not return the instance to the pool. Use <see cref="ResetForReuse"/> to retain the capacity.</remarks>
-    public void Reset()
+    /// <summary>Resets this writer and returns its backing storage to the array pool.</summary>
+    /// <remarks>Borrowed spans expire. The instance remains usable and reacquires storage on the next write.</remarks>
+    public void ResetAndRelease()
     {
-        if (CurrentIndex != 0)
-            ReleaseStorage();
-        ResetForReuse();
+        Reset();
+        ReleaseStorage();
     }
 
     /// <summary>Returns the storage and clears the reference state owned by this instance.</summary>

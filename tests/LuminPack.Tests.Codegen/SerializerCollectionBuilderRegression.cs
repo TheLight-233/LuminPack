@@ -39,7 +39,7 @@ internal static class SerializerCollectionBuilderRegression
                     {
                         var numbers=Enumerable.Range(0,count).ToArray();var text=numbers.Select(item=>item.ToString()).ToArray();
                         var value=new CollectionBuilderGraph{Numbers=new(numbers),Text=new(text),Tail=123};
-                        buffer.ResetCore();if(json)LuminPackSerializer.SerializeJson<CollectionBuilderGraph, P>(value,buffer);else LuminPackSerializer.Serialize<CollectionBuilderGraph, P>(value,buffer);
+                        buffer.ResetWrittenCount();if(json)LuminPackSerializer.SerializeJson<CollectionBuilderGraph, P>(value,buffer);else LuminPackSerializer.Serialize<CollectionBuilderGraph, P>(value,buffer);
                         var old=new CollectionBuilderGraph{Numbers=new(new[]{-1}),Text=new(new[]{"old"}),Tail=-1};
                         CollectionBuilderGraph result=reused?old:null;
                         if(json)LuminPackSerializer.DeserializeJson<CollectionBuilderGraph, P>(buffer.GetSpan(),ref result);else LuminPackSerializer.Deserialize<CollectionBuilderGraph, P>(buffer.GetSpan(),ref result);

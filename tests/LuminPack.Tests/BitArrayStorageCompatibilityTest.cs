@@ -59,7 +59,7 @@ public class BitArrayStorageCompatibilityTest
             byte[] expected = new byte[4 + words.Length * 4];
             BinaryPrimitives.WriteInt32LittleEndian(expected, length);
             global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(words.AsSpan()).CopyTo(expected.AsSpan(4));
-            output.ResetCore();
+            output.ResetWrittenCount();
             var writer = new global::LuminPack.Core.LuminPackWriter(output);
             Assert.True(global::LuminPack.Code.LuminPackCollectionAccess.TryWriteBitArrayPayload(ref writer, source));
             Assert.Equal(expected, writer.Buffer[..writer.Position].ToArray());

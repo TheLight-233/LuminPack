@@ -22,11 +22,11 @@ internal static partial class SerializerJsonEnumerableWriteRegression
                     _ => family + ".CreateRange(" + items + ")"
                 };
                 calls.AppendLine("{ " + family + "<" + element + "> value = " + factory + ";");
-                calls.AppendLine("string expected = Expected(value); buffer.ResetCore(); LuminPackSerializer.SerializeJson<" + family + "<" + element + ">, TProfile>(value, buffer); EqualText<TProfile>(buffer, expected);");
+                calls.AppendLine("string expected = Expected(value); buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<" + family + "<" + element + ">, TProfile>(value, buffer); EqualText<TProfile>(buffer, expected);");
                 if (family == "FrozenSet")
                     calls.AppendLine("""
-                        buffer.ResetCore(); LuminPackSerializer.Serialize<FrozenSet<ELEMENT>, TProfile>(value, buffer); byte[] actual = buffer.GetSpan().ToArray();
-                        buffer.ResetCore(); var scalar = new LuminPackWriter(buffer); scalar.EnsureAdditionalCapacity(4); scalar.Write(value.Count);
+                        buffer.ResetWrittenCount(); LuminPackSerializer.Serialize<FrozenSet<ELEMENT>, TProfile>(value, buffer); byte[] actual = buffer.GetSpan().ToArray();
+                        buffer.ResetWrittenCount(); var scalar = new LuminPackWriter(buffer); scalar.EnsureAdditionalCapacity(4); scalar.Write(value.Count);
                         foreach (var item in value) { scalar.CheckBuffer(); LuminPackSerializer.Serialize<ELEMENT, TProfile>(ref scalar, in item); }
                         scalar.CheckBuffer(); if (!actual.AsSpan().SequenceEqual(scalar.GetSpan())) throw new Exception("Frozen set scalar bytes differ.");
                         """.Replace("ELEMENT", element, StringComparison.Ordinal));
@@ -35,9 +35,9 @@ internal static partial class SerializerJsonEnumerableWriteRegression
             calls.AppendLine("{ var value = Enumerable.Range(0," + items + ".Length).ToFrozenDictionary(i => i, i => " + items + "[i]);");
             calls.AppendLine("""
                 string expected = ("[" + string.Join(",", value.Select(pair => "[" + pair.Key.ToString(System.Globalization.CultureInfo.InvariantCulture) + "," + JsonSerializer.Serialize(pair.Value,jsonOptions) + "]")) + "]").Replace("\\uD83D\\uDE00", "\uD83D\uDE00");
-                buffer.ResetCore(); LuminPackSerializer.SerializeJson<FrozenDictionary<int, ELEMENT>, TProfile>(value, buffer); EqualText<TProfile>(buffer, expected);
-                buffer.ResetCore(); LuminPackSerializer.Serialize<FrozenDictionary<int, ELEMENT>, TProfile>(value, buffer); byte[] actual = buffer.GetSpan().ToArray();
-                buffer.ResetCore(); var scalar = new LuminPackWriter(buffer); scalar.EnsureAdditionalCapacity(4); scalar.Write(value.Count);
+                buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<FrozenDictionary<int, ELEMENT>, TProfile>(value, buffer); EqualText<TProfile>(buffer, expected);
+                buffer.ResetWrittenCount(); LuminPackSerializer.Serialize<FrozenDictionary<int, ELEMENT>, TProfile>(value, buffer); byte[] actual = buffer.GetSpan().ToArray();
+                buffer.ResetWrittenCount(); var scalar = new LuminPackWriter(buffer); scalar.EnsureAdditionalCapacity(4); scalar.Write(value.Count);
                 foreach (var item in value)
                 {
                     scalar.CheckBuffer(); var key = item.Key; var entryValue = item.Value;

@@ -129,32 +129,32 @@ internal static partial class SerializerImmutableListWriteRegression
                 unsafe{LuminPackSerializer.Register<SetItem,P>(SetItem.Serialize,SetItem.Deserialize,SetItem.WriteJson<P>,SetItem.ReadJson<P>);}
                 using var buffer=new LuminBufferWriter(true);
                 ISet<int> emptySorted=new SortedSet<int>();IReadOnlySet<int> emptyReadOnlySorted=(SortedSet<int>)emptySorted;
-                if(Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<ISet<int>, P>(emptySorted,buffer);})!=0 ||
-                   Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<IReadOnlySet<int>, P>(emptyReadOnlySorted,buffer);})!=0)
+                if(Allocated(()=>{buffer.ResetWrittenCount();LuminPackSerializer.Serialize<ISet<int>, P>(emptySorted,buffer);})!=0 ||
+                   Allocated(()=>{buffer.ResetWrittenCount();LuminPackSerializer.Serialize<IReadOnlySet<int>, P>(emptyReadOnlySorted,buffer);})!=0)
                     throw new Exception("Empty sorted interface writing allocated a traversal stack.");
-                buffer.ResetCore();
+                buffer.ResetWrittenCount();
                 foreach(int count in new[]{0,1,33})
                 {
                     int[] items=Enumerable.Range(0,count).ToArray();ISet<int> set=new HashSet<int>(items);
                     IReadOnlySet<int> frozen=items.ToFrozenSet();
                     LuminPackSerializer.SerializeJson<int[], P>(items,buffer);byte[] expected=buffer.GetSpan().ToArray();
-                    buffer.ResetCore();LuminPackSerializer.SerializeJson<ISet<int>, P>(set,buffer);
+                    buffer.ResetWrittenCount();LuminPackSerializer.SerializeJson<ISet<int>, P>(set,buffer);
                     if(!buffer.GetSpan().SequenceEqual(expected))throw new Exception("Hash interface JSON order changed.");
-                    if(Allocated(()=>{buffer.ResetCore();LuminPackSerializer.SerializeJson<ISet<int>, P>(set,buffer);})!=0)
+                    if(Allocated(()=>{buffer.ResetWrittenCount();LuminPackSerializer.SerializeJson<ISet<int>, P>(set,buffer);})!=0)
                         throw new Exception("Hash interface JSON boxed its enumerator.");
-                    if(Allocated(()=>{buffer.ResetCore();LuminPackSerializer.SerializeJson<IReadOnlySet<int>, P>(frozen,buffer);})!=0 ||
-                       Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<IReadOnlySet<int>, P>(frozen,buffer);})!=0)
+                    if(Allocated(()=>{buffer.ResetWrittenCount();LuminPackSerializer.SerializeJson<IReadOnlySet<int>, P>(frozen,buffer);})!=0 ||
+                       Allocated(()=>{buffer.ResetWrittenCount();LuminPackSerializer.Serialize<IReadOnlySet<int>, P>(frozen,buffer);})!=0)
                         throw new Exception("Frozen interface writing boxed its enumerator.");
-                    buffer.ResetCore();LuminPackSerializer.Serialize<IReadOnlySet<int>, P>(frozen,buffer);IReadOnlySet<int> result=null;
+                    buffer.ResetWrittenCount();LuminPackSerializer.Serialize<IReadOnlySet<int>, P>(frozen,buffer);IReadOnlySet<int> result=null;
                     LuminPackSerializer.Deserialize<IReadOnlySet<int>, P>(buffer.GetSpan(),ref result);
                     if(!result.SetEquals(items))throw new Exception("Frozen interface binary contents changed.");
-                    buffer.ResetCore();
+                    buffer.ResetWrittenCount();
                 }
                 var derived=new ReversedSet();ISet<int> derivedInterface=derived;
                 LuminPackSerializer.SerializeJson<ISet<int>, P>(derivedInterface,buffer);int[] reversed=null;
                 LuminPackSerializer.DeserializeJson<int[], P>(buffer.GetSpan(),ref reversed);
                 if(derived.Visits!=1 || !reversed.SequenceEqual(new[]{3,2,1}))throw new Exception("Derived set enumeration was bypassed.");
-                buffer.ResetCore();LuminPackSerializer.Serialize<ISet<int>, P>(derivedInterface,buffer);
+                buffer.ResetWrittenCount();LuminPackSerializer.Serialize<ISet<int>, P>(derivedInterface,buffer);
                 reversed=null;LuminPackSerializer.Deserialize<int[], P>(buffer.GetSpan(),ref reversed);
                 if(derived.Visits!=2 || !reversed.SequenceEqual(new[]{3,2,1}))throw new Exception("Derived binary enumeration was bypassed.");
                 CheckCallbacks<P>();
@@ -169,7 +169,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     var concrete=new SortedSet<SetItem>{first,second};ISet<SetItem> mutable=concrete;IReadOnlySet<SetItem> view=concrete;
                     var failure=new InvalidOperationException("Callback failure.");
                     SetItem.Events.Clear();SetItem.Action=()=>{if(remove)concrete.Remove(first);else throw failure;};
-                    Exception observed=null;buffer.ResetCore();
+                    Exception observed=null;buffer.ResetWrittenCount();
                     try
                     {
                         if(readOnly){if(json)LuminPackSerializer.SerializeJson<IReadOnlySet<SetItem>, P>(view,buffer);else LuminPackSerializer.Serialize<IReadOnlySet<SetItem>, P>(view,buffer);}

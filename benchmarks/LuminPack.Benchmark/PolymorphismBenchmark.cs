@@ -863,7 +863,7 @@ public class PolymorphismBenchmark
     [BenchmarkCategory("Serialize")]
     public void LuminPackSerialize()
     {
-        luminBufferWriter.ResetCore();
+        luminBufferWriter.ResetWrittenCount();
         luminBufferWriter.WriterState.ResetOperationState();
         LuminPackSerializer.Serialize<PolymorphismClassBase, LuminPackUtf16LengthOptions>(myClass, luminBufferWriter);
     }

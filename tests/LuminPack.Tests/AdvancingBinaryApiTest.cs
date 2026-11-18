@@ -362,7 +362,7 @@ public class AdvancingBinaryApiTest
         var value = new FluentThrowingValue { Text = "complete field before the callback" };
         Assert.Throws<InvalidOperationException>(() => LuminPackSerializer.Serialize(value, buffer));
         Assert.Equal(prefix, buffer.GetSpan().ToArray());
-        buffer.ResetForReuse();
+        buffer.Reset();
         LuminPackSerializer.Serialize(91, buffer);
         Assert.Equal(BitConverter.GetBytes(91), buffer.GetSpan().ToArray());
     }

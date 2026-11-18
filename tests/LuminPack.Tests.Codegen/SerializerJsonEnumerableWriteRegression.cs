@@ -73,7 +73,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
             string expression = template.StartsWith("I", StringComparison.Ordinal)
                 ? "new " + (template == "ISet<T>" ? "HashSet<" : "List<") + element + ">(" + items + ")"
                 : "new " + type + "(" + argument + ")";
-            calls.AppendLine("{ " + type + " value = " + expression + "; string expected = Expected(value); buffer.ResetCore(); LuminPackSerializer.SerializeJson<" + type + ", TProfile>(value, buffer); EqualText<TProfile>(buffer, expected); (value as IDisposable)?.Dispose(); }");
+            calls.AppendLine("{ " + type + " value = " + expression + "; string expected = Expected(value); buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<" + type + ", TProfile>(value, buffer); EqualText<TProfile>(buffer, expected); (value as IDisposable)?.Dispose(); }");
         }
         calls.Append(BuildImmutableCases());
         return Source.Replace("MODE", mode, StringComparison.Ordinal).Replace("SEQUENCE_CASES", calls.ToString(), StringComparison.Ordinal) + BoundarySource;
@@ -127,10 +127,10 @@ internal static partial class SerializerJsonEnumerableWriteRegression
                     SEQUENCE_CASES
                     var dict = new ConcurrentDictionary<int,int>(); foreach (int item in ints) dict[item] = item;
                     string dictText = "[" + string.Join(",",dict.Select(pair => "[" + pair.Key.ToString(System.Globalization.CultureInfo.InvariantCulture) + "," + pair.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]")) + "]";
-                    buffer.ResetCore(); LuminPackSerializer.SerializeJson<ConcurrentDictionary<int, int>, TProfile>(dict, buffer); EqualText<TProfile>(buffer,dictText);
+                    buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<ConcurrentDictionary<int, int>, TProfile>(dict, buffer); EqualText<TProfile>(buffer,dictText);
                     var graph = new SequenceGraph { Values = new ConcurrentStack<int>(ints) };
-                    buffer.ResetCore(); LuminPackSerializer.SerializeJson<SequenceGraph, TProfile>(graph,buffer); EqualText<TProfile>(buffer,"{\"Values\":" + Expected(graph.Values) + "}");
-                    buffer.ResetCore(); LuminPackSerializer.Serialize<SequenceGraph, TProfile>(graph,buffer);
+                    buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<SequenceGraph, TProfile>(graph,buffer); EqualText<TProfile>(buffer,"{\"Values\":" + Expected(graph.Values) + "}");
+                    buffer.ResetWrittenCount(); LuminPackSerializer.Serialize<SequenceGraph, TProfile>(graph,buffer);
                     SequenceGraph decoded = null; LuminPackSerializer.Deserialize<SequenceGraph, TProfile>(buffer.GetSpan(),ref decoded);
                     if (!decoded.Values.SequenceEqual(graph.Values)) throw new Exception("Nested binary stack control changed.");
                 }
@@ -140,13 +140,13 @@ internal static partial class SerializerJsonEnumerableWriteRegression
                     if (expected != actual) throw new Exception("Iterator exception state changed: " + fault + " / " + expected + " / " + actual);
                 }
                 var nullableValues = new Queue<int?>(new int?[] { 1, null, -2 });
-                buffer.ResetCore(); LuminPackSerializer.SerializeJson<Queue<int?>, TProfile>(nullableValues,buffer); EqualText<TProfile>(buffer,"[1,null,-2]");
+                buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<Queue<int?>, TProfile>(nullableValues,buffer); EqualText<TProfile>(buffer,"[1,null,-2]");
                 var enumValues = new Queue<SequenceNumber>(new[] { SequenceNumber.One, SequenceNumber.Two });
-                buffer.ResetCore(); LuminPackSerializer.SerializeJson<Queue<SequenceNumber>, TProfile>(enumValues,buffer); EqualText<TProfile>(buffer,"[1,2]");
+                buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<Queue<SequenceNumber>, TProfile>(enumValues,buffer); EqualText<TProfile>(buffer,"[1,2]");
                 var objectValues = new Queue<SequenceValue>(new[] { new SequenceValue { Number = 3 } });
-                buffer.ResetCore(); LuminPackSerializer.SerializeJson<Queue<SequenceValue>, TProfile>(objectValues,buffer); EqualText<TProfile>(buffer,"[{\"Number\":3}]");
+                buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<Queue<SequenceValue>, TProfile>(objectValues,buffer); EqualText<TProfile>(buffer,"[{\"Number\":3}]");
                 BoundaryProfile<TProfile>();
-                ConcurrentQueue<int> nullQueue = null; buffer.ResetCore(); LuminPackSerializer.SerializeJson<ConcurrentQueue<int>, TProfile>(nullQueue,buffer); EqualText<TProfile>(buffer,"null");
+                ConcurrentQueue<int> nullQueue = null; buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<ConcurrentQueue<int>, TProfile>(nullQueue,buffer); EqualText<TProfile>(buffer,"null");
             }
             // The fixture's supplementary character is literal in LuminPack's established wire representation.
             private static string Expected<T>(IEnumerable<T> values) => JsonSerializer.Serialize(values.ToArray(), jsonOptions).Replace("\\uD83D\\uDE00", "\uD83D\uDE00");

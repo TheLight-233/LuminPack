@@ -226,17 +226,17 @@ internal static class SerializerTimeZoneCacheRegression
                 foreach(var zone in zones)
                 {
                     string text=zone.ToSerializedString();LuminPackTimeZoneInfoCache.Parse(text);
-                    output.ResetCore();LuminPackSerializer.Serialize<TimeZoneInfo, T>(zone,output);byte[] binary=output.GetSpan().ToArray();
-                    output.ResetCore();LuminPackSerializer.SerializeJson<TimeZoneInfo, T>(zone,output);byte[] json=output.GetSpan().ToArray();
+                    output.ResetWrittenCount();LuminPackSerializer.Serialize<TimeZoneInfo, T>(zone,output);byte[] binary=output.GetSpan().ToArray();
+                    output.ResetWrittenCount();LuminPackSerializer.SerializeJson<TimeZoneInfo, T>(zone,output);byte[] json=output.GetSpan().ToArray();
                     Compare<T>(binary,false);Compare<T>(json,true);Compare<T>(JsonBytes<T>(JsonSerializer.Serialize(text)),true);
                     Compare<T>(JsonBytes<T>("\""+string.Concat(text.Select(c=>"\\u"+((int)c).ToString("x4")))+"\""),true);
                     foreach(var other in zones.Skip(5).Take(3))LuminPackTimeZoneInfoCache.Parse(other.ToSerializedString());
                     Compare<T>(binary,false);Compare<T>(json,true);
                     var graph=new ZoneReadEnvelope{Zone=zone,Tail=137};
-                    output.ResetCore();LuminPackSerializer.Serialize<ZoneReadEnvelope, T>(graph,output);ZoneReadEnvelope decoded=null;
+                    output.ResetWrittenCount();LuminPackSerializer.Serialize<ZoneReadEnvelope, T>(graph,output);ZoneReadEnvelope decoded=null;
                     LuminPackSerializer.Deserialize<ZoneReadEnvelope, T>(output.GetSpan(),ref decoded);
                     if(decoded.Tail!=137||decoded.Zone.ToSerializedString()!=text)throw new Exception("Nested binary snapshot changed.");
-                    output.ResetCore();LuminPackSerializer.SerializeJson<ZoneReadEnvelope, T>(graph,output);decoded=null;
+                    output.ResetWrittenCount();LuminPackSerializer.SerializeJson<ZoneReadEnvelope, T>(graph,output);decoded=null;
                     LuminPackSerializer.DeserializeJson<ZoneReadEnvelope, T>(output.GetSpan(),ref decoded);
                     if(decoded.Tail!=137||decoded.Zone.ToSerializedString()!=text)throw new Exception("Nested JSON snapshot changed.");
                     if(zone==TimeZoneInfo.Utc||zone.Id=="Unicode")
@@ -249,17 +249,17 @@ internal static class SerializerTimeZoneCacheRegression
                 {
                     if(default(T).StringEncoding!=LuminPackStringEncoding.UTF8||!text.Any(char.IsSurrogate))
                     {
-                        output.ResetCore();var writer=new LuminPackWriter(output);writer.WriteObjectHeader(0);writer.Write<T>(text);
+                        output.ResetWrittenCount();var writer=new LuminPackWriter(output);writer.WriteObjectHeader(0);writer.Write<T>(text);
                         Compare<T>(writer.GetSpan().ToArray(),false);
                     }
                     Compare<T>(JsonBytes<T>(JsonSerializer.Serialize(text)),true);
                 }
-                TimeZoneInfo absent=null;output.ResetCore();LuminPackSerializer.Serialize<TimeZoneInfo, T>(absent,output);Compare<T>(output.GetSpan().ToArray(),false);
+                TimeZoneInfo absent=null;output.ResetWrittenCount();LuminPackSerializer.Serialize<TimeZoneInfo, T>(absent,output);Compare<T>(output.GetSpan().ToArray(),false);
                 foreach(string text in new[]{"null","\"\"","true","123","{}","[]","\"invalid\"","\"\\x\"","\"\\uD800\"","\"a\nb\""})Compare<T>(JsonBytes<T>(text),true);
                 if(default(T).StringEncoding==LuminPackStringEncoding.UTF8)
                 {
                     Compare<T>(new byte[]{34,0xC0,0xAF,34},true);
-                    output.ResetCore();var writer=new LuminPackWriter(output);writer.WriteObjectHeader(0);writer.Write<T>("bad");
+                    output.ResetWrittenCount();var writer=new LuminPackWriter(output);writer.WriteObjectHeader(0);writer.Write<T>("bad");
                     byte[] malformed=writer.GetSpan().ToArray();int payload=malformed.AsSpan().IndexOf("bad"u8);
                     if(payload<0)throw new Exception("The malformed UTF-8 fixture payload was not found.");
                     foreach(byte[] invalid in new[]{new byte[]{0xC0,0xAF,32},new byte[]{0xED,0xA0,0x80},new byte[]{0xE2,0x82,0xFF}})

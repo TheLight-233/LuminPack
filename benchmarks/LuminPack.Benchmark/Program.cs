@@ -76,7 +76,7 @@ internal static class Program
         Check("Simple consumed", BitConverter.GetBytes(simpleBytes.Length), BitConverter.GetBytes(simpleConsumed));
         LuminPack.LuminPackSerializer.Deserialize(simpleBytes, ref simpleRead);
         Check("Simple existing target", simpleBytes, LuminPack.LuminPackSerializer.Serialize(simpleRead));
-        buffer.ResetCore();
+        buffer.ResetWrittenCount();
         LuminPack.LuminPackSerializer.Serialize(simple, buffer);
         Check("Simple buffer writer", simpleBytes, buffer.GetSpan());
         Check("Simple returning read", simpleBytes,
@@ -92,7 +92,7 @@ internal static class Program
         Check("CharacterSaveData existing target", dataBytes,
             LuminPack.LuminPackSerializer.Serialize<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackUtf16LengthOptions>(dataRead));
         Check("CharacterSaveData declared profile", dataBytes, LuminPack.LuminPackSerializer.Serialize(data));
-        buffer.ResetCore();
+        buffer.ResetWrittenCount();
         LuminPack.LuminPackSerializer.Serialize<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackUtf16LengthOptions>(data, buffer);
         Check("CharacterSaveData buffer writer", dataBytes, buffer.GetSpan());
         var bufferWriter = new System.Buffers.ArrayBufferWriter<byte>();
@@ -122,7 +122,7 @@ internal static class Program
         LuminPack.LuminPackSerializer.Deserialize<LuminPackBenchmark.PolymorphismClassBase, LuminPack.Option.LuminPackUtf16LengthOptions>(polymorphicBytes, ref polymorphicRead);
         Check("Polymorphism existing target", polymorphicBytes,
             LuminPack.LuminPackSerializer.Serialize<LuminPackBenchmark.PolymorphismClassBase, LuminPack.Option.LuminPackUtf16LengthOptions>(polymorphicRead));
-        buffer.ResetCore();
+        buffer.ResetWrittenCount();
         LuminPack.LuminPackSerializer.Serialize<LuminPackBenchmark.PolymorphismClassBase, LuminPack.Option.LuminPackUtf16LengthOptions>(polymorphic, buffer);
         Check("Polymorphism buffer writer", polymorphicBytes, buffer.GetSpan());
         Console.WriteLine(failures == 0 ? "Round trip verified." : $"{failures} round-trip check(s) failed.");

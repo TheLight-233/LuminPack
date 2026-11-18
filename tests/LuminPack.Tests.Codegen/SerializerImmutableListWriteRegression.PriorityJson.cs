@@ -24,12 +24,12 @@ internal static partial class SerializerImmutableListWriteRegression
                     foreach(int count in new[]{0,1,2,33})foreach(bool reuse in new[]{false,true})
                     {
                         var value=new PriorityQueue<int,int>(Enumerable.Range(0,count).Select(i=>(i,i+7)));
-                        output.ResetCore();LuminPackSerializer.SerializeJson<PriorityQueue<int, int>, P>(value,output);
+                        output.ResetWrittenCount();LuminPackSerializer.SerializeJson<PriorityQueue<int, int>, P>(value,output);
                         PriorityQueue<int,int> result=reuse?new(new[]{(-1,-1)}):null;var prior=result;
                         LuminPackSerializer.DeserializeJson<PriorityQueue<int, int>, P>(output.GetSpan(),ref result);
                         if(!result.UnorderedItems.SequenceEqual(value.UnorderedItems)||reuse&&!ReferenceEquals(prior,result))throw new Exception("Priority pair tokens or reuse changed.");
                         var graph=new PriorityEnvelope{Queue=new(Enumerable.Range(0,count).Select(i=>("item"+i,i+7))),Tail=137};
-                        output.ResetCore();LuminPackSerializer.SerializeJson<PriorityEnvelope, P>(graph,output);PriorityEnvelope restored=null;
+                        output.ResetWrittenCount();LuminPackSerializer.SerializeJson<PriorityEnvelope, P>(graph,output);PriorityEnvelope restored=null;
                         LuminPackSerializer.DeserializeJson<PriorityEnvelope, P>(output.GetSpan(),ref restored);
                         if(restored.Tail!=137||!restored.Queue.UnorderedItems.SequenceEqual(graph.Queue.UnorderedItems))throw new Exception("Nested priority pair tokens changed.");
                     }

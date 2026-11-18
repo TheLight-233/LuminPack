@@ -300,7 +300,7 @@ public class FixedUnionCursorTest
         Assert.Equal(0, CursorOverrideCase.Calls);
 
         source[2] = new FixedCase { Number = 22 };
-        destination.ResetForReuse();
+        destination.Reset();
         LuminPackSerializer.Serialize(in source, destination);
         var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CursorRoot?>>(destination.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(22, Assert.IsType<FixedCase>(copy[2]).Number);
@@ -376,7 +376,7 @@ public class FixedUnionCursorTest
         {
             Number = 73
         };
-        destination.ResetForReuse();
+        destination.Reset();
         LuminPackSerializer.Serialize(in source, destination);
         var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CursorRoot?>>(destination.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(73, Assert.IsType<FixedCase>(copy[2]).Number);

@@ -109,7 +109,7 @@ internal static class SerializerBinaryEntryShapeRegression
                     PackedCell? packed = new PackedCell { X = 23, Y = -4096 };
                     byte[] packedBytes = LuminPackSerializer.Serialize(packed.Value);
                     byte[] nullableBytes = LuminPackSerializer.Serialize(packed);
-                    buffer.ResetForReuse();
+                    buffer.Reset();
                     LuminPackSerializer.Serialize(packed, buffer);
                     if (packedBytes.Length != 9 || nullableBytes.Length != 10 ||
                         !nullableBytes.AsSpan(1).SequenceEqual(packedBytes) || !nullableBytes.AsSpan().SequenceEqual(buffer.GetSpan()))

@@ -518,7 +518,7 @@ namespace LuminPack
         /// <typeparam name=""T"">The value type.</typeparam>
         /// <param name=""value"">The value to serialize.</param>
         /// <param name=""writerBuffer"">The exclusive destination and reference-tracking context.</param>
-        /// <remarks>Appends without resetting contents or reference state. Call ResetForReuse for an independent session or after failure.
+        /// <remarks>Appends without resetting contents or reference state. Call Reset for an independent session or after failure.
         /// <para>Statically bound payload calls are redirected to their generated concrete entries during compilation or IL postprocessing.
         /// The registration requirements below apply only when a call cannot use a static entry.</para>
         /// <para>Generic overload. The closed type argument <typeparamref name=""T"" /> selects an explicitly registered formatter. Register
@@ -526,7 +526,7 @@ namespace LuminPack
         /// determined by that registration; no concrete field layout is assumed by this overload.</para>
         /// <para>Uses the caller-owned reusable buffer and its reference-tracking state. The caller must exclusively own the buffer for the
         /// duration of the operation.</para>
-        /// <para>Appends at the current absolute position without resetting payload or reference state. Call ResetForReuse before an
+        /// <para>Appends at the current absolute position without resetting payload or reference state. Call Reset before an
         /// independent session or after failure. Partial output and reference state remain after an exception; the cursor binding is always
         /// detached.</para>
         /// </remarks>
@@ -538,7 +538,7 @@ namespace LuminPack
         /// <typeparam name=""T"">The value type.</typeparam>
         /// <param name=""value"">The value to serialize.</param>
         /// <param name=""writerBuffer"">The exclusive destination and reference-tracking context.</param>
-        /// <remarks>Appends without resetting contents or reference state. Call ResetForReuse for an independent session or after failure.
+        /// <remarks>Appends without resetting contents or reference state. Call Reset for an independent session or after failure.
         /// <para>Statically bound payload calls are redirected to their generated concrete entries during compilation or IL postprocessing.
         /// The registration requirements below apply only when a call cannot use a static entry.</para>
         /// <para>Generic overload. The closed type argument <typeparamref name=""T"" /> selects an explicitly registered formatter. Register
@@ -546,7 +546,7 @@ namespace LuminPack
         /// determined by that registration; no concrete field layout is assumed by this overload.</para>
         /// <para>Uses the caller-owned reusable buffer and its reference-tracking state. The caller must exclusively own the buffer for the
         /// duration of the operation.</para>
-        /// <para>Appends at the current absolute position without resetting payload or reference state. Call ResetForReuse before an
+        /// <para>Appends at the current absolute position without resetting payload or reference state. Call Reset before an
         /// independent session or after failure. Partial output and reference state remain after an exception; the cursor binding is always
         /// detached.</para>
         /// </remarks>
@@ -1052,7 +1052,7 @@ namespace LuminPack
         /// <typeparam name=""T"">The value type.</typeparam>
         /// <param name=""value"">The value to serialize.</param>
         /// <param name=""writerBuffer"">The exclusive destination and reference-tracking context.</param>
-        /// <remarks>Appends without resetting contents or reference state. Call ResetForReuse for an independent session or after failure.
+        /// <remarks>Appends without resetting contents or reference state. Call Reset for an independent session or after failure.
         /// <para>Statically bound payload calls are redirected to their generated concrete entries during compilation or IL postprocessing.
         /// The registration requirements below apply only when a call cannot use a static entry.</para>
         /// <para>Generic overload. The closed type argument <typeparamref name=""T"" /> selects an explicitly registered formatter. Register
@@ -1060,7 +1060,7 @@ namespace LuminPack
         /// determined by that registration; no concrete field layout is assumed by this overload.</para>
         /// <para>Uses the caller-owned reusable buffer and its reference-tracking state. The caller must exclusively own the buffer for the
         /// duration of the operation.</para>
-        /// <para>Appends at the current absolute position without resetting payload or reference state. Call ResetForReuse before an
+        /// <para>Appends at the current absolute position without resetting payload or reference state. Call Reset before an
         /// independent session or after failure. Partial output and reference state remain after an exception; the cursor binding is always
         /// detached.</para>
         /// </remarks>
@@ -1072,7 +1072,7 @@ namespace LuminPack
         /// <typeparam name=""T"">The value type.</typeparam>
         /// <param name=""value"">The value to serialize.</param>
         /// <param name=""writerBuffer"">The exclusive destination and reference-tracking context.</param>
-        /// <remarks>Appends without resetting contents or reference state. Call ResetForReuse for an independent session or after failure.
+        /// <remarks>Appends without resetting contents or reference state. Call Reset for an independent session or after failure.
         /// <para>Statically bound payload calls are redirected to their generated concrete entries during compilation or IL postprocessing.
         /// The registration requirements below apply only when a call cannot use a static entry.</para>
         /// <para>Generic overload. The closed type argument <typeparamref name=""T"" /> selects an explicitly registered formatter. Register
@@ -1080,7 +1080,7 @@ namespace LuminPack
         /// determined by that registration; no concrete field layout is assumed by this overload.</para>
         /// <para>Uses the caller-owned reusable buffer and its reference-tracking state. The caller must exclusively own the buffer for the
         /// duration of the operation.</para>
-        /// <para>Appends at the current absolute position without resetting payload or reference state. Call ResetForReuse before an
+        /// <para>Appends at the current absolute position without resetting payload or reference state. Call Reset before an
         /// independent session or after failure. Partial output and reference state remain after an exception; the cursor binding is always
         /// detached.</para>
         /// </remarks>

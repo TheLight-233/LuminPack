@@ -90,7 +90,7 @@ public unsafe class DefaultReferenceContextTest
         var second=new LuminPackWriter(owner);
         LuminPackSerializer.Serialize(ref second,in source);
         Assert.Equal(boundary+2,second.Position);
-        owner.ResetForReuse();
+        owner.Reset();
         var reset=new LuminPackWriter(owner);
         LuminPackSerializer.Serialize(ref reset,in source);
         Assert.Equal(boundary,reset.Position);

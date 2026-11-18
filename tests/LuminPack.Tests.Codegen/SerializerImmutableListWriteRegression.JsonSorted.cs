@@ -123,7 +123,7 @@ internal static partial class SerializerImmutableListWriteRegression
                 foreach (int trigger in new[] { 0, 1, 2 })
                 for (int change = 0; change <= 7; change++)
                 {
-                    component = part; at = trigger; mutation = change; Reset(false, false); buffer.ResetCore();
+                    component = part; at = trigger; mutation = change; Reset(false, false); buffer.ResetWrittenCount();
                     var writer = new LuminPackJsonWriter(buffer);
                     string error = "success";
                     try { LuminPackSerializer.SerializeJson<SortedList<SortedMutationKey, SortedMutationValue>, TProfile>(ref writer, in active); }
@@ -155,7 +155,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     Reset(derived, reverse);
                     Exception expectedError = Observe(() => { foreach (var pair in active) { Before("k", pair.Key.Number); Before("v", pair.Value.Number); } });
                     string[] expectedEvents = events.ToArray();
-                    Reset(derived, reverse); buffer.ResetCore();
+                    Reset(derived, reverse); buffer.ResetWrittenCount();
                     Exception actualError = Observe(() => LuminPackSerializer.SerializeJson<SortedList<SortedMutationKey, SortedMutationValue>, TProfile>(active, buffer));
                     if (actualError?.GetType() != expectedError?.GetType() || !events.SequenceEqual(expectedEvents))
                         throw new Exception("Sorted-list mutation or pair capture differs from public enumeration: " + change + "/" + part + "/" + trigger);
@@ -168,7 +168,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     for (int i = 0; i < count; i++) list.Add(i, i * 3);
                     string text = "[" + string.Join(",", list.Select(pair => "[" + pair.Key.ToString(System.Globalization.CultureInfo.InvariantCulture) + "," + pair.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]")) + "]";
                     var encoding = default(TProfile).StringEncoding == LuminPackStringEncoding.UTF16 ? System.Text.Encoding.Unicode : System.Text.Encoding.UTF8;
-                    buffer.ResetCore(); LuminPackSerializer.SerializeJson<SortedList<int, int>, TProfile>(list, buffer);
+                    buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<SortedList<int, int>, TProfile>(list, buffer);
                     if (!buffer.GetSpan().SequenceEqual(encoding.GetBytes(text))) throw new Exception("Sorted-list JSON bytes changed.");
                     SortedList<int, int> decoded = null;
                     LuminPackSerializer.DeserializeJson<SortedList<int, int>, TProfile>(buffer.GetSpan(), ref decoded);
@@ -179,7 +179,7 @@ internal static partial class SerializerImmutableListWriteRegression
                 foreach (bool json in new[] { false, true })
                 foreach (bool nested in new[] { false, true })
                 {
-                    Action write = () => { buffer.ResetCore(); if (nested) { if (json) LuminPackSerializer.SerializeJson<SortedEnvelope, TProfile>(graph, buffer); else LuminPackSerializer.Serialize<SortedEnvelope, TProfile>(graph, buffer); } else { if (json) LuminPackSerializer.SerializeJson<SortedList<int, int>, TProfile>(values, buffer); else LuminPackSerializer.Serialize<SortedList<int, int>, TProfile>(values, buffer); } };
+                    Action write = () => { buffer.ResetWrittenCount(); if (nested) { if (json) LuminPackSerializer.SerializeJson<SortedEnvelope, TProfile>(graph, buffer); else LuminPackSerializer.Serialize<SortedEnvelope, TProfile>(graph, buffer); } else { if (json) LuminPackSerializer.SerializeJson<SortedList<int, int>, TProfile>(values, buffer); else LuminPackSerializer.Serialize<SortedList<int, int>, TProfile>(values, buffer); } };
                     for (int i = 0; i < 128; i++) write();
                     long before = GC.GetAllocatedBytesForCurrentThread();
                     for (int i = 0; i < 128; i++) write();

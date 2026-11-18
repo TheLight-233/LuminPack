@@ -107,22 +107,22 @@ internal static partial class SerializerFrameworkEntryRegression
                 foreach(string name in names)
                 {
                     Type item=new NameType(name);string compact=Qualifiers.Replace(name,"");
-                    reference.ResetCore();var binary=new LuminPackWriter(reference);binary.WriteObjectHeader(0);binary.Write<P>(compact);byte[] expected=binary.GetSpan().ToArray();
-                    output.ResetCore();NameType.Gets=0;LuminPackSerializer.Serialize<Type, P>(item,output);Require(NameType.Gets==1&&output.GetSpan().SequenceEqual(expected),"Binary type-name wire/getter");
-                    reference.ResetCore();var json=new LuminPackJsonWriter(reference);json.Write<P>(compact);expected=json.GetSpan().ToArray();
-                    output.ResetCore();NameType.Gets=0;LuminPackSerializer.SerializeJson<Type, P>(item,output);Require(NameType.Gets==1&&output.GetSpan().SequenceEqual(expected),"JSON type-name wire/getter");
-                    for(int i=0;i<64;i++){output.ResetCore();LuminPackSerializer.Serialize<Type, P>(item,output);output.ResetCore();LuminPackSerializer.SerializeJson<Type, P>(item,output);}
+                    reference.ResetWrittenCount();var binary=new LuminPackWriter(reference);binary.WriteObjectHeader(0);binary.Write<P>(compact);byte[] expected=binary.GetSpan().ToArray();
+                    output.ResetWrittenCount();NameType.Gets=0;LuminPackSerializer.Serialize<Type, P>(item,output);Require(NameType.Gets==1&&output.GetSpan().SequenceEqual(expected),"Binary type-name wire/getter");
+                    reference.ResetWrittenCount();var json=new LuminPackJsonWriter(reference);json.Write<P>(compact);expected=json.GetSpan().ToArray();
+                    output.ResetWrittenCount();NameType.Gets=0;LuminPackSerializer.SerializeJson<Type, P>(item,output);Require(NameType.Gets==1&&output.GetSpan().SequenceEqual(expected),"JSON type-name wire/getter");
+                    for(int i=0;i<64;i++){output.ResetWrittenCount();LuminPackSerializer.Serialize<Type, P>(item,output);output.ResetWrittenCount();LuminPackSerializer.SerializeJson<Type, P>(item,output);}
                     long start=GC.GetAllocatedBytesForCurrentThread();
-                    for(int i=0;i<32;i++){output.ResetCore();LuminPackSerializer.Serialize<Type, P>(item,output);output.ResetCore();LuminPackSerializer.SerializeJson<Type, P>(item,output);}
+                    for(int i=0;i<32;i++){output.ResetWrittenCount();LuminPackSerializer.Serialize<Type, P>(item,output);output.ResetWrittenCount();LuminPackSerializer.SerializeJson<Type, P>(item,output);}
                     Require(GC.GetAllocatedBytesForCurrentThread()==start,"Type writes allocated temporary heap storage");
                 }
                 foreach(var culture in new[]{CultureInfo.InvariantCulture,CultureInfo.GetCultureInfo("en-US"),new CultureInfo("fr-FR")})
                 foreach(string uri in new[]{"relative/path?x=1","https://example.com/a%20b?x=1#t","mailto:a@example.com"})
                 {
                     var value=new TextEnvelope{First=typeof(int),Second=typeof(List<>),Types=new[]{typeof(Dictionary<string,int[]>),typeof(int[,])},Culture=culture,Uri=new Uri(uri,UriKind.RelativeOrAbsolute),Number=new Lazy<int>(17),Text=new Lazy<string>("value"),Nested=new Lazy<Type>(typeof(string)),Tail=731};
-                    output.ResetCore();LuminPackSerializer.Serialize<TextEnvelope, P>(value,output);byte[] bytes=output.GetSpan().ToArray();TextEnvelope result=null;
+                    output.ResetWrittenCount();LuminPackSerializer.Serialize<TextEnvelope, P>(value,output);byte[] bytes=output.GetSpan().ToArray();TextEnvelope result=null;
                     LuminPackSerializer.Deserialize<TextEnvelope, P>(bytes,ref result);Verify(result,value);LuminPackSerializer.Deserialize<TextEnvelope, P>(bytes,ref result);Verify(result,value);
-                    output.ResetCore();LuminPackSerializer.SerializeJson<TextEnvelope, P>(value,output);bytes=output.GetSpan().ToArray();result=null;
+                    output.ResetWrittenCount();LuminPackSerializer.SerializeJson<TextEnvelope, P>(value,output);bytes=output.GetSpan().ToArray();result=null;
                     LuminPackSerializer.DeserializeJson<TextEnvelope, P>(bytes,ref result);Verify(result,value);LuminPackSerializer.DeserializeJson<TextEnvelope, P>(bytes,ref result);Verify(result,value);
                 }
             }
@@ -152,7 +152,7 @@ internal static partial class SerializerFrameworkEntryRegression
                 Type type=typeof(int);CultureInfo culture=CultureInfo.GetCultureInfo("en-US");Uri uri=new Uri("relative/path",UriKind.Relative);Lazy<int> lazy=new(17);
                 for(int kind=0;kind<4;kind++)
                 {
-                    output.ResetCore();
+                    output.ResetWrittenCount();
                     if(kind==0)LuminPackSerializer.Serialize<Type, P>(type,output);else if(kind==1)LuminPackSerializer.Serialize<CultureInfo, P>(culture,output);else if(kind==2)LuminPackSerializer.Serialize<Uri, P>(uri,output);else LuminPackSerializer.Serialize<Lazy<int>, P>(lazy,output);
                     byte[] bytes=output.GetSpan().ToArray();
                     for(int length=0;length<=bytes.Length;length++)ReadOne<P>(result,kind,bytes.AsSpan(0,length).ToArray(),false);

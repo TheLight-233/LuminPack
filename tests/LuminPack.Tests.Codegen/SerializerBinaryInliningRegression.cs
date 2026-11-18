@@ -399,7 +399,7 @@ internal static class SerializerBinaryInliningRegression
                         LuminPackSerializer.Serialize(value, buffer);
                         LuminPackSerializer.Serialize(value, buffer);
                         if (buffer.CurrentIndex != bytes.Length * 2 || !buffer.GetSpan().Slice(bytes.Length).SequenceEqual(bytes)) throw new Exception("Named member append changed.");
-                        buffer.ResetForReuse();
+                        buffer.Reset();
                         LuminPackSerializer.Serialize(value, buffer);
                         if (!buffer.GetSpan().SequenceEqual(bytes)) throw new Exception("Named member reset changed.");
                         if (size == 8 && text == "ASCII") {

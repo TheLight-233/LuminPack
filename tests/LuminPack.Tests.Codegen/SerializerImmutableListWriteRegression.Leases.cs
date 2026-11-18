@@ -89,10 +89,10 @@ internal static partial class SerializerImmutableListWriteRegression
                 foreach (bool json in new[] { false, true })
                 {
                     Action[] writes = {
-                        () => { buffer.ResetCore(); if (json) LuminPackSerializer.SerializeJson<ImmutableDictionary<int, LeasePayload>, TProfile>(immutable, buffer); else LuminPackSerializer.Serialize<ImmutableDictionary<int, LeasePayload>, TProfile>(immutable, buffer); },
-                        () => { buffer.ResetCore(); if (json) LuminPackSerializer.SerializeJson<ImmutableSortedDictionary<int, LeasePayload>, TProfile>(immutableSorted, buffer); else LuminPackSerializer.Serialize<ImmutableSortedDictionary<int, LeasePayload>, TProfile>(immutableSorted, buffer); },
-                        () => { buffer.ResetCore(); if (json) LuminPackSerializer.SerializeJson<SortedDictionary<int, LeasePayload>, TProfile>(sorted, buffer); else LuminPackSerializer.Serialize<SortedDictionary<int, LeasePayload>, TProfile>(sorted, buffer); },
-                        () => { buffer.ResetCore(); if (json) LuminPackSerializer.SerializeJson<SortedList<int, LeasePayload>, TProfile>(list, buffer); else LuminPackSerializer.Serialize<SortedList<int, LeasePayload>, TProfile>(list, buffer); }
+                        () => { buffer.ResetWrittenCount(); if (json) LuminPackSerializer.SerializeJson<ImmutableDictionary<int, LeasePayload>, TProfile>(immutable, buffer); else LuminPackSerializer.Serialize<ImmutableDictionary<int, LeasePayload>, TProfile>(immutable, buffer); },
+                        () => { buffer.ResetWrittenCount(); if (json) LuminPackSerializer.SerializeJson<ImmutableSortedDictionary<int, LeasePayload>, TProfile>(immutableSorted, buffer); else LuminPackSerializer.Serialize<ImmutableSortedDictionary<int, LeasePayload>, TProfile>(immutableSorted, buffer); },
+                        () => { buffer.ResetWrittenCount(); if (json) LuminPackSerializer.SerializeJson<SortedDictionary<int, LeasePayload>, TProfile>(sorted, buffer); else LuminPackSerializer.Serialize<SortedDictionary<int, LeasePayload>, TProfile>(sorted, buffer); },
+                        () => { buffer.ResetWrittenCount(); if (json) LuminPackSerializer.SerializeJson<SortedList<int, LeasePayload>, TProfile>(list, buffer); else LuminPackSerializer.Serialize<SortedList<int, LeasePayload>, TProfile>(list, buffer); }
                     };
                     string[] labels = { "ImmutableDictionary", "ImmutableSortedDictionary", "SortedDictionary", "SortedList fallback" };
                     var failures = new List<string>();
@@ -126,7 +126,7 @@ internal static partial class SerializerImmutableListWriteRegression
                 for (int i = 0; i < items.Length; i++) matrix[i / 11, i % 11] = items[i];
                 using var buffer = new LuminBufferWriter(true);
                 LuminPackSerializer.SerializeJson<Stack<LeasePayload>, TProfile>(stack, buffer); byte[] stackBytes = buffer.GetSpan().ToArray();
-                buffer.ResetCore(); LuminPackSerializer.SerializeJson<LeasePayload[,], TProfile>(matrix, buffer); byte[] matrixBytes = buffer.GetSpan().ToArray();
+                buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<LeasePayload[,], TProfile>(matrix, buffer); byte[] matrixBytes = buffer.GetSpan().ToArray();
                 Stack<LeasePayload> stackResult = null; LeasePayload[,] matrixResult = null;
                 LuminPackSerializer.DeserializeJson<Stack<LeasePayload>, TProfile>(stackBytes.AsSpan(), ref stackResult);
                 LuminPackSerializer.DeserializeJson<LeasePayload[,], TProfile>(matrixBytes.AsSpan(), ref matrixResult);
@@ -161,7 +161,7 @@ internal static partial class SerializerImmutableListWriteRegression
                 using var buffer = new LuminBufferWriter(true);
                 foreach (bool json in new[] { false, true })
                 {
-                    buffer.ResetCore();
+                    buffer.ResetWrittenCount();
                     SortedList<string, string> result = null;
                     if (json) { LuminPackSerializer.SerializeJson<SortedList<string, string>, TProfile>(value, buffer); LuminPackSerializer.DeserializeJson<SortedList<string, string>, TProfile>(buffer.GetSpan(), ref result); }
                     else { LuminPackSerializer.Serialize<SortedList<string, string>, TProfile>(value, buffer); LuminPackSerializer.Deserialize<SortedList<string, string>, TProfile>(buffer.GetSpan(), ref result); }
@@ -242,7 +242,7 @@ internal static partial class SerializerImmutableListWriteRegression
                                     offset += 8;
                                 }
                             }
-                            buffer.ResetCore(); writes[index]();
+                            buffer.ResetWrittenCount(); writes[index]();
                             if (!buffer.GetSpan().SequenceEqual(expected)) throw new Exception("Fixed-pair output changed during staging or buffer growth.");
                         }
                     }

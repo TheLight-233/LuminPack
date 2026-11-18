@@ -109,7 +109,7 @@ internal static class SerializerSmallHashSetWriteRegression
         }
         source.Append("""
                 }
-                var set=new HashSet<byte>{3,7,11};using(var buffer=new LuminBufferWriter(true)){Buffered(set,buffer);if(!Writebyte(set).AsSpan().SequenceEqual(buffer.GetSpan()))throw new Exception("Buffered bytes changed");buffer.ResetForReuse();BufferedInterface(set,buffer);if(!Writebyte(set).AsSpan().SequenceEqual(buffer.GetSpan()))throw new Exception("Buffered interface bytes changed");}
+                var set=new HashSet<byte>{3,7,11};using(var buffer=new LuminBufferWriter(true)){Buffered(set,buffer);if(!Writebyte(set).AsSpan().SequenceEqual(buffer.GetSpan()))throw new Exception("Buffered bytes changed");buffer.Reset();BufferedInterface(set,buffer);if(!Writebyte(set).AsSpan().SequenceEqual(buffer.GetSpan()))throw new Exception("Buffered interface bytes changed");}
                 if(Json(set)!="[3,7,11]")throw new Exception("JSON changed");
                 SetHolder value=new SetHolder{Value=set};byte[] bytes=Nested(value);SetHolder copy=null;LuminPackSerializer.Deserialize(bytes,ref copy);
                 if(!copy.Value.SetEquals(set))throw new Exception("Nested set changed");

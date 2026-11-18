@@ -94,7 +94,7 @@ internal static partial class SerializerImmutableListWriteRegression
                 {
                     int[] values=Enumerable.Range(0,count).Select(i=>i*7-13).ToArray();
                     ImmutableQueue<int> queue=Build(values);
-                    Action write=()=>{output.ResetCore();if(json){if(contract)LuminPackSerializer.SerializeJson<IImmutableQueue<int>, P>((IImmutableQueue<int>)queue,output);else LuminPackSerializer.SerializeJson<ImmutableQueue<int>, P>(queue,output);}
+                    Action write=()=>{output.ResetWrittenCount();if(json){if(contract)LuminPackSerializer.SerializeJson<IImmutableQueue<int>, P>((IImmutableQueue<int>)queue,output);else LuminPackSerializer.SerializeJson<ImmutableQueue<int>, P>(queue,output);}
                         else{if(contract)LuminPackSerializer.Serialize<IImmutableQueue<int>, P>((IImmutableQueue<int>)queue,output);else LuminPackSerializer.Serialize<ImmutableQueue<int>, P>(queue,output);}};
                     for(int i=0;i<64;i++)write();
                     long allocated=long.MaxValue;
@@ -105,7 +105,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     }
                     if(available && allocated!=0)throw new Exception("First queue write allocated a reversal: "+allocated);
                     if(available && cache.GetValue(queue)!=null)throw new Exception("Serialization populated the lazy queue cache.");
-                    byte[] actual=output.GetSpan().ToArray();output.ResetCore();
+                    byte[] actual=output.GetSpan().ToArray();output.ResetWrittenCount();
                     if(json)LuminPackSerializer.SerializeJson<int[], P>(values,output);else LuminPackSerializer.Serialize<int[], P>(values,output);
                     if(!actual.SequenceEqual(output.GetSpan().ToArray()))throw new Exception("Uncached queue framing or element order changed.");
                     if(!queue.SequenceEqual(values)||!queue.Enqueue(719).SequenceEqual(values.Append(719)))throw new Exception("Queue contents changed.");
@@ -120,8 +120,8 @@ internal static partial class SerializerImmutableListWriteRegression
                 var text=ImmutableQueue<string>.Empty;foreach(string word in words)text=text.Enqueue(word);
                 foreach(bool json in new[]{false,true})
                 {
-                    output.ResetCore();if(json)LuminPackSerializer.SerializeJson<IImmutableQueue<string>, P>((IImmutableQueue<string>)text,output);else LuminPackSerializer.Serialize<IImmutableQueue<string>, P>((IImmutableQueue<string>)text,output);
-                    byte[] actual=output.GetSpan().ToArray();output.ResetCore();
+                    output.ResetWrittenCount();if(json)LuminPackSerializer.SerializeJson<IImmutableQueue<string>, P>((IImmutableQueue<string>)text,output);else LuminPackSerializer.Serialize<IImmutableQueue<string>, P>((IImmutableQueue<string>)text,output);
+                    byte[] actual=output.GetSpan().ToArray();output.ResetWrittenCount();
                     if(json)LuminPackSerializer.SerializeJson<string[], P>(words,output);else LuminPackSerializer.Serialize<string[], P>(words,output);
                     if(!actual.SequenceEqual(output.GetSpan().ToArray()))throw new Exception("Queue string/null framing changed.");
                 }
@@ -139,7 +139,7 @@ internal static partial class SerializerImmutableListWriteRegression
                 {
                     var queue=ImmutableQueue<QueueFailItem>.Empty;
                     for(int i=0;i<4;i++)queue=queue.Enqueue(new QueueFailItem{Id=i,Text="value"});
-                    Action write=()=>{output.ResetCore();if(json)LuminPackSerializer.SerializeJson<ImmutableQueue<QueueFailItem>, P>(queue,output);else LuminPackSerializer.Serialize<ImmutableQueue<QueueFailItem>, P>(queue,output);};
+                    Action write=()=>{output.ResetWrittenCount();if(json)LuminPackSerializer.SerializeJson<ImmutableQueue<QueueFailItem>, P>(queue,output);else LuminPackSerializer.Serialize<ImmutableQueue<QueueFailItem>, P>(queue,output);};
                     QueueFailItem.ThrowOn=-1;QueueFailItem.Events.Clear();write();
                     var expected=System.Buffers.ArrayPool<QueueFailItem>.Shared.Rent(16);System.Buffers.ArrayPool<QueueFailItem>.Shared.Return(expected,true);
                     QueueFailItem.Events.Clear();QueueFailItem.ThrowOn=failure;Exception observed=null;
@@ -167,7 +167,7 @@ internal static partial class SerializerImmutableListWriteRegression
 
                 void Check<T>(T[] contents, Action write, int[] prefix)
                 {
-                    output.ResetCore();
+                    output.ResetWrittenCount();
                     QueueFailItem.ThrowOn = -1;
                     write();
                     byte[] complete = output.GetSpan().ToArray();
@@ -177,7 +177,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     pool.Return(expectedLease);
                     QueueFailItem.Events.Clear();
                     QueueFailItem.ThrowOn = prefix[1];
-                    output.ResetCore();
+                    output.ResetWrittenCount();
                     Exception observed = null;
                     try { write(); }
                     catch (Exception error) { observed = error; }
@@ -191,7 +191,7 @@ internal static partial class SerializerImmutableListWriteRegression
                             throw new Exception("JSON tree writer lost its lease or retained references.");
                     }
                     finally { pool.Return(returned, true); }
-                    output.ResetCore();
+                    output.ResetWrittenCount();
                     write();
                     if (!output.GetSpan().SequenceEqual(complete)) throw new Exception("JSON tree write changed after failure.");
                 }

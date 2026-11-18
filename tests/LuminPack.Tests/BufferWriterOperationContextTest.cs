@@ -54,12 +54,14 @@ internal static class BufferWriterOperationContextTest
         var marker = new object();
         buffer.WriterState.GetOrAddReference(marker);
         buffer.ReaderState.AddObjectReference(999, marker);
+        buffer.ReaderState.AddVersionTable(31, [7]);
         LuminBufferWriterPool.Return(buffer);
         var reused = LuminBufferWriterPool.Rent();
         try
         {
             Assert(!reused.WriterState.GetOrAddReference(marker).existsReference, "Return retained writer references.");
             AssertThrows(() => reused.ReaderState.GetObjectReference(999), "Return retained reader references.");
+            Assert(!reused.ReaderState.TryGetVersionTable(31, out _), "Return retained a version table.");
             LuminPackSerializer.Serialize("default", reused);
             Assert(global::LuminPackUnitTest.ConcreteReads.Read<string>(reused, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == "default", "A reused buffer inherited a compiled profile.");
         }
@@ -92,7 +94,7 @@ internal static class BufferWriterOperationContextTest
         TestProfileSerializer.SerializeJson(expected, buffer, utf16);
         Assert(TestProfileSerializer.DeserializeJson<string>(System.Text.Encoding.Unicode.GetString(buffer.GetSpan()), utf16) == expected,
             "UTF-16 document round trip failed.");
-        buffer.ResetCore();
+        buffer.ResetWrittenCount();
         LuminPackSerializer.SerializeJson(expected, buffer);
         Assert(global::LuminPackUnitTest.ConcreteReads.ReadJson<string>(buffer, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) == expected, "The default document inherited UTF-16.");
     }

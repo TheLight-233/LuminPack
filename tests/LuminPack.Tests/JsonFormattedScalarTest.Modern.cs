@@ -213,7 +213,7 @@ public partial class JsonFormattedScalarTest
         LuminPackSerializer.SerializeJson<TimeOnly, LuminPackUtf8LengthOptions>(TimeOnly.MaxValue, buffer);
         LuminPackSerializer.SerializeJson<Int128, LuminPackUtf8LengthOptions>(Int128.MinValue, buffer);
         LuminPackSerializer.SerializeJson<UInt128, LuminPackUtf8LengthOptions>(UInt128.MaxValue, buffer);
-        buffer.ResetCore();
+        buffer.ResetWrittenCount();
     }
 }
 #endif

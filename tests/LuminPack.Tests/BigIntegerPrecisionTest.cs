@@ -63,14 +63,14 @@ public class BigIntegerPrecisionTest
         BigInteger target = default;
         for (int i = 0; i < 64; i++)
         {
-            output.ResetCore(); LuminPackSerializer.Serialize(value, output);
+            output.ResetWrittenCount(); LuminPackSerializer.Serialize(value, output);
             LuminPackSerializer.Deserialize(input, ref target);
             target = NecessaryMagnitude(value, magnitude);
         }
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 64; i++)
         {
-            output.ResetCore(); LuminPackSerializer.Serialize(value, output);
+            output.ResetWrittenCount(); LuminPackSerializer.Serialize(value, output);
         }
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         before = GC.GetAllocatedBytesForCurrentThread();
@@ -150,7 +150,7 @@ public class BigIntegerPrecisionTest
         BigInteger target = default;
         for (int i = 0; i < 64; i++)
         {
-            output.ResetCore();
+            output.ResetWrittenCount();
             LuminPackSerializer.SerializeJson<BigInteger, TOptions>(value, output);
             LuminPackSerializer.DeserializeJson<BigInteger, TOptions>(input, ref target);
             target = ReadDirect<TOptions>(input, state);
@@ -159,7 +159,7 @@ public class BigIntegerPrecisionTest
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 64; i++)
         {
-            output.ResetCore();
+            output.ResetWrittenCount();
             LuminPackSerializer.SerializeJson<BigInteger, TOptions>(value, output);
         }
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);

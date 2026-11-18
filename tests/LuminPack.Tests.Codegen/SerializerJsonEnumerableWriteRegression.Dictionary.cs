@@ -89,21 +89,21 @@ internal static partial class SerializerJsonEnumerableWriteRegression
                 var map=new Dictionary<int,Payload>{{1,item},{2,null},{3,item}};
                 LuminPackSerializer.SerializeJson<Dictionary<int, Payload>, P>(map,buffer);
                 Assert<P>(buffer.GetSpan(),"[[1,{\"Number\":7,\"Text\":\"x\"}],[2,null],[3,{\"Number\":7,\"Text\":\"x\"}]]");
-                buffer.ResetCore();IDictionary<int,Payload> writable=map;LuminPackSerializer.SerializeJson<IDictionary<int, Payload>, P>(writable,buffer);
+                buffer.ResetWrittenCount();IDictionary<int,Payload> writable=map;LuminPackSerializer.SerializeJson<IDictionary<int, Payload>, P>(writable,buffer);
                 Assert<P>(buffer.GetSpan(),"[[1,{\"Number\":7,\"Text\":\"x\"}],[2,null],[3,{\"Number\":7,\"Text\":\"x\"}]]");
-                buffer.ResetCore();IReadOnlyDictionary<int,Payload> readable=map;LuminPackSerializer.SerializeJson<IReadOnlyDictionary<int, Payload>, P>(readable,buffer);
+                buffer.ResetWrittenCount();IReadOnlyDictionary<int,Payload> readable=map;LuminPackSerializer.SerializeJson<IReadOnlyDictionary<int, Payload>, P>(readable,buffer);
                 Assert<P>(buffer.GetSpan(),"[[1,{\"Number\":7,\"Text\":\"x\"}],[2,null],[3,{\"Number\":7,\"Text\":\"x\"}]]");
-                buffer.ResetCore();var pair=new KeyValuePair<int,Payload>(1,item);LuminPackSerializer.SerializeJson<KeyValuePair<int, Payload>, P>(pair,buffer);
+                buffer.ResetWrittenCount();var pair=new KeyValuePair<int,Payload>(1,item);LuminPackSerializer.SerializeJson<KeyValuePair<int, Payload>, P>(pair,buffer);
                 Assert<P>(buffer.GetSpan(),"[1,{\"Number\":7,\"Text\":\"x\"}]");
-                buffer.ResetCore();var objects=new Dictionary<Payload,Payload>{{item,item}};LuminPackSerializer.SerializeJson<Dictionary<Payload, Payload>, P>(objects,buffer);
+                buffer.ResetWrittenCount();var objects=new Dictionary<Payload,Payload>{{item,item}};LuminPackSerializer.SerializeJson<Dictionary<Payload, Payload>, P>(objects,buffer);
                 Assert<P>(buffer.GetSpan(),"[[{\"Number\":7,\"Text\":\"x\"},{\"Number\":7,\"Text\":\"x\"}]]");
-                buffer.ResetCore();var structs=new Dictionary<int,ValuePayload>{{1,new ValuePayload{Number=7}}};LuminPackSerializer.SerializeJson<Dictionary<int, ValuePayload>, P>(structs,buffer);
+                buffer.ResetWrittenCount();var structs=new Dictionary<int,ValuePayload>{{1,new ValuePayload{Number=7}}};LuminPackSerializer.SerializeJson<Dictionary<int, ValuePayload>, P>(structs,buffer);
                 Assert<P>(buffer.GetSpan(),"[[1,{\"Number\":7}]]");
-                buffer.ResetCore();var strings=new Dictionary<int,TextPayload>{{1,new TextPayload{Text="x"}}};LuminPackSerializer.SerializeJson<Dictionary<int, TextPayload>, P>(strings,buffer);
+                buffer.ResetWrittenCount();var strings=new Dictionary<int,TextPayload>{{1,new TextPayload{Text="x"}}};LuminPackSerializer.SerializeJson<Dictionary<int, TextPayload>, P>(strings,buffer);
                 Assert<P>(buffer.GetSpan(),"[[1,{\"Text\":\"x\"}]]");
-                buffer.ResetCore();var empty=new Dictionary<int,EmptyPayload>{{1,new EmptyPayload()}};LuminPackSerializer.SerializeJson<Dictionary<int, EmptyPayload>, P>(empty,buffer);
+                buffer.ResetWrittenCount();var empty=new Dictionary<int,EmptyPayload>{{1,new EmptyPayload()}};LuminPackSerializer.SerializeJson<Dictionary<int, EmptyPayload>, P>(empty,buffer);
                 Assert<P>(buffer.GetSpan(),"[[1,{}]]");
-                buffer.ResetCore();var sequence=new[]{item,item};LuminPackSerializer.SerializeJson<Payload[], P>(sequence,buffer);
+                buffer.ResetWrittenCount();var sequence=new[]{item,item};LuminPackSerializer.SerializeJson<Payload[], P>(sequence,buffer);
                 Assert<P>(buffer.GetSpan(),"[{\"Number\":7,\"Text\":\"x\"},{\"Number\":7,\"Text\":\"x\"}]");
             }
             static void Assert<P>(ReadOnlySpan<byte> bytes,string expected) where P:struct,ILuminPackOptions
@@ -203,9 +203,9 @@ internal static partial class SerializerJsonEnumerableWriteRegression
           var map=Enumerable.Range(0,17).ToDictionary(i=>i,i=>i*7);
           IDictionary<int,int> writable=map;IReadOnlyDictionary<int,int> readable=map;
           using var output=new LuminBufferWriter(true);
-          for(int i=0;i<128;i++){output.ResetCore();LuminPackSerializer.SerializeJson<IDictionary<int, int>, P>(writable,output);output.ResetCore();LuminPackSerializer.SerializeJson<IReadOnlyDictionary<int, int>, P>(readable,output);}
+          for(int i=0;i<128;i++){output.ResetWrittenCount();LuminPackSerializer.SerializeJson<IDictionary<int, int>, P>(writable,output);output.ResetWrittenCount();LuminPackSerializer.SerializeJson<IReadOnlyDictionary<int, int>, P>(readable,output);}
           long before=GC.GetAllocatedBytesForCurrentThread();
-          for(int i=0;i<128;i++){output.ResetCore();LuminPackSerializer.SerializeJson<IDictionary<int, int>, P>(writable,output);output.ResetCore();LuminPackSerializer.SerializeJson<IReadOnlyDictionary<int, int>, P>(readable,output);}
+          for(int i=0;i<128;i++){output.ResetWrittenCount();LuminPackSerializer.SerializeJson<IDictionary<int, int>, P>(writable,output);output.ResetWrittenCount();LuminPackSerializer.SerializeJson<IReadOnlyDictionary<int, int>, P>(readable,output);}
           if(GC.GetAllocatedBytesForCurrentThread()!=before)throw new Exception("Exact dictionary interface traversal allocated");
          }
          static void Run<P>()where P:struct,ILuminPackOptions

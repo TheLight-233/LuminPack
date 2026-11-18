@@ -27,7 +27,7 @@ public sealed class BufferAppendTest
         LuminPackSerializer.Serialize((AppendLargeFixed)(raw), buffer);
         Assert.True(buffer.CurrentIndex <= buffer.TotalLength);
         Assert.True(buffer.GetSpan().SequenceEqual(rawBytes.Concat(rawBytes).ToArray()));
-        buffer.ResetForReuse();
+        buffer.Reset();
         var batch = new AppendLargeFixedContainer
         {
             Value = raw,
@@ -51,7 +51,10 @@ public sealed class BufferAppendTest
         int cursor = 45;
         buffer.SetCurrentIndexPtr(ref cursor);
         Assert.Equal(123, buffer.CurrentIndex);
-        buffer.ResetCore();
+        buffer.ResetWrittenCount();
+        cursor = 46;
+        Assert.Equal(0, buffer.CurrentIndex);
+        cursor = 45;
         buffer.SetCurrentIndexPtr(ref cursor);
         Assert.Equal(45, buffer.CurrentIndex);
         cursor = 67;
@@ -59,6 +62,10 @@ public sealed class BufferAppendTest
         buffer.CompleteWrite(cursor);
         cursor = 89;
         Assert.Equal(67, buffer.CurrentIndex);
+        buffer.SetCurrentIndexPtr(ref cursor);
+        buffer.Reset();
+        cursor = 90;
+        Assert.Equal(0, buffer.CurrentIndex);
     }
 
     /// <summary>Crosses several native segments with unchecked fixed records at append boundaries.</summary>
@@ -145,12 +152,12 @@ public sealed class BufferAppendTest
         Assert.Equal(buffer.CurrentIndex, reader.Position);
         buffer.ReaderState.AddObjectReference(17, value);
         int capacity = buffer.TotalLength;
-        buffer.ResetForReuse();
+        buffer.Reset();
         Assert.Equal(capacity, buffer.TotalLength);
         Assert.Equal(0, buffer.CurrentIndex);
         Assert.False(buffer.WriterState.GetOrAddReference(value).existsReference);
         Assert.ThrowsAny<Exception>(() => buffer.ReaderState.GetObjectReference(17));
-        buffer.ResetForReuse();
+        buffer.Reset();
         LuminPackSerializer.Serialize(value, buffer);
         Assert.Equal(firstLength, buffer.CurrentIndex);
     }
@@ -168,7 +175,7 @@ public sealed class BufferAppendTest
         byte[] second = Encoding.Unicode.GetBytes(LuminPackSerializer.SerializeJson("second"));
         Assert.True(buffer.GetSpan().SequenceEqual(first.Concat(second).ToArray()));
         Assert.True(buffer.WriterState.GetOrAddReference(marker).existsReference);
-        buffer.ResetForReuse();
+        buffer.Reset();
         LuminPackSerializer.SerializeJson<string, LuminPackUtf16LengthOptions>((string)("first"), buffer);
         int offset = buffer.CurrentIndex;
         LuminPackSerializer.SerializeJson<string, LuminPackUtf16LengthOptions>((string)("second"), buffer);
@@ -220,22 +227,83 @@ public sealed class BufferAppendTest
         Assert.Equal(length, buffer.CurrentIndex);
         Assert.True(buffer.GetSpan()[..prefix.Length].SequenceEqual(prefix));
         Assert.True(buffer.WriterState.GetOrAddReference(marker).existsReference);
-        buffer.ResetForReuse();
+        buffer.Reset();
         LuminPackSerializer.Serialize(456, buffer);
         Assert.Equal(456, global::LuminPackUnitTest.ConcreteReads.Read<int>(buffer, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref int concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
-    /// <summary>Clears both maps even when an explicitly reset payload has no published bytes.</summary>
+    /// <summary>Preserves the storage and operation state when only the written count is reset.</summary>
     [Fact]
-    public void FullResetClearsEmptyPayloadReferenceMaps()
+    public void ResetWrittenCountPreservesOperationState()
     {
         using var buffer = new LuminBufferWriter(true);
-        var marker = new object ();
+        buffer.LoadSpan([1, 2, 3]);
+        int capacity = buffer.TotalLength;
+        var marker = new object();
         buffer.WriterState.GetOrAddReference(marker);
+        buffer.ReaderState.AddObjectReference(0, marker);
         buffer.ReaderState.AddObjectReference(17, marker);
+        buffer.ReaderState.AddVersionTable(31, [7, 19]);
+
+        buffer.ResetWrittenCount();
+        Assert.True(buffer.GetSpan().IsEmpty);
+        Assert.Equal(capacity, buffer.TotalLength);
+        Assert.True(buffer.WriterState.GetOrAddReference(marker).existsReference);
+        Assert.Same(marker, buffer.ReaderState.GetObjectReference(0));
+        Assert.Same(marker, buffer.ReaderState.GetObjectReference(17));
+        Assert.True(buffer.ReaderState.TryGetVersionTable(31, out var table));
+        Assert.True(table.SequenceEqual(new byte[] { 7, 19 }));
+    }
+
+    /// <summary>Clears reader and writer state even when the payload has no published bytes.</summary>
+    [Fact]
+    public void ResetClearsEmptyPayloadOperationState()
+    {
+        using var buffer = new LuminBufferWriter(true);
+        int capacity = buffer.GetFullSpan().Length;
+        var marker = new object();
+        buffer.WriterState.GetOrAddReference(marker);
+        buffer.ReaderState.AddObjectReference(0, marker);
+        buffer.ReaderState.AddObjectReference(17, marker);
+        buffer.ReaderState.AddVersionTable(31, [7]);
+
         buffer.Reset();
+        Assert.Equal(capacity, buffer.TotalLength);
         Assert.False(buffer.WriterState.GetOrAddReference(marker).existsReference);
+        Assert.ThrowsAny<Exception>(() => buffer.ReaderState.GetObjectReference(0));
         Assert.ThrowsAny<Exception>(() => buffer.ReaderState.GetObjectReference(17));
+        Assert.False(buffer.ReaderState.TryGetVersionTable(31, out _));
+    }
+
+    /// <summary>Clears a version table without requiring either reference map to be active.</summary>
+    [Fact]
+    public void ResetClearsVersionOnlyState()
+    {
+        using var buffer = new LuminBufferWriter(true);
+        buffer.ReaderState.AddVersionTable(31, [7]);
+        buffer.Reset();
+        Assert.False(buffer.ReaderState.TryGetVersionTable(31, out _));
+    }
+
+    /// <summary>Clears state and releases storage when an owned buffer is disposed.</summary>
+    [Fact]
+    public void DisposeClearsStateAndCapacity()
+    {
+        using var buffer = new LuminBufferWriter(true);
+        buffer.LoadSpan([1, 2, 3]);
+        var marker = new object();
+        buffer.WriterState.GetOrAddReference(marker);
+        buffer.ReaderState.AddObjectReference(0, marker);
+        buffer.ReaderState.AddVersionTable(31, [7]);
+        int cursor = 3;
+        buffer.SetCurrentIndexPtr(ref cursor);
+
+        buffer.Dispose();
+        cursor = 5;
+        Assert.Equal(0, buffer.CurrentIndex);
+        Assert.Equal(0, buffer.TotalLength);
+        Assert.False(buffer.WriterState.HasOperationState);
+        Assert.False(buffer.ReaderState.HasOperationState);
     }
 
     /// <summary>Overwrites temporary stack storage to expose escaped pointers to a completed writer's cursor.</summary>

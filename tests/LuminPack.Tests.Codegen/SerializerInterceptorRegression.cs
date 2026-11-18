@@ -90,7 +90,7 @@ internal static partial class SerializerInterceptorRegression
                     LuminPackSerializer.Deserialize<StatePayload, LuminPackUtf16LengthOptions>(ref reader, ref restored);
                     if (restored.Number != value.Number || restored.Text != value.Text) throw new Exception("State read changed the binary payload.");
 
-                    output.ResetCore();
+                    output.ResetWrittenCount();
                     var jsonWriter = new LuminPackJsonWriter(output);
                     LuminPackSerializer.SerializeJson<StatePayload, LuminPackUtf16LengthOptions>(ref jsonWriter, in value);
                     var bytes = jsonWriter.GetSpan().ToArray();

@@ -566,14 +566,14 @@ public class CollectionFastPathTest
         using var buffer = new LuminBufferWriter(true);
         for (int i = 0; i < 32; i++)
         {
-            buffer.ResetCore();
+            buffer.ResetWrittenCount();
             LuminPackSerializer.Serialize(wrapper, buffer);
         }
 
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 32; i++)
         {
-            buffer.ResetCore();
+            buffer.ResetWrittenCount();
             LuminPackSerializer.Serialize(wrapper, buffer);
         }
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);

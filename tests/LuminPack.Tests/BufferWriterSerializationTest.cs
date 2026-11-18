@@ -29,8 +29,8 @@ internal static class BufferWriterSerializationTest
             WriteToAndResetCopiesPublishedPayload);
         RunCase(results, nameof(PoolReturnRentClearsPublishedLength),
             PoolReturnRentClearsPublishedLength);
-        RunCase(results, nameof(ResetClearsPublishedPayloadAndAllowsReuse),
-            ResetClearsPublishedPayloadAndAllowsReuse);
+        RunCase(results, nameof(ResetAndReleaseClearsStorageAndAllowsReuse),
+            ResetAndReleaseClearsStorageAndAllowsReuse);
         RunCase(results, nameof(InPlaceCompressionRoundTripsPublishedPayload),
             InPlaceCompressionRoundTripsPublishedPayload);
         RunCase(results, nameof(AliasedAndResetOperationsAreRejected),
@@ -78,7 +78,7 @@ internal static class BufferWriterSerializationTest
             writer.GetSpan()[..expectedLong.Length].SequenceEqual(expectedLong) &&
             writer.GetSpan()[expectedLong.Length..].SequenceEqual(expectedShort),
             "Appending a short record changed the previous record or its new suffix.");
-        writer.ResetForReuse();
+        writer.Reset();
         LuminPackSerializer.Serialize(shortValue, writer);
         Assert(global::LuminPackUnitTest.ConcreteReads.Read<string>(writer.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == shortValue,
             "Short payload from the reused writer could not be deserialized.");
@@ -97,7 +97,7 @@ internal static class BufferWriterSerializationTest
         Assert(writer.CurrentIndex == expectedLong.Length && writer.GetSpan().SequenceEqual(expectedLong),
             "External JSON writer did not publish the expected long payload.");
 
-        writer.ResetForReuse();
+        writer.Reset();
         LuminPackSerializer.SerializeJson(shortValue, writer);
         var expectedShort = Encoding.Unicode.GetBytes(LuminPackSerializer.SerializeJson(shortValue));
         Assert(writer.CurrentIndex == expectedShort.Length,
@@ -126,6 +126,10 @@ internal static class BufferWriterSerializationTest
         Assert(writer.GetSpan().IsEmpty, "ToArrayAndReset did not clear the published span.");
         Assert(global::LuminPackUnitTest.ConcreteReads.Read<string>(actual, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == value,
             "ToArrayAndReset payload could not be deserialized.");
+
+        LuminPackSerializer.Serialize("replacement-payload", writer);
+        writer.Reset();
+        Assert(actual.AsSpan().SequenceEqual(expected), "Reusing the writer changed the returned snapshot.");
     }
 
     /// <summary>Writes to and reset async writes published payload to the current output.</summary>
@@ -191,21 +195,36 @@ internal static class BufferWriterSerializationTest
         }
     }
 
-    /// <summary>Verifies reset clears published payload and allows reuse.</summary>
-    private static void ResetClearsPublishedPayloadAndAllowsReuse()
+    /// <summary>Releases storage, clears the operation states and leaves the writer available for another write.</summary>
+    private static void ResetAndReleaseClearsStorageAndAllowsReuse()
     {
         using var writer = new LuminBufferWriter(true);
         LuminPackSerializer.Serialize("before-reset", writer);
-        Assert(writer.CurrentIndex > 0, "Reset test did not publish an initial payload.");
+        Assert(writer.CurrentIndex > 0 && writer.TotalLength > 0, "Reset test did not allocate and publish a payload.");
+        var marker = new object();
+        writer.WriterState.GetOrAddReference(marker);
+        writer.ReaderState.AddObjectReference(17, marker);
+        writer.ReaderState.AddVersionTable(31, [7]);
+        int cursor = writer.CurrentIndex;
+        writer.SetCurrentIndexPtr(ref cursor);
 
-        writer.Reset();
-        Assert(writer.CurrentIndex == 0 && writer.GetSpan().IsEmpty,
-            "Reset did not clear a completed serialization.");
+        writer.ResetAndRelease();
+        cursor++;
+        Assert(writer.CurrentIndex == 0 && writer.GetSpan().IsEmpty && writer.TotalLength == 0,
+            "ResetAndRelease did not detach the cursor and release the payload storage.");
+        Assert(!writer.WriterState.HasOperationState && !writer.ReaderState.HasOperationState,
+            "ResetAndRelease kept operation state from the previous payload.");
 
         const string value = "after-reset";
         LuminPackSerializer.Serialize(value, writer);
+        Assert(writer.TotalLength > 0, "The next write did not acquire storage.");
         Assert(global::LuminPackUnitTest.ConcreteReads.Read<string>(writer.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == value,
-            "Buffer writer could not be reused after Reset released its buffer.");
+            "Buffer writer could not be reused after ResetAndRelease.");
+
+        writer.Reset();
+        Assert(writer.TotalLength > 0, "Reset released the storage of the previous payload.");
+        writer.ResetAndRelease();
+        Assert(writer.TotalLength == 0, "ResetAndRelease retained storage when the published payload was empty.");
     }
 
     /// <summary>Verifies in place compression round trips published payload.</summary>

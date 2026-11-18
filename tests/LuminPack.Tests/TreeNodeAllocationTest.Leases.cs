@@ -159,7 +159,7 @@ public sealed partial class TreeNodeAllocationTest
         using var output = new LuminBufferWriter(true);
         for (int format = 0; format < 3; format++)
         {
-            output.ResetCore();
+            output.ResetWrittenCount();
             if (dictionary)
             {
                 if (format == 0) LuminPackSerializer.Serialize(map, output);

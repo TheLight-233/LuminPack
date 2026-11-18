@@ -91,7 +91,7 @@ internal static partial class SerializerIssueRegression
                         var items = new FixedRecord[length];
                         items[0] = record;
                         items[^1] = record;
-                        buffer.ResetForReuse();
+                        buffer.Reset();
                         LuminPackSerializer.Serialize(items, buffer);
                         var encoded = buffer.GetSpan();
                         if (encoded.Length != length + 84 || encoded[45] != 255 || !encoded[4..45].SequenceEqual(expected) ||

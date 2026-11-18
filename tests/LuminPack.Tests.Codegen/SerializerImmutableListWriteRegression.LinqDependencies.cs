@@ -46,16 +46,16 @@ internal static partial class SerializerImmutableListWriteRegression
                     ILookup<string,int> lookup=items.ToLookup(x=>"key");
                     foreach(bool json in new[]{false,true})
                     {
-                        output.ResetCore();if(json)LuminPackSerializer.SerializeJson<IGrouping<string, int>, P>(group,output);else LuminPackSerializer.Serialize<IGrouping<string, int>, P>(group,output);
+                        output.ResetWrittenCount();if(json)LuminPackSerializer.SerializeJson<IGrouping<string, int>, P>(group,output);else LuminPackSerializer.Serialize<IGrouping<string, int>, P>(group,output);
                         IGrouping<string,int> result=null;
                         if(json)LuminPackSerializer.DeserializeJson<IGrouping<string, int>, P>(output.GetSpan(),ref result);else LuminPackSerializer.Deserialize<IGrouping<string, int>, P>(output.GetSpan(),ref result);
                         if(result.Key!="key"||!result.SequenceEqual(items))throw new Exception("Grouping dependencies changed.");
-                        output.ResetCore();if(json)LuminPackSerializer.SerializeJson<ILookup<string, int>, P>(lookup,output);else LuminPackSerializer.Serialize<ILookup<string, int>, P>(lookup,output);
+                        output.ResetWrittenCount();if(json)LuminPackSerializer.SerializeJson<ILookup<string, int>, P>(lookup,output);else LuminPackSerializer.Serialize<ILookup<string, int>, P>(lookup,output);
                         ILookup<string,int> table=null;
                         if(json)LuminPackSerializer.DeserializeJson<ILookup<string, int>, P>(output.GetSpan(),ref table);else LuminPackSerializer.Deserialize<ILookup<string, int>, P>(output.GetSpan(),ref table);
                         if(table.Count!=1||!table["key"].SequenceEqual(items))throw new Exception("Lookup dependencies changed.");
                         var value=new LinqEnvelope{Group=group,Lookup=lookup,Tail=137};
-                        output.ResetCore();if(json)LuminPackSerializer.SerializeJson<LinqEnvelope, P>(value,output);else LuminPackSerializer.Serialize<LinqEnvelope, P>(value,output);
+                        output.ResetWrittenCount();if(json)LuminPackSerializer.SerializeJson<LinqEnvelope, P>(value,output);else LuminPackSerializer.Serialize<LinqEnvelope, P>(value,output);
                         LinqEnvelope envelope=null;
                         if(json)LuminPackSerializer.DeserializeJson<LinqEnvelope, P>(output.GetSpan(),ref envelope);else LuminPackSerializer.Deserialize<LinqEnvelope, P>(output.GetSpan(),ref envelope);
                         if(envelope.Tail!=137||!envelope.Group.SequenceEqual(items)||!envelope.Lookup["key"].SequenceEqual(items))throw new Exception("Nested LINQ dependencies changed.");

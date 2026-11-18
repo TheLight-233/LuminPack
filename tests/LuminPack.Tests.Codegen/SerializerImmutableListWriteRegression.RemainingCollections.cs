@@ -116,13 +116,13 @@ internal static partial class SerializerImmutableListWriteRegression
                     var items=Enumerable.Range(0,count).ToArray();
                     IGrouping<int,int> group=new LuminPackGrouping<int,int>(1,items);
                     ILookup<int,int> lookup=new LuminPackLookup<int,int>(new Dictionary<int,IGrouping<int,int>>{{1,group}});
-                    if(Allocated(()=>{output.ResetCore();LuminPackSerializer.Serialize<IGrouping<int, int>, P>(group,output);LuminPackSerializer.SerializeJson<IGrouping<int, int>, P>(group,output);})!=0||
-                       Allocated(()=>{output.ResetCore();LuminPackSerializer.Serialize<ILookup<int, int>, P>(lookup,output);LuminPackSerializer.SerializeJson<ILookup<int, int>, P>(lookup,output);})!=0)
+                    if(Allocated(()=>{output.ResetWrittenCount();LuminPackSerializer.Serialize<IGrouping<int, int>, P>(group,output);LuminPackSerializer.SerializeJson<IGrouping<int, int>, P>(group,output);})!=0||
+                       Allocated(()=>{output.ResetWrittenCount();LuminPackSerializer.Serialize<ILookup<int, int>, P>(lookup,output);LuminPackSerializer.SerializeJson<ILookup<int, int>, P>(lookup,output);})!=0)
                         throw new Exception("Grouping or lookup traversal allocated.");
                     var value=new RemainingEnvelope{Group=group,OtherGroup=group,Lookup=lookup,Priority=new(items.Select(x=>(x,x))),Bag=new(items),Blocking=new(new ConcurrentQueue<int>(items)),Complex=new(2,3),Plane=new(1,2,3,4),Tail=137};
                     foreach(bool json in new[]{false,true})foreach(bool reused in new[]{false,true})
                     {
-                        output.ResetCore();if(json)LuminPackSerializer.SerializeJson<RemainingEnvelope, P>(value,output);else LuminPackSerializer.Serialize<RemainingEnvelope, P>(value,output);
+                        output.ResetWrittenCount();if(json)LuminPackSerializer.SerializeJson<RemainingEnvelope, P>(value,output);else LuminPackSerializer.Serialize<RemainingEnvelope, P>(value,output);
                         RemainingEnvelope result=reused?new RemainingEnvelope{Priority=new(),Bag=new(),Blocking=new()}:null;
                         var old=result;var priorBlocking=result?.Blocking;
                         if(json)LuminPackSerializer.DeserializeJson<RemainingEnvelope, P>(output.GetSpan(),ref result);else LuminPackSerializer.Deserialize<RemainingEnvelope, P>(output.GetSpan(),ref result);
@@ -135,15 +135,15 @@ internal static partial class SerializerImmutableListWriteRegression
                     }
                     value.Blocking.Dispose();
                 }
-                var scalar=new Complex(2,3);output.ResetCore();LuminPackSerializer.SerializeJson<Complex, P>(scalar,output);byte[] bytes=output.GetSpan().ToArray();
+                var scalar=new Complex(2,3);output.ResetWrittenCount();LuminPackSerializer.SerializeJson<Complex, P>(scalar,output);byte[] bytes=output.GetSpan().ToArray();
                 Complex resultScalar=default;
                 if(Allocated(()=>LuminPackSerializer.DeserializeJson<Complex, P>(bytes,ref resultScalar))!=0||resultScalar!=scalar)throw new Exception("Complex property names allocated.");
-                var plane=new Plane(1,2,3,4);output.ResetCore();LuminPackSerializer.SerializeJson<Plane, P>(plane,output);bytes=output.GetSpan().ToArray();Plane resultPlane=default;
+                var plane=new Plane(1,2,3,4);output.ResetWrittenCount();LuminPackSerializer.SerializeJson<Plane, P>(plane,output);bytes=output.GetSpan().ToArray();Plane resultPlane=default;
                 if(Allocated(()=>LuminPackSerializer.DeserializeJson<Plane, P>(bytes,ref resultPlane))!=0||resultPlane!=plane)throw new Exception("Plane property names allocated.");
                 var queues=Enumerable.Range(0,32).Select(i=>new PriorityQueue<int,int>(new[]{(1,1)})).ToArray();
-                var warmQueue=new PriorityQueue<int,int>(new[]{(1,1)});output.ResetCore();LuminPackSerializer.SerializeJson<PriorityQueue<int, int>, P>(warmQueue,output);
+                var warmQueue=new PriorityQueue<int,int>(new[]{(1,1)});output.ResetWrittenCount();LuminPackSerializer.SerializeJson<PriorityQueue<int, int>, P>(warmQueue,output);
                 long start=GC.GetAllocatedBytesForCurrentThread();
-                foreach(var queue in queues){output.ResetCore();LuminPackSerializer.SerializeJson<PriorityQueue<int, int>, P>(queue,output);}
+                foreach(var queue in queues){output.ResetWrittenCount();LuminPackSerializer.SerializeJson<PriorityQueue<int, int>, P>(queue,output);}
                 if(GC.GetAllocatedBytesForCurrentThread()!=start)throw new Exception("Priority traversal allocated a view on fresh queues.");
             }
             public static string Evidence()
@@ -167,7 +167,7 @@ internal static partial class SerializerImmutableListWriteRegression
                 {
                     var queue=new PriorityQueue<RemainingItem,int>(new[]{(new RemainingItem{Id=1},1),(new RemainingItem{Id=2},2)});
                     RemainingItem.Writing=id=>{report.Append(id).Append(',');if(id==(mutation==3?2:1)){if(mutation==1)queue.Clear();if(mutation==2)queue.EnsureCapacity(100);if(mutation==3)queue.Enqueue(new RemainingItem{Id=3},3);}};
-                    output.ResetCore();try{if(json)LuminPackSerializer.SerializeJson<PriorityQueue<RemainingItem, int>, P>(queue,output);else LuminPackSerializer.Serialize<PriorityQueue<RemainingItem, int>, P>(queue,output);report.Append("ok");}
+                    output.ResetWrittenCount();try{if(json)LuminPackSerializer.SerializeJson<PriorityQueue<RemainingItem, int>, P>(queue,output);else LuminPackSerializer.Serialize<PriorityQueue<RemainingItem, int>, P>(queue,output);report.Append("ok");}
                     catch(Exception e){report.Append(e.GetType().Name);}
                     report.Append(':').Append(Convert.ToBase64String(output.GetSpan())).AppendLine();RemainingItem.Writing=null;
                 }
@@ -178,14 +178,14 @@ internal static partial class SerializerImmutableListWriteRegression
                     dict.Add(2,new LuminPackGrouping<int,RemainingItem>(2,new[]{new RemainingItem{Id=2}}));
                     ILookup<int,RemainingItem> lookup=new LuminPackLookup<int,RemainingItem>(dict);
                     RemainingItem.Writing=id=>{report.Append(id).Append(',');if(id==1){if(mutation==1)dict.Clear();if(mutation==2)dict.Remove(2);if(mutation==3)dict.Add(3,new LuminPackGrouping<int,RemainingItem>(3,Array.Empty<RemainingItem>()));}};
-                    output.ResetCore();try{if(json)LuminPackSerializer.SerializeJson<ILookup<int, RemainingItem>, P>(lookup,output);else LuminPackSerializer.Serialize<ILookup<int, RemainingItem>, P>(lookup,output);report.Append("ok");}
+                    output.ResetWrittenCount();try{if(json)LuminPackSerializer.SerializeJson<ILookup<int, RemainingItem>, P>(lookup,output);else LuminPackSerializer.Serialize<ILookup<int, RemainingItem>, P>(lookup,output);report.Append("ok");}
                     catch(Exception e){report.Append(e.GetType().Name);}
                     report.Append(':').Append(Convert.ToBase64String(output.GetSpan())).AppendLine();RemainingItem.Writing=null;
                 }
                 foreach(int count in new[]{0,16,17,32})foreach(int failAt in new[]{-1,1})
                 {
                     var source=new PriorityQueue<int,int>(Enumerable.Range(0,count).Select(i=>(i,i)));
-                    output.ResetCore();LuminPackSerializer.Serialize<PriorityQueue<int, int>, P>(source,output);
+                    output.ResetWrittenCount();LuminPackSerializer.Serialize<PriorityQueue<int, int>, P>(source,output);
                     int calls=0;var comparer=Comparer<int>.Create((left,right)=>{report.Append(left).Append('/').Append(right).Append(',');if(++calls==failAt)throw new InvalidOperationException("Comparer sentinel");return left.CompareTo(right);});
                     var result=new PriorityQueue<int,int>(comparer);var old=result;
                     try{LuminPackSerializer.Deserialize<PriorityQueue<int, int>, P>(output.GetSpan(),ref result);report.Append("ok");}catch(Exception e){report.Append(e.GetType().Name);}
@@ -194,17 +194,17 @@ internal static partial class SerializerImmutableListWriteRegression
                 foreach(bool stack in new[]{false,true})foreach(bool json in new[]{false,true})
                 {
                     IProducerConsumerCollection<int> storage=stack?(IProducerConsumerCollection<int>)new ConcurrentStack<int>(new[]{1,2,3}):new ConcurrentQueue<int>(new[]{1,2,3});
-                    var blocking=new BlockingCollection<int>(storage,8);blocking.CompleteAdding();output.ResetCore();
+                    var blocking=new BlockingCollection<int>(storage,8);blocking.CompleteAdding();output.ResetWrittenCount();
                     if(json)LuminPackSerializer.SerializeJson<BlockingCollection<int>, P>(blocking,output);else LuminPackSerializer.Serialize<BlockingCollection<int>, P>(blocking,output);
                     report.Append(Convert.ToBase64String(output.GetSpan())).Append(':').Append(blocking.Count).Append(':').Append(blocking.IsAddingCompleted).AppendLine();
-                    blocking.Dispose();output.ResetCore();try{if(json)LuminPackSerializer.SerializeJson<BlockingCollection<int>, P>(blocking,output);else LuminPackSerializer.Serialize<BlockingCollection<int>, P>(blocking,output);report.Append("accepted disposed");}catch(Exception e){report.Append(e.GetType().Name);}
+                    blocking.Dispose();output.ResetWrittenCount();try{if(json)LuminPackSerializer.SerializeJson<BlockingCollection<int>, P>(blocking,output);else LuminPackSerializer.Serialize<BlockingCollection<int>, P>(blocking,output);report.Append("accepted disposed");}catch(Exception e){report.Append(e.GetType().Name);}
                     report.Append(':').Append(Convert.ToBase64String(output.GetSpan())).AppendLine();
                 }
                 foreach(bool json in new[]{false,true})
                 {
                     var bag=new ConcurrentBag<RemainingItem>(new[]{new RemainingItem{Id=1},new RemainingItem{Id=2}});
                     RemainingItem.Writing=id=>{report.Append(id).Append(',');bag.Clear();bag.Add(new RemainingItem{Id=3});};
-                    output.ResetCore();if(json)LuminPackSerializer.SerializeJson<ConcurrentBag<RemainingItem>, P>(bag,output);else LuminPackSerializer.Serialize<ConcurrentBag<RemainingItem>, P>(bag,output);
+                    output.ResetWrittenCount();if(json)LuminPackSerializer.SerializeJson<ConcurrentBag<RemainingItem>, P>(bag,output);else LuminPackSerializer.Serialize<ConcurrentBag<RemainingItem>, P>(bag,output);
                     report.Append(':').Append(Convert.ToBase64String(output.GetSpan())).AppendLine();RemainingItem.Writing=null;
                 }
             }

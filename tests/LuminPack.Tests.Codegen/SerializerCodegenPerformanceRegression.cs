@@ -173,7 +173,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                     {
                         for (int i = 0; i < 2; i++)
                         {
-                            buffer.ResetForReuse();
+                            buffer.Reset();
                             LuminPackSerializer.Serialize(value, buffer);
                             if (!buffer.GetSpan().SequenceEqual(expected)) throw new Exception("Reusable Union output changed.");
                         }

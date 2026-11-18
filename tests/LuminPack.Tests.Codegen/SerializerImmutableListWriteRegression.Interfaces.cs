@@ -143,7 +143,7 @@ internal static partial class SerializerImmutableListWriteRegression
                 using var buffer = new LuminBufferWriter(true);
                 for (int format = 0; format < 2; format++)
                 {
-                    buffer.ResetCore(); bool failed = false;
+                    buffer.ResetWrittenCount(); bool failed = false;
                     Exception expectedError = null;
                     try { if (format == 0) ((IEnumerable<EntryItem>)invalid).GetEnumerator(); else _ = invalid.Count; }
                     catch (Exception error) { expectedError = error; }
@@ -161,7 +161,7 @@ internal static partial class SerializerImmutableListWriteRegression
                 using var buffer = new LuminBufferWriter(true);
                 foreach (bool json in new[] { false, true })
                 {
-                    Action write = () => { buffer.ResetCore(); EntryItem.Events.Clear(); if (json) LuminPackSerializer.SerializeJson<InterfaceGraph, TProfile>(graph, buffer); else LuminPackSerializer.Serialize<InterfaceGraph, TProfile>(graph, buffer); };
+                    Action write = () => { buffer.ResetWrittenCount(); EntryItem.Events.Clear(); if (json) LuminPackSerializer.SerializeJson<InterfaceGraph, TProfile>(graph, buffer); else LuminPackSerializer.Serialize<InterfaceGraph, TProfile>(graph, buffer); };
                     write();
                     InterfaceGraph result = null;
                     if (json) LuminPackSerializer.DeserializeJson<InterfaceGraph, TProfile>(buffer.GetSpan(), ref result); else LuminPackSerializer.Deserialize<InterfaceGraph, TProfile>(buffer.GetSpan(), ref result);
@@ -169,14 +169,14 @@ internal static partial class SerializerImmutableListWriteRegression
                         throw new Exception("Nested immutable interface state or ordering changed.");
                     CheckAllocation(write, "Nested immutable interface graph");
                 }
-                Action writeSet = () => { buffer.ResetCore(); EntryItem.Events.Clear(); LuminPackSerializer.SerializeJson<ImmutableHashSet<EntryItem>, TProfile>(set, buffer); };
+                Action writeSet = () => { buffer.ResetWrittenCount(); EntryItem.Events.Clear(); LuminPackSerializer.SerializeJson<ImmutableHashSet<EntryItem>, TProfile>(set, buffer); };
                 writeSet(); byte[] setBytes = buffer.GetSpan().ToArray();
-                buffer.ResetCore(); LuminPackSerializer.SerializeJson<IImmutableSet<EntryItem>, TProfile>((IImmutableSet<EntryItem>)set, buffer);
+                buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<IImmutableSet<EntryItem>, TProfile>((IImmutableSet<EntryItem>)set, buffer);
                 if (!buffer.GetSpan().SequenceEqual(setBytes)) throw new Exception("Concrete and interface set JSON differ.");
                 CheckAllocation(writeSet, "Concrete hash set JSON");
-                Action writeDictionary = () => { buffer.ResetCore(); EntryItem.Events.Clear(); LuminPackSerializer.SerializeJson<ImmutableDictionary<int, EntryItem>, TProfile>(dictionary, buffer); };
+                Action writeDictionary = () => { buffer.ResetWrittenCount(); EntryItem.Events.Clear(); LuminPackSerializer.SerializeJson<ImmutableDictionary<int, EntryItem>, TProfile>(dictionary, buffer); };
                 writeDictionary(); byte[] dictionaryBytes = buffer.GetSpan().ToArray();
-                buffer.ResetCore(); LuminPackSerializer.SerializeJson<IImmutableDictionary<int, EntryItem>, TProfile>((IImmutableDictionary<int, EntryItem>)dictionary, buffer);
+                buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<IImmutableDictionary<int, EntryItem>, TProfile>((IImmutableDictionary<int, EntryItem>)dictionary, buffer);
                 if (!buffer.GetSpan().SequenceEqual(dictionaryBytes)) throw new Exception("Concrete and interface dictionary JSON differ.");
                 CheckAllocation(writeDictionary, "Concrete hash dictionary JSON");
             }
@@ -202,7 +202,7 @@ internal static partial class SerializerImmutableListWriteRegression
                         expected = oracle.GetSpan().ToArray();
                     }
                     int[] events = EntryItem.Events.ToArray();
-                    Action write = () => { buffer.ResetCore(); EntryItem.Events.Clear(); if (json) LuminPackSerializer.SerializeJson<IImmutableList<EntryItem>, TProfile>(value, buffer); else LuminPackSerializer.Serialize<IImmutableList<EntryItem>, TProfile>(value, buffer); };
+                    Action write = () => { buffer.ResetWrittenCount(); EntryItem.Events.Clear(); if (json) LuminPackSerializer.SerializeJson<IImmutableList<EntryItem>, TProfile>(value, buffer); else LuminPackSerializer.Serialize<IImmutableList<EntryItem>, TProfile>(value, buffer); };
                     write();
                     if (!buffer.GetSpan().SequenceEqual(expected) || !EntryItem.Events.SequenceEqual(events)) throw new Exception("List bytes, options or callbacks differ.");
                     if (value is TraceProxy custom)
@@ -243,7 +243,7 @@ internal static partial class SerializerImmutableListWriteRegression
                         expected = oracle.GetSpan().ToArray();
                     }
                     int[] events = EntryItem.Events.ToArray();
-                    Action write = () => { buffer.ResetCore(); EntryItem.Events.Clear(); if (json) LuminPackSerializer.SerializeJson<IImmutableSet<EntryItem>, TProfile>(value, buffer); else LuminPackSerializer.Serialize<IImmutableSet<EntryItem>, TProfile>(value, buffer); };
+                    Action write = () => { buffer.ResetWrittenCount(); EntryItem.Events.Clear(); if (json) LuminPackSerializer.SerializeJson<IImmutableSet<EntryItem>, TProfile>(value, buffer); else LuminPackSerializer.Serialize<IImmutableSet<EntryItem>, TProfile>(value, buffer); };
                     write();
                     if (!buffer.GetSpan().SequenceEqual(expected) || !EntryItem.Events.SequenceEqual(events)) throw new Exception("Set bytes, options or callbacks differ.");
                     if (value is TraceProxy custom)
@@ -284,7 +284,7 @@ internal static partial class SerializerImmutableListWriteRegression
                         expected = oracle.GetSpan().ToArray();
                     }
                     int[] events = EntryItem.Events.ToArray();
-                    Action write = () => { buffer.ResetCore(); EntryItem.Events.Clear(); if (json) LuminPackSerializer.SerializeJson<IImmutableQueue<EntryItem>, TProfile>(value, buffer); else LuminPackSerializer.Serialize<IImmutableQueue<EntryItem>, TProfile>(value, buffer); };
+                    Action write = () => { buffer.ResetWrittenCount(); EntryItem.Events.Clear(); if (json) LuminPackSerializer.SerializeJson<IImmutableQueue<EntryItem>, TProfile>(value, buffer); else LuminPackSerializer.Serialize<IImmutableQueue<EntryItem>, TProfile>(value, buffer); };
                     write();
                     if (!buffer.GetSpan().SequenceEqual(expected) || !EntryItem.Events.SequenceEqual(events)) throw new Exception("Queue bytes, options or callbacks differ.");
                     if (value is TraceProxy custom)
@@ -325,7 +325,7 @@ internal static partial class SerializerImmutableListWriteRegression
                         expected = oracle.GetSpan().ToArray();
                     }
                     int[] events = EntryItem.Events.ToArray();
-                    Action write = () => { buffer.ResetCore(); EntryItem.Events.Clear(); if (json) LuminPackSerializer.SerializeJson<IImmutableStack<EntryItem>, TProfile>(value, buffer); else LuminPackSerializer.Serialize<IImmutableStack<EntryItem>, TProfile>(value, buffer); };
+                    Action write = () => { buffer.ResetWrittenCount(); EntryItem.Events.Clear(); if (json) LuminPackSerializer.SerializeJson<IImmutableStack<EntryItem>, TProfile>(value, buffer); else LuminPackSerializer.Serialize<IImmutableStack<EntryItem>, TProfile>(value, buffer); };
                     write();
                     if (!buffer.GetSpan().SequenceEqual(expected) || !EntryItem.Events.SequenceEqual(events)) throw new Exception("Stack bytes, options or callbacks differ.");
                     if (value is TraceProxy custom)
@@ -366,7 +366,7 @@ internal static partial class SerializerImmutableListWriteRegression
                         expected = oracle.GetSpan().ToArray();
                     }
                     int[] events = EntryItem.Events.ToArray();
-                    Action write = () => { buffer.ResetCore(); EntryItem.Events.Clear(); if (json) LuminPackSerializer.SerializeJson<IImmutableDictionary<int, EntryItem>, TProfile>(value, buffer); else LuminPackSerializer.Serialize<IImmutableDictionary<int, EntryItem>, TProfile>(value, buffer); };
+                    Action write = () => { buffer.ResetWrittenCount(); EntryItem.Events.Clear(); if (json) LuminPackSerializer.SerializeJson<IImmutableDictionary<int, EntryItem>, TProfile>(value, buffer); else LuminPackSerializer.Serialize<IImmutableDictionary<int, EntryItem>, TProfile>(value, buffer); };
                     write();
                     if (!buffer.GetSpan().SequenceEqual(expected) || !EntryItem.Events.SequenceEqual(events)) throw new Exception("Dictionary bytes, options or callbacks differ.");
                     if (value is TraceProxy custom)

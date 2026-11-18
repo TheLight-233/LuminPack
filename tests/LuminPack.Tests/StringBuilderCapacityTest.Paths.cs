@@ -24,7 +24,7 @@ public partial class StringBuilderCapacityTest
             BinaryPrimitives.WriteInt32LittleEndian(expected, length);
             MemoryMarshal.AsBytes(text.AsSpan()).CopyTo(expected.AsSpan(4));
             Assert.Equal(expected, LuminPackSerializer.Serialize(value));
-            buffer.ResetCore();
+            buffer.ResetWrittenCount();
             LuminPackSerializer.Serialize(value, buffer);
             Assert.True(buffer.GetSpan().SequenceEqual(expected));
             StringBuilder? restored = null;
@@ -207,9 +207,9 @@ public partial class StringBuilderCapacityTest
     /// <param name="restored">The reused target.</param>
     private static void Exercise(StringBuilder value, LuminBufferWriter buffer, byte[] json, byte[] utf8, ref StringBuilder restored)
     {
-        buffer.ResetCore(); LuminPackSerializer.Serialize(value, buffer);
-        buffer.ResetCore(); LuminPackSerializer.SerializeJson<StringBuilder, LuminPackUtf8LengthOptions>(value, buffer);
-        buffer.ResetCore(); LuminPackSerializer.SerializeJson<StringBuilder, LuminPackUtf16LengthOptions>(value, buffer);
+        buffer.ResetWrittenCount(); LuminPackSerializer.Serialize(value, buffer);
+        buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<StringBuilder, LuminPackUtf8LengthOptions>(value, buffer);
+        buffer.ResetWrittenCount(); LuminPackSerializer.SerializeJson<StringBuilder, LuminPackUtf16LengthOptions>(value, buffer);
         LuminPackSerializer.DeserializeJson<StringBuilder, LuminPackUtf16LengthOptions>(json, ref restored);
         LuminPackSerializer.DeserializeJson<StringBuilder, LuminPackUtf8LengthOptions>(utf8, ref restored);
     }

@@ -100,7 +100,7 @@ Person result = await LuminPackSerializer.DeserializeAsync<Person>(stream, cance
 <a id="reusing-a-buffer"></a>
 ## Reusing a buffer
 
-Overloads that take a `LuminBufferWriter` append at its current cursor and keep everything written before, including reference tracking state. You own the buffer and decide when to reset it:
+Overloads that take a `LuminBufferWriter` append at its current cursor and keep the current operation state. Call `Reset()` to start an independent record in the same buffer.
 
 ```csharp
 using var output = new LuminPack.Utility.LuminBufferWriter(true);
@@ -108,18 +108,20 @@ LuminPackSerializer.Serialize(person, output);
 int firstEnd = output.CurrentIndex;
 LuminPackSerializer.Serialize(person, output);   // output.GetSpan() holds both records
 
-output.ResetForReuse();                          // clear content and reference tables, keep capacity
+output.Reset();                                  // clear written count and operation states, keep capacity
 LuminPackSerializer.Serialize(person, output);
 ```
 
 | Method | Effect |
 | --- | --- |
-| `ResetForReuse()` | Clears content and both reference tables, keeps the pooled capacity. |
-| `Reset()` | Clears content and both reference tables, and returns a non-empty pooled buffer. |
-| `ResetCore()` | Clears content only; reference tables are kept. Copy/compress `AndReset` methods behave the same. |
+| `Reset()` | Resets the written count and live cursor, clears the writer and reader operation states, and keeps capacity. |
+| `ResetWrittenCount()` | Resets the written count and live cursor while retaining capacity and both operation states. |
 
-- After a write throws, the written bytes and reference state remain; call `ResetForReuse()` before the next independent write.
-- To restart writing while keeping the read state, call `output.ResetCore()` and `output.WriterState.ResetOperationState()`.
+Use `ResetAndRelease()` to clear both states and return the current array while keeping the writer usable. When finished, call `Dispose()` on a directly constructed writer or call `LuminBufferWriterPool.Return(writer)` for a rented one.
+
+- After a write throws, the written bytes and reference state remain. Call `Reset()` before the next independent write.
+- To restart writing while keeping the read state, call `output.ResetWrittenCount()` followed by `output.WriterState.ResetOperationState()`.
+- Copy and compression methods ending in `AndReset` reset the written count and cursor after success and preserve both operation states.
 - Appended JSON documents get no separator; track their boundaries yourself.
 - The `byte[]`, `string`, stream and `IBufferWriter<byte>` overloads manage their own buffers and state.
 

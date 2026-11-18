@@ -142,27 +142,27 @@ internal static partial class SerializerImmutableListWriteRegression
                         new ReadOnlyObservableCollection<int>(new ObservableCollection<int>(items))};
                     foreach(var sequence in sequences)
                     {
-                        if(Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<IEnumerable<int>, P>(sequence,buffer);})!=0 ||
-                           Allocated(()=>{buffer.ResetCore();LuminPackSerializer.SerializeJson<IEnumerable<int>, P>(sequence,buffer);})!=0)
+                        if(Allocated(()=>{buffer.ResetWrittenCount();LuminPackSerializer.Serialize<IEnumerable<int>, P>(sequence,buffer);})!=0 ||
+                           Allocated(()=>{buffer.ResetWrittenCount();LuminPackSerializer.SerializeJson<IEnumerable<int>, P>(sequence,buffer);})!=0)
                             throw new Exception("Sequence writing allocated an enumerator: "+sequence.GetType());
                         foreach(bool json in new[]{false,true})
                         {
-                            buffer.ResetCore();if(json)LuminPackSerializer.SerializeJson<IEnumerable<int>, P>(sequence,buffer);else LuminPackSerializer.Serialize<IEnumerable<int>, P>(sequence,buffer);
+                            buffer.ResetWrittenCount();if(json)LuminPackSerializer.SerializeJson<IEnumerable<int>, P>(sequence,buffer);else LuminPackSerializer.Serialize<IEnumerable<int>, P>(sequence,buffer);
                             IEnumerable<int> result=null;if(json)LuminPackSerializer.DeserializeJson<IEnumerable<int>, P>(buffer.GetSpan(),ref result);else LuminPackSerializer.Deserialize<IEnumerable<int>, P>(buffer.GetSpan(),ref result);
                             if(!result.SequenceEqual(sequence))throw new Exception("Sequence order or interface framing changed.");
                         }
                     }
                     ICollection<int> collection=new LinkedList<int>(items);IList<int> list=new ObservableCollection<int>(items);
                     IReadOnlyCollection<int> readOnly=new Queue<int>(items);IReadOnlyList<int> indexed=new ReadOnlyCollection<int>(items);
-                    if(Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<ICollection<int>, P>(collection,buffer);LuminPackSerializer.SerializeJson<ICollection<int>, P>(collection,buffer);})!=0 ||
-                       Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<IList<int>, P>(list,buffer);LuminPackSerializer.SerializeJson<IList<int>, P>(list,buffer);})!=0 ||
-                       Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<IReadOnlyCollection<int>, P>(readOnly,buffer);LuminPackSerializer.SerializeJson<IReadOnlyCollection<int>, P>(readOnly,buffer);})!=0 ||
-                       Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<IReadOnlyList<int>, P>(indexed,buffer);LuminPackSerializer.SerializeJson<IReadOnlyList<int>, P>(indexed,buffer);})!=0)
+                    if(Allocated(()=>{buffer.ResetWrittenCount();LuminPackSerializer.Serialize<ICollection<int>, P>(collection,buffer);LuminPackSerializer.SerializeJson<ICollection<int>, P>(collection,buffer);})!=0 ||
+                       Allocated(()=>{buffer.ResetWrittenCount();LuminPackSerializer.Serialize<IList<int>, P>(list,buffer);LuminPackSerializer.SerializeJson<IList<int>, P>(list,buffer);})!=0 ||
+                       Allocated(()=>{buffer.ResetWrittenCount();LuminPackSerializer.Serialize<IReadOnlyCollection<int>, P>(readOnly,buffer);LuminPackSerializer.SerializeJson<IReadOnlyCollection<int>, P>(readOnly,buffer);})!=0 ||
+                       Allocated(()=>{buffer.ResetWrittenCount();LuminPackSerializer.Serialize<IReadOnlyList<int>, P>(indexed,buffer);LuminPackSerializer.SerializeJson<IReadOnlyList<int>, P>(indexed,buffer);})!=0)
                         throw new Exception("A sequence interface retained traversal allocations.");
                     var envelope=new SequenceEnvelope{Builder=new ReadOnlyCollectionBuilder<int>(items),Observable=new ObservableCollection<int>(items),Items=items,Tail=123};
                     foreach(bool json in new[]{false,true})
                     {
-                        buffer.ResetCore();if(json)LuminPackSerializer.SerializeJson<SequenceEnvelope, P>(envelope,buffer);else LuminPackSerializer.Serialize<SequenceEnvelope, P>(envelope,buffer);
+                        buffer.ResetWrittenCount();if(json)LuminPackSerializer.SerializeJson<SequenceEnvelope, P>(envelope,buffer);else LuminPackSerializer.Serialize<SequenceEnvelope, P>(envelope,buffer);
                         SequenceEnvelope result=null;if(json)LuminPackSerializer.DeserializeJson<SequenceEnvelope, P>(buffer.GetSpan(),ref result);else LuminPackSerializer.Deserialize<SequenceEnvelope, P>(buffer.GetSpan(),ref result);
                         if(result.Tail!=123||!result.Builder.SequenceEqual(items)||!result.Observable.SequenceEqual(items)||!result.Items.SequenceEqual(items))
                             throw new Exception("Nested sequence storage was bound to the wrong value.");
@@ -171,12 +171,12 @@ internal static partial class SerializerImmutableListWriteRegression
                 var derived=new ReversedSequence();IEnumerable<int> contract=derived;
                 foreach(bool json in new[]{false,true})
                 {
-                    buffer.ResetCore();if(json)LuminPackSerializer.SerializeJson<IEnumerable<int>, P>(contract,buffer);else LuminPackSerializer.Serialize<IEnumerable<int>, P>(contract,buffer);
+                    buffer.ResetWrittenCount();if(json)LuminPackSerializer.SerializeJson<IEnumerable<int>, P>(contract,buffer);else LuminPackSerializer.Serialize<IEnumerable<int>, P>(contract,buffer);
                     int[] result=null;if(json)LuminPackSerializer.DeserializeJson<int[], P>(buffer.GetSpan(),ref result);else LuminPackSerializer.Deserialize<int[], P>(buffer.GetSpan(),ref result);
                     if(!result.SequenceEqual(new[]{3,2,1}))throw new Exception("Derived enumeration was bypassed.");
                 }
                 if(derived.Visits!=2)throw new Exception("Derived public traversal did not run exactly once.");
-                var wrapper=new ReadOnlyCollection<int>(derived);buffer.ResetCore();LuminPackSerializer.SerializeJson<ReadOnlyCollection<int>, P>(wrapper,buffer);
+                var wrapper=new ReadOnlyCollection<int>(derived);buffer.ResetWrittenCount();LuminPackSerializer.SerializeJson<ReadOnlyCollection<int>, P>(wrapper,buffer);
                 if(derived.Visits!=3)throw new Exception("A wrapper bypassed its derived backing enumerator.");
                 ObservableCollection<int> reuse=new(Enumerable.Range(1,33));
                 byte[] input=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes("[1,2,3]");
