@@ -129,7 +129,11 @@ internal static class FormatterCapabilities
             if (concrete == "ImmutableArray" && modern && !unity && named.TypeArguments[0].IsUnmanagedType &&
                 named.TypeArguments[0].OriginalDefinition.SpecialType != SpecialType.System_Nullable_T &&
                 FormatterImmutableTraits.HasRawArrayReader(compilation))
+            {
                 result.Add("ReadRawImmutableArray");
+                if (FormatterImmutableTraits.HasRawArrayReader(compilation, reuse: true))
+                    result.Add("ReuseRawImmutableArray");
+            }
             if (concrete == "ImmutableSet")
                 concrete = "ImmutableHashSet";
             if (concrete.StartsWith("Immutable", StringComparison.Ordinal) && FormatterImmutableTraits.Available(compilation, concrete.Substring(9), named.Arity))

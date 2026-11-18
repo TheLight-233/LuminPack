@@ -174,6 +174,7 @@ The history of individual approvals lives in Git. When this document, the code a
 - **Binary Union tag lookup**. Generated case tables may map the full case hashes to dense indices for a jump table. Each selected arm verifies the original tag before reading its payload. Unknown tags, registered escapes, reader checks and failure publication keep the existing contract.
 - **Memory layout initialization**. A modern JIT consumer retaining the optimized binary `Memory<T>` reader can initialize the exact-array layout probe once before the reader is first compiled. This does not initialize formatter registration. Other layouts and backends retain their checked fallback.
 - **Counted linked-list writes**. When framework node storage is verified, eligible raw or built-in-profile string linked lists can write the observed count by following the circular links directly. Formatter operations that can invoke user code and unrecognized storage keep the public traversal.
+- **Raw immutable array reuse**. After proving the complete input range, a generated raw `ImmutableArray<T>` reader can retain an existing array when its length and payload bytes match. A different payload uses a new backing array, keeping the existing array immutable. Default and empty arrays remain distinct.
 
 ### Options and generation
 

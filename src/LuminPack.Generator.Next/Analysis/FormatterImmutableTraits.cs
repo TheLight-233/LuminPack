@@ -7,14 +7,17 @@ internal static class FormatterImmutableTraits
 {
     /// <summary>Checks for the direct raw array reader in the referenced runtime.</summary>
     /// <param name="compilation">The consumer's actual framework and runtime references.</param>
-    /// <returns>Whether the reader can return a new immutable raw array.</returns>
-    internal static bool HasRawArrayReader(Compilation compilation)
+    /// <param name="reuse">Whether the method must accept the existing immutable array.</param>
+    /// <returns>Whether the requested raw array reader is available.</returns>
+    internal static bool HasRawArrayReader(Compilation compilation, bool reuse = false)
     {
         var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader");
         var array = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableArray`1");
         return reader is not null && array is not null && reader.GetMembers("ReadRawImmutableArray").OfType<IMethodSymbol>().Any(method =>
-            method is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 1, Parameters.Length: 0,
+            method is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 1,
                 ReturnsByRef: false, ReturnsByRefReadonly: false } && method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+            method.Parameters.Length == (reuse ? 1 : 0) &&
+            (!reuse || method.Parameters[0].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, method.ReturnType)) &&
             method.TypeParameters[0].ConstraintTypes.Length == 0 &&
             SymbolEqualityComparer.Default.Equals(method.ReturnType, array.Construct(method.TypeParameters[0])));
     }

@@ -153,9 +153,10 @@ internal static class ImmutableArrayOwnerFile
                     w.Line("    scoped ref " + sequence + " value)");
                     if (ownerRead)
                         w.Line("    where TLuminProfile : struct, " + options);
-                    if (!ownerRead && set.FindFormatter(sequence)?.Supports("ReadRawImmutableArray") == true)
+                    if (!ownerRead && set.FindFormatter(sequence) is { } formatter && formatter.Supports("ReadRawImmutableArray"))
                     {
-                        w.Line("    => value = reader.ReadRawImmutableArray<" + scalar + ">();");
+                        string candidate = formatter.Supports("ReuseRawImmutableArray") ? "value" : string.Empty;
+                        w.Line("    => value = reader.ReadRawImmutableArray<" + scalar + ">(" + candidate + ");");
                         w.Blank();
                         break;
                     }
