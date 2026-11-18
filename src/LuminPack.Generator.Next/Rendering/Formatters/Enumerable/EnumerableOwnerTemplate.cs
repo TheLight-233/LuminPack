@@ -1017,8 +1017,9 @@ internal static class EnumerableOwnerTemplate
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
+                    // Direct integer reads let tiered PGO inline the collection append in steady state.
                     if (spec.OutlineJson)
-                        w.Line(w.MethodImpl("NoInlining", optimized));
+                        w.Line(w.MethodImpl("NoInlining", optimized && integerRead == null));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");

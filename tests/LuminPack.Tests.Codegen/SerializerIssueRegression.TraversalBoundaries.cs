@@ -46,6 +46,15 @@ internal static partial class SerializerIssueRegression
                             copy is not [{ Flat: { Number: 17, Text: "text" }, Compound.Items: ["two", "five"] }, { Flat: null, Compound: null }])
                             throw new Exception("Compound collection traversal lost framing or reused member storage.");
                     }
+                    var set = new HashSet<int> { 3, 9 };
+                    string setJson = LuminPackSerializer.SerializeJson(set);
+                    LuminPackSerializer.DeserializeJson(setJson, ref set);
+                    Queue<long> queue = null;
+                    LuminPackSerializer.DeserializeJson("[9,3000000000]", ref queue);
+                    HashSet<string> text = null;
+                    LuminPackSerializer.DeserializeJson("[\"text\"]", ref text);
+                    if (!set.SetEquals([3, 9]) || queue.Dequeue() != 9 || queue.Dequeue() != 3000000000L || !text.SetEquals(["text"]))
+                        throw new Exception("The tiered integer read or the text control changed its values.");
                 }
             }
             """;
@@ -85,6 +94,21 @@ internal static partial class SerializerIssueRegression
             if (write.ToString().Contains("loopWriter", StringComparison.Ordinal) || write.DescendantNodes().OfType<TryStatementSyntax>().Any() ||
                 read.ToString().Contains("loopReader", StringComparison.Ordinal))
                 throw new InvalidOperationException("A compound collection staged the formatter's operation state.");
+
+            CheckJsonTier("HashSetOfIntFormatter", "ReadJson", fullOptimization: false);
+            CheckJsonTier("QueueOfLongFormatter", "ReadJson", fullOptimization: false);
+            CheckJsonTier("HashSetOfIntFormatter", "WriteJson", fullOptimization: true);
+            CheckJsonTier("HashSetOfStringFormatter", "ReadJson", fullOptimization: true);
+
+            void CheckJsonTier(string formatter, string operation, bool fullOptimization)
+            {
+                var method = owners.Where(owner => owner.Identifier.ValueText == formatter).SelectMany(owner => owner.Members)
+                    .OfType<MethodDeclarationSyntax>().Single(item => item.Identifier.ValueText == operation && item.Body != null);
+                string attributes = method.AttributeLists.ToString();
+                if (!attributes.Contains("NoInlining", StringComparison.Ordinal) ||
+                    attributes.Contains("AggressiveOptimization", StringComparison.Ordinal) != fullOptimization)
+                    throw new InvalidOperationException($"Unexpected JSON tiering for {formatter}.{operation}.");
+            }
         }
     }
 }
