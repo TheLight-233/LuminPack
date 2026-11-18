@@ -168,7 +168,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
     uses: ./.github/workflows/benchmark-matrix.yml
     with:
-      jit: ${{ inputs.benchmark_jit }}
+      timing: true
 
   benchmark:
     name: Benchmark (${{ matrix.host }})

@@ -39,7 +39,7 @@ Unity 2022.3.51f1 和 6000.0.43f1 依次运行 Editor 测试、IL2CPP smoke Play
 | 输入 | 默认值 | 作用 |
 | --- | --- | --- |
 | `run_benchmarks` | 关闭 | 在三台主机上运行 BenchmarkDotNet，并为矩阵计时。 |
-| `benchmark_jit` | `both` | 分别运行 `TieredPGO`（分层编译和动态 PGO）与 `FullOpts`（两者都关闭）任务。FullOpts 是 JIT 稳定性对照，不能代替生产环境的 PGO 结果。 |
+| `benchmark_jit` | `both` | 选择 BenchmarkDotNet 任务。`TieredPGO` 启用分层编译和动态 PGO，`FullOpts` 关闭两者。 |
 | `benchmark_satori` | `only` | `only` 只测 `eng/SatoriCompiler` 准备的 Satori GC 运行时，`both` 额外加上 stock 运行时任务，`off` 只测 stock 运行时。 |
 
 ### BenchmarkDotNet
@@ -51,10 +51,10 @@ Unity 2022.3.51f1 和 6000.0.43f1 依次运行 Editor 测试、IL2CPP smoke Play
 
 ### 序列化矩阵
 
-`benchmark-matrix.yml` 在相关推送和拉取请求上做往返校验。手动触发该工作流，或在 `ci.yml` 中开启 `run_benchmarks`，默认会分别为两种 JIT 配置计时。独立工作流通过 `jit` 选择配置，CI 则把 `benchmark_jit` 传给矩阵。每种配置使用独立的 runner 和 Server GC，覆盖所有格式和场景，每个场景跑三个进程，每个进程九轮。
+`benchmark-matrix.yml` 在相关推送和拉取请求上做往返校验。手动触发该工作流，或在 `ci.yml` 中开启 `run_benchmarks`，会在同一台 runner 上使用 FullOpts 和 Server GC 为所有格式和场景计时。每个场景跑三个进程，每个进程九轮。FullOpts 关闭分层编译和动态 PGO。
 
-TieredPGO 启用分层编译、动态 PGO 和循环 Quick JIT，并将调用计数延迟设为零。最终校准采样次数前，对同一个操作的各库打乱顺序、交错预热。每个库的每项操作至少累计 300 毫秒的实际运行时间和 256 次调用。FullOpts 关闭分层编译与动态 PGO，最低预热为 15 毫秒和 256 次调用。若同一进程的前三轮和最后三轮中位数相差至少 20%，报告会标记该项。所有样本都保留，漂移标记本身不能确定原因。
+最终校准采样次数前，矩阵会对同一个操作的各库打乱顺序、交错预热。每个库的每项操作至少累计 15 毫秒的实际运行时间和 256 次调用。如果同一进程的前三轮和最后三轮中位数相差至少 20%，报告会标记该项，并保留所有样本。
 
-`benchmark-matrix` 产物保存 TieredPGO 结果，`benchmark-matrix-fullopts` 保存单独的对照结果。两者均包含记录了预热数据的原始 JSONL、机器信息、`stability.csv` 和 `REPORT.md`。库之间的比值在同一 JIT 任务内比较。
+`benchmark-matrix` 产物包含记录了预热数据的原始 JSONL、机器信息、`stability.csv` 和 `REPORT.md`。库之间的比值在同一次运行内比较。
 
 如何用这些产物生成图表，见[贡献指南](CONTRIBUTING.cn.md#基准测试)。

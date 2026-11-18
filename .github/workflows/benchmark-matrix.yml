@@ -19,18 +19,12 @@ on:
       - 'global.json'
       - '.github/workflows/benchmark-matrix.yml'
   workflow_dispatch:
-    inputs:
-      jit:
-        description: JIT configurations to time
-        type: choice
-        options: [both, tiered, fullopts]
-        default: both
   workflow_call:
     inputs:
-      jit:
-        description: JIT configurations to time
-        type: string
-        default: both
+      timing:
+        description: Collect FullOpts timings in addition to fixture validation
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -41,13 +35,11 @@ concurrency:
 
 jobs:
   matrix:
-    name: Matrix (${{ matrix.jit }})
+    name: Matrix (FullOpts)
     runs-on: ubuntu-latest
     timeout-minutes: 225
-    strategy:
-      fail-fast: false
-      matrix:
-        jit: ${{ fromJSON(github.event_name != 'workflow_dispatch' && '["Validation"]' || inputs.jit == 'tiered' && '["TieredPGO"]' || inputs.jit == 'fullopts' && '["FullOpts"]' || '["TieredPGO","FullOpts"]') }}
+    env:
+      DOTNET_TieredCompilation: '0'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -63,12 +55,7 @@ jobs:
       - name: Validate fixtures and sample the matrix
         shell: bash
         env:
-          TIMING: ${{ matrix.jit != 'Validation' }}
-          DOTNET_TieredCompilation: ${{ matrix.jit == 'TieredPGO' && '1' || '0' }}
-          DOTNET_TieredPGO: ${{ matrix.jit == 'TieredPGO' && '1' || '0' }}
-          DOTNET_TC_QuickJit: ${{ matrix.jit == 'TieredPGO' && '1' || '0' }}
-          DOTNET_TC_QuickJitForLoops: ${{ matrix.jit == 'TieredPGO' && '1' || '0' }}
-          DOTNET_TC_CallCountingDelayMs: '0'
+          TIMING: ${{ github.event_name == 'workflow_dispatch' || inputs.timing }}
         run: |
           set -euo pipefail
           mkdir -p .tmp/matrix-artifacts
@@ -97,5 +84,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.jit == 'FullOpts' && 'benchmark-matrix-fullopts' || 'benchmark-matrix' }}
+          name: benchmark-matrix
           path: .tmp/matrix-artifacts

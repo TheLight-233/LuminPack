@@ -8,8 +8,7 @@ using System.Text.Json;
 internal static class Program
 {
     private const int WarmupMinCalls = 256;
-    private const int TieredWarmupMilliseconds = 300;
-    private const int FullOptsWarmupMilliseconds = 15;
+    private const int WarmupMilliseconds = 15;
 
     private sealed record Operation(string Library, string Name, Action Invoke);
 
@@ -39,8 +38,6 @@ internal static class Program
         CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
         int concreteCalls = EntryAudit.Check();
         bool json = args[0] == "json";
-        string? tiering = Environment.GetEnvironmentVariable("DOTNET_TieredCompilation");
-        int warmupMilliseconds = tiering == "0" ? FullOptsWarmupMilliseconds : TieredWarmupMilliseconds;
         string scene = args[1];
         Config.Count = scene switch { "small" => 8, "large" => 4096, _ => 256 };
         var fixtures = scene == "main"
@@ -60,14 +57,10 @@ internal static class Program
             ServerGC = GCSettings.IsServerGC,
             ProcessorCount = Environment.ProcessorCount,
             Rounds = rounds,
-            TieredCompilation = tiering,
-            TieredPGO = Environment.GetEnvironmentVariable("DOTNET_TieredPGO"),
-            QuickJit = Environment.GetEnvironmentVariable("DOTNET_TC_QuickJit"),
-            QuickJitForLoops = Environment.GetEnvironmentVariable("DOTNET_TC_QuickJitForLoops"),
-            CallCountingDelayMilliseconds = Environment.GetEnvironmentVariable("DOTNET_TC_CallCountingDelayMs"),
+            TieredCompilation = Environment.GetEnvironmentVariable("DOTNET_TieredCompilation") ?? "0",
             WarmupStrategy = rounds == 0 ? null : "interleaved-active-time",
             WarmupMinCalls = rounds == 0 ? 0 : WarmupMinCalls,
-            WarmupMinMilliseconds = rounds == 0 ? 0 : warmupMilliseconds,
+            WarmupMinMilliseconds = rounds == 0 ? 0 : WarmupMilliseconds,
             References = json
                 ? new Dictionary<string, string?> { ["System.Text.Json"] = VersionOf(typeof(JsonSerializer)) }
                 : new Dictionary<string, string?>
@@ -113,7 +106,7 @@ internal static class Program
             var measurements = new List<Measurement>();
             foreach (var group in work.GroupBy(item => item.Name))
             {
-                var warmup = WarmUp(group, random, warmupMilliseconds);
+                var warmup = WarmUp(group, random);
                 foreach (var state in warmup)
                 {
                     var operation = state.Operation;
@@ -150,9 +143,8 @@ internal static class Program
     /// <summary>Warms each library on the same operation in shuffled batches before final calibration.</summary>
     /// <param name="operations">The supported library operations in this comparison.</param>
     /// <param name="random">The instance that shuffles execution order.</param>
-    /// <param name="minimumMilliseconds">The minimum active time per library, excluding other libraries.</param>
     /// <returns>The warmup observations for the comparison.</returns>
-    private static WarmupState[] WarmUp(IEnumerable<Operation> operations, Random random, int minimumMilliseconds)
+    private static WarmupState[] WarmUp(IEnumerable<Operation> operations, Random random)
     {
         var states = operations.Select(operation => new WarmupState(operation, Calibrate(operation.Invoke))).ToArray();
         int remaining = states.Length;
@@ -161,11 +153,11 @@ internal static class Program
             random.Shuffle(states.AsSpan());
             foreach (var state in states)
             {
-                if (state.Calls >= WarmupMinCalls && state.Milliseconds >= minimumMilliseconds)
+                if (state.Calls >= WarmupMinCalls && state.Milliseconds >= WarmupMilliseconds)
                     continue;
                 state.Milliseconds += Measure(state.Operation.Invoke, state.BatchSize) * state.BatchSize / 1_000_000;
                 state.Calls += state.BatchSize;
-                if (state.Calls >= WarmupMinCalls && state.Milliseconds >= minimumMilliseconds)
+                if (state.Calls >= WarmupMinCalls && state.Milliseconds >= WarmupMilliseconds)
                     remaining--;
             }
         }
