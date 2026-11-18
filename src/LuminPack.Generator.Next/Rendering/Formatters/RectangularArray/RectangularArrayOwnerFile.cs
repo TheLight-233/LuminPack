@@ -13,7 +13,6 @@ internal static class RectangularArrayOwnerFile
     private const string Marshal = "global::System.Runtime.InteropServices.MemoryMarshal";
     private const string PackMarshal = "global::LuminPack.Code.LuminPackMarshal";
     private const string Error = "global::LuminPack.Code.LuminPackExceptionHelper";
-    private const string NullableRectangle = "global::LuminPack.Code.LuminPackNullableRectangle";
     private const string Profile = "TLuminProfile";
 
     /// <summary>Renders the four independently selectable operations of a closed rectangular array.</summary>
@@ -55,12 +54,7 @@ internal static class RectangularArrayOwnerFile
         string owner = "global::LuminPack." + GeneratedNames.Owner(set.Extension!, item);
         string? nullablePayload = arrayContract?.Supports("WriteFramedNullableSpan") == true
             ? (elementContract ?? set.FindFormatter(item))?.NativeNullablePayload : null;
-        FormatterStorageModel? nullableStorage = arrayContract?.RectangularNullableStorage;
-        int nullableEncoding = arrayContract?.RectangularNullableEncoding ?? 0;
-        string? storageArguments = nullableEncoding != 0 && nullableStorage is { NullablePayload: { } nullableArgument }
-            ? "<" + nullableArgument + ", " + FormatterStorageEmitter.Layout(nullableStorage) + ">" : null;
-        string encoding = nullableEncoding.ToString(CultureInfo.InvariantCulture);
-        string hasTag = nullableEncoding == 1 && storageArguments != null && nullableStorage!.ModelSizes.Length > 1 ? "true" : "false";
+        NullableCollectionEmitter? nullableBlock = NullableCollectionEmitter.For(elementContract);
         string[] axes = Enumerable.Range(0, rank).Select(index => index.ToString(CultureInfo.InvariantCulture)).ToArray();
         string[] dimensions = axes.Select(axis => "dimension" + axis).ToArray();
         string array = "new " + ContiguousOwnerFile.WithRank(item, "[" + string.Join(", ", dimensions) + "]");
@@ -71,9 +65,9 @@ internal static class RectangularArrayOwnerFile
             (w, context) => JsonRead(w, context.JsonReader),
             w =>
             {
-                if (storageArguments != null)
+                if (nullableBlock != null)
                 {
-                    FormatterStorageEmitter.Support(w, nullableStorage!);
+                    nullableBlock.Support(w);
                     if ((operations & GeneratedOperations.BinaryRead) != 0)
                         NullableReadSupport(w);
                 }
@@ -99,11 +93,10 @@ internal static class RectangularArrayOwnerFile
             foreach (string axis in axes)
                 w.Line("writer.Write(value.GetLength(" + axis + "));");
             w.Line("writer.WriteCollectionHeader(value.Length);");
-            if (storageArguments != null)
+            if (nullableBlock != null)
             {
                 First(w, item);
-                w.Line(NullableRectangle + ".Write" + storageArguments + "(ref writer, " + Marshal +
-                    ".CreateReadOnlySpan(ref first, value.Length), " + encoding + ", " + hasTag + ");");
+                nullableBlock.WritePayload(w, "writer", Marshal + ".CreateReadOnlySpan(ref first, value.Length)");
                 w.Line("writer.CheckBuffer();");
                 return;
             }
@@ -197,7 +190,7 @@ internal static class RectangularArrayOwnerFile
                 w.Line("int " + dimensions[axis] + " = global::LuminPack.Core.LuminPackReader.Read<int>(ref " +
                     Unsafe + ".Add(ref dimensions, " + offset + "));");
             }
-            w.Line("if (!reader.TryReadCollectionHead(out var length" + (layout != null || storageArguments != null ? ", 0" : "") + ")) " +
+            w.Line("if (!reader.TryReadCollectionHead(out var length" + (layout != null || nullableBlock != null ? ", 0" : "") + ")) " +
                 Error + ".ThrowInvalidCollection();");
             if (rank == 2)
             {
@@ -218,7 +211,7 @@ internal static class RectangularArrayOwnerFile
                     AccumulateDimension(w, dimension);
                 w.Line("if (expectedLength != length) " + Error + ".ThrowMultiDimensionalArrayLengthMismatch();");
             }
-            if (storageArguments != null)
+            if (nullableBlock != null)
             {
                 w.Line("value = LuminRoots_" + suffix + ".ReadNullablePayload(ref reader, length, " +
                     string.Join(", ", dimensions) + ");");
@@ -310,14 +303,12 @@ internal static class RectangularArrayOwnerFile
             w.Line("internal static " + type + " ReadNullablePayload(scoped ref LuminPackReader reader, int length, " +
                 string.Join(", ", dimensions.Select(dimension => "int " + dimension)) + ")");
             w.Open();
-            w.Line(NullableRectangle + ".Validate" + storageArguments + "(ref reader, length, " + encoding + ", " +
-                hasTag + ", out byte storageTag);");
+            nullableBlock!.Validate(w, "reader", "length");
             w.Line("var replacement = " + array + ";");
             w.Line("if (length != 0)");
             w.Open();
             First(w, item, "replacement");
-            w.Line(NullableRectangle + ".Read" + storageArguments + "(ref reader, " + Marshal + ".CreateSpan(ref first, length), " +
-                encoding + ", storageTag);");
+            nullableBlock.ReadPayload(w, "reader", Marshal + ".CreateSpan(ref first, length)");
             w.Close();
             w.Line("return replacement;");
             w.Close();

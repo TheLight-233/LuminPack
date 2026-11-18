@@ -29,6 +29,21 @@ internal static class ObservableCollectionOwnerFile
     {
         var w = c.W;
         string t = c.Scalar;
+        if (c.NullableBlock != null)
+        {
+            w.Line("if (value is not null && length != 0)");
+            w.Open();
+            // Clear can invoke user code. Transfer the validated input into the lease before that callback boundary.
+            c.PooledRead(() =>
+            {
+                w.Line("value.Clear();");
+                w.Line("var reusedView = global::LuminPack.Code.LuminPackMarshal.As<" + c.Sequence +
+                    ", global::LuminPack.Code.ObservableCollectionView<" + t + ">>(ref value);");
+                w.Line("items.CopyTo(global::LuminPack.Code.LuminPackMarshal.GetListSpan(reusedView.items!, length));");
+            });
+            w.Line("goto operationComplete_RootRead;");
+            w.Close();
+        }
         w.Line("if (value is null)");
         w.Indented(() => w.Line("value = new " + c.Sequence + "();"));
         w.Line("else");

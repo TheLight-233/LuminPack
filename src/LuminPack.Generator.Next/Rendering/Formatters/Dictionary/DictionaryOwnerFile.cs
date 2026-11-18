@@ -11,7 +11,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// <c>Add</c>. The JSON form is an array of key and value arrays.</remarks>
 internal static class DictionaryOwnerFile
 {
-    // The original pipeline stores a nullable of a payload of at most four bytes as its raw struct.
+    // The sparse scalar template is used only for these native nullable payloads.
     /// <summary>Handles raw nullable for <c>DictionaryOwnerFile</c>.</summary>
     /// <param name="member">The member being analyzed or emitted.</param>
     /// <returns>Whether the input satisfies the raw nullable check.</returns>
@@ -28,8 +28,8 @@ internal static class DictionaryOwnerFile
         var model = fact.Contract!;
         var key = model.Arguments[0];
         var value = model.Arguments[1];
-        if (GenericIdentity.IsRaw(key.Type) && key.Type != "bool" && value.Definition == GenericIdentity.Nullable &&
-            GenericIdentity.IsRaw(value.Arguments[0].Type))
+        if (GenericIdentity.IsRaw(key.Type) && key.Type != "bool" && value.NativeNullableElement &&
+            RawNullable(value.Arguments[0].Type + "?"))
             return Render(set, new DictionaryOwnerFact(fact.Family, model.Type, key.Type, value.Arguments[0].Type + "?"), operations);
         // A packable payload is a native entry only when its own formatter is a plain storage copy.
         bool Native(Model.FormatterModel side) => side.Raw && (side.Payload == null || side.RawStorage);
@@ -100,11 +100,8 @@ internal static class DictionaryOwnerFile
         {
             if (member.EndsWith("?", System.StringComparison.Ordinal))
             {
-                w.Line(state + ".CheckBuffer();");
-                // A nullable of at most four payload bytes is stored as its raw struct; a wider one is framed by its owner: a null
-                // marker, or a memberless header and the payload.
-                if (RawNullable(member))
-                    w.Line(state + ".Advance(global::LuminPack.Core.LuminPackWriter.Write(ref " + state + ".Cursor, " + expression + "));");
+                if (contractModel?.Arguments[1] is { } nullable)
+                    FormatterElementEmitter.WriteCollectionElement(w, set, nullable, expression, state);
                 else
                     w.Line(valueOwner + ".Write<TLuminProfile>(ref " + state + ", " + expression + ");");
             }
@@ -121,10 +118,13 @@ internal static class DictionaryOwnerFile
         // Reads one entry member from the isolated operation state into an assignable location.
         void ReadMember(string state, string member, string destination)
         {
-            if (RawNullable(member))
-                w.Line(state + ".Read(ref " + memory + ".As<" + member + ", byte>(ref " + destination + "), " + memory + ".SizeOf<" + member + ">());");
-            else if (member.EndsWith("?", System.StringComparison.Ordinal))
-                w.Line(valueOwner + ".Read<TLuminProfile>(ref " + state + ", ref " + destination + ");");
+            if (member.EndsWith("?", System.StringComparison.Ordinal))
+            {
+                if (contractModel?.Arguments[1] is { } nullable)
+                    FormatterElementEmitter.ReadCollectionElement(w, set, nullable, destination, state);
+                else
+                    w.Line(valueOwner + ".Read<TLuminProfile>(ref " + state + ", ref " + destination + ");");
+            }
             else if (member == "string")
                 w.Line(state + ".Read<TLuminProfile>(ref " + destination + ");");
             else

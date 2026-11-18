@@ -972,13 +972,6 @@ internal static partial class TypeModelFactory
             if (reserved is 5 or 6 && (keyText || keyRaw != null) && (valueText || valueRaw != null))
                 return new DictionaryMember(name, storage, policy, declared, kind, key, value, pair: reserved == 5, keyText, valueText,
                     keyType: keyRaw?.Spelling, valueType: valueRaw?.Spelling, keyOwned: keyRaw?.Owned, valueOwned: valueRaw?.Owned);
-            // A dictionary whose value is a nullable raw scalar writes sparse entries with a varint key and the fixed value.
-            if (reserved == 0 && Scalar(type.TypeArguments[1]) == null &&
-                type.TypeArguments[1] is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } nullable &&
-                nullable.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T &&
-                Scalar(nullable.TypeArguments[0]) is { } innerValue && Scalar(type.TypeArguments[0], allowBoolean: false) is { } innerKey)
-                return new DictionaryMember(name, storage, policy, declared, kind, key, value, sparse: true,
-                    keyType: innerKey.Keyword, valueType: innerValue.Keyword + "?");
             return new DictionaryMember(name, storage, policy, declared, kind, key, value);
         }
 
@@ -1871,12 +1864,13 @@ internal static partial class TypeModelFactory
 
         /// <summary>Selects tagged native storage for an unmarked struct whose native layout varies between layout models.</summary>
         /// <param name="named">The resolved storage type.</param>
+        /// <param name="strategy">The consumer-resolved strategy, when the type is used through a collection formatter.</param>
         /// <returns>The tagged plan, or null when the struct is not analyzable, has a single layout or owns no formatter.</returns>
-        private static PortablePlan? TryTaggedPlan(INamedTypeSymbol named)
+        private static PortablePlan? TryTaggedPlan(INamedTypeSymbol named, int? strategy = null)
         {
             if (named.TypeKind != TypeKind.Struct || named.SpecialType != SpecialType.None || !named.IsUnmanagedType)
                 return null;
-            if (LayoutStrategy(named) != 0 || GenerationMode(named) != "Object")
+            if ((strategy ?? LayoutStrategy(named)) != 0 || GenerationMode(named) != "Object")
                 return null;
             if (PortableScalarSize(named) != 0 || ContainsTypeParameter(named) || Opaque(named) != null)
                 return null;

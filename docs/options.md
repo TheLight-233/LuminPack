@@ -130,7 +130,9 @@ public partial struct Packet
 ```
 
 - A struct's own setting overrides its assembly's. Referenced assemblies keep their own declarations.
-- On .NET 8 and later, Next applies the underlying type's layout to eligible rectangular `Nullable<T>` arrays. Built-in scalar elements use the consuming assembly's setting. `Native` writes the complete row-major nullable storage as a block. `Tagged` writes one layout tag only when a nonempty block has multiple modeled layouts. `Packed` and unsupported elements use the per-element nullable encoding.
+- In Next, built-in scalars, enums and framework value tuples in collections use the consuming assembly's setting. The default is `Tagged`.
+- On supported .NET 8+ targets, collections of eligible `Nullable<T>` use the underlying type's layout. `Native` stores the complete nullable stride, including padding. A contiguous `Tagged` payload writes one tag when a nonempty block has multiple models. Element-wise collections use headerless native records for proven single-layout scalars and the element's nullable formatter for other `Tagged` payloads. `Packed` uses the nullable marker and the packed payload of each present element.
+- Older targets and unsupported nullable layouts use the element's nullable formatter. Both ends must select the same collection encoding.
 - Field expansion includes private and ignored fields and auto-property backing fields, recursively; `LuminPackOrder` does not change it. `long` always takes 8 bytes.
 - Collections of tagged or packed structs are converted with SIMD acceleration on .NET 8+; other platforms, including IL2CPP, produce the same bytes field by field.
 - `Packed` reports a diagnostic for native integers, pointers, fixed buffers, inline arrays, runtime-sized vectors, `Custom` storage and layouts it cannot analyze.

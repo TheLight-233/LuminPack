@@ -46,8 +46,10 @@ internal static class ConcurrentQueueStringOwnerFile
         string owner = GeneratedNames.Owner(extension, queue);
         string readable = ReadableTypeName.Of(GeneratedNames.PayloadKey(queue));
         string roots = "LuminRoots_" + readable;
-        bool framedNullableInt32 = set.FindFormatter(queue)?.Supports("ReadFramedNullableInt32s") == true &&
-            set.FindFormatter(itemType)?.NativeNullablePayload == "int";
+        var itemContract = set.FindFormatter(itemType);
+        bool nativeNullable = itemContract?.NativeNullableElement == true;
+        bool framedNullableInt32 = !nativeNullable && set.FindFormatter(queue)?.Supports("ReadFramedNullableInt32s") == true &&
+            itemContract?.NativeNullablePayload == "int";
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -102,6 +104,8 @@ internal static class ConcurrentQueueStringOwnerFile
                         w.Line("ref readonly string value2 = ref v;");
                         w.Line("operationState.Write<TLuminProfile>(value2);");
                     }
+                    else if (nativeNullable)
+                        FormatterElementEmitter.WriteCollectionElement(w, set, itemContract!, "v", "operationState");
                     else
                     {
                         w.Line("operationState.CheckBuffer();");
@@ -167,13 +171,15 @@ internal static class ConcurrentQueueStringOwnerFile
                     w.Open();
                     w.Line(reader + " operationState = default;");
                     w.Line("reader.CopyTo(ref operationState);");
-                    w.Line("int length = operationState.ReadLength(" + (set.FindFormatter(itemType) is { } itemModel ? FormatterElementEmitter.Minimum(itemModel) : "1") + ");");
+                    w.Line("int length = operationState.ReadLength(" + (itemContract != null ? FormatterElementEmitter.CollectionMinimum(itemContract) : "1") + ");");
                     w.Line("if (length < 0)");
                     w.Open();
                     w.Line("value = null;");
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
                     w.Blank();
+                    if (nativeNullable)
+                        FormatterElementEmitter.ValidateNativeNullableCollection(w, itemContract!, "length", "operationState");
                     w.Line("if (value is null)");
                     w.Open();
                     w.Line("var pooled = global::System.Buffers.ArrayPool<" + itemType + ">.Shared.Rent(length);");
@@ -181,7 +187,10 @@ internal static class ConcurrentQueueStringOwnerFile
                     w.Open();
                     w.Line("if (length != 0)");
                     w.Open();
-                    if (framedNullableInt32)
+                    if (nativeNullable)
+                        w.Line("operationState.Read(ref " + memory + ".As<" + itemType + ", byte>(ref " + marshal +
+                            ".GetNotNullArrayReference(pooled)), checked(length * " + memory + ".SizeOf<" + itemType + ">()));");
+                    else if (framedNullableInt32)
                     {
                         w.Line("operationState.ReadFramedNullableInt32s(global::System.MemoryExtensions.AsSpan(pooled, 0, length));");
                     }
@@ -221,8 +230,11 @@ internal static class ConcurrentQueueStringOwnerFile
                     else
                     {
                         w.Line(itemType + " v = default !;");
-                        ForwardedElementRead.Emit(w, itemType, "operationState", "v",
-                            element + ".Read<TLuminProfile>(ref operationState, ref v);");
+                        if (nativeNullable)
+                            w.Line("operationState.Read(ref " + memory + ".As<" + itemType + ", byte>(ref v), " + memory + ".SizeOf<" + itemType + ">());");
+                        else
+                            ForwardedElementRead.Emit(w, itemType, "operationState", "v",
+                                element + ".Read<TLuminProfile>(ref operationState, ref v);");
                     }
                     w.Line("value.Enqueue(v);");
                     w.Close();

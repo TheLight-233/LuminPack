@@ -19,9 +19,12 @@ internal sealed class FormatterModel : IEquatable<FormatterModel>
     internal readonly bool Raw;
     /// <summary>Whether raw collection storage preserves the element's established contiguous contract.</summary>
     internal readonly bool RawCollection;
-    /// <summary>Whether enumerable element loops store the nullable value in native reference-free storage.</summary>
-    internal bool NativeNullableElement => Definition == Rendering.Formatters.GenericIdentity.Nullable &&
-        Layout == null && Arguments.Length == 1 && Arguments[0].RawCollection;
+    /// <summary>Whether an element loop can use checked native storage without a layout tag.</summary>
+    /// <remarks>The one-model CLR layouts of small scalar nullables have the same flag and value offsets on the
+    /// supported 32-bit and 64-bit runtimes. Compound Tagged values need a descriptor to prove their local layout.</remarks>
+    internal bool NativeNullableElement => NullableEncoding == 2 ||
+        NullableEncoding == 1 && NullableStorage is { ModelSizes.Length: 1 } &&
+        (Arguments[0].Underlying ?? Arguments[0].Type) is "bool" or "byte" or "sbyte" or "char" or "short" or "ushort" or "int" or "uint" or "float";
     /// <summary>Whether the value's own formatter is exactly a copy of its native storage, so a keyed entry may store it raw.</summary>
     /// <remarks>The original raw-storage rule for dictionary keys and values: a contiguous collection copies any reference-free
     /// element, but a pair, a version-tolerant or managed-record struct and a Union frame their values themselves.</remarks>
@@ -34,10 +37,10 @@ internal sealed class FormatterModel : IEquatable<FormatterModel>
 
     /// <summary>The optional packed or tagged contiguous storage plan.</summary>
     internal readonly FormatterStorageModel? Layout;
-    /// <summary>The proven layout of a nullable rectangular array's complete native elements.</summary>
-    internal readonly FormatterStorageModel? RectangularNullableStorage;
-    /// <summary>The rectangular nullable element encoding: zero for framed, one for tagged, and two for native.</summary>
-    internal readonly int RectangularNullableEncoding;
+    /// <summary>The proven layout of a nullable collection element.</summary>
+    internal readonly FormatterStorageModel? NullableStorage;
+    /// <summary>The nullable collection element encoding: zero for framed, one for tagged, and two for native.</summary>
+    internal readonly int NullableEncoding;
     /// <summary>Whether shared publication must emit a payload outside the attributed declaration stream.</summary>
     internal readonly bool PublishPayload;
     /// <summary>The analyzed payload when this compilation owns its formatter.</summary>
@@ -67,9 +70,9 @@ internal sealed class FormatterModel : IEquatable<FormatterModel>
     /// <param name = "reuseArraySlots">The reuse array slots used by this operation.</param>
     /// <param name = "capabilities">The capabilities used by this operation.</param>
     /// <param name = "publishPayload">The publish payload used by this operation.</param>
-    /// <param name = "rectangularNullableStorage">The storage models used only by a nullable rectangular array.</param>
-    /// <param name = "rectangularNullableEncoding">The binary rectangular nullable element encoding.</param>
-    internal FormatterModel(string type, string definition, FormatterModel[]? arguments = null, bool raw = false, bool rawCollection = false, FormatterStorageModel? layout = null, TypeModel? payload = null, string? underlying = null, bool ordinaryObject = false, int rank = 0, bool formattedJson = false, bool reuseArraySlots = false, string[]? capabilities = null, bool publishPayload = false, FormatterStorageModel? rectangularNullableStorage = null, int rectangularNullableEncoding = 0)
+    /// <param name = "nullableStorage">The verified block models of the nullable element.</param>
+    /// <param name = "nullableEncoding">The binary nullable collection element encoding.</param>
+    internal FormatterModel(string type, string definition, FormatterModel[]? arguments = null, bool raw = false, bool rawCollection = false, FormatterStorageModel? layout = null, TypeModel? payload = null, string? underlying = null, bool ordinaryObject = false, int rank = 0, bool formattedJson = false, bool reuseArraySlots = false, string[]? capabilities = null, bool publishPayload = false, FormatterStorageModel? nullableStorage = null, int nullableEncoding = 0)
     {
         PublishPayload = publishPayload;
         Capabilities = capabilities ?? Array.Empty<string>();
@@ -79,8 +82,8 @@ internal sealed class FormatterModel : IEquatable<FormatterModel>
         Raw = raw;
         RawCollection = rawCollection;
         Layout = layout;
-        RectangularNullableStorage = rectangularNullableStorage;
-        RectangularNullableEncoding = rectangularNullableEncoding;
+        NullableStorage = nullableStorage;
+        NullableEncoding = nullableEncoding;
         Payload = payload;
         Underlying = underlying;
         OrdinaryObject = ordinaryObject;
@@ -96,12 +99,12 @@ internal sealed class FormatterModel : IEquatable<FormatterModel>
     /// <summary>Attaches the immutable runtime API facts captured by analysis.</summary>
     /// <param name = "capabilities">The capabilities used by this operation.</param>
     /// <returns>The normalized result of the operation.</returns>
-    internal FormatterModel WithCapabilities(string[] capabilities) => capabilities.Length == 0 ? this : new FormatterModel(Type, Definition, Arguments, Raw, RawCollection, Layout, Payload, Underlying, OrdinaryObject, Rank, FormattedJson, ReuseArraySlots, capabilities, PublishPayload, RectangularNullableStorage, RectangularNullableEncoding);
+    internal FormatterModel WithCapabilities(string[] capabilities) => capabilities.Length == 0 ? this : new FormatterModel(Type, Definition, Arguments, Raw, RawCollection, Layout, Payload, Underlying, OrdinaryObject, Rank, FormattedJson, ReuseArraySlots, capabilities, PublishPayload, NullableStorage, NullableEncoding);
     /// <inheritdoc/>
     /// <summary>Processes the current formatter contract.</summary>
     /// <param name = "other">The other used by this operation.</param>
     /// <returns>Whether the requested contract or capability is available.</returns>
-    public bool Equals(FormatterModel? other) => ReferenceEquals(this, other) || other != null && Type == other.Type && Definition == other.Definition && Raw == other.Raw && RawCollection == other.RawCollection && OrdinaryObject == other.OrdinaryObject && ReuseArraySlots == other.ReuseArraySlots && Rank == other.Rank && Underlying == other.Underlying && FormattedJson == other.FormattedJson && PublishPayload == other.PublishPayload && Equals(Layout, other.Layout) && Equals(RectangularNullableStorage, other.RectangularNullableStorage) && RectangularNullableEncoding == other.RectangularNullableEncoding && Equals(Payload, other.Payload) && Arguments.SequenceEqual(other.Arguments) && Capabilities.SequenceEqual(other.Capabilities);
+    public bool Equals(FormatterModel? other) => ReferenceEquals(this, other) || other != null && Type == other.Type && Definition == other.Definition && Raw == other.Raw && RawCollection == other.RawCollection && OrdinaryObject == other.OrdinaryObject && ReuseArraySlots == other.ReuseArraySlots && Rank == other.Rank && Underlying == other.Underlying && FormattedJson == other.FormattedJson && PublishPayload == other.PublishPayload && Equals(Layout, other.Layout) && Equals(NullableStorage, other.NullableStorage) && NullableEncoding == other.NullableEncoding && Equals(Payload, other.Payload) && Arguments.SequenceEqual(other.Arguments) && Capabilities.SequenceEqual(other.Capabilities);
     /// <inheritdoc/>
     /// <summary>Processes the current formatter contract.</summary>
     /// <param name = "obj">The obj used by this operation.</param>

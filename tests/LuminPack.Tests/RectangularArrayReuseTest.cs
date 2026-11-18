@@ -295,26 +295,26 @@ public sealed class RectangularArrayReuseTest
         Assert.Same(alias, target.Items);
     }
 
-    /// <summary>Reads framed queue elements in order and checks markers before enqueueing.</summary>
+    /// <summary>Reads framed queues of multi-model Tagged elements and checks markers before enqueueing.</summary>
     [Fact]
     public void FramedNullableQueueKeepsPublicationOrder()
     {
-        var source = new ConcurrentQueue<int?>([10, null, 12, null]);
+        var source = new ConcurrentQueue<long?>([10, null, 12, null]);
         byte[] wire = LuminPackSerializer.Serialize(source);
-        ConcurrentQueue<int?>? fresh = null;
+        ConcurrentQueue<long?>? fresh = null;
         Assert.Equal(wire.Length, LuminPackSerializer.Deserialize(wire, ref fresh));
         Assert.Equal(source.ToArray(), fresh!.ToArray());
 
-        wire[sizeof(int) + 1 + sizeof(int)] = 2;
+        wire[sizeof(int) + 1 + sizeof(long)] = 2;
         fresh = null;
         Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(wire, ref fresh));
         Assert.Null(fresh);
 
-        ConcurrentQueue<int?>? reused = new([77]);
+        ConcurrentQueue<long?>? reused = new([77]);
         var alias = reused;
         Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(wire, ref reused));
         Assert.Same(alias, reused);
-        Assert.Equal(new int?[] { 10 }, alias.ToArray());
+        Assert.Equal(new long?[] { 10 }, alias.ToArray());
     }
 }
 

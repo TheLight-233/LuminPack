@@ -36,8 +36,10 @@ internal sealed partial class EnumerableOwnerContext
     internal bool Forwarded { get; }
     /// <summary>Whether this family's default element block uses contiguous storage.</summary>
     internal bool Contiguous { get; }
-    /// <summary>Whether the complete element block owns a packed or tagged layout.</summary>
-    internal bool ContiguousLayout => Contiguous && _element?.Layout != null;
+    /// <summary>Whether the complete element block uses a generated layout descriptor.</summary>
+    internal bool ContiguousLayout => Contiguous && (_element?.Layout != null || NullableBlock != null);
+    /// <summary>The proven nullable block contract for this family's contiguous storage.</summary>
+    internal NullableCollectionEmitter? NullableBlock { get; }
     private readonly SharedFormatterSet _set;
     /// <summary>Checks the exact runtime API facts of this sequence.</summary>
     /// <param name="capability">The capability supplied to <c>Supports</c>.</param>
@@ -230,10 +232,10 @@ internal sealed partial class EnumerableOwnerContext
         }
         if (Forwarded)
         {
-            if (NativeNullableElement || Contiguous && _element!.RawCollection)
+            if (Contiguous && _element!.RawCollection)
                 W.Line("operationState.Read(ref " + Memory + ".As<" + Scalar + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + Scalar + ">());");
             else
-                FormatterElementEmitter.Read(W, _set, _element!, destination, "operationState", fresh: fresh);
+                FormatterElementEmitter.ReadCollectionElement(W, _set, _element!, destination, "operationState", fresh: fresh);
             return;
         }
         if (Payload != null)
@@ -293,16 +295,25 @@ internal sealed partial class EnumerableOwnerContext
     /// <summary>Emits the read of <c>length</c> elements into a span.</summary>
     /// <param name="span">The destination span expression.</param>
     /// <param name="foreign">Whether to enable foreign for this operation.</param>
-    internal void ReadBlock(string span, bool foreign = false)
+    /// <param name="nativeValidated">Whether the enclosing reader already checked the complete native nullable range.</param>
+    internal void ReadBlock(string span, bool foreign = false, bool nativeValidated = false)
     {
         if (!foreign && Text && Supports("ReadInterfaceStrings"))
         {
             W.Line("operationState.ReadStrings<TLuminProfile>(" + span + ");");
             return;
         }
-        if (NativeNullableElement || Forwarded && Contiguous && (_element!.RawCollection || _element.Layout != null))
+        if (Forwarded && Contiguous && (_element!.RawCollection || ContiguousLayout))
         {
             ReadContiguous(span);
+            return;
+        }
+        if (NativeNullableElement)
+        {
+            if (!nativeValidated)
+                ValidateNativeNullableElements();
+            W.Line("if (length != 0) operationState.Read(ref " + Memory + ".As<" + Scalar + ", byte>(ref " +
+                Marshal + ".GetReference(" + span + ")), checked(length * " + Memory + ".SizeOf<" + Scalar + ">()));");
             return;
         }
         if (foreign && Text)
@@ -362,6 +373,7 @@ internal sealed partial class EnumerableOwnerContext
         _element = element;
         Forwarded = element != null;
         Contiguous = contiguous;
+        NullableBlock = contiguous ? NullableCollectionEmitter.For(element, "LuminRoots_" + ReadableTypeName.Of(GeneratedNames.PayloadKey(sequence))) : null;
         Payload = payload;
         W = writer;
         Sequence = sequence;
@@ -379,10 +391,11 @@ internal sealed partial class EnumerableOwnerContext
     {
         if (outline)
         {
-            W.Line("ReadPooledFallback(ref operationState, ref value, length);");
+            W.Line("ReadPooledFallback(ref operationState, ref value, length" + (NullableBlock != null ? ", storageTag" : "") + ");");
             W.Blank();
             W.Line(W.MethodImpl("NoInlining"));
-            W.Line("static void ReadPooledFallback(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref " + Sequence + " value, int length)");
+            W.Line("static void ReadPooledFallback(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref " + Sequence + " value, int length" +
+                (NullableBlock != null ? ", byte storageTag" : "") + ")");
             W.Open();
             W.Line("ref var operationState = ref reader;");
         }
@@ -586,18 +599,19 @@ internal static class EnumerableOwnerTemplate
         FormatterModel? element = fact.ForwardedType == null ? null : set.FindFormatter(scalar) ?? new FormatterModel(scalar, FormatterDefinitions.PayloadReference);
         bool optimizeBinaryWrite = optimized &&
             !BinaryTraversalTiering.PreferPgo(scalar, element, payload);
-        string minimum = element != null ? (element.NativeNullableElement || fact.Family.ContiguousElements && element.RawCollection ?
-            memory + ".SizeOf<" + scalar + ">()" : fact.Family.ContiguousElements && set.FindFormatter(scalar)?.Layout != null ? "0" :
-            FormatterElementEmitter.Minimum(element)) :
-            text ? "1" : memory + ".SizeOf<" + scalar + ">()";
         var context = new EnumerableOwnerContext(w, sequence, scalar, memory, marshal, payload, set, element, fact.Family.ContiguousElements);
+        string minimum = context.ContiguousLayout ? "0" :
+            element != null && !(element.NativeNullableElement || context.Contiguous && element.RawCollection) ? FormatterElementEmitter.Minimum(element) :
+            element == null && text ? "1" : memory + ".SizeOf<" + scalar + ">()";
         bool concurrentStack = sequence.StartsWith("global::System.Collections.Concurrent.ConcurrentStack<", StringComparison.Ordinal);
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead,
             () =>
             {
-                if (element?.Layout != null && context.Contiguous)
+                if (context.NullableBlock != null)
+                    context.NullableBlock.Support(w, (operations & GeneratedOperations.BinaryRead) != 0);
+                else if (element?.Layout != null && context.Contiguous)
                     FormatterStorageEmitter.Support(w, element.Layout);
             });
 
@@ -772,7 +786,9 @@ internal static class EnumerableOwnerTemplate
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
                     w.Blank();
-                    if (context.Forwarded && context.Contiguous && element?.Layout != null)
+                    if (context.NullableBlock != null)
+                        context.NullableBlock.Validate(w, "operationState", "length");
+                    else if (context.Forwarded && context.Contiguous && element?.Layout != null)
                         FormatterStorageEmitter.Validate(w, element.Layout, "length", "operationState");
                     spec.ReadBody(context);
                     w.Blank();

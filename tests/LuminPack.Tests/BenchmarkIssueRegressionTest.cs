@@ -1238,17 +1238,19 @@ public sealed class BenchmarkIssueRegressionTest
         Assert.Equal(2, Assert.IsType<BenchHealthComponent>(restoredSnapshot.Entities[2].Components[2]).Hp - 100);
     }
 
-    /// <summary>Checks native nullable blocks across contiguous collections and rectangular arrays.</summary>
+    /// <summary>Uses one headerless nullable layout across collections in the default Tagged mode.</summary>
     [Fact]
     public void NullableCollectionShapesUseContiguousBlocks()
     {
         int?[] elements = [8, null, -5, 2];
         byte[] native = LuminPackSerializer.Serialize(elements);
-        IList<int?> list = new List<int?>(elements);
-        IReadOnlyList<int?> wrapper = new ReadOnlyCollection<int?>(list);
+        var list = new List<int?>(elements);
+        var wrapper = new ReadOnlyCollection<int?>(list);
         Assert.Equal(native, LuminPackSerializer.Serialize(list));
         Assert.Equal(native, LuminPackSerializer.Serialize(wrapper));
         Assert.Equal(native, LuminPackSerializer.Serialize(new Collection<int?>(list)));
+        Assert.Equal(native, LuminPackSerializer.Serialize<IList<int?>>(list));
+        Assert.Equal(native, LuminPackSerializer.Serialize<IReadOnlyList<int?>>(wrapper));
 
         var queue = new Queue<int?>(4);
         queue.Enqueue(100);

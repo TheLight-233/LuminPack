@@ -58,21 +58,15 @@ internal sealed partial class EnumerableOwnerContext
 
     /// <summary>Writes a default element through the element's static owner.</summary>
     /// <param name = "expression">The addressable value expression.</param>
-    internal void WriteElement(string expression)
-    {
-        // A nullable reference-free scalar element is native storage, as the original element loops copied it.
-        if (NativeNullableElement)
-        {
-            W.Line("operationState.CheckBuffer();");
-            W.Line("operationState.Write(ref global::System.Runtime.CompilerServices.Unsafe.As<" + _element!.Type + ", byte>(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in " +
-                expression + ")), global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + _element.Type + ">());");
-            return;
-        }
-        FormatterElementEmitter.Write(W, _set, _element!, expression, "operationState");
-    }
+    internal void WriteElement(string expression) =>
+        FormatterElementEmitter.WriteCollectionElement(W, _set, _element!, expression, "operationState");
 
-    /// <summary>Whether the forwarded element is a nullable reference-free scalar without a storage layout.</summary>
+    /// <summary>Whether the forwarded element uses complete native nullable storage.</summary>
     internal bool NativeNullableElement => _element?.NativeNullableElement == true;
+
+    /// <summary>Validates complete native nullable slots before a collection mutates its destination.</summary>
+    internal void ValidateNativeNullableElements() =>
+        FormatterElementEmitter.ValidateNativeNullableCollection(W, _element!, "length", "operationState");
 
     /// <summary>Shares one object element loop across exact list, exact array and fresh interface destinations.</summary>
     /// <param name="freshList">Whether the fallback is a new list rather than an array.</param>
@@ -142,7 +136,8 @@ internal sealed partial class EnumerableOwnerContext
     }
 
     /// <summary>Retains exact mutable List and array targets selected by the legacy interface reader.</summary>
-    internal void ReadInterfaceTargets()
+    /// <param name="nativeValidated">Whether the interface reader has already checked the native nullable range.</param>
+    internal void ReadInterfaceTargets(bool nativeValidated = false)
     {
         if (!Supports("InterfaceTargetReuse"))
             return;
@@ -152,7 +147,7 @@ internal sealed partial class EnumerableOwnerContext
         W.Open();
         W.Line("var selected = " + Memory + ".As<" + list + ">(value);");
         W.Line("var target = global::LuminPack.Code.LuminPackMarshal.GetListSpan(selected, length);");
-        ReadBlock("target");
+        ReadBlock("target", nativeValidated: nativeValidated);
         W.Line("value = selected;");
         W.Line("goto operationComplete_RootRead;");
         W.Close();
@@ -161,7 +156,7 @@ internal sealed partial class EnumerableOwnerContext
         W.Line("var selected = " + Memory + ".As<" + array + ">(value);");
         W.Line("if (selected.Length != length) selected = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<" + Scalar + ">(length);");
         W.Line("var target = " + PackMarshal + ".CreateSpan(ref " + PackMarshal + ".GetNotNullArrayReference(selected), length);");
-        ReadBlock("target");
+        ReadBlock("target", nativeValidated: nativeValidated);
         W.Line("value = selected;");
         W.Line("goto operationComplete_RootRead;");
         W.Close();
@@ -172,9 +167,10 @@ internal sealed partial class EnumerableOwnerContext
     internal void WriteSpan(string expression)
     {
         W.Line("global::System.ReadOnlySpan<" + Scalar + "> blockItems = " + expression + ";");
-        if (NativeNullableElement)
+        if (NullableBlock != null)
         {
-            WriteNativeNullableSpan("blockItems");
+            NullableBlock.WriteCollection(W, "operationState", "blockItems");
+            W.Line("operationState.CheckBuffer();");
             return;
         }
         if (_element!.RawCollection)
@@ -224,6 +220,11 @@ internal sealed partial class EnumerableOwnerContext
     /// <param name = "span">The element storage span expression.</param>
     private void ReadContiguous(string span)
     {
+        if (NullableBlock != null)
+        {
+            NullableBlock.ReadCollection(W, "operationState", span);
+            return;
+        }
         if (_element!.Layout != null)
         {
             FormatterStorageEmitter.Payload(W, _element.Layout, "global::System.Runtime.InteropServices.MemoryMarshal.GetReference(" + span + ")", "length", false, "operationState");
@@ -240,7 +241,7 @@ internal sealed partial class EnumerableOwnerContext
     internal void WrapperWrite(string local)
     {
         if (_set.FindFormatter(Sequence)?.Definition == "System.Collections.ObjectModel.ReadOnlyCollection" &&
-            !NativeNullableElement && !_element!.RawCollection && _element.Layout == null && Supports("WrapperJsonStorage"))
+            !_element!.RawCollection && !ContiguousLayout && Supports("WrapperJsonStorage"))
         {
             W.Line("var storage = global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + Scalar + ">(" + local + ");");
             W.Line("global::System.ReadOnlySpan<" + Scalar + "> items;");
@@ -265,7 +266,7 @@ internal sealed partial class EnumerableOwnerContext
 
         W.Line("int wrapperDepth = 0;");
         W.Line("var wrapperList = global::LuminPack.Code.LuminPackCollectionAccess.GetUnderlyingIList(" + local + ", ref wrapperDepth);");
-        if (!NativeNullableElement && !_element!.RawCollection && _element.Layout == null)
+        if (!_element!.RawCollection && !ContiguousLayout)
         {
             W.Line("if (wrapperList != null)");
             W.Indented(() => W.Line("WriteList(ref operationState, wrapperList);"));
@@ -301,6 +302,25 @@ internal sealed partial class EnumerableOwnerContext
     /// <param name="local">The wrapper expression.</param>
     private void WriteOtherWrapperStorage(string local)
     {
+        if (ContiguousLayout)
+        {
+            // The selected block wire is independent of the wrapper's actual backing collection.
+            W.Line("global::System.ReadOnlySpan<" + Scalar + "> stagedItems;");
+            if (Supports("WrapperJsonStorage"))
+            {
+                W.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + Scalar + ">(" + local + ") is " +
+                    ContiguousOwnerFile.ArrayType(Scalar) + " backingArray)");
+                W.Indented(() => W.Line("stagedItems = backingArray;"));
+                W.Line("else");
+            }
+            W.Open();
+            W.Line("var staged = new global::System.Collections.Generic.List<" + Scalar + ">();");
+            W.Line("foreach (var item in " + local + ") staged.Add(item);");
+            W.Line("stagedItems = " + PackMarshal + ".GetListSpan(staged);");
+            W.Close();
+            WriteSpan("stagedItems");
+            return;
+        }
         W.Line("int countPosition = operationState.BeginCollection();");
         W.Line("int count = 0;");
         bool arrayTraversal = !_element!.RawCollection && Supports("WrapperJsonStorage");

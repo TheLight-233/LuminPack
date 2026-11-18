@@ -161,17 +161,9 @@ internal sealed partial class PairedDictionaryContext
                 expression + "));");
             return;
         }
-        if (_contract != null && NativeNullable(_contract.Arguments[type == Key ? 0 : 1]))
-        {
-            // A nullable reference-free scalar entry is native storage, as the original raw pairs wrote it.
-            W.Line("operationState.CheckBuffer();");
-            W.Line("operationState.EnsureAdditionalCapacity(" + Memory + ".SizeOf<" + type + ">());");
-            W.Line("operationState.Advance(global::LuminPack.Core.LuminPackWriter.Write(ref operationState.Cursor, " + expression + "));");
-            return;
-        }
         if (_contract != null)
         {
-            FormatterElementEmitter.Write(W, _set, _contract.Arguments[type == Key ? 0 : 1], expression, "operationState", checkBuffer: checkBuffer);
+            FormatterElementEmitter.WriteCollectionElement(W, _set, _contract.Arguments[type == Key ? 0 : 1], expression, "operationState", checkBuffer: checkBuffer);
             return;
         }
         if (Payload != null && type == Payload.GlobalName)
@@ -201,17 +193,6 @@ internal sealed partial class PairedDictionaryContext
             W.Line("operationState.Write<TLuminProfile>(" + expression + ");");
     }
 
-    /// <summary>Whether an entry contract is a nullable reference-free scalar without a storage layout.</summary>
-    /// <remarks>Only the families the original wrote as raw pairs (Dictionary and its interfaces) store it natively; a sorted
-    /// list frames each entry.</remarks>
-    /// <param name="contract">The contract supplied to <c>NativeNullable</c>.</param>
-    /// <returns>Whether the input satisfies the native nullable check.</returns>
-    private bool NativeNullable(FormatterModel contract) => contract.Definition == GenericIdentity.Nullable &&
-        contract.Arguments.Length == 1 && contract.Arguments[0].RawCollection && contract.Layout == null &&
-        (Dictionary.StartsWith("global::System.Collections.Generic.Dictionary<", StringComparison.Ordinal) ||
-         Dictionary.StartsWith("global::System.Collections.Generic.IDictionary<", StringComparison.Ordinal) ||
-         Dictionary.StartsWith("global::System.Collections.Generic.IReadOnlyDictionary<", StringComparison.Ordinal));
-
     /// <summary>Reads one entry member from the isolated operation state into an assignable location.</summary>
     /// <param name="type">The member keyword or <c>string</c>.</param>
     /// <param name="destination">The assignable destination.</param>
@@ -233,14 +214,9 @@ internal sealed partial class PairedDictionaryContext
                 W.Line("operationState.Read(ref " + Memory + ".As<" + type + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + type + ">());");
             return;
         }
-        if (_contract != null && NativeNullable(_contract.Arguments[type == Key ? 0 : 1]))
-        {
-            W.Line("operationState.Read(ref " + Memory + ".As<" + type + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + type + ">());");
-            return;
-        }
         if (_contract != null)
         {
-            FormatterElementEmitter.Read(W, _set, _contract.Arguments[type == Key ? 0 : 1], destination, "operationState", fresh: fresh);
+            FormatterElementEmitter.ReadCollectionElement(W, _set, _contract.Arguments[type == Key ? 0 : 1], destination, "operationState", fresh: fresh);
             return;
         }
         if (Payload != null && type == Payload.GlobalName)
@@ -761,8 +737,8 @@ internal static class PairedDictionaryOwnerTemplate
         string keyOwner = "global::LuminPack." + GeneratedNames.Owner(extension, key);
         string valueOwner = fact.Element != null ? "global::LuminPack." + fact.Element.Owner : "global::LuminPack." + GeneratedNames.Owner(extension, value);
         bool nativeEntries = fact.Family.NativeEntries && fact.Contract?.Arguments.All(argument => argument.RawStorage) == true;
-        string minimum = nativeEntries ? memory + ".SizeOf<" + key + ">() + " + memory + ".SizeOf<" + value + ">()" : fact.Contract != null ? FormatterElementEmitter.Minimum(fact.Contract.Arguments[0]) + " + " +
-            FormatterElementEmitter.Minimum(fact.Contract.Arguments[1]) : (key != "string" ? memory + ".SizeOf<" + key + ">()" : "1") + " + " +
+        string minimum = nativeEntries ? memory + ".SizeOf<" + key + ">() + " + memory + ".SizeOf<" + value + ">()" : fact.Contract != null ? FormatterElementEmitter.CollectionMinimum(fact.Contract.Arguments[0]) + " + " +
+            FormatterElementEmitter.CollectionMinimum(fact.Contract.Arguments[1]) : (key != "string" ? memory + ".SizeOf<" + key + ">()" : "1") + " + " +
             (value != "string" && fact.Element == null && !fact.ForwardedValue ? memory + ".SizeOf<" + value + ">()" : "1");
         const string generic = "    where TLuminProfile : struct, ";
         var context = new PairedDictionaryContext(w, dictionary, key, value, memory, extension, spec.Source, spec.KeyMember, spec.ValueMember,

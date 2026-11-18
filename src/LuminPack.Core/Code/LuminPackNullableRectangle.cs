@@ -1,5 +1,6 @@
 #if NET8_0_OR_GREATER
 using System;
+using System.Buffers;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -10,7 +11,7 @@ using LuminPack.Utility;
 
 namespace LuminPack.Code;
 
-/// <summary>Transfers the complete checked native or tagged payload of a rectangular nullable array.</summary>
+/// <summary>Transfers checked native or tagged nullable storage in generated collections.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class LuminPackNullableRectangle
 {
@@ -46,6 +47,77 @@ public static class LuminPackNullableRectangle
         writer.Write(ref Unsafe.As<T?, byte>(ref first), nativeBytes);
     }
 
+    /// <summary>Writes a counted contiguous nullable collection, including an aliased retained destination.</summary>
+    /// <typeparam name="T">The reference-free underlying nullable type.</typeparam>
+    /// <typeparam name="TLayout">The generated storage layout descriptor.</typeparam>
+    /// <param name="writer">The destination writer.</param>
+    /// <param name="values">The source elements.</param>
+    /// <param name="encoding">The compiled storage mode.</param>
+    /// <param name="writeTag">Whether several tagged models are available.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void WriteCollection<T, TLayout>(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<T?> values, int encoding, bool writeTag)
+        where T : unmanaged
+        where TLayout : struct, ILuminNullableStorageLayout
+    {
+        int count = values.Length;
+        if (count == 0)
+        {
+            writer.EnsureAdditionalCapacity(sizeof(int));
+            writer.WriteCollectionHeader(0);
+            return;
+        }
+        int stride = encoding == Tagged ? LuminStorageTag<T?, TLayout>.Width : Unsafe.SizeOf<T?>();
+        int bytes = checked(count * stride);
+        int size = checked(sizeof(int) + (writeTag ? 1 : 0) + bytes);
+        ref T? first = ref MemoryMarshal.GetReference(values);
+        if (MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<T?, byte>(ref first), checked(count * Unsafe.SizeOf<T?>()))
+                .Overlaps(writer.Buffer))
+        {
+            WriteAliased<T, TLayout>(ref writer, values, encoding, writeTag);
+            return;
+        }
+        writer.EnsureAdditionalCapacity(size);
+        writer.WriteCollectionHeader(count);
+        if (encoding == Tagged)
+        {
+            if (writeTag)
+                writer.Write(LuminStorageTag<T?, TLayout>.Tag);
+            LuminStorageTag<T?, TLayout>.Pack(ref first, count, ref writer.Cursor);
+            writer.Advance(bytes);
+        }
+        else
+            writer.Write(ref Unsafe.As<T?, byte>(ref first), bytes);
+    }
+
+    /// <summary>Captures aliased source storage before writing any header or growing the destination.</summary>
+    /// <typeparam name="T">The reference-free underlying nullable type.</typeparam>
+    /// <typeparam name="TLayout">The generated storage layout descriptor.</typeparam>
+    /// <param name="writer">The destination writer.</param>
+    /// <param name="values">The source elements overlapping the retained destination.</param>
+    /// <param name="encoding">The compiled storage mode.</param>
+    /// <param name="writeTag">Whether several tagged models are available.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void WriteAliased<T, TLayout>(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<T?> values, int encoding, bool writeTag)
+        where T : unmanaged
+        where TLayout : struct, ILuminNullableStorageLayout
+    {
+        // Preserve padding in Native storage, including padding in null records.
+        int bytes = checked(values.Length * Unsafe.SizeOf<T?>());
+        byte[] scratch = ArrayPool<byte>.Shared.Rent(bytes);
+        try
+        {
+            ref byte copy = ref MemoryMarshal.GetArrayDataReference(scratch);
+            ref byte source = ref Unsafe.As<T?, byte>(ref MemoryMarshal.GetReference(values));
+            LuminPackMarshal.CopyBlockUnaligned(ref copy, ref source, (uint)bytes);
+            WriteCollection<T, TLayout>(ref writer,
+                MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<byte, T?>(ref copy), values.Length), encoding, writeTag);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(scratch);
+        }
+    }
+
     /// <summary>Validates the complete payload and its Boolean storage before allocating the rectangular result.</summary>
     /// <typeparam name="T">The reference-free underlying nullable type.</typeparam>
     /// <typeparam name="TLayout">The generated storage layout descriptor.</typeparam>
@@ -62,30 +134,62 @@ public static class LuminPackNullableRectangle
         tag = 1;
         if (count == 0)
             return;
-        int stride, presence, boolean = -1;
-        if (encoding == Tagged)
+        if (encoding != Tagged)
         {
-            if (hasTag)
-                tag = reader.Read<byte>();
-            stride = LuminStorageTag<T?, TLayout>.WidthOf(tag);
-            presence = default(TLayout).ModelByteOffset(tag, 0);
-            if (typeof(T) == typeof(bool))
-                boolean = default(TLayout).ModelByteOffset(tag, 1);
+            ValidateNative<T>(ref reader, count);
+            return;
         }
-        else
-        {
-            stride = Unsafe.SizeOf<T?>();
-            presence = 0;
-            if (typeof(T) == typeof(bool))
-            {
-                T? sample = default;
-                ref T payload = ref Unsafe.AsRef(in Nullable.GetValueRefOrDefaultRef(in sample));
-                boolean = (int)Unsafe.ByteOffset(ref Unsafe.As<T?, byte>(ref sample), ref Unsafe.As<T, byte>(ref payload));
-            }
-        }
+        if (hasTag)
+            tag = reader.Read<byte>();
+        int stride = LuminStorageTag<T?, TLayout>.WidthOf(tag);
+        int presence = default(TLayout).ModelByteOffset(tag, 0);
+        int boolean = typeof(T) == typeof(bool) ? default(TLayout).ModelByteOffset(tag, 1) : -1;
         int bytes = checked(count * stride);
         reader.EnsureCollectionPayload(reader.Position, bytes);
         ValidateFlags(ref reader.Cursor, count, stride, bytes, presence, boolean);
+    }
+
+    /// <summary>Checks native nullable records without advancing past them.</summary>
+    /// <typeparam name="T">The reference-free underlying nullable type.</typeparam>
+    /// <param name="reader">The input at the first native record.</param>
+    /// <param name="count">The previously checked element count.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void ValidateNative<T>(scoped ref LuminPackReader reader, int count) where T : unmanaged
+    {
+        if (count == 0)
+            return;
+        int stride = Unsafe.SizeOf<T?>();
+        int bytes = checked(count * stride);
+        reader.EnsureCollectionPayload(reader.Position, bytes);
+        ValidateFlags(ref reader.Cursor, count, stride, bytes, 0, NativeBooleanOffset<T>());
+    }
+
+    /// <summary>Reads a complete checked native nullable record in a per-element collection loop.</summary>
+    /// <typeparam name="T">The reference-free underlying nullable type.</typeparam>
+    /// <param name="reader">The input at the native record.</param>
+    /// <param name="value">The element to publish after validation.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void ReadNative<T>(scoped ref LuminPackReader reader, scoped ref T? value) where T : unmanaged
+    {
+        int stride = Unsafe.SizeOf<T?>();
+        ref byte source = ref reader.Cursor;
+        reader.EnsureCollectionPayload(reader.Position, stride);
+        if (source > 1 || typeof(T) == typeof(bool) && Unsafe.Add(ref source, NativeBooleanOffset<T>()) > 1)
+            InvalidBooleanStorage();
+        reader.Read(ref Unsafe.As<T?, byte>(ref value), stride);
+    }
+
+    /// <summary>Gets the actual native Boolean payload offset, when the underlying type is Boolean.</summary>
+    /// <typeparam name="T">The reference-free underlying nullable type.</typeparam>
+    /// <returns>The actual offset, or minus one when no Boolean payload needs validation.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int NativeBooleanOffset<T>() where T : unmanaged
+    {
+        if (typeof(T) != typeof(bool))
+            return -1;
+        T? sample = default;
+        ref T payload = ref Unsafe.AsRef(in Nullable.GetValueRefOrDefaultRef(in sample));
+        return (int)Unsafe.ByteOffset(ref Unsafe.As<T?, byte>(ref sample), ref Unsafe.As<T, byte>(ref payload));
     }
 
     /// <summary>Copies a validated payload into the unpublished rectangular result.</summary>
@@ -112,6 +216,60 @@ public static class LuminPackNullableRectangle
             return;
         }
         reader.Read(ref Unsafe.As<T?, byte>(ref first), checked(values.Length * Unsafe.SizeOf<T?>()));
+    }
+
+    /// <summary>Transfers a validated collection block into writable storage that may alias the input.</summary>
+    /// <typeparam name="T">The reference-free underlying nullable type.</typeparam>
+    /// <typeparam name="TLayout">The generated storage layout descriptor.</typeparam>
+    /// <param name="reader">The input after validating the block and consuming any tag.</param>
+    /// <param name="values">The destination elements.</param>
+    /// <param name="encoding">The compiled storage mode.</param>
+    /// <param name="tag">The validated or implicit tagged model.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void ReadCollection<T, TLayout>(scoped ref LuminPackReader reader, scoped Span<T?> values, int encoding, byte tag)
+        where T : unmanaged
+        where TLayout : struct, ILuminNullableStorageLayout
+    {
+        if (values.IsEmpty)
+            return;
+        int width = encoding == Tagged ? LuminStorageTag<T?, TLayout>.WidthOf(tag) : Unsafe.SizeOf<T?>();
+        ref byte target = ref Unsafe.As<T?, byte>(ref MemoryMarshal.GetReference(values));
+        var destination = MemoryMarshal.CreateSpan(ref target, checked(values.Length * Unsafe.SizeOf<T?>()));
+        var source = MemoryMarshal.CreateReadOnlySpan(ref reader.Cursor, checked(values.Length * width));
+        if (!source.Overlaps(destination))
+        {
+            Read<T, TLayout>(ref reader, values, encoding, tag);
+            return;
+        }
+        reader.Advance(source.Length);
+        if (encoding == Tagged)
+            ReadAliased<T, TLayout>(source, values, tag);
+        else
+            source.CopyTo(destination);
+    }
+
+    /// <summary>Stages an overlapping tagged payload so layout conversion has disjoint ranges.</summary>
+    /// <typeparam name="T">The reference-free underlying nullable type.</typeparam>
+    /// <typeparam name="TLayout">The generated storage layout descriptor.</typeparam>
+    /// <param name="source">The validated wire payload.</param>
+    /// <param name="values">The existing destination elements.</param>
+    /// <param name="tag">The validated or implicit tagged model.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ReadAliased<T, TLayout>(scoped ReadOnlySpan<byte> source, scoped Span<T?> values, byte tag)
+        where T : unmanaged
+        where TLayout : struct, ILuminNullableStorageLayout
+    {
+        byte[] scratch = ArrayPool<byte>.Shared.Rent(source.Length);
+        try
+        {
+            source.CopyTo(scratch);
+            LuminStorageTag<T?, TLayout>.Unpack(tag, ref MemoryMarshal.GetArrayDataReference(scratch), values.Length,
+                ref MemoryMarshal.GetReference(values));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(scratch);
+        }
     }
 
     /// <summary>Rejects noncanonical presence and Boolean payload bytes in the validated payload window.</summary>

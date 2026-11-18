@@ -56,7 +56,7 @@ Delegate targets use the formatter signature of the member type, for example `st
 
 These Union switches do not inherit from assemblies, containing types or base types, cannot be selected through operation profiles, and do not pin string profiles. A legacy standalone marker takes precedence over an explicit false option. Only assert `SingleImplementation` when no other assembly can add an implementation.
 
-The Next generator on supported .NET 8+ targets applies the underlying `StructLayout` to eligible rectangular `Nullable<T>` arrays. For built-in scalar elements use the assembly option. `Native` requires a matching runtime layout at both ends. `Tagged` supports conversion between modeled layouts. `Packed` uses the element's nullable encoding in these arrays.
+In Next, built-in scalars, enums and framework value tuples in collections use the consuming assembly's `StructLayout` option, which defaults to `Tagged`. On supported .NET 8+ targets, eligible `Nullable<T>` collection elements follow the underlying type's layout. `Native` requires a matching runtime layout at both ends. `Tagged` contiguous blocks support conversion between modeled layouts. `Packed` writes the nullable marker and the packed payload of a present value.
 
 ## Examples
 

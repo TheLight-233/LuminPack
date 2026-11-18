@@ -25,6 +25,8 @@ internal static class BlockingCollectionOwnerFile
         string root = "global::LuminPack.LuminPackSerializer." + roots;
         string owner = GeneratedNames.Owner(set.Extension!, type);
         bool raw = fact.Scalar != null && fact.Scalar != "string";
+        var itemContract = set.FindFormatter(item);
+        bool nativeNullable = itemContract?.NativeNullableElement == true;
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots,
             "internal static partial class " + owner, null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -47,11 +49,19 @@ internal static class BlockingCollectionOwnerFile
             w.Line("int count = 0;");
             w.Line("foreach (var item in value)");
             w.Open();
-            if (item != "string")
+            if (item != "string" && !nativeNullable)
                 w.Line("writer.CheckBuffer();");
             w.Line("count++;");
             w.Line("var current = item;");
-            w.Line(element + ".Write<TOptions>(ref writer, in current);");
+            if (nativeNullable)
+                FormatterElementEmitter.WriteCollectionElement(w, set, itemContract!, "current", profile: "TOptions");
+            else if (raw)
+            {
+                w.Line("writer.EnsureAdditionalCapacity(" + w.A("Unsafe") + ".SizeOf<" + item + ">());");
+                w.Line("writer.Write(in current);");
+            }
+            else
+                w.Line(element + ".Write<TOptions>(ref writer, in current);");
             w.Close();
             w.Line("writer.EndCollection(position, count);");
             w.Line("writer.CheckBuffer();");
@@ -67,19 +77,24 @@ internal static class BlockingCollectionOwnerFile
                 return;
 
             Root("RootRead", reader, read: true);
-            string minimum = raw ? w.A("Unsafe") + ".SizeOf<" + item + ">()" : "1";
+            string minimum = raw || nativeNullable ? w.A("Unsafe") + ".SizeOf<" + item + ">()" : "1";
             w.Line("int length = reader.ReadLength(" + minimum + ");");
             w.Line("if (length < 0)");
             w.Open();
             w.Line("value = null;");
             w.Line("return;");
             w.Close();
+            if (nativeNullable)
+                FormatterElementEmitter.ValidateNativeNullableCollection(w, itemContract!, "length", "reader");
             w.Line("var pool = global::System.Buffers.ArrayPool<" + item + ">.Shared;");
             w.Line("var items = pool.Rent(length);");
             w.Line("try");
             w.Open();
             if (raw)
                 w.Line("reader.Read<" + item + ">(global::LuminPack.Code.LuminPackMarshal.CreateSpan(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items), length));");
+            else if (nativeNullable)
+                w.Line("if (length != 0) reader.Read(ref " + w.A("Unsafe") + ".As<" + item + ", byte>(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items)), checked(length * " +
+                    w.A("Unsafe") + ".SizeOf<" + item + ">()));");
             else
             {
                 w.Line("if (length != 0)");

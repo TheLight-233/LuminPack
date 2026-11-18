@@ -145,9 +145,8 @@ internal static partial class TypeModelFactory
                             Payload: RecordModel { Versioned: false, Derived: false, Constructor: null, Callbacks: null, Rent: null, Rejection: null } } &&
                         array.ElementType is INamedTypeSymbol declaration && OptionSwitch(declaration, "ReuseRectangularArraySlots", true);
                 }
-                var nullable = RectangularNullableStorage(array, element);
                 return new FormatterModel(spelling, FormatterDefinitions.Array, new[] { element }, rank: array.Rank,
-                    reuseArraySlots: reuseArraySlots, rectangularNullableStorage: nullable.Layout, rectangularNullableEncoding: nullable.Encoding);
+                    reuseArraySlots: reuseArraySlots);
             }
 
             if (type is not INamedTypeSymbol named)
@@ -159,9 +158,9 @@ internal static partial class TypeModelFactory
             string definition = named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.OriginalDefinition.Name;
             if (FormatterRegistry.HasStandalone(definition))
                 return new FormatterModel(spelling, definition);
-            FormatterStorageModel? layout = FormatterStorage(named);
-            // Nullable<T> is not an unmanaged type argument, so its collections keep their element operations.
-            bool rawCollection = named.IsUnmanagedType && named.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T && layout == null &&
+            bool isNullable = named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+            FormatterStorageModel? layout = isNullable ? null : FormatterStorage(named);
+            bool rawCollection = named.IsUnmanagedType && !isNullable && layout == null &&
                 !ContainsCustomContract(named, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
             if (FormatterDefinitions.HasGeneric(definition) || FormatterRegistry.FindSequence(definition) != null || FormatterRegistry.FindDictionary(spelling) != null)
             {
@@ -174,6 +173,11 @@ internal static partial class TypeModelFactory
                     arguments[i] = argument;
                 }
 
+                if (isNullable)
+                {
+                    var nullable = NullableCollectionStorage(named, arguments[0]);
+                    return new FormatterModel(spelling, definition, arguments, nullableStorage: nullable.Layout, nullableEncoding: nullable.Encoding);
+                }
                 bool raw = definition == GenericIdentity.ValueTuple && rawCollection;
                 return new FormatterModel(spelling, definition, arguments, raw, rawCollection, layout);
             }
@@ -282,38 +286,35 @@ internal static partial class TypeModelFactory
         {
             if (!type.IsUnmanagedType || GenerationMode(type) != "Object")
                 return null;
+            int strategy = CollectionLayoutStrategy(type);
             PortablePlan? plan;
-            if (LayoutStrategy(type) == 1)
+            if (strategy == 1)
             {
                 plan = AnalyzePortable(type, strict: true);
                 if (plan?.HasPadding != true)
                     return null;
             }
             else
-                plan = TryTaggedPlan(type);
+                plan = TryTaggedPlan(type, strategy);
             return plan == null ? null : NormalizeStorage(plan);
         }
 
-        /// <summary>Models a rectangular nullable's flag and payload independently of its standalone formatter.</summary>
-        /// <param name="array">The closed array shape.</param>
-        /// <param name="element">The existing nullable element contract.</param>
-        /// <returns>The verified storage candidate and its rectangular binary encoding.</returns>
-        private (FormatterStorageModel? Layout, int Encoding) RectangularNullableStorage(IArrayTypeSymbol array, FormatterModel element)
+        /// <summary>Models a reference-free nullable's flag and payload once for every binary collection.</summary>
+        /// <param name="nullable">The closed nullable element.</param>
+        /// <param name="value">The standalone payload's formatter contract.</param>
+        /// <returns>The verified storage candidate and its collection encoding.</returns>
+        private (FormatterStorageModel? Layout, int Encoding) NullableCollectionStorage(INamedTypeSymbol nullable, FormatterModel value)
         {
-            if (array.Rank <= 1 || !Options.Net8 || Options.Unity ||
-                array.ElementType is not INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable ||
-                nullable.TypeArguments[0] is not INamedTypeSymbol { IsUnmanagedType: true } payload ||
-                element is not { Definition: GenericIdentity.Nullable, Arguments.Length: 1 })
+            if (!Options.Net8 || Options.Unity || nullable.TypeArguments[0] is not INamedTypeSymbol { IsUnmanagedType: true } payload)
                 return default;
-            FormatterModel value = element.Arguments[0];
-            if (element.NativeNullablePayload == null &&
+            if (!(value.Raw && value.RawStorage && value.Layout == null) &&
                 (value.Layout is not { Tagged: true, Volatile: false } ||
                  !(value.Definition == GenericIdentity.ValueTuple || value.Payload is StructModel { Versioned: false }) ||
                  ContainsCustomContract(payload, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default))))
                 return default;
 
-            int strategy = NullableRectangularStrategy(payload);
-            if (strategy == 1 || !FormatterRuntimeTraits.HasNullableRectangleStorage(_compilation))
+            int strategy = CollectionLayoutStrategy(payload);
+            if (strategy == 1 || !FormatterRuntimeTraits.HasNullableCollectionStorage(_compilation))
                 return default;
 
             if (AnalyzePortable(payload, strict: true) is not { WireSize: > 0 } payloadPlan || HasVolatile(payloadPlan) ||

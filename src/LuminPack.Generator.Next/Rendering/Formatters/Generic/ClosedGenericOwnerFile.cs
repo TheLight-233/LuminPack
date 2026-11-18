@@ -171,7 +171,17 @@ internal static class ClosedGenericOwnerFile
                 return;
             }
 
-            if (reference || nullable)
+            if (nullable)
+            {
+                w.Line("byte marker = reader.Read<byte>();");
+                w.Line("if (marker != 0)");
+                w.Open();
+                w.Line("if (marker != byte.MaxValue) global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidDataException(\"Invalid nullable element marker.\");");
+                w.Line("value = default;");
+                w.Line("return;");
+                w.Close();
+            }
+            else if (reference)
             {
                 w.Line("if (!reader.TryReadObjectHead())");
                 w.Open();

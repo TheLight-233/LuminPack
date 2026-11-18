@@ -319,7 +319,9 @@ internal static class InterfaceOwnerFile
         if (c.ReadObjectInterfaceItems())
             return;
         var w = c.W;
-        c.ReadInterfaceTargets();
+        if (c.NativeNullableElement)
+            c.ValidateNativeNullableElements();
+        c.ReadInterfaceTargets(nativeValidated: c.NativeNullableElement);
         w.Line("if (length == 0)");
         w.Open();
         w.Line("value = global::System.Array.Empty<" + c.Scalar + ">();");
@@ -340,7 +342,9 @@ internal static class InterfaceOwnerFile
         if (c.ReadObjectInterfaceItems(freshList: true))
             return;
         var w = c.W;
-        c.ReadInterfaceTargets();
+        if (c.NativeNullableElement)
+            c.ValidateNativeNullableElements();
+        c.ReadInterfaceTargets(nativeValidated: c.NativeNullableElement);
         w.Line("var list = new global::System.Collections.Generic.List<" + c.Scalar + ">(length);");
         w.Line("if (length != 0)");
         w.Open();
@@ -362,10 +366,13 @@ internal static class InterfaceOwnerFile
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
+        bool nativeBlock = c.NativeNullableElement && c.Supports("ReadNullableHashSetRaw");
+        if (nativeBlock)
+            c.ValidateNativeNullableElements();
         w.Line(c.HashSetRefill
             ? "var hashSet = global::LuminPack.Code.LuminPackCollectionAccess.PrepareHashSetForRefill(value as " + set + ", length);"
             : "var hashSet = new " + set + "(length);");
-        if (c.NativeNullableElement && c.Supports("ReadNullableHashSetRaw") || !c.Counted && c.Supports("ReadRawHashSet"))
+        if (nativeBlock || !c.Counted && c.Supports("ReadRawHashSet"))
         {
             string method = c.NativeNullableElement ? "ReadNullableHashSetRaw" : "ReadRawHashSet";
             w.Line("global::LuminPack.Code.LuminPackMarshal." + method + "(ref operationState, hashSet, length);");
@@ -387,5 +394,5 @@ internal static class InterfaceOwnerFile
 
     /// <summary>Handles block for <c>InterfaceOwnerFile</c>.</summary>
     /// <param name="c">The case or formatter context in scope.</param>
-    private static void Block(EnumerableOwnerContext c) => c.ReadBlock("span");
+    private static void Block(EnumerableOwnerContext c) => c.ReadBlock("span", nativeValidated: c.NativeNullableElement);
 }

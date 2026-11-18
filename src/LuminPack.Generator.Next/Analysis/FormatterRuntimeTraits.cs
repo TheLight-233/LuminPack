@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using LuminPack.SourceGenerator.Next.Rendering.Formatters;
@@ -134,23 +135,28 @@ internal static class FormatterRuntimeTraits
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, span));
     }
 
-    /// <summary>Recognizes the Core operations for checked rectangular nullable storage blocks.</summary>
+    /// <summary>Recognizes the complete Core contract for nullable collection storage.</summary>
     /// <param name="compilation">The consuming compilation and its Core reference.</param>
     /// <returns>Whether the selected runtime exposes the complete block contract.</returns>
-    internal static bool HasNullableRectangleStorage(Compilation compilation)
+    internal static bool HasNullableCollectionStorage(Compilation compilation)
     {
         var operations = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackNullableRectangle");
         var layout = compilation.GetTypeByMetadataName("LuminPack.Utility.ILuminNullableStorageLayout");
         return operations is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } &&
             layout is { TypeKind: TypeKind.Interface, DeclaredAccessibility: Accessibility.Public } &&
-            Has("Write", 4) && Has("Validate", 5) && Has("Read", 4);
+            HasBlock("Write", 4) && HasBlock("Validate", 5) && HasBlock("Read", 4) &&
+            HasBlock("WriteCollection", 4) && HasBlock("ReadCollection", 4) &&
+            Methods("ValidateNative", 1, 2).Any() && Methods("ReadNative", 1, 2).Any();
 
-        bool Has(string name, int count) => operations!.GetMembers(name).OfType<IMethodSymbol>().Any(method =>
-            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 2, ReturnsVoid: true } &&
-            method.Parameters.Length == count && method.Parameters[0].RefKind == RefKind.Ref &&
-            method.TypeParameters[0].HasUnmanagedTypeConstraint && method.TypeParameters[1].HasValueTypeConstraint &&
+        bool HasBlock(string name, int count) => Methods(name, 2, count).Any(method =>
+            method.TypeParameters[1].HasValueTypeConstraint &&
             method.TypeParameters[1].ConstraintTypes.Length == 1 &&
             SymbolEqualityComparer.Default.Equals(method.TypeParameters[1].ConstraintTypes[0], layout));
+        IEnumerable<IMethodSymbol> Methods(string name, int arity, int count) =>
+            operations!.GetMembers(name).OfType<IMethodSymbol>().Where(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, ReturnsVoid: true } &&
+                method.Arity == arity && method.Parameters.Length == count && method.Parameters[0].RefKind == RefKind.Ref &&
+                method.TypeParameters[0].HasUnmanagedTypeConstraint);
     }
 
     /// <summary>Checks the referenced runtime for the present nullable native-payload reader.</summary>

@@ -97,11 +97,13 @@ internal static class QueueOwnerFile
         w.Blank();
         if (refill)
         {
+            if (c.NativeNullableElement)
+                c.ValidateNativeNullableElements();
             w.Line("var slots = global::LuminPack.Code.LuminPackCollectionAccess.PrepareQueueRefill(value, length);");
             w.Line("if (slots.Length == length)");
             w.Open();
             if (c.NativeNullableElement)
-                c.ReadBlock("slots");
+                c.ReadBlock("slots", nativeValidated: true);
             else
             {
                 w.Line("ref var firstSlot = ref " + c.Marshal + ".GetReference(slots);");

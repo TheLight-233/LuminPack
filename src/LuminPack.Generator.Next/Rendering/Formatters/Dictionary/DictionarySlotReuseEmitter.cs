@@ -56,7 +56,7 @@ internal static class DictionarySlotReuseEmitter
         w.Line("do");
         w.Open();
         w.Line(key.Type + " key = default;");
-        FormatterElementEmitter.Read(w, set, key, "key");
+        FormatterElementEmitter.ReadCollectionElement(w, set, key, "key");
         w.Line("if (seen is null && (!order.MoveNext() || !global::System.Collections.Generic.EqualityComparer<" + key.Type + ">.Default.Equals(order.Current.Key, key))) seen = RecordPrefix(destination, count, index);");
         w.Line("if (seen is not null) " + add + "(ref " + arrayReference + "(seen), (nint)(uint)index) = key;");
         w.Line("ref var slot = ref global::System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrNullRef(destination, key);");
@@ -65,7 +65,7 @@ internal static class DictionarySlotReuseEmitter
             UnionCases();
         else
         {
-            FormatterElementEmitter.Read(w, set, value, "slot");
+            FormatterElementEmitter.ReadCollectionElement(w, set, value, "slot");
             w.Line("continue;");
         }
 
@@ -159,7 +159,7 @@ internal static class DictionarySlotReuseEmitter
             w.Line(key.Type + " incoming = global::LuminPack.Core.LuminPackReader.Read<" + key.Type + ">(ref cursor);");
             w.Line("if (!global::System.Collections.Generic.EqualityComparer<" + key.Type + ">.Default.Equals(incoming, entry.Key)) break;");
             w.Line("reader.Cursor = ref " + add + "(ref cursor, keyWidth);");
-            FormatterElementEmitter.Read(w, set, value, "entry.Value");
+            FormatterElementEmitter.ReadCollectionElement(w, set, value, "entry.Value");
             w.Close();
             w.Line("while (++matched < count);");
             w.Close();
@@ -234,12 +234,12 @@ internal static class DictionarySlotReuseEmitter
             w.Line(key.Type + " key = default;");
             w.Line("if (index != parsed)");
             w.Open();
-            FormatterElementEmitter.Read(w, set, key, "key");
+            FormatterElementEmitter.ReadCollectionElement(w, set, key, "key");
             w.Close();
             w.Line("else");
             w.Indented(() => w.Line("key = " + add + "(ref firstSeen, (nint)(uint)index);"));
             w.Line(value.Type + " item = destination.TryGetValue(key, out var existing) ? existing : default!;");
-            FormatterElementEmitter.Read(w, set, value, "item");
+            FormatterElementEmitter.ReadCollectionElement(w, set, value, "item");
             w.Line(add + "(ref firstItem, (nint)(uint)index) = new " + pair + "(key, item);");
             w.Close();
             w.Line("while (++index < count);");

@@ -126,7 +126,7 @@ internal static partial class SerializerIssueRegression
         }
         byte[] vector = Bind<Func<int?[], byte[]>>(tagged, "WriteVector")([17, null, 0, -1]);
         RequireNullableWire(vector.Length == sizeof(int) + 4 * Unsafe.SizeOf<int?>() &&
-            BinaryPrimitives.ReadInt32LittleEndian(vector) == 4, "The existing rank-one nullable vector framing changed.");
+            BinaryPrimitives.ReadInt32LittleEndian(vector) == 4, "The single-model Tagged nullable vector gained extra framing.");
 
         int?[,,] cube = { { { null, 7, -1 } }, { { 8, null, 9 } } };
         foreach (Type writer in new[] { native, tagged })

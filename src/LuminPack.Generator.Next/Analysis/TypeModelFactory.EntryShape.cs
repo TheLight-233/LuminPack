@@ -41,15 +41,16 @@ internal static partial class TypeModelFactory
 
     private sealed partial class Session
     {
-        /// <summary>Resolves the declared storage strategy of a rectangular nullable array's payload.</summary>
+        /// <summary>Resolves the declared storage strategy of a collection's unmanaged payload.</summary>
         /// <param name="payload">The reference-free value wrapped by the nullable element.</param>
         /// <returns>The existing Tagged, Packed, or Native strategy value.</returns>
-        private int NullableRectangularStrategy(INamedTypeSymbol payload)
+        private int CollectionLayoutStrategy(INamedTypeSymbol payload)
         {
             if (ReadStructLayoutOption(payload.GetAttributes()) is int declared)
                 return declared;
             var assembly = payload.ContainingAssembly;
-            if (payload.SpecialType != SpecialType.None || FrameworkScalarBody.Contains(FormatterName(payload)))
+            if (payload.SpecialType != SpecialType.None || payload.TypeKind == TypeKind.Enum || IsValueTuple(payload) ||
+                FrameworkScalarBody.Contains(FormatterName(payload)))
                 assembly = _compilation.Assembly;
             return ReadStructLayoutOption(assembly.GetAttributes()) ?? 0;
         }

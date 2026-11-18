@@ -7,6 +7,62 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// <summary>Emits static element operations without specializing the containing collection for its element type.</summary>
 internal static class FormatterElementEmitter
 {
+    private const string NullableStorage = "global::LuminPack.Code.LuminPackNullableRectangle";
+
+    /// <summary>Writes a collection slot using its chosen native nullable or standalone element format.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="set">The shared formatter publication facts.</param>
+    /// <param name="model">The normalized element formatter.</param>
+    /// <param name="expression">The element value expression.</param>
+    /// <param name="state">The operation-state variable name.</param>
+    /// <param name="profile">The compiled profile type parameter name.</param>
+    /// <param name="checkBuffer">Whether the writer can still be beyond its growth threshold.</param>
+    internal static void WriteCollectionElement(CodeWriter w, SharedFormatterSet set, FormatterModel model, string expression,
+        string state = "writer", string profile = "TLuminProfile", bool checkBuffer = true)
+    {
+        if (!model.NativeNullableElement)
+        {
+            Write(w, set, model, expression, state, profile, checkBuffer);
+            return;
+        }
+
+        if (checkBuffer)
+            w.Line(state + ".CheckBuffer();");
+        w.Line(state + ".EnsureAdditionalCapacity(global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + model.Type + ">());");
+        w.Line(state + ".Advance(global::LuminPack.Core.LuminPackWriter.Write<" + model.Type + ">(ref " + state + ".Cursor, " + expression + "));");
+    }
+
+    /// <summary>Reads a collection slot using its chosen native nullable or standalone element format.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="set">The shared formatter publication facts.</param>
+    /// <param name="model">The normalized element formatter.</param>
+    /// <param name="expression">The addressable destination expression.</param>
+    /// <param name="state">The operation-state variable name.</param>
+    /// <param name="profile">The compiled profile type parameter name.</param>
+    /// <param name="fresh">Whether the destination is a newly initialized default local.</param>
+    internal static void ReadCollectionElement(CodeWriter w, SharedFormatterSet set, FormatterModel model, string expression,
+        string state = "reader", string profile = "TLuminProfile", bool fresh = false)
+    {
+        if (model.NativeNullableElement)
+            w.Line(NullableStorage + ".ReadNative<" + model.Arguments[0].Type + ">(ref " + state + ", ref " + expression + ");");
+        else
+            Read(w, set, model, expression, state, profile, fresh);
+    }
+
+    /// <summary>Validates the complete native nullable range before a direct collection transfer.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="model">The native nullable element contract.</param>
+    /// <param name="count">The validated element-count expression.</param>
+    /// <param name="state">The operation-state variable name.</param>
+    internal static void ValidateNativeNullableCollection(CodeWriter w, FormatterModel model, string count, string state) =>
+        w.Line(NullableStorage + ".ValidateNative<" + model.Arguments[0].Type + ">(ref " + state + ", " + count + ");");
+
+    /// <summary>Returns the width lower bound of an individually written collection slot.</summary>
+    /// <param name="model">The normalized element formatter.</param>
+    /// <returns>The minimum readable byte count per slot.</returns>
+    internal static string CollectionMinimum(FormatterModel model) => model.NativeNullableElement
+        ? "global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + model.Type + ">()" : Minimum(model);
+
     /// <summary>Finds the concrete fixed class body a contiguous array can write inside a proven window.</summary>
     /// <param name="set">The shared formatter facts and target.</param>
     /// <param name="model">The exact array element contract.</param>

@@ -49,10 +49,9 @@ internal static class ContiguousOwnerFile
         bool scalarElements = shape == ContiguousShape.ReadOnlySequence;
         // A sequence of reference-free elements writes its count first and copies each segment's storage, as the original did.
         bool rawSequence = scalarElements && element.RawCollection && element.Layout == null;
-        // A nullable raw scalar is stored natively too: the original contiguous writers copied the complete Nullable storage
-        // through the tagged block writer, which records the layout where models differ.
-        bool raw = (element.RawCollection || element.NativeNullableElement) && !scalarElements;
+        bool raw = element.RawCollection && !scalarElements;
         FormatterStorageModel? layout = scalarElements ? null : element.Layout;
+        NullableCollectionEmitter? nullableBlock = scalarElements ? null : NullableCollectionEmitter.For(element, "LuminRoots_" + suffix);
         string empty = reference ? "null" : "default";
         string absent = shape switch
         {
@@ -73,11 +72,13 @@ internal static class ContiguousOwnerFile
             (ContiguousShape.Memory or ContiguousShape.ReadOnlyMemory or ContiguousShape.ArraySegment);
         return SpecialOwnerFile.Render(set, operations, suffix, model.Type, reference, BinaryWrite, BinaryRead, JsonWrite, JsonRead, w =>
         {
-            if (layout != null)
+            if (nullableBlock != null)
+                nullableBlock.Support(w, (operations & GeneratedOperations.BinaryRead) != 0);
+            else if (layout != null)
                 FormatterStorageEmitter.Support(w, layout);
         }, compressedEntries: shape is ContiguousShape.Array or ContiguousShape.List, outlineJson: true,
-            outlineBinaryWrite: scalarElements || (!raw && layout == null && element.Type != "string"),
-            outlineBinaryRead: !raw && !rawSequence && layout == null && element.Type != "string",
+            outlineBinaryWrite: scalarElements || (!raw && layout == null && nullableBlock == null && element.Type != "string"),
+            outlineBinaryRead: !raw && !rawSequence && layout == null && nullableBlock == null && element.Type != "string",
             binaryWriteEntries: measure ? MeasureRecord : null,
             jsonWriteRun: !scalarElements && JsonIntegerRunWriter.Supports(set, model.Type, element.Type), optimizedRoots: true,
             tierBinaryWrite: fixedObject == null && BinaryTraversalTiering.PreferPgo(element.Type, element));
@@ -141,7 +142,7 @@ internal static class ContiguousOwnerFile
                     w.Open();
                     w.Line("var item = current;");
                     w.Line("count++;");
-                    FormatterElementEmitter.Write(w, set, element, "item");
+                    FormatterElementEmitter.WriteCollectionElement(w, set, element, "item");
                     w.Line("if (--length == 0) break;");
                     w.Line("current = ref " + Unsafe + ".Add(ref current, 1);");
                     w.Close();
@@ -157,13 +158,13 @@ internal static class ContiguousOwnerFile
             w.Line("global::System.ReadOnlySpan<" + element.Type + "> items = " + span + ";");
             if (raw)
             {
-                if (element.RawCollection && element.Definition != GenericIdentity.Nullable)
-                    w.Line("writer.Write<" + element.Type + ">(items, items.Length);");
-                else
-                {
-                    w.Line("int bytes = global::LuminPack.Core.LuminPackWriter.Size<" + element.Type + ">(items.Length, true, false);");
-                    w.Line("writer.AdvanceSafe(global::LuminPack.Core.LuminPackWriter.Write<" + element.Type + ">(writer.Reserve(writer.Position, bytes), items, items.Length, true, false));");
-                }
+                w.Line("writer.Write<" + element.Type + ">(items, items.Length);");
+                return;
+            }
+            if (nullableBlock != null)
+            {
+                nullableBlock.WriteCollection(w, "writer", "items");
+                w.Line("writer.CheckBuffer();");
                 return;
             }
 
@@ -349,7 +350,9 @@ internal static class ContiguousOwnerFile
                 w.Line("value = new " + model.Type + "(array);");
                 return;
             }
-            string minimum = raw ? Unsafe + ".SizeOf<" + element.Type + ">()" : layout != null ? "0" : FormatterElementEmitter.Minimum(element);
+            string minimum = raw || scalarElements && element.NativeNullableElement
+                ? Unsafe + ".SizeOf<" + element.Type + ">()"
+                : layout != null || nullableBlock != null ? "0" : FormatterElementEmitter.Minimum(element);
             if (shape == ContiguousShape.List && freshUnion != null)
             {
                 // The original fresh Union loop: a new list reads into its fresh storage array and expands the dispatch per element.
@@ -386,7 +389,9 @@ internal static class ContiguousOwnerFile
             w.Line("value = " + empty + ";");
             w.Line("return;");
             w.Close();
-            if (layout != null)
+            if (nullableBlock != null)
+                nullableBlock.Validate(w, "reader", "length");
+            else if (layout != null)
                 FormatterStorageEmitter.Validate(w, layout, "length");
             bool directRawSlice = raw && element.Type != "bool" &&
                 shape is ContiguousShape.Memory or ContiguousShape.ArraySegment;
@@ -403,6 +408,8 @@ internal static class ContiguousOwnerFile
                 if (element.Type == "bool")
                     w.Line("global::LuminPack.Security.LuminPackInputPolicy.CheckBooleans(items);");
             }
+            else if (nullableBlock != null)
+                nullableBlock.ReadCollection(w, "reader", "items");
             else if (layout != null)
                 FormatterStorageEmitter.Payload(w, layout, MemoryMarshal + ".GetReference(items)", "length", false);
             else if (element.Type == "string")
@@ -718,7 +725,7 @@ internal static class ContiguousOwnerFile
             {
                 // These backing arrays are fresh, so ordinary object slots already hold the null seed.
                 bool fresh = shape is ContiguousShape.ReadOnlyMemory or ContiguousShape.ReadOnlySequence or ContiguousShape.ImmutableArray;
-                FormatterElementEmitter.Read(w, set, element, slot, readLocal ? "loopReader" : "reader", fresh: fresh);
+                FormatterElementEmitter.ReadCollectionElement(w, set, element, slot, readLocal ? "loopReader" : "reader", fresh: fresh);
             }
             w.Close();
             w.Line("while (++index < length);");

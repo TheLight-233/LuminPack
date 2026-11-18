@@ -113,11 +113,14 @@ internal static class HashSetOwnerFile
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
+        bool nativeBlock = c.NativeNullableElement && c.Supports("ReadNullableHashSetRaw");
+        if (nativeBlock)
+            c.ValidateNativeNullableElements();
         w.Line(c.HashSetRefill
             ? "value = global::LuminPack.Code.LuminPackCollectionAccess.PrepareHashSetForRefill(value, length);"
             : "value = new " + c.Sequence + "(length);");
         w.Blank();
-        if (c.NativeNullableElement && c.Supports("ReadNullableHashSetRaw") || !c.Counted && c.Supports("ReadRawHashSet"))
+        if (nativeBlock || !c.Counted && c.Supports("ReadRawHashSet"))
         {
             string method = c.NativeNullableElement ? "ReadNullableHashSetRaw" : "ReadRawHashSet";
             w.Line("global::LuminPack.Code.LuminPackMarshal." + method + "(ref operationState, value, length);");
