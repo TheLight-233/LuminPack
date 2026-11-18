@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
 using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Core;
@@ -658,6 +659,93 @@ LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Equal(15, target.Items[1]!.Number);
         Assert.Equal(25, target.Array[1]!.Number);
     }
+
+#if LUMINPACK_NEXT_GENERATOR
+    /// <summary>Checks Boolean storage across vector lanes and the tail before writing a reused array.</summary>
+    /// <param name="index">The element holding the malformed flag.</param>
+    /// <param name="flagOffset">The byte offset of the presence or Boolean flag in its element.</param>
+    [Theory]
+    [InlineData(7, 0)]
+    [InlineData(8, 1)]
+    [InlineData(15, 0)]
+    [InlineData(16, 1)]
+    [InlineData(31, 0)]
+    [InlineData(32, 1)]
+    [InlineData(63, 0)]
+    [InlineData(64, 1)]
+    [InlineData(127, 0)]
+    [InlineData(128, 1)]
+    [InlineData(130, 0)]
+    [InlineData(130, 1)]
+    public void NullableBooleanArrayRejectsInvalidPayload(int index, int flagOffset)
+    {
+        const int headerWidth = sizeof(int);
+        const int elementWidth = 2;
+        const int count = 131;
+        var source = new bool?[count];
+        var alias = new bool?[count];
+        for (int i = 0; i < count; i++)
+        {
+            source[i] = i % 3 == 0 ? null : i % 3 == 2;
+            alias[i] = true;
+        }
+        byte[] wire = LuminPackSerializer.Serialize(source);
+        Assert.Equal(headerWidth + count * elementWidth, wire.Length);
+        int offset = headerWidth + index * elementWidth + flagOffset;
+        byte flag = wire[offset];
+        wire[offset] = 0x80;
+        bool?[]? target = alias;
+        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(wire, ref target));
+        Assert.Same(alias, target);
+        Assert.All(alias, item => Assert.True(item));
+
+        wire[offset] = flag;
+        Assert.Equal(wire.Length, LuminPackSerializer.Deserialize(wire, ref target));
+        Assert.Same(alias, target);
+        Assert.Equal(source, alias);
+    }
+
+    /// <summary>Checks presence flags and allows nonzero padding across a Tagged nullable Int64 block.</summary>
+    /// <param name="index">The element holding the malformed presence flag.</param>
+    [Theory]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(15)]
+    [InlineData(16)]
+    [InlineData(18)]
+    public void NullableLongArrayIgnoresNonzeroPadding(int index)
+    {
+        const int headerWidth = sizeof(int) + 1;
+        const int count = 19;
+        int elementWidth = Unsafe.SizeOf<long?>();
+        var source = new long?[count];
+        var alias = new long?[count];
+        for (int i = 0; i < count; i++)
+        {
+            source[i] = i % 3 == 0 ? null : i + 100;
+            alias[i] = -77;
+        }
+        byte[] wire = LuminPackSerializer.Serialize(source);
+        Assert.Equal(headerWidth + count * elementWidth, wire.Length);
+        for (int i = 0; i < count; i++)
+            wire.AsSpan(headerWidth + i * elementWidth + 1, elementWidth - sizeof(long) - 1).Fill(0xE5);
+
+        int offset = headerWidth + index * elementWidth;
+        byte flag = wire[offset];
+        wire[offset] = 2;
+        long?[]? target = alias;
+        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(wire, ref target));
+        Assert.Same(alias, target);
+        Assert.All(alias, item => Assert.Equal<long?>(-77, item));
+
+        wire[offset] = flag;
+        Assert.Equal(wire.Length, LuminPackSerializer.Deserialize(wire, ref target));
+        Assert.Same(alias, target);
+        Assert.Equal(source, alias);
+    }
+#endif
 
     /// <summary>Checks root container and explicit formatter members clear incoming null objects.</summary>
     [Fact]

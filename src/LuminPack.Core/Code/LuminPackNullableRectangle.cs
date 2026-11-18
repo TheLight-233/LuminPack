@@ -285,44 +285,92 @@ public static class LuminPackNullableRectangle
         if ((uint)presence >= (uint)stride || boolean >= stride)
             LuminPackExceptionHelper.ThrowInvalidDataException("Invalid nullable storage offsets.");
 
-        int offset = 0;
-        if (IntPtr.Size == 8 && BitConverter.IsLittleEndian && stride is 2 or 4 or 8)
+        if (count == 1)
         {
-            ulong flags = 0xFEUL << (presence * 8);
-            if (boolean >= 0)
-                flags |= 0xFEUL << (boolean * 8);
-            if (stride == 2)
-                flags |= flags << 16;
-            if (stride != 8)
-                flags |= flags << 32;
+            if (Unsafe.Add(ref source, presence) > 1 || boolean >= 0 && Unsafe.Add(ref source, boolean) > 1)
+                goto InvalidStorage;
+            return;
+        }
+
+        int offset = 0;
+        if (IntPtr.Size == 8 && BitConverter.IsLittleEndian && stride is 2 or 4 or 8 or 16)
+        {
+            ulong low = presence < 8 ? 0xFEUL << (presence * 8) : 0;
+            ulong high = presence >= 8 ? 0xFEUL << ((presence - 8) * 8) : 0;
+            if (boolean >= 8)
+                high |= 0xFEUL << ((boolean - 8) * 8);
+            else if (boolean >= 0)
+                low |= 0xFEUL << (boolean * 8);
+            if (stride != 16)
+            {
+                if (stride == 2)
+                    low |= low << 16;
+                if (stride != 8)
+                    low |= low << 32;
+                high = low;
+            }
+
+            // Each vector contains complete periods. Padding and arbitrary payload bytes are masked out.
+            var period = Vector128.Create(low, high);
 
             if (Avx512F.IsSupported && Vector512.IsHardwareAccelerated)
             {
-                var mask = Vector512.Create(flags);
+                var mask = Vector512.Create(Vector256.Create(period, period), Vector256.Create(period, period));
+                for (; offset <= bytes - 256; offset += 256)
+                {
+                    ref byte start = ref Unsafe.Add(ref source, offset);
+                    var group = Vector512.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref start)) |
+                        Vector512.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref start, 64))) |
+                        Vector512.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref start, 128))) |
+                        Vector512.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref start, 192)));
+                    if (!Vector512.EqualsAll(group & mask, Vector512<ulong>.Zero))
+                        goto InvalidStorage;
+                }
                 for (; offset <= bytes - 64; offset += 64)
                     if (!Vector512.EqualsAll(Vector512.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref source, offset))) & mask,
                             Vector512<ulong>.Zero))
-                        InvalidBooleanStorage();
+                        goto InvalidStorage;
             }
             if (Avx2.IsSupported)
             {
-                var mask = Vector256.Create(flags);
+                var mask = Vector256.Create(period, period);
+                for (; offset <= bytes - 128; offset += 128)
+                {
+                    ref byte start = ref Unsafe.Add(ref source, offset);
+                    var group = Vector256.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref start)) |
+                        Vector256.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref start, 32))) |
+                        Vector256.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref start, 64))) |
+                        Vector256.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref start, 96)));
+                    if (!Vector256.EqualsAll(group & mask, Vector256<ulong>.Zero))
+                        goto InvalidStorage;
+                }
                 for (; offset <= bytes - 32; offset += 32)
                     if (!Vector256.EqualsAll(Vector256.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref source, offset))) & mask,
                             Vector256<ulong>.Zero))
-                        InvalidBooleanStorage();
+                        goto InvalidStorage;
             }
             if (Vector128.IsHardwareAccelerated)
             {
-                var mask = Vector128.Create(flags);
+                var mask = period;
+                for (; offset <= bytes - 64; offset += 64)
+                {
+                    ref byte start = ref Unsafe.Add(ref source, offset);
+                    var group = Vector128.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref start)) |
+                        Vector128.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref start, 16))) |
+                        Vector128.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref start, 32))) |
+                        Vector128.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref start, 48)));
+                    if (!Vector128.EqualsAll(group & mask, Vector128<ulong>.Zero))
+                        goto InvalidStorage;
+                }
                 for (; offset <= bytes - 16; offset += 16)
                     if (!Vector128.EqualsAll(Vector128.LoadUnsafe(ref Unsafe.As<byte, ulong>(ref Unsafe.Add(ref source, offset))) & mask,
                             Vector128<ulong>.Zero))
-                        InvalidBooleanStorage();
+                        goto InvalidStorage;
             }
-            for (; offset <= bytes - sizeof(ulong); offset += sizeof(ulong))
-                if ((Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, offset)) & flags) != 0)
-                    InvalidBooleanStorage();
+            if (stride != 16)
+                for (; offset <= bytes - sizeof(ulong); offset += sizeof(ulong))
+                    if ((Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, offset)) & low) != 0)
+                        goto InvalidStorage;
         }
 
         int remaining = count - offset / stride;
@@ -330,9 +378,13 @@ public static class LuminPackNullableRectangle
         for (; remaining > 0; remaining--)
         {
             if (Unsafe.Add(ref current, presence) > 1 || boolean >= 0 && Unsafe.Add(ref current, boolean) > 1)
-                InvalidBooleanStorage();
+                goto InvalidStorage;
             current = ref Unsafe.Add(ref current, stride);
         }
+        return;
+
+    InvalidStorage:
+        InvalidBooleanStorage();
     }
 
     /// <summary>Reports an invalid managed Boolean value in a nullable block.</summary>
