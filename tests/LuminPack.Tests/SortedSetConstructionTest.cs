@@ -57,6 +57,14 @@ public sealed class SortedSetConstructionTest
         }
     }
 
+    /// <summary>Verifies string node colors and mutations across the typed construction limit.</summary>
+    [Fact]
+    public void StringTreesMatchAtTheConstructionLimit()
+    {
+        foreach (int count in new[] { 511, 512, 1024, 2048, 4095, 4096, 4097 })
+            Check(Enumerable.Range(0, count).Select(index => index.ToString("D5", CultureInfo.InvariantCulture)).ToArray());
+    }
+
     /// <summary>Preserves public sorting and duplicate selection when the ascending proof declines.</summary>
     [Fact]
     public void UnorderedDuplicateAndSpecialValuesKeepPublicConstruction()
