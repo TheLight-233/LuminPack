@@ -16,7 +16,7 @@ public static partial class LuminPackMarshal
     /// The caller supplies valid ranges; this method does not perform bounds checks or provide
     /// memmove, atomic or volatile semantics. Managed references stay tracked. On modern 64-bit
     /// SIMD targets, blocks through 32 bytes use bounded cached accesses. Reused blocks from 256 bytes
-    /// through 32 KiB use destination-aligned 256-bit stores, and from 128 bytes on Intel processors
+    /// through 32 KiB use destination-aligned 256-bit stores, and from 128 bytes on Intel and AMD family 1Ah processors
     /// with accelerated 512-bit vectors, destination-aligned 512-bit stores (see <see cref="LuminKernelPolicy"/>
     /// for the measurements behind both ranges). Other lengths, older targets,
     /// 32-bit targets and unsupported hardware retain <c>Unsafe.CopyBlockUnaligned</c>.
@@ -119,17 +119,24 @@ public static partial class LuminPackMarshal
     private static class WideCopyHardware
     {
         /// <summary>Whether this processor uses the 512-bit medium schedule.</summary>
-        internal static readonly bool Preferred = Vector512.IsHardwareAccelerated && IsGenuineIntel();
+        internal static readonly bool Preferred = Vector512.IsHardwareAccelerated && PrefersWideStores();
 
-        /// <summary>Reads the CPUID vendor string.</summary>
-        /// <returns>Whether the vendor is GenuineIntel.</returns>
-        private static bool IsGenuineIntel()
+        /// <summary>Reads the CPUID vendor and AMD display family.</summary>
+        /// <returns>Whether the processor belongs to a measured wide-copy family.</returns>
+        private static bool PrefersWideStores()
         {
             if (!X86Base.IsSupported)
                 return false;
-            (_, int ebx, int ecx, int edx) = X86Base.CpuId(0, 0);
+            (int maxLeaf, int ebx, int ecx, int edx) = X86Base.CpuId(0, 0);
             // "Genu" "ineI" "ntel" in EBX, EDX, ECX.
-            return ebx == 0x756E6547 && edx == 0x49656E69 && ecx == 0x6C65746E;
+            if (ebx == 0x756E6547 && edx == 0x49656E69 && ecx == 0x6C65746E)
+                return true;
+
+            // "Auth" "enti" "cAMD" in EBX, EDX, ECX. Only family 0Fh uses the extended family bits.
+            if (maxLeaf < 1 || ebx != 0x68747541 || edx != 0x69746E65 || ecx != 0x444D4163)
+                return false;
+            int signature = X86Base.CpuId(1, 0).Eax;
+            return ((signature >> 8) & 0xF) == 0xF && ((signature >> 20) & 0xFF) == 0x1A - 0xF;
         }
     }
 

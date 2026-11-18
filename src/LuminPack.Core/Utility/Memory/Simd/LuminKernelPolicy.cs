@@ -39,6 +39,8 @@ namespace LuminPack.Code
         //                  512-bit      0.81    0.65    0.48    0.57    0.86    0.93
         //   EPYC 9V74      256-bit      0.82    0.73    0.59    0.79    0.77    0.78
         //                  512-bit      1.00    0.88    0.70    0.87    0.89    0.89
+        //   EPYC 9V45      256-bit      0.71    0.59    0.59    0.72    0.95    1.29   (run 44213256237, attempt 2, slot 2)
+        //                  512-bit      0.75    0.58    0.49    0.55    0.87    0.99
         //   EPYC 7763      256-bit      0.78    0.62    0.59    0.59    0.83    0.64
         //   i7-8700B       256-bit      0.60    0.73    0.69    0.70    0.60    0.63
         //   i7-13650HX     256-bit      1.05    0.66    0.65    0.78    0.92    0.98   (local Windows run, same probe)
@@ -77,7 +79,9 @@ namespace LuminPack.Code
         /// Evidence (same CI run, matrix raw-collection rows, 512-bit build / 256-bit build, fastest round, median of three
         /// processes): on the Xeon 6975P-C, reuse took 0.92 at 1 KiB, 0.87 at 4 KiB and 0.91 at 16 KiB, and writes 0.98 at
         /// 1 KiB, 1.02 at 4 KiB and 1.04 at 16 KiB. On the EPYC 9V74 (Zen 4, 512-bit operations split into two 256-bit halves)
-        /// reuse took 1.04 at 1 KiB and 4 KiB, so AMD processors keep the 256-bit schedule. Zen 5 was not sampled.
+        /// reuse took 1.04 at 1 KiB and 4 KiB, so family 19h keeps the 256-bit schedule. On two EPYC 9V45 runners (family 1Ah)
+        /// the wide kernel took 0.76 to 0.77 of stock for 1 KiB memory reuse and 0.81 to 0.82 at 4 KiB. At 16 KiB
+        /// the runtime copy won the array comparison, but wide stores still took only 0.65 of stock on both hosts.
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool UseWideCopy(bool is64Bit, bool preferWide, uint count)
