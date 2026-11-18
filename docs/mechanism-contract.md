@@ -168,6 +168,7 @@ The history of individual approvals lives in Git. When this document, the code a
 - **Packed priority queue reads**. The checked packed heap reader can validate and copy eight signed 32-bit priorities at a time with AVX2. It resumes four-wide or scalar checking at the first group that needs it. Non-heap input still takes the ordinary enqueue suffix.
 - **Tiering of shared formatter roots**. On .NET 8 and later outside Unity, shared traversal roots retain the first-compilation optimization policy when the sharing pass outlines them. Loop-free roots keep their established inlining hints.
 - **Medium UTF-16 record writes**. On accelerated 64-bit targets, complete binary UTF-16 length records of 17 to 32 characters can use the bounded 256-bit record kernel already used by contiguous runs. Both compact Latin-1 and raw UTF-16 preserve their original layouts.
+- **Binary interface collection staging**. Exact framework wrappers can expose validated backing storage to the existing contiguous writers. A framework grouping may lease a temporary array for `ICollection<T>.CopyTo` and write the checked element span in enumeration order. Unknown implementations keep the public enumeration and its publication semantics.
 
 ### Options and generation
 

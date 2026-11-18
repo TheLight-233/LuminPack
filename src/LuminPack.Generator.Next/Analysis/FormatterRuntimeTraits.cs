@@ -62,6 +62,44 @@ internal static class FormatterRuntimeTraits
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, sequence.Construct(method.TypeParameters[0])));
     }
 
+    /// <summary>Proves the Core staging lease and prefix release APIs are available in the consumer.</summary>
+    /// <param name="compilation">The referenced runtime metadata.</param>
+    /// <returns>Whether the generated lease can use Core-owned staging.</returns>
+    internal static bool HasStaging(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminStaging`1");
+        if (owner is not { IsStatic: true, DeclaredAccessibility: Accessibility.Public })
+            return false;
+        var element = owner.TypeParameters[0];
+        var array = compilation.CreateArrayTypeSymbol(element);
+        return owner.GetMembers("Rent").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 0, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+            SymbolEqualityComparer.Default.Equals(method.ReturnType, array) && method.Parameters.Length == 1 && IsCount(method.Parameters[0])) &&
+            owner.GetMembers("Return").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 0, ReturnsVoid: true } &&
+                method.Parameters.Length == 2 && method.Parameters[0].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, array) && IsCount(method.Parameters[1]));
+
+        static bool IsCount(IParameterSymbol parameter) => parameter.RefKind == RefKind.None && parameter.Type.SpecialType == SpecialType.System_Int32;
+    }
+
+    /// <summary>Checks the framework grouping copy source's exact public signature.</summary>
+    /// <param name="compilation">The referenced runtime and framework metadata.</param>
+    /// <param name="grouping">The closed grouping being projected.</param>
+    /// <returns>Whether the optional grouping optimization is callable.</returns>
+    internal static bool HasFrameworkGroupingCopy(Compilation compilation, INamedTypeSymbol grouping)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var collection = compilation.GetTypeByMetadataName("System.Collections.Generic.ICollection`1");
+        return access is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } && collection != null &&
+            access.GetMembers("GetFrameworkGroupingCopySource").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 2, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type,
+                    grouping.OriginalDefinition.Construct(method.TypeParameters[0], method.TypeParameters[1])) &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, collection.Construct(method.TypeParameters[1])));
+    }
+
     /// <summary>Checks the optional owning reader for an exact scalar sorted list.</summary>
     /// <param name="compilation">The referenced framework and Core metadata.</param>
     /// <param name="list">The selected exact framework list.</param>
@@ -372,6 +410,15 @@ internal static class FormatterRuntimeTraits
         var sequence = compilation.GetTypeByMetadataName("System.Collections.Immutable." + name + "`1");
         return span is not null && sequence is not null && compilation.GetTypeByMetadataName("System.Collections.Immutable." + name)?.GetMembers("Create").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 1 && method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 1 && method.TypeParameters[0].ConstraintTypes.IsEmpty && !method.TypeParameters[0].HasReferenceTypeConstraint && !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint && !method.TypeParameters[0].HasConstructorConstraint && !method.TypeParameters[0].HasNotNullConstraint && method.Parameters[0].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, span.Construct(method.TypeParameters[0])) && SymbolEqualityComparer.Default.Equals(method.ReturnType, sequence.Construct(method.TypeParameters[0]))) == true;
     }
+
+    /// <summary>Checks whether a consumer may initialize the mutable memory layout before JIT compilation.</summary>
+    /// <param name="compilation">The consumer's actual runtime and framework metadata.</param>
+    /// <returns>Whether the required initializer attribute and runtime method are available.</returns>
+    internal static bool HasMemoryStorageInitializer(Compilation compilation) =>
+        compilation.GetTypeByMetadataName("System.Runtime.CompilerServices.ModuleInitializerAttribute") is { DeclaredAccessibility: Accessibility.Public } &&
+        compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackMarshal")?.GetMembers("InitializeMemoryStorage")
+            .OfType<IMethodSymbol>().Any(method => method is { IsStatic: true, Arity: 0, DeclaredAccessibility: Accessibility.Public, ReturnsVoid: true } &&
+                method.Parameters.Length == 0) == true;
 
     /// <summary>Checks the exact optional portable bit-storage writer signature.</summary>
     /// <param name = "compilation">The consumer's referenced runtime metadata.</param>

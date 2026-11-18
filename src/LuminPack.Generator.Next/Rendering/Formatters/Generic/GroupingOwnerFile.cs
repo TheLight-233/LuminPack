@@ -35,7 +35,9 @@ internal static class GroupingOwnerFile
         string ownedLookup = "global::LuminPack.Utility.LuminPackLookup<" + key + ", " + element + ">";
         if (definition == GenericIdentity.Grouping)
         {
-            bool canReadJsonStringChoice = set.FindFormatter(declared)?.Supports("CanReadJsonStringChoice") == true;
+            var contract = set.FindFormatter(declared);
+            bool canReadJsonStringChoice = contract?.Supports("CanReadJsonStringChoice") == true;
+            bool capture = contract?.Supports("CopyFrameworkGrouping") == true;
             return SpecialOwnerFile.Render(set, operations, shortName, declared, true,
                 (w, c) =>
                 {
@@ -47,6 +49,8 @@ internal static class GroupingOwnerFile
                     w.Blank();
                     w.Line(key + " key = value.Key;");
                     FormatterElementEmitter.Write(w, set, set.FindFormatter(key) ?? new FormatterModel(key, FormatterDefinitions.Scalar, raw: GenericIdentity.IsRaw(key)), "key");
+                    if (capture && set.FindFormatter(element) is { } elementModel)
+                        WriteFrameworkGrouping(w, c, set, elementModel);
                     w.Line(Sequence(element) + " elements = value;");
                     w.Line(sequence + ".Write<" + c.Profile + ">(ref writer, in elements);");
                 },
@@ -130,6 +134,57 @@ internal static class GroupingOwnerFile
         }
 
         return LookupOwner(set, operations, shortName, declared, grouping, groupingOwner, ownedLookup, key, element);
+    }
+
+    /// <summary>Copies framework grouping elements once and writes their existing sequence representation.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The grouping's compiled writer profile.</param>
+    /// <param name="set">The published formatter contracts.</param>
+    /// <param name="element">The closed sequence element contract.</param>
+    private static void WriteFrameworkGrouping(CodeWriter w, SpecialOwnerContext context, SharedFormatterSet set, FormatterModel element)
+    {
+        string staging = "global::LuminPack.Utility.LuminStaging<" + element.Type + ">";
+        w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.GetFrameworkGroupingCopySource(value) is { } collection)");
+        w.Open();
+        w.Line("int count = collection.Count;");
+        w.Line("var captured = " + staging + ".Rent(count);");
+        w.Line("try");
+        w.Open();
+        w.Line("collection.CopyTo(captured, 0);");
+        w.Line("var items = new global::System.ReadOnlySpan<" + element.Type + ">(captured, 0, count);");
+        if (element.Type == "string")
+        {
+            w.Line("writer.EnsureAdditionalCapacity(sizeof(int));");
+            w.Line("writer.WriteCollectionHeader(count);");
+            w.Line("writer.WriteStrings<" + context.Profile + ">(items);");
+        }
+        else if (element.Raw && element.RawStorage && element.Layout == null)
+            w.Line("writer.Write<" + element.Type + ">(items, count);");
+        else if (element.NativeNullableElement)
+        {
+            const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
+            w.Line("int bytes = checked(count * " + unsafeType + ".SizeOf<" + element.Type + ">());");
+            w.Line("writer.EnsureAdditionalCapacity(checked(sizeof(int) + bytes));");
+            w.Line("writer.WriteCollectionHeader(count);");
+            w.Line("if (bytes != 0) writer.Write(ref " + unsafeType + ".As<" + element.Type + ", byte>(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(items)), bytes);");
+        }
+        else
+        {
+            w.Line("int header = writer.BeginCollection();");
+            w.Line("foreach (ref readonly var item in items)");
+            w.Open();
+            FormatterElementEmitter.Write(w, set, element, "item");
+            w.Close();
+            w.Line("writer.EndCollection(header, count);");
+        }
+        w.Line("writer.CheckBuffer();");
+        w.Close();
+        w.Line("finally");
+        w.Open();
+        w.Line(staging + ".Return(captured, count);");
+        w.Close();
+        w.Line("return;");
+        w.Close();
     }
 
     /// <summary>Handles lookup owner for <c>GroupingOwnerFile</c>.</summary>

@@ -117,7 +117,8 @@ internal readonly partial struct SharedFormatterSet
         if (model.Definition == GenericIdentity.Grouping)
             CollectFormatter(new FormatterModel(GroupingOwnerFile.Sequence(model.Arguments[1].Type), "System.Collections.Generic.IEnumerable", new[] { model.Arguments[1] }), formatters, payloads);
         if (model.Definition == GenericIdentity.Lookup)
-            CollectFormatter(new FormatterModel("global::System.Linq.IGrouping<" + model.Arguments[0].Type + ", " + model.Arguments[1].Type + ">", GenericIdentity.Grouping, model.Arguments), formatters, payloads);
+            CollectFormatter(new FormatterModel("global::System.Linq.IGrouping<" + model.Arguments[0].Type + ", " + model.Arguments[1].Type + ">",
+                GenericIdentity.Grouping, model.Arguments, capabilities: model.Capabilities), formatters, payloads);
         if (model.Definition is "System.Collections.ObjectModel.ReadOnlyDictionary" or "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary")
             CollectFormatter(new FormatterModel("global::System.Collections.Generic.Dictionary<" + model.Arguments[0].Type + ", " + model.Arguments[1].Type + ">", "System.Collections.Generic.Dictionary", model.Arguments), formatters, payloads);
     }

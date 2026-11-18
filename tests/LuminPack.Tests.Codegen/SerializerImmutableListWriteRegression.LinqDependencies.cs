@@ -1,6 +1,10 @@
+extern alias ModelBasedAnalyzer;
+
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 internal static partial class SerializerImmutableListWriteRegression
 {
@@ -16,7 +20,7 @@ internal static partial class SerializerImmutableListWriteRegression
             using LuminPack.Option;
             using LuminPack.Utility;
             [assembly:LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
-            [LuminPackable] public sealed class LinqEnvelope
+            [LuminPackable] public sealed partial class LinqEnvelope
             {
                 public IGrouping<string,int> Group;
                 public ILookup<string,int> Lookup;
@@ -28,6 +32,12 @@ internal static partial class SerializerImmutableListWriteRegression
                 {
                     Check<LuminPackUtf8LengthOptions>();Check<LuminPackUtf16LengthOptions>();
                     Check<LuminPackUtf8TokenOptions>();Check<LuminPackUtf16TokenOptions>();
+                    ILookup<int,int> onlyLookup=new[]{1,2,3,4}.ToLookup(x=>x%2);
+                    byte[] encoded=LuminPackSerializer.Serialize(onlyLookup);
+                    ILookup<int,int> decoded=null;
+                    LuminPackSerializer.Deserialize(encoded,ref decoded);
+                    if(decoded.Count!=2||!decoded[0].SequenceEqual(new[]{2,4})||!decoded[1].SequenceEqual(new[]{1,3}))
+                        throw new Exception("Lookup-only grouping capture changed element order.");
                 }
                 private static void Check<P>()where P:struct,ILuminPackOptions
                 {
@@ -59,8 +69,16 @@ internal static partial class SerializerImmutableListWriteRegression
             var compilation = CSharpCompilation.Create("LinqDependencies" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), parse, "Entry.cs")], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
-            Create(parse).RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+            var generated = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse)
+                .RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+            Require(generated.GetRunResult().GeneratedTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+                .Any(method => method.ParameterList.Parameters.Any(parameter => parameter.Type?.DescendantNodesAndSelf().OfType<GenericNameSyntax>()
+                    .Any(name => name.Identifier.ValueText == "IGrouping" && name.TypeArgumentList.Arguments.Count == 2 &&
+                        name.TypeArgumentList.Arguments.All(argument => argument is PredefinedTypeSyntax scalar && scalar.Keyword.IsKind(SyntaxKind.IntKeyword))) == true) &&
+                    method.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call => call.Expression is MemberAccessExpressionSyntax access &&
+                        access.Name.Identifier.ValueText == "GetFrameworkGroupingCopySource")),
+                "The implicitly published lookup grouping did not retain its framework copy capability.");
             using var image = new MemoryStream();
             var emitted = output.Emit(image);
             Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));

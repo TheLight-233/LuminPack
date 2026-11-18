@@ -103,6 +103,8 @@ internal static class FormatterCapabilities
         if (definition is "System.Collections.Generic.List" or "System.Memory" or "System.ReadOnlyMemory" or
             "System.ArraySegment" or "System.Buffers.ReadOnlySequence")
             ContiguousCapabilities(compilation, named.TypeArguments[0], result);
+        if (definition == "System.Memory" && modern && !unity && FormatterRuntimeTraits.HasMemoryStorageInitializer(compilation))
+            result.Add("InitializeMemoryStorage");
         if (definition == "System.Buffers.ReadOnlySequence" && named.TypeArguments[0].SpecialType == SpecialType.System_String &&
             FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteCheckedStrings", named.TypeArguments[0]))
             result.Add("WriteCheckedStringSpan");
@@ -237,11 +239,21 @@ internal static class FormatterCapabilities
                     result.Add("WriteInterfaceStrings");
                 if (FormatterRuntimeTraits.HasStringSpanReader(compilation, element))
                     result.Add("ReadInterfaceStrings");
+                if (FormatterRuntimeTraits.HasWrappedStringWriter(compilation))
+                    result.Add("WriteWrappedStrings");
             }
+            if (FormatterRuntimeTraits.HasSequenceStorage(compilation))
+                result.Add("InterfaceWrapperStorage");
             bool ordinary = element is INamedTypeSymbol { TypeKind: TypeKind.Class } payload && payload.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackableAttribute" && (attribute.ConstructorArguments.Length == 0 || Convert.ToInt32(attribute.ConstructorArguments[0].Value, System.Globalization.CultureInfo.InvariantCulture) == 0)) && !payload.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackUnionAttribute");
             if (element.SpecialType == SpecialType.System_String || element.IsUnmanagedType && (element.SpecialType != SpecialType.None || Rendering.Formatters.FrameworkScalarBody.Contains(element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))) || ordinary)
                 result.Add("InterfaceTargetReuse");
         }
+        if (definition is "System.Linq.IGrouping" or "System.Linq.ILookup" && FormatterRuntimeTraits.HasStaging(compilation) &&
+            compilation.GetTypeByMetadataName("System.Linq.IGrouping`2") is { } grouping &&
+            FormatterRuntimeTraits.HasFrameworkGroupingCopy(compilation, grouping) &&
+            (named.TypeArguments[1].SpecialType != SpecialType.System_String ||
+                FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteStrings", named.TypeArguments[1])))
+            result.Add("CopyFrameworkGrouping");
 
         if (definition == "System.Collections.Generic.HashSet")
         {

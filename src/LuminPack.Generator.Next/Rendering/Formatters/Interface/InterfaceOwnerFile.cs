@@ -69,10 +69,12 @@ internal static class InterfaceOwnerFile
         bool frozenSet = setInterface && c.Supports("FrozenSetInterfaceTraversal");
         const string immutable = "global::System.Collections.Immutable.";
         var immutableSets = new[] { "ImmutableHashSet", "ImmutableSortedSet" };
-        bool outlineFallback = c.Counted || setInterface;
         bool stringSpan = !setInterface && c.Text && c.Supports("WriteInterfaceStrings");
         var reservedElement = setInterface ? null : c.ReservableListElement();
         bool rawSpan = !setInterface && (!c.Counted || c.NativeNullableElement);
+        bool wrappedRaw = rawSpan && c.Supports("InterfaceWrapperStorage");
+        bool wrappedText = c.Text && !setInterface && c.Supports("WriteWrappedStrings");
+        bool outlineFallback = c.Counted || setInterface || wrappedRaw;
         const string collections = "global::System.Collections.Generic.";
         string[] concreteSequences = c.Sequence.StartsWith(collections + "IEnumerable<", System.StringComparison.Ordinal) ||
             c.Sequence.StartsWith(collections + "IReadOnlyCollection<", System.StringComparison.Ordinal)
@@ -231,12 +233,40 @@ internal static class InterfaceOwnerFile
             w.Line(w.MethodImpl("NoInlining"));
             w.Line("static void " + method + "(scoped ref " + writer + " operationState, " + input + " items)");
             w.Open();
+            if (method == "WriteInterface")
+            {
+                if (wrappedText)
+                {
+                    w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteWrappedStrings<TLuminProfile>(ref operationState, items))");
+                    w.Indented(() => w.Line("return;"));
+                }
+                if (wrappedRaw)
+                    WriteWrappedRaw();
+            }
             if (setFamily != null)
                 WriteSetRun(setFamily);
             c.CountedWrite("items", outlineText: c.Text && (!setInterface || method == "WriteInterface" ||
                 setFamily is "ImmutableHashSet" or "ImmutableSortedSet"));
             w.Close();
             w.Blank();
+        }
+
+        void WriteWrappedRaw()
+        {
+            w.Line("var storage = global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage(items);");
+            w.Line("if (storage is not null)");
+            w.Open();
+            w.Line("global::System.ReadOnlySpan<" + scalar + "> backing = storage is " + type + " list");
+            w.Line("    ? global::LuminPack.Code.LuminPackMarshal.GetListSpan(list) : (" + arrayType + ")storage;");
+            if (c.NativeNullableElement)
+                c.WriteNativeNullableSpan("backing");
+            else
+            {
+                w.Line("operationState.Write<" + scalar + ">(backing, backing.Length);");
+                w.Line("operationState.CheckBuffer();");
+            }
+            w.Line("return;");
+            w.Close();
         }
 
         void WriteSetRun(string family)

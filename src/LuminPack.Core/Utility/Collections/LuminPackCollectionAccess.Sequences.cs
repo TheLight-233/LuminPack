@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace LuminPack.Code;
@@ -53,6 +54,34 @@ public static partial class LuminPackCollectionAccess
     public static object? GetGroupingStorage<TKey, TElement>(IGrouping<TKey, TElement> source)
         => source is global::LuminPack.Utility.LuminPackGrouping<TKey, TElement> grouping
             ? GetSequenceStorage(grouping.Elements) : null;
+
+    /// <summary>Finds an immutable grouping whose framework copy preserves its enumeration and owns no user callbacks.</summary>
+    /// <typeparam name="TKey">The grouping key type.</typeparam>
+    /// <typeparam name="TElement">The grouping element type.</typeparam>
+    /// <param name="source">The non-null grouping to inspect.</param>
+    /// <returns>The trusted copy source, or null when enumeration owns the contract.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static ICollection<TElement>? GetFrameworkGroupingCopySource<TKey, TElement>(IGrouping<TKey, TElement> source)
+    {
+        if (source is not ICollection<TElement> collection)
+            return null;
+        var type = source.GetType();
+        return type.IsGenericType && type.GetGenericTypeDefinition() == FrameworkGrouping.Definition ? collection : null;
+    }
+
+    /// <summary>Discovers the grouping definition from the public LINQ operation on the current runtime.</summary>
+    private static class FrameworkGrouping
+    {
+        internal static readonly Type? Definition = Find();
+
+        /// <summary>Returns the immutable framework implementation's generic identity when available.</summary>
+        /// <returns>The grouping definition, or null if the framework uses a different non-generic implementation.</returns>
+        private static Type? Find()
+        {
+            var sample = new byte[1].ToLookup(static value => value)[0].GetType();
+            return sample.IsGenericType ? sample.GetGenericTypeDefinition() : null;
+        }
+    }
 
     /// <summary>Appends without constructing unobserved event payloads, retaining the public operation whenever callbacks can run.</summary>
     /// <typeparam name="T">The appended element type.</typeparam>
