@@ -39,7 +39,8 @@ internal static class ImmutableDictionaryOwnerFile
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
+        bool seedKeys = c.Key == "string" && c.Supports("SeedImmutableStringKeys");
         c.ReadPairs(() => w.Line("value = global::LuminPack.Utility.LuminTreeStorage.CreateImmutableDictionary(pairs, length);"),
-            knownNonEmpty: c.UsesRawOrStringEntries);
+            knownNonEmpty: c.UsesRawOrStringEntries, readInt32Value: seedKeys, seedStringKeys: seedKeys);
     }
 }

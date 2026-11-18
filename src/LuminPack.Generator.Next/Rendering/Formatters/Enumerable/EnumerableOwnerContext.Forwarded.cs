@@ -243,12 +243,42 @@ internal sealed partial class EnumerableOwnerContext
 
         W.Line("int wrapperDepth = 0;");
         W.Line("var wrapperList = global::LuminPack.Code.LuminPackCollectionAccess.GetUnderlyingIList(" + local + ", ref wrapperDepth);");
+        if (!_element!.RawCollection && _element.Layout == null)
+        {
+            W.Line("if (wrapperList != null)");
+            W.Indented(() => W.Line("WriteList(ref operationState, wrapperList);"));
+            W.Line("else");
+            W.Indented(() => W.Line("WriteOtherStorage(ref operationState, " + local + ");"));
+            W.Blank();
+            W.Line(W.MethodImpl("NoInlining"));
+            W.Line("static void WriteOtherStorage(ref global::LuminPack.Core.LuminPackWriter operationState, " + Sequence + " source)");
+            W.Open();
+            WriteOtherWrapperStorage("source");
+            W.Close();
+            W.Blank();
+            W.Line(W.MethodImpl("NoInlining"));
+            W.Line("static void WriteList(ref global::LuminPack.Core.LuminPackWriter operationState, global::System.Collections.Generic.List<" + Scalar + "> list)");
+            W.Open();
+            // Capturing the sized span retains the original list version change.
+            WriteSpan(PackMarshal + ".GetListSpan(list, list.Count)");
+            W.Close();
+            return;
+        }
+
         W.Line("if (wrapperList != null)");
         W.Open();
-        WriteSpan("global::LuminPack.Code.LuminPackMarshal.GetListSpan(wrapperList, wrapperList.Count)");
+        WriteSpan(PackMarshal + ".GetListSpan(wrapperList, wrapperList.Count)");
         W.Close();
         W.Line("else");
         W.Open();
+        WriteOtherWrapperStorage(local);
+        W.Close();
+    }
+
+    /// <summary>Writes a wrapper whose backing list was unavailable, keeping its original count backpatch.</summary>
+    /// <param name="local">The wrapper expression.</param>
+    private void WriteOtherWrapperStorage(string local)
+    {
         W.Line("int countPosition = operationState.BeginCollection();");
         W.Line("int count = 0;");
         bool arrayTraversal = !_element!.RawCollection && Supports("WrapperJsonStorage");
@@ -269,7 +299,7 @@ internal sealed partial class EnumerableOwnerContext
         W.Line("foreach (var item in " + local + ")");
         W.Open();
         W.Line("count++;");
-        if (_element.RawCollection)
+        if (_element!.RawCollection)
         {
             W.Line("operationState.CheckBuffer();");
             W.Line("operationState.Write(ref " + Memory + ".As<" + Scalar + ", byte>(ref " + Memory + ".AsRef(in item)), " + Memory + ".SizeOf<" + Scalar + ">());");
@@ -281,7 +311,6 @@ internal sealed partial class EnumerableOwnerContext
             W.Close();
         W.Line("operationState.EndCollection(countPosition, count);");
         W.Line("operationState.CheckBuffer();");
-        W.Close();
     }
 
     /// <summary>Writes only the collection builder's logical backing-array range.</summary>

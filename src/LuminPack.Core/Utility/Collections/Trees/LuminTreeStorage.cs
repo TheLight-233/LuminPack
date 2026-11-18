@@ -1351,12 +1351,10 @@ public static partial class LuminTreeStorage
 #if NET10_0_OR_GREATER
         if (BclTrees.SortedSet<T>.Available)
         {
-            // Strings use the typed builder through 256 items. CI 57 round-4 run 44205342061 (Xeon 6975P-C, .NET 10
-            // FullOpts, five paired processes, typed / framework construction, fastest round): SortedSet<string> fresh and
-            // reuse took 0.64 to 0.66 at 8 items, 0.73 to 0.75 at 256 and 0.76 in the changing scene; the main 256-string
-            // reference case took 0.77 to 0.80. At 4096 items, outside the limit, the framework constructor stayed
-            // (0.98 to 0.99); an earlier ungated build was not adopted. SortedSet<Element> controls stayed within 0.94 to 1.03.
-            const int typedStringLimit = 256;
+            // Run 44213256237 measured the typed builder against the framework on Xeon 6975P-C, EPYC 9V74 and
+            // two EPYC 9V45 runners. Across 512, 1024, 2048 and 4096 strings, fresh and reused sets retained their
+            // allocations. The bound is the largest measured size, including a complete extra tree level at 4096.
+            const int typedStringLimit = 4096;
             if (typeof(T).IsClass && (typeof(T) != typeof(string) || count <= typedStringLimit) && count > 1 &&
                 count <= int.MaxValue / 2 && (uint)count <= (uint)items.Length &&
                 TypedSortedSetNodes<T>.Factory is { } construct)

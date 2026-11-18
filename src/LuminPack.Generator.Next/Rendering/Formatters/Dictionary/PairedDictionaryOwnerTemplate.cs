@@ -267,7 +267,8 @@ internal sealed partial class PairedDictionaryContext
     /// <param name="consume">The statements that consume the pooled <c>pairs</c> and <c>length</c>.</param>
     /// <param name="knownNonEmpty">Whether the caller has proved the count is positive.</param>
     /// <param name="readInt32Value">Whether to use the checked scalar reader for an intrinsic <c>int</c> value.</param>
-    internal void ReadPairs(Action consume, bool knownNonEmpty = false, bool readInt32Value = false)
+    /// <param name="seedStringKeys">Whether matching immutable dictionary keys can seed the staged string reads.</param>
+    internal void ReadPairs(Action consume, bool knownNonEmpty = false, bool readInt32Value = false, bool seedStringKeys = false)
     {
         W.Line("var pairs = global::System.Buffers.ArrayPool<" + Pair + ">.Shared.Rent(length);");
         W.Line("try");
@@ -285,12 +286,19 @@ internal sealed partial class PairedDictionaryContext
         }
         // Rent guarantees at least length slots. Each field is still checked before storing its pair.
         W.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pairs);");
+        if (seedStringKeys)
+        {
+            W.Line("var prior = value;");
+            W.Line("bool seedKeys = prior is not null && prior.Count == length && operationState.CanReuseEnumeratedStringKey<TLuminProfile>(prior.KeyComparer);");
+            W.Line("if (seedKeys)");
+            W.Indented(() => W.Line("global::LuminPack.Utility.LuminTreeStorage.CopyTo(prior!, global::LuminPack.Code.LuminPackMarshal.CreateSpan(ref first, length));"));
+        }
         W.Line("int index = 0;");
         W.Line("do");
         W.Open();
-        W.Line(Key + " k = default !;");
+        W.Line(seedStringKeys ? "string k = seedKeys ? " + Memory + ".Add(ref first, (nint)(uint)index).Key : default!;" : Key + " k = default !;");
         W.Line(Value + " v = default !;");
-        ReadMember(Key, "k", fresh: true);
+        ReadMember(Key, "k", fresh: !seedStringKeys);
         ReadMember(Value, "v", fresh: true, readInt32: readInt32Value);
         W.Line(Memory + ".Add(ref first, (nint)(uint)index) = new " + Pair + "(k!, v);");
         W.Close();

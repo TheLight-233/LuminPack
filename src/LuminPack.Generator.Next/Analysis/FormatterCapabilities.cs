@@ -88,6 +88,8 @@ internal static class FormatterCapabilities
         if (definition == "System.Collections.Generic.PriorityQueue" && FormatterOrderedCollectionTraits.HasPriorityTraversal(compilation, named))
         {
             result.Add("PriorityQueueTraversal");
+            if (named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].SpecialType == SpecialType.System_Int32)
+                result.Add("PriorityQueueStringReuse");
             if (FormatterOrderedCollectionTraits.HasPriorityReader(compilation, named))
                 result.Add("ReadPriorityQueueStorage");
             if (FormatterOrderedCollectionTraits.HasPriorityWriter(compilation, named))
@@ -200,6 +202,11 @@ internal static class FormatterCapabilities
                 result.Add("ImmutableStringRun");
         }
 
+        if (definition == "System.Collections.Immutable.ImmutableDictionary" &&
+            named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].SpecialType == SpecialType.System_Int32 &&
+            FormatterImmutableTraits.HasTreeCopy(compilation, "ImmutableDictionary", 2) &&
+            FormatterRuntimeTraits.HasEnumeratedStringKeyCheck(compilation))
+            result.Add("SeedImmutableStringKeys");
         if (definition == "System.Collections.Generic.Dictionary" && named.TypeArguments[0].SpecialType == SpecialType.System_String && FormatterRuntimeTraits.HasEnumeratedStringKeyCheck(compilation))
             result.Add("EnumeratedStringKey");
         if (definition == "System.Collections.Generic.Dictionary" && modern && !unity && CallbackFree(named.TypeArguments[0]))
