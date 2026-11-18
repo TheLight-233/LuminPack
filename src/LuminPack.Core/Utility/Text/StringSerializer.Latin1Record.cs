@@ -588,43 +588,34 @@ public static partial class StringSerializer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static string ReadShortLatin1Payload(ref byte payload, int length, string? current)
     {
-        int back = length - (length >= 8 ? 8 : 4);
-        Vector128<ushort> first, last;
-        if (length >= 8)
-        {
-            first = Vector128.WidenLower(Vector128.CreateScalarUnsafe(LuminPackReader.Read<ulong>(ref payload)).AsByte());
-            last = Vector128.WidenLower(Vector128.CreateScalarUnsafe(LuminPackReader.Read<ulong>(ref Unsafe.Add(ref payload, (nint)(uint)back))).AsByte());
-        }
-        else
-        {
-            first = WidenFourLatin1(LuminPackReader.Read<uint>(ref payload));
-            last = WidenFourLatin1(LuminPackReader.Read<uint>(ref Unsafe.Add(ref payload, (nint)(uint)back)));
-        }
-
         if (current is not null && current.Length == length)
         {
+            // The widened blocks live only inside this comparison: keeping vectors across the allocation call below
+            // spills them on System V targets, which preserve no XMM registers across calls.
+            int back = length - (length >= 8 ? 8 : 4);
             ref ushort chars = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(current.AsSpan()));
-            bool equal = length >= 8
-                ? Vector128.EqualsAll(last, Vector128.LoadUnsafe(ref chars, (nuint)(uint)back)) && Vector128.EqualsAll(first, Vector128.LoadUnsafe(ref chars))
-                : last.AsUInt64().ToScalar() == LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)back))) &&
-                  (back == 0 || first.AsUInt64().ToScalar() == LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref chars)));
+            bool equal;
+            if (length >= 8)
+            {
+                var first = Vector128.WidenLower(Vector128.CreateScalarUnsafe(LuminPackReader.Read<ulong>(ref payload)).AsByte());
+                var last = Vector128.WidenLower(Vector128.CreateScalarUnsafe(LuminPackReader.Read<ulong>(ref Unsafe.Add(ref payload, (nint)(uint)back))).AsByte());
+                equal = Vector128.EqualsAll(last, Vector128.LoadUnsafe(ref chars, (nuint)(uint)back)) && Vector128.EqualsAll(first, Vector128.LoadUnsafe(ref chars));
+            }
+            else
+            {
+                ulong first = WidenFourLatin1(LuminPackReader.Read<uint>(ref payload)).AsUInt64().ToScalar();
+                ulong last = WidenFourLatin1(LuminPackReader.Read<uint>(ref Unsafe.Add(ref payload, (nint)(uint)back))).AsUInt64().ToScalar();
+                equal = last == LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)back))) &&
+                    (back == 0 || first == LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref chars)));
+            }
+
             if (equal)
                 return current;
         }
 
+        // Allocate before loading the payload so no widened value is live across the call.
         string result = FastString.Allocate(length);
-        ref ushort destination = ref Unsafe.As<char, ushort>(ref Unsafe.AsRef(in result.GetPinnableReference()));
-        if (length >= 8)
-        {
-            first.StoreUnsafe(ref destination);
-            last.StoreUnsafe(ref destination, (nuint)(uint)back);
-        }
-        else
-        {
-            LuminPackWriter.Write(ref Unsafe.As<ushort, byte>(ref destination), first.AsUInt64().ToScalar());
-            LuminPackWriter.Write(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref destination, (nint)(uint)back)), last.AsUInt64().ToScalar());
-        }
-
+        WidenShortLatin1(ref payload, ref Unsafe.As<char, ushort>(ref Unsafe.AsRef(in result.GetPinnableReference())), length);
         return result;
     }
 
