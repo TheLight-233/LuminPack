@@ -5,7 +5,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// <summary>Renders the shared owner of one closed <c>Dictionary&lt;TKey, TValue&gt;</c> whose value is a packable class.</summary>
 /// <remarks>The write counts the enumeration of the dictionary as it writes each key and expands each value's record body. The read
 /// creates a presized dictionary or clears the reused one and adds each entry, expanding the value's record body on the caller's
-/// reader. The JSON form is an array of key and value arrays whose values use the value's own formatter owner.</remarks>
+/// reader. JSON string keys name object properties. Each value uses its own JSON formatter in either input form.</remarks>
 internal static class PayloadDictionaryOwnerFile
 {
     private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(c => c.DenseWrite(), Read, "value[key!] = itemValue;");

@@ -80,12 +80,14 @@ The default text encoding is UTF-16; select UTF-8 with `[LuminPackOption(StringE
 | Arrays and sequential collections | `[1, 2, 3]` |
 | Multidimensional arrays | `{"Lengths":[2,2],"LowerBounds":[0,0],"Values":[1,2,3,4]}` |
 | `KeyValuePair<K,V>` | `[key, value]` |
-| Dictionaries | `[[key1, value1], [key2, value2]]`, so keys can be any supported type |
+| String-keyed framework dictionaries | `{"one":1,"two":2}`. Readers also accept `[["one",1],["two",2]]`. |
+| Dictionaries with other key types | `[[key1, value1], [key2, value2]]` |
 | `Tuple`, `ValueTuple` | array of members in order |
 | `Lazy<T>` | `{"Value": value}`; a `null` instance is `null` |
 | Union | `{"$type": tag, "$value": {...}}` |
 | Reference tracking | `$id` on the first occurrence, `{"$ref": id}` afterwards |
 
+- A map's property names use the JSON string escaping rules, and duplicate keys follow its insertion or replacement behavior. An interface or read-only wrapper whose underlying map cannot be identified can still emit pairs, preserving keys such as `null` from a custom implementation. Priority queues and lists of key/value pairs keep pair framing.
 - Unknown properties are skipped; missing members keep their default value. Property order does not matter.
 - `NaN` and infinities are not valid JSON numbers: writing them throws, and out-of-range numbers such as `1e999` are rejected on read.
 - Reading enforces `MaxJsonDepth` (1024 by default). Enable `ValidateJsonSyntax` for JSON from outside sources.

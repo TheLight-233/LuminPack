@@ -253,6 +253,9 @@ internal static class WireFixtures
         Put(directory, "medium-ascii", Enumerable.Range(17, 16).Select(n => new string('x', n)).ToArray(), Utf8Length);
         Put(directory, "short-unicode", new[] { "\u4E2D\u6587", "\u73A9\u5BB6_00001_\uD83D\uDE00", "A\0B\u007fC", "\u00E9clair" }, Utf8Length);
         Put(directory, "dictionary", new Dictionary<string, int> { ["one"] = 1, ["\u4E2D\u6587"] = 2 });
+#if LUMINPACK_NEXT_WIRE
+        File.WriteAllBytes(Path.Combine(directory, "dictionary-string.json"), JsonDictionaryBytes());
+#endif
         Put(directory, "queue", CreateQueue());
         Put(directory, "stack", CreateStack());
         Put(directory, "bit-array", new BitArray(new[] { true, false, true, true, false, false, true, true, false }));
@@ -269,6 +272,9 @@ internal static class WireFixtures
     /// <param name="directory">The directory used by this operation.</param>
     internal static void Verify(string directory)
     {
+#if LUMINPACK_NEXT_WIRE
+        VerifyJsonDictionary(directory);
+#endif
         VerifyWrittenBytes(directory);
         Check(Get<int>(directory, "int") == -123456789, "int");
         Check(Get<string>(directory, "string-utf8", Utf8Length) == "Unity \u2194 .NET 8 \uD83D\uDE00", "string-utf8");
@@ -302,6 +308,31 @@ internal static class WireFixtures
 #endif
     }
 
+#if LUMINPACK_NEXT_WIRE
+    /// <summary>Writes the string-key fixture directly into the UTF-8 destination.</summary>
+    /// <returns>The exact property names, escapes and values emitted by the generated formatter.</returns>
+    private static byte[] JsonDictionaryBytes()
+    {
+        var output = new System.Buffers.ArrayBufferWriter<byte>();
+        var map = new Dictionary<string, int> { ["one"] = 1, ["a\"b"] = 2 };
+        LuminPackSerializer.SerializeJson<Dictionary<string, int>, LuminPackUtf8LengthOptions>(map, output);
+        return output.WrittenSpan.ToArray();
+    }
+
+    /// <summary>Reads both stored JSON forms through the shipped dictionary formatter.</summary>
+    /// <param name="directory">The fixture directory.</param>
+    private static void VerifyJsonDictionary(string directory)
+    {
+        foreach (string name in new[] { "dictionary-string.json", "dictionary-string-pairs.json" })
+        {
+            Dictionary<string, int> map = null!;
+            LuminPackSerializer.DeserializeJson<Dictionary<string, int>, LuminPackUtf8LengthOptions>(
+                File.ReadAllBytes(Path.Combine(directory, name)), ref map);
+            Check(map.Count == 2 && map["one"] == 1 && map["a\"b"] == 2, name);
+        }
+    }
+#endif
+
     /// <summary>Compares newly emitted records with retained fixture bytes without modifying the baseline.</summary>
     /// <param name="directory">The retained fixture directory.</param>
     private static void VerifyWrittenBytes(string directory)
@@ -311,7 +342,7 @@ internal static class WireFixtures
         try
         {
             Write(temporary);
-            foreach (string file in Directory.EnumerateFiles(temporary, "*.bin"))
+            foreach (string file in Directory.EnumerateFiles(temporary))
                 Check(File.ReadAllBytes(file).AsSpan().SequenceEqual(File.ReadAllBytes(Path.Combine(directory, Path.GetFileName(file)))), Path.GetFileName(file) + " written bytes");
         }
         finally { Directory.Delete(temporary, true); }

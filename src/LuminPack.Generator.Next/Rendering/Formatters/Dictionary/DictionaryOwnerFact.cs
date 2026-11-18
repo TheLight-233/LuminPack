@@ -24,16 +24,21 @@ internal sealed class DictionaryFormatter
     /// <param name="jsonReuseStore">The JSON reuse store supplied to <c>DictionaryFormatter</c>.</param>
     /// <param name="nativeEntries">Whether to enable native entries for this operation.</param>
     /// <param name="general">The general supplied to <c>DictionaryFormatter</c>.</param>
+    /// <param name="isMap">Whether entries represent unique dictionary keys.</param>
     internal DictionaryFormatter(RenderDictionaryOwner entries, bool forwardsToDictionary = false, RenderDictionaryOwner? payload = null,
-        string? jsonReuseStore = null, bool nativeEntries = false, RenderDictionaryOwner? general = null)
+        string? jsonReuseStore = null, bool nativeEntries = false, RenderDictionaryOwner? general = null, bool isMap = true)
     {
         General = general;
         NativeEntries = nativeEntries || forwardsToDictionary;
         JsonReuseStore = jsonReuseStore;
         Entries = entries;
+        IsMap = isMap;
         Payload = payload;
         ForwardsToDictionary = forwardsToDictionary;
     }
+
+    /// <summary>Whether a string key can represent a JSON property in this collection.</summary>
+    internal bool IsMap { get; }
 
     /// <summary>Whether a fully raw pair follows the concrete Dictionary contiguous entry contract.</summary>
     internal bool NativeEntries { get; }

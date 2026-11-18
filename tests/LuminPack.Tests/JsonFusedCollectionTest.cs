@@ -38,7 +38,7 @@ public class JsonFusedCollectionTest
         Assert.Equal(longs, global::LuminPackUnitTest.ConcreteReads.ReadJson<List<long>>(LuminPackSerializer.SerializeJson(longs), static (string concreteReadInput, ref List<long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
     }
 
-    /// <summary>Checks fused dictionary entries are the established pair arrays and read back through either reader path.</summary>
+    /// <summary>Checks string properties and integer pairs against the scalar JSON token writers.</summary>
     [Fact]
     public void EntryWritersMatchTheTokenPath()
     {
@@ -54,10 +54,10 @@ public class JsonFusedCollectionTest
         var byIntLong = byInt.ToDictionary(pair => pair.Key, pair => (long)pair.Value * int.MaxValue);
         var byIntText = byInt.ToDictionary(pair => pair.Key, pair => Strings[Math.Abs(pair.Key) % Strings.Length]);
 
-        Check(byString, LuminPackSerializer.SerializeJson(byString), Text, value => Number(value));
+        CheckProperties(byString, LuminPackSerializer.SerializeJson(byString), value => Number(value));
         Assert.Equal(byString, global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<string, long>>(LuminPackSerializer.SerializeJson(byString), static (string concreteReadInput, ref Dictionary<string, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Assert.Equal(byString, global::LuminPackUnitTest.ConcreteReads.ReadJson<IDictionary<string, long>>(LuminPackSerializer.SerializeJson(byString), static (string concreteReadInput, ref IDictionary<string, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
-        Check(byText, LuminPackSerializer.SerializeJson(byText), Text, Text);
+        CheckProperties(byText, LuminPackSerializer.SerializeJson(byText), Text);
         Assert.Equal(byText, global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<string, string?>>(LuminPackSerializer.SerializeJson(byText), static (string concreteReadInput, ref Dictionary<string, string?> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Check(byInt, LuminPackSerializer.SerializeJson(byInt), key => Number(key), value => Number(value));
         Assert.Equal(byInt, global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<int, int>>(LuminPackSerializer.SerializeJson(byInt), static (string concreteReadInput, ref Dictionary<int, int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
@@ -65,7 +65,10 @@ public class JsonFusedCollectionTest
         Assert.Equal(byIntLong, global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<int, long>>(LuminPackSerializer.SerializeJson(byIntLong), static (string concreteReadInput, ref Dictionary<int, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Check(byIntText, LuminPackSerializer.SerializeJson(byIntText), key => Number(key), Text);
         Assert.Equal(byIntText, global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<int, string?>>(LuminPackSerializer.SerializeJson(byIntText), static (string concreteReadInput, ref Dictionary<int, string?> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
-        Assert.Equal("[]", LuminPackSerializer.SerializeJson(new Dictionary<string, int>()));
+        Assert.Equal("{}", LuminPackSerializer.SerializeJson(new Dictionary<string, int>()));
+
+        static void CheckProperties<TValue>(Dictionary<string, TValue> value, string json, Func<TValue, string> item)
+            => Assert.Equal("{" + string.Join(",", value.Select(pair => Text(pair.Key) + ":" + item(pair.Value))) + "}", json);
 
         // <summary>Compares fused output with pair arrays built from single-value token writes.</summary>
         static void Check<TKey, TValue>(Dictionary<TKey, TValue> value, string json, Func<TKey, string> key, Func<TValue, string> item) where TKey : notnull

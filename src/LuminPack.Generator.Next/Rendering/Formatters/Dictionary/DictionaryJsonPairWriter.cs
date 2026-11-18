@@ -13,6 +13,7 @@ internal sealed class DictionaryJsonPairWriter
     private readonly bool _integer;
     private readonly bool _utf8Only;
     private readonly bool _scalarSeparators;
+    private readonly bool _stringProperties;
 
     /// <summary>Captures the compiled key and value operations.</summary>
     /// <param name="writer">The generated source writer.</param>
@@ -23,14 +24,16 @@ internal sealed class DictionaryJsonPairWriter
     /// <param name="integer">Whether the runtime exposes the scalar entry writer.</param>
     /// <param name="utf8Only">Whether UTF-16 retains the original formatting callback boundaries.</param>
     /// <param name="capturedPair">Whether both members come from an already captured dictionary entry.</param>
+    /// <param name="stringProperties">Whether each string key names an object property.</param>
     internal DictionaryJsonPairWriter(CodeWriter writer, string keyOwner, string valueOwner, string keyType, string valueType, bool integer,
-        bool utf8Only = false, bool capturedPair = false)
+        bool utf8Only = false, bool capturedPair = false, bool stringProperties = false)
     {
         _writer = writer;
         _keyOwner = keyOwner;
         _valueOwner = valueOwner;
         _keyType = keyType;
         _valueType = valueType;
+        _stringProperties = stringProperties;
         _integer = integer && GenericFormatterReuse.Real(keyType) == "int" &&
             (GenericFormatterReuse.Real(valueType) is "int" or "long");
         _utf8Only = utf8Only;
@@ -46,7 +49,7 @@ internal sealed class DictionaryJsonPairWriter
     /// <summary>Initializes the separator state used by the individual formatter calls.</summary>
     internal void Begin()
     {
-        if (!_scalarSeparators && (!_integer || _utf8Only))
+        if (!_stringProperties && !_scalarSeparators && (!_integer || _utf8Only))
             _writer.Line("bool isFirst = true;");
     }
 
@@ -56,6 +59,15 @@ internal sealed class DictionaryJsonPairWriter
     internal void Write(string key, string value)
     {
         var w = _writer;
+        if (_stringProperties)
+        {
+            w.Line("writer.WritePropertyName<TLuminProfile>(" + key + ");");
+            w.Line("var propertyValue = " + value + ";");
+            w.Line(_valueOwner + ".Write<TLuminProfile>(ref writer, propertyValue);");
+            if (!UsesScalarSeparator(_valueType))
+                w.Line("writer.SetFirstElement(false);");
+            return;
+        }
         if (_integer)
         {
             string memory = w.A("Unsafe");

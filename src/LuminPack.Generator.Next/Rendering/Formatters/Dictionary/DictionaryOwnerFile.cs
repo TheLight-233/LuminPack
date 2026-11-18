@@ -8,7 +8,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// two raw scalars store packed raw pairs. The binary write copies the dense entry storage when the runtime layout is the 64-bit
 /// one and the dictionary has no removed entries, and enumerates otherwise. The binary read reuses a non-null destination
 /// through a staged refill, or builds a fresh dictionary directly in its entry storage and rebuilds its buckets, falling back to
-/// <c>Add</c>. The JSON form is an array of key and value arrays.</remarks>
+/// <c>Add</c>. JSON string keys name object properties. Readers also accept the array-of-pairs form.</remarks>
 internal static class DictionaryOwnerFile
 {
     // The sparse scalar template is used only for these native nullable payloads.
@@ -698,16 +698,17 @@ internal static class DictionaryOwnerFile
                     w.Line("return;");
                     w.Close();
                     w.Blank();
-                    w.Line("writer.WriteArrayStart<TLuminProfile>();");
+                    bool properties = key == "string";
+                    w.Line(properties ? "writer.WriteObjectStart<TLuminProfile>();" : "writer.WriteArrayStart<TLuminProfile>();");
                     var pairWriter = new DictionaryJsonPairWriter(w, keyOwner, valueOwner, key, value,
-                        pair && contractModel?.Supports("JsonIntegerPair") == true, capturedPair: true);
+                        pair && contractModel?.Supports("JsonIntegerPair") == true, capturedPair: true, stringProperties: properties);
                     pairWriter.Begin();
                     w.Line("foreach (var item in value)");
                     w.Open();
                     pairWriter.Write("item.Key", "item.Value");
                     w.Close();
                     w.Blank();
-                    w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                    w.Line(properties ? "writer.WriteObjectEnd<TLuminProfile>();" : "writer.WriteArrayEnd<TLuminProfile>();");
                     w.Close();
                     w.Blank();
                     break;
@@ -764,12 +765,20 @@ internal static class DictionaryOwnerFile
                     w.Blank();
                     w.Line("if (value is not null && value.GetType() != typeof(" + dictionary + "))");
                     w.Indented(() => w.Line("value = null;"));
-                    DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, "value[key] = itemValue;", jsonReader);
+                    DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, "value[key] = itemValue;", jsonReader, stringProperties: key == "string");
                     w.Line("if (value is null)");
                     w.Indented(() => w.Line("value = new " + dictionary + "();"));
                     w.Line("else");
                     w.Indented(() => w.Line("value.Clear();"));
                     w.Blank();
+                    if (key == "string")
+                    {
+                        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectStart)");
+                        w.Open();
+                        DictionaryJsonPropertyReader.Emit(w, keyOwner, valueOwner, value, jsonReader, "value[key] = itemValue;");
+                        w.Line("return;");
+                        w.Close();
+                    }
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
                     w.Line("while (reader.Read<TLuminProfile>())");
                     w.Open();

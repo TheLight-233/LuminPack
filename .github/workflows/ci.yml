@@ -149,6 +149,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release --no-restore -p:LuminPackPackageVersion=0.0.0-ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release --no-build -p:LuminPackPackageVersion=0.0.0-ci -- --wire verify tests/LuminPack.Tests.Aot/Fixtures
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .github/scripts/verify-next-package.ps1 -Version 0.0.0-ci -Config $configPath -Cache $cache
 
       - name: Upload test results

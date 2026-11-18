@@ -215,6 +215,7 @@ LuminPackSerializer.Deserialize<List<KeyValuePair<string, int>>, LuminPackUtf16L
         var frozen = new Dictionary<string, int> { ["a"] = 1, ["b"] = 2 }.ToFrozenDictionary();
         json = LuminPackSerializer.SerializeJson(frozen);
         using var frozenDocument = JsonDocument.Parse(json);
+        Assert.Equal(JsonValueKind.Object, frozenDocument.RootElement.ValueKind);
         var restored = global::LuminPackUnitTest.ConcreteReads.ReadJson<FrozenDictionary<string, int>>(json, static (string concreteReadInput, ref FrozenDictionary<string, int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(2, restored.Count);
         Assert.Equal(2, restored["b"]);
@@ -223,6 +224,7 @@ LuminPackSerializer.Deserialize<List<KeyValuePair<string, int>>, LuminPackUtf16L
         priorities.Enqueue("b", 2);
         json = LuminPackSerializer.SerializeJson(priorities);
         using var priorityDocument = JsonDocument.Parse(json);
+        Assert.Equal("[[\"a\",1],[\"b\",2]]", json);
         var restoredPriorities = global::LuminPackUnitTest.ConcreteReads.ReadJson<PriorityQueue<string, int>>(json, static (string concreteReadInput, ref PriorityQueue<string, int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert.Equal("a", restoredPriorities.Dequeue());
         Assert.Equal("b", restoredPriorities.Dequeue());

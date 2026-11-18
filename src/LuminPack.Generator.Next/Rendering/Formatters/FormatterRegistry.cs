@@ -233,7 +233,7 @@ internal static class FormatterRegistry
         ["System.Collections.Generic.Dictionary"] = new DictionaryFormatter(DictionaryOwnerFile.Render, payload: PayloadDictionaryOwnerFile.Render, jsonReuseStore: "value[key] = itemValue;", nativeEntries: true, general: DictionaryOwnerFile.RenderDefault),
         ["System.Collections.Generic.SortedDictionary"] = new DictionaryFormatter(SortedDictionaryOwnerFile.Render, jsonReuseStore: "value.Add(key!, itemValue);"),
         ["System.Collections.Generic.SortedList"] = new DictionaryFormatter(SortedListOwnerFile.Render, jsonReuseStore: "value.Add(key!, itemValue);"),
-        ["System.Collections.Generic.PriorityQueue"] = new DictionaryFormatter(PriorityQueueOwnerFile.Render),
+        ["System.Collections.Generic.PriorityQueue"] = new DictionaryFormatter(PriorityQueueOwnerFile.Render, isMap: false),
         ["System.Collections.Concurrent.ConcurrentDictionary"] = new DictionaryFormatter(ConcurrentDictionaryOwnerFile.Render, jsonReuseStore: "value.TryAdd(key!, itemValue);"),
         ["System.Collections.Immutable.ImmutableDictionary"] = new DictionaryFormatter(ImmutableDictionaryOwnerFile.Render),
         ["System.Collections.Immutable.ImmutableSortedDictionary"] = new DictionaryFormatter(ImmutableSortedDictionaryOwnerFile.Render),
@@ -245,7 +245,7 @@ internal static class FormatterRegistry
     };
 
     /// <summary>The owner of a list of key and value pairs.</summary>
-    internal static readonly DictionaryFormatter PairList = new DictionaryFormatter(PairListOwnerFile.Render);
+    internal static readonly DictionaryFormatter PairList = new DictionaryFormatter(PairListOwnerFile.Render, isMap: false);
 
     /// <summary>Finds the dictionary definition behind a declared dictionary spelling.</summary>
     /// <param name="declaredType">The declared dictionary spelling.</param>

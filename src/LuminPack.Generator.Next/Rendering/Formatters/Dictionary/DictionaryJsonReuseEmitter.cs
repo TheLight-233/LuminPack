@@ -14,26 +14,49 @@ internal static class DictionaryJsonReuseEmitter
     /// <param name = "jsonReader">The json reader used by this operation.</param>
     /// <param name="sortedList">The exact sorted-list type when the runtime can traverse its validated storage.</param>
     /// <param name="exactSnapshot">The exact runtime type and its existing value traversal, if available.</param>
+    /// <param name="stringProperties">Whether this family accepts the object form for string keys.</param>
     internal static void Emit(CodeWriter w, string key, string value, string keyOwner, string valueOwner, string store, string jsonReader,
-        string? sortedList = null, (string Type, string Source)? exactSnapshot = null)
+        string? sortedList = null, (string Type, string Source)? exactSnapshot = null, bool stringProperties = false)
     {
         string pair = "global::System.Collections.Generic.KeyValuePair<" + key + ", " + value + ">";
+        string pool = "global::System.Buffers.ArrayPool<" + pair + ">.Shared";
+        string clear = "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + pair + ">()";
         w.Line("if (value is not null)");
         w.Open();
+        if (stringProperties)
+        {
+            w.Line("bool objectForm = reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectStart;");
+            w.Line("int length = 16;");
+            w.Line("if (objectForm)");
+            w.Open();
+            DictionaryJsonPropertyReader.SelectFirst(w);
+            w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
+            w.Open();
+            w.Line("value.Clear();");
+            w.Line("return;");
+            w.Close();
+            w.Close();
+            w.Line("else");
+            w.Open();
+        }
         w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
-        w.Line("int length = reader.CountArrayElements<TLuminProfile>();");
+        w.Line((stringProperties ? "" : "int ") + "length = reader.CountArrayElements<TLuminProfile>();");
         w.Line("if (length == 0)");
         w.Open();
         w.Line("reader.ConsumeArrayEnd<TLuminProfile>();");
         w.Line("value.Clear();");
         w.Line("return;");
         w.Close();
+        if (stringProperties)
+            w.Close();
         w.Line("int oldCount = value.Count;");
-        w.Line("var entries = global::System.Buffers.ArrayPool<" + pair + ">.Shared.Rent(global::System.Math.Max(length, oldCount));");
+        w.Line("var entries = " + pool + ".Rent(global::System.Math.Max(length, oldCount));");
         w.Line("int count = 0;");
         w.Line("try");
         w.Open();
-        w.Line("ref var firstEntry = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(entries);");
+        const string firstEntry = "ref var firstEntry = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(entries);";
+        if (!stringProperties)
+            w.Line(firstEntry);
         const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
         if (key == "string")
         {
@@ -67,6 +90,27 @@ internal static class DictionaryJsonReuseEmitter
                 w.Close();
         }
 
+        if (stringProperties)
+        {
+            w.Line("if (objectForm)");
+            w.Open();
+            DictionaryJsonPropertyReader.Emit(w, keyOwner, valueOwner, value, jsonReader,
+                "entries[count++] = new " + pair + "(key, itemValue);",
+                "count < oldCount ? entries[count].Key : default!",
+                "value.TryGetValue(key, out itemValue);", writer =>
+                {
+                    writer.Line("if (count == entries.Length)");
+                    writer.Open();
+                    writer.Line("var larger = " + pool + ".Rent(checked(count * 2));");
+                    writer.Line("global::System.Array.Copy(entries, larger, count);");
+                    writer.Line(pool + ".Return(entries, " + clear + ");");
+                    writer.Line("entries = larger;");
+                    writer.Close();
+                }, firstPropertySelected: true);
+            w.Close();
+            w.Line("else");
+            w.Open();
+        }
         w.Line("while (reader.Read<TLuminProfile>())");
         w.Open();
         w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd) break;");
@@ -95,6 +139,11 @@ internal static class DictionaryJsonReuseEmitter
         w.Close();
         w.Line("entries[count++] = new " + pair + "(key!, itemValue);");
         w.Close();
+        if (stringProperties)
+        {
+            w.Close();
+            w.Line(firstEntry);
+        }
         w.Line("value.Clear();");
         w.Line("if (count != 0)");
         w.Open();
@@ -111,7 +160,7 @@ internal static class DictionaryJsonReuseEmitter
         w.Close();
         w.Line("finally");
         w.Open();
-        w.Line("global::System.Buffers.ArrayPool<" + pair + ">.Shared.Return(entries, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + pair + ">());");
+        w.Line(pool + ".Return(entries, " + clear + ");");
         w.Close();
         w.Line("return;");
         w.Close();

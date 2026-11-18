@@ -701,7 +701,7 @@ internal sealed class PairedDictionarySpec
 }
 
 /// <summary>Renders the shared binary and JSON formatter owner of a closed dictionary of raw scalar or string entries.</summary>
-/// <remarks>The wire is the entry count followed by each key and its value; the JSON form is an array of key and value arrays.
+/// <remarks>The binary wire contains the count followed by each key and its value. JSON maps can use string keys as property names.
 /// The binary algorithms and the JSON destination handling are supplied by the family through
 /// <see cref="PairedDictionarySpec"/>.</remarks>
 internal static class PairedDictionaryOwnerTemplate
@@ -741,6 +741,7 @@ internal static class PairedDictionaryOwnerTemplate
             FormatterElementEmitter.CollectionMinimum(fact.Contract.Arguments[1]) : (key != "string" ? memory + ".SizeOf<" + key + ">()" : "1") + " + " +
             (value != "string" && fact.Element == null && !fact.ForwardedValue ? memory + ".SizeOf<" + value + ">()" : "1");
         const string generic = "    where TLuminProfile : struct, ";
+        bool propertyKeys = key == "string" && fact.Family.IsMap;
         var context = new PairedDictionaryContext(w, dictionary, key, value, memory, extension, spec.Source, spec.KeyMember, spec.ValueMember,
             fact.Element, fact.ForwardedValue, fact.Contract, set, nativeEntries, checkedUnion);
         bool optimizeTreeWrite = context.OptimizeBinaryTraversal &&
@@ -925,10 +926,25 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Line("return;");
                     w.Close();
                     w.Blank();
-                    w.Line("writer.WriteArrayStart<TLuminProfile>();");
+                    bool readOnlyWrapper = dictionary.StartsWith("global::System.Collections.ObjectModel.ReadOnlyDictionary<", StringComparison.Ordinal);
+                    bool properties = propertyKeys && (!readOnlyWrapper || context.Supports("ReadOnlyTypedDictionaryStorage"));
+                    // An arbitrary interface implementation or wrapper can enumerate a null key, which requires pair framing.
+                    if (properties && fact.Family.ForwardsToDictionary)
+                    {
+                        string known = readOnlyWrapper
+                            ? "global::LuminPack.Code.LuminPackCollectionAccess.GetReadOnlyDictionaryStorage(value) is not null"
+                            : "value.GetType() == typeof(global::System.Collections.Generic.Dictionary<string, " + value + ">)";
+                        EmitUnknownMap(known);
+                    }
+                    else if (properties && dictionary.StartsWith("global::System.Collections.Immutable.IImmutableDictionary<", StringComparison.Ordinal))
+                    {
+                        EmitUnknownMap("value is global::System.Collections.Immutable.ImmutableDictionary<string, " + value +
+                            "> || value is global::System.Collections.Immutable.ImmutableSortedDictionary<string, " + value + ">");
+                    }
+                    w.Line(properties ? "writer.WriteObjectStart<TLuminProfile>();" : "writer.WriteArrayStart<TLuminProfile>();");
                     var pairWriter = new DictionaryJsonPairWriter(w, keyOwner, valueOwner, key, value,
                         context.Supports("JsonIntegerPair") && context.RawPairs, utf8Only: context.Supports("PriorityQueueTraversal"),
-                        capturedPair: spec.CapturesJsonPairs);
+                        capturedPair: spec.CapturesJsonPairs, stringProperties: properties);
                     bool hashTree = EmitTree("ImmutableDictionary", "CopyImmutableHashTree");
                     bool sortedTree = EmitTree("ImmutableSortedDictionary", "CopyImmutableSortedTree");
                     if ((hashTree || sortedTree) && !dictionary.StartsWith("global::System.Collections.Immutable.IImmutableDictionary<", StringComparison.Ordinal))
@@ -1000,10 +1016,27 @@ internal static class PairedDictionaryOwnerTemplate
                             w.Close();
                     }
                     w.Blank();
-                    w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                    w.Line(properties ? "writer.WriteObjectEnd<TLuminProfile>();" : "writer.WriteArrayEnd<TLuminProfile>();");
                     w.Close();
                     w.Blank();
                     break;
+
+                    void EmitUnknownMap(string known)
+                    {
+                        w.Line("if (!(" + known + "))");
+                        w.Open();
+                        w.Line("writer.WriteArrayStart<TLuminProfile>();");
+                        var entries = new DictionaryJsonPairWriter(w, keyOwner, valueOwner, key, value, integer: false,
+                            capturedPair: spec.CapturesJsonPairs);
+                        entries.Begin();
+                        w.Line("foreach (var item in value)");
+                        w.Open();
+                        entries.Write("item.Key", "item.Value");
+                        w.Close();
+                        w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                        w.Line("return;");
+                        w.Close();
+                    }
 
                     void EmitLocalLoop(string method, string input, string source = "items")
                     {
@@ -1028,7 +1061,7 @@ internal static class PairedDictionaryOwnerTemplate
                                 ImmutableTreeTraversal.Items(w, () =>
                                     pairWriter.Write("item.Key", "item.Value"));
                             });
-                            w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                            w.Line(properties ? "writer.WriteObjectEnd<TLuminProfile>();" : "writer.WriteArrayEnd<TLuminProfile>();");
                             w.Line("return;");
                             w.Close();
                         });
@@ -1106,7 +1139,7 @@ internal static class PairedDictionaryOwnerTemplate
                     if (fact.Family.JsonReuseStore != null)
                         DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, fact.Family.JsonReuseStore, jsonReader,
                             context.Supports("SortedListTraversal") ? dictionary : null,
-                            context.Supports("ConcurrentTraversal") ? (dictionary, context.Source) : null);
+                            context.Supports("ConcurrentTraversal") ? (dictionary, context.Source) : null, stringProperties: propertyKeys);
                     else if (dictionary.StartsWith("global::System.Collections.Generic.IDictionary<", StringComparison.Ordinal) ||
                         dictionary.StartsWith("global::System.Collections.Generic.IReadOnlyDictionary<", StringComparison.Ordinal))
                     {
@@ -1121,7 +1154,7 @@ internal static class PairedDictionaryOwnerTemplate
                         w.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
                         w.Line("static void ReadExistingDictionary(ref " + jsonReader + " reader, " + concrete + " value)");
                         w.Open();
-                        DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, "value[key] = itemValue;", jsonReader);
+                        DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, "value[key] = itemValue;", jsonReader, stringProperties: propertyKeys);
                         w.Close();
                         w.Blank();
                     }
@@ -1143,6 +1176,15 @@ internal static class PairedDictionaryOwnerTemplate
                         w.Indented(() => w.Line("value.Clear();"));
                     }
                     w.Blank();
+                    if (propertyKeys)
+                    {
+                        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectStart)");
+                        w.Open();
+                        DictionaryJsonPropertyReader.Emit(w, keyOwner, valueOwner, value, jsonReader, spec.JsonAdd);
+                        w.Close();
+                        w.Line("else");
+                        w.Open();
+                    }
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
                     if (spec.JsonBefore == null && context.Supports("PriorityJsonCapacity"))
                     {
@@ -1183,6 +1225,8 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Close();
                     w.Line(spec.JsonAdd);
                     w.Close();
+                    if (propertyKeys)
+                        w.Close();
                     spec.JsonAfter?.Invoke(context);
                     w.Close();
                     w.Blank();
