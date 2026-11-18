@@ -111,6 +111,9 @@ internal enum EntryKind
     /// <summary>A count followed by a native contiguous payload.</summary>
     RawArray,
 
+    /// <summary>A framework list with a count followed by a native contiguous payload.</summary>
+    RawList,
+
     /// <summary>A four-component framework version behind its object marker.</summary>
     FixedVersion,
 

@@ -188,6 +188,9 @@ internal static partial class TypeModelFactory
                     { IsSealed: true, IsGenericType: false } && FixedRootObject(nested) is { } fixedNested)
                     return new EntryShape(EntryKind.FixedObjectArray, fixedNested.Readable);
             }
+            if (HasRetainedDirectWrite && type is INamedTypeSymbol { TypeArguments.Length: 1 } list &&
+                IsFrameworkCollection(list, "System.Collections.Generic.List`1") && IsKnownScalar(list.TypeArguments[0]))
+                return new EntryShape(EntryKind.RawList, FormatterName(list.TypeArguments[0]));
             if (type is INamedTypeSymbol { Name: "PriorityQueue", TypeArguments.Length: 2 } heap &&
                 IsFrameworkCollection(heap, "System.Collections.Generic.PriorityQueue`2") &&
                 FormatterOrderedCollectionTraits.HasPriorityAllocatingWriter(_compilation, heap))

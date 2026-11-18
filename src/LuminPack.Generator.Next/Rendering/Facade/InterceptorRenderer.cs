@@ -479,6 +479,8 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     {
         if (shape.Kind == EntryKind.RawScalar)
             return RawWrite;
+        if (shape.Kind == EntryKind.RawList)
+            return RawListWrite.Replace("%ELEMENT%", shape.Element!);
         if (FixedRoot(shape) is { } fixedRoot)
         {
             if (shape.Kind is not (EntryKind.RawArray or EntryKind.BigInteger or EntryKind.BitArray))
@@ -1063,6 +1065,16 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     private const string RawWrite = """
                         var buffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(Unsafe.SizeOf<%TYPE%>());
                         LuminPackWriter.Write(ref MemoryMarshal.GetArrayDataReference(buffer), in value);
+                        return buffer;
+        """ + "\n";
+
+    private const string RawListWrite = """
+                        var list = value;
+                        var items = list is null ? default(global::System.ReadOnlySpan<%ELEMENT%>) :
+                            global::LuminPack.Code.LuminPackMarshal.GetListSpan(list);
+                        int length = LuminPackWriter.SpanRecordBound<%ELEMENT%>(list is null, items.Length);
+                        var buffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(length);
+                        LuminPackWriter.WriteReservedSpan<%ELEMENT%>(ref MemoryMarshal.GetArrayDataReference(buffer), list is null, items);
                         return buffer;
         """ + "\n";
 
