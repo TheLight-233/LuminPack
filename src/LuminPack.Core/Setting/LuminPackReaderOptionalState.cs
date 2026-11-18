@@ -11,8 +11,22 @@ namespace LuminPack.Option
         internal static readonly LuminPackReaderOptionalState NullOption = new LuminPackReaderOptionalState(true);
 
         private LuminCircleReferenceMap<uint, object>? refToObject;
-        // The overflow map is retained after reset, while this flag reflects whether it holds ids.
-        private bool _hasOverflow;
+        // The overflow and version maps are retained after reset. Their flags describe the current operation only.
+        [Flags]
+        private enum PopulatedTable : byte
+        {
+            Overflow = 1,
+            Version = 2,
+        }
+
+        private PopulatedTable _populatedTables;
+
+        /// <summary>Gets whether the current operation holds out-of-sequence identifiers.</summary>
+        private bool HasOverflow
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (_populatedTables & PopulatedTable.Overflow) != 0;
+        }
         private LuminIdentityMap? reusedObjectToRef;
         private bool reuseIndexInitialized;
         // Writers assign identifiers 0, 1, 2, ... in record order, so a read stores them in an array. The map holds only
@@ -24,6 +38,13 @@ namespace LuminPack.Option
         private Dictionary<ulong, (int Start, int Length)>? _versionTables;
         private byte[] _versionTableBytes = Array.Empty<byte>();
         private int _versionTableUsed;
+
+        /// <summary>Gets whether this operation holds tracked objects or version tables.</summary>
+        internal bool HasOperationState
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (_sequentialCount | (int)_populatedTables) != 0;
+        }
 
         /// <summary>Retains UTF-8 JSON escape decoding storage in the exclusively owned reader context.</summary>
         internal byte[]? JsonUtf8StringScratch;
@@ -97,12 +118,13 @@ namespace LuminPack.Option
         public void ResetOperationState()
         {
             // No reference can be retained before the first identifier is registered.
-            if (_versionTables is { Count: > 0 })
+            if ((_populatedTables & PopulatedTable.Version) != 0)
             {
-                _versionTables.Clear();
+                _versionTables!.Clear();
                 _versionTableUsed = 0;
+                _populatedTables &= ~PopulatedTable.Version;
             }
-            if (_sequentialCount == 0 && !_hasOverflow)
+            if (_sequentialCount == 0 && !HasOverflow)
                 return;
             ResetReferences();
         }
@@ -120,6 +142,7 @@ namespace LuminPack.Option
             table.CopyTo(_versionTableBytes.AsSpan(_versionTableUsed));
             _versionTables.Add(fingerprint, (_versionTableUsed, table.Length));
             _versionTableUsed += table.Length;
+            _populatedTables |= PopulatedTable.Version;
         }
 
         /// <summary>Finds the member table a short version record names.</summary>
@@ -148,10 +171,10 @@ namespace LuminPack.Option
             else
                 Array.Clear(sequential, 0, count);
             _sequentialCount = 0;
-            if (_hasOverflow)
+            if (HasOverflow)
             {
                 refToObject!.Clear();
-                _hasOverflow = false;
+                _populatedTables &= ~PopulatedTable.Overflow;
             }
             reusedObjectToRef?.Clear();
             reuseIndexInitialized = false;
@@ -174,7 +197,7 @@ namespace LuminPack.Option
         [MethodImpl(MethodImplOptions.NoInlining)]
         private object GetMappedReference(uint id)
         {
-            if (_hasOverflow && refToObject!.TryGetValue(id, out var value))
+            if (HasOverflow && refToObject!.TryGetValue(id, out var value))
             {
                 return value;
             }
@@ -204,7 +227,7 @@ namespace LuminPack.Option
         {
             if (!reuseIndexInitialized)
             {
-                if (_sequentialCount <= 8 && !_hasOverflow)
+                if (_sequentialCount <= 8 && !HasOverflow)
                 {
                     var sequential = _sequential;
                     foreach (ref readonly var entry in sequential.AsSpan(0, Math.Min(sequential.Length, _sequentialCount)))
@@ -229,7 +252,7 @@ namespace LuminPack.Option
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void Store(uint id, object value)
         {
-            if (id == (uint)_sequentialCount && id < (uint)_sequential.Length && !_hasOverflow)
+            if (id == (uint)_sequentialCount && id < (uint)_sequential.Length && !HasOverflow)
             {
                 _sequential[id].Value = value;
                 _sequentialCount++;
@@ -244,7 +267,7 @@ namespace LuminPack.Option
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void StoreSlow(uint id, object value)
         {
-            if (id == (uint)_sequentialCount && !_hasOverflow && id < int.MaxValue / 2)
+            if (id == (uint)_sequentialCount && !HasOverflow && id < int.MaxValue / 2)
             {
                 Array.Resize(ref _sequential, Math.Max(16, _sequential.Length * 2));
                 _sequential[id].Value = value;
@@ -254,7 +277,7 @@ namespace LuminPack.Option
             {
                 if (id < (uint)_sequentialCount || !(refToObject ??= new LuminCircleReferenceMap<uint, object>()).TryAdd(id, value))
                     LuminPackExceptionHelper.ThrowMessage("Object is already added, id:" + id);
-                _hasOverflow = true;
+                _populatedTables |= PopulatedTable.Overflow;
             }
         }
 
@@ -265,7 +288,7 @@ namespace LuminPack.Option
             reusedObjectToRef ??= new LuminIdentityMap();
             for (int i = 0; i < _sequentialCount; i++)
                 reusedObjectToRef.TryAdd(_sequential[i].Value!, (uint)i);
-            if (_hasOverflow)
+            if (HasOverflow)
                 foreach (var entry in refToObject!)
                     reusedObjectToRef.TryAdd(entry.Value, entry.Key);
             reuseIndexInitialized = true;
@@ -276,10 +299,10 @@ namespace LuminPack.Option
         /// <returns>Whether the instance has already been registered by identity.</returns>
         public bool IsObjectReferenceRegistered(object value)
         {
-            if (_sequentialCount == 0 && !_hasOverflow)
+            if (_sequentialCount == 0 && !HasOverflow)
                 return false;
             // A few sequential references are scanned without building the identity index.
-            if (!reuseIndexInitialized && _sequentialCount <= 8 && !_hasOverflow)
+            if (!reuseIndexInitialized && _sequentialCount <= 8 && !HasOverflow)
             {
                 var sequential = _sequential;
                 for (int i = 0; i < sequential.Length && i < _sequentialCount; i++)

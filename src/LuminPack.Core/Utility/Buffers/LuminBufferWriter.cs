@@ -408,6 +408,18 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal Span<byte> BeginCursorWrite(out int index)
     {
+        index = 0;
+        if (_writtenCount == 0 && _liveIndex == 0 && _capacity != 0)
+            return Window;
+        return BeginAppend(out index);
+    }
+
+    /// <summary>Acquires storage or restores fixed-record headroom for a nonempty cursor session.</summary>
+    /// <param name="index">Receives the absolute start of the appended record.</param>
+    /// <returns>The complete allocation after restoring fixed-record headroom.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private Span<byte> BeginAppend(out int index)
+    {
         index = CurrentIndex;
         if (_capacity == 0)
             Grow(InitialBufferSize);
@@ -644,6 +656,14 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     public void ResetForReuse()
     {
         ResetCore();
+        if (WriterState.HasOperationState | ReaderState.HasOperationState)
+            ResetOperationStates();
+    }
+
+    /// <summary>Clears the buffer's reader and writer tables after a stateful operation.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ResetOperationStates()
+    {
         WriterState.ResetOperationState();
         ReaderState.ResetOperationState();
     }

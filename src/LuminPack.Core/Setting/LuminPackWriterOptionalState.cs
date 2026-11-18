@@ -18,6 +18,13 @@ namespace LuminPack.Option
         private bool _hashed;
         private LuminIdentityMap? _objectToRef;
 
+        /// <summary>Gets whether this operation holds any tracked objects.</summary>
+        internal bool HasOperationState
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _nextId != 0;
+        }
+
         /// <summary>Initializes a new instance of <c>LuminPackWriterOptionalState</c>.</summary>
         public LuminPackWriterOptionalState()
         {
