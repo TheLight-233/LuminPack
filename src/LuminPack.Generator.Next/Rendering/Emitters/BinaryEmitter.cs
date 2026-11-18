@@ -750,6 +750,8 @@ internal static partial class BinaryEmitter
         var body = new List<string>();
         string count = members.Length.ToString(CultureInfo.InvariantCulture);
         bool bounded = model.Bounded != null;
+        if (!union && !structValue && CanReserveFixedObject(model))
+            return ReservedFixedObject(model, w, count);
         body.Add("var value = input;");
         if (bounded)
         {

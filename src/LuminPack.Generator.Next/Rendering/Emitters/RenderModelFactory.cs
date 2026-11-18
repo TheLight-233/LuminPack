@@ -367,6 +367,10 @@ internal static class RenderModelFactory
                 return new RenderMember(culture.Name, RenderMemberKind.CultureInfo, culture.Declared, culture.Declared, 0,
                     "global::LuminPack." + GeneratedNames.Owner(extension, culture.Declared), ScalarKind.Other, mirrored,
                     property: property);
+            case SpecialMember { NativeFrameworkScalar: true } special when options.Net8:
+                return new RenderMember(special.Name, RenderMemberKind.Fixed, special.Declared, special.Declared, 0,
+                    "global::LuminPack." + GeneratedNames.Owner(extension, special.Declared), ScalarKind.Struct, mirrored,
+                    raw: true, builtin: true, property: property);
             case SpecialMember special:
                 return new RenderMember(special.Name, RenderMemberKind.Special, ReadableTypeName.Of(special.Declared), special.Declared, 0,
                     "global::LuminPack." + GeneratedNames.Owner(extension, special.Declared), ScalarKind.Other, mirrored,

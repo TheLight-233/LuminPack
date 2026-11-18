@@ -283,11 +283,12 @@ internal static class GenericFormatterReuse
             FormatterModel item = model.Arguments[0];
             // A closed owner of a forwarded element is published by its family's forwarding template.
             bool forwardedFact = fact is { ForwardedType: not null };
-            // A shared placeholder has no record body for the existing exact List reservation.
+            // A shared placeholder has no concrete record body for an array window or exact List reservation.
             // Keep that write root concrete while sharing the other eligible operations.
             GeneratedOperations closedOperations = (operations & GeneratedOperations.BinaryWrite) != 0 &&
-                FormatterCapabilities.SequenceInterface(shape.Definition) &&
-                FormatterElementEmitter.ReservableCollectionElement(_set, item) != null
+                (shape == ArrayFamily && FormatterElementEmitter.FixedObject(_set, item) != null ||
+                    FormatterCapabilities.SequenceInterface(shape.Definition) &&
+                    FormatterElementEmitter.ReservableCollectionElement(_set, item) != null)
                 ? GeneratedOperations.BinaryWrite : GeneratedOperations.None;
             // An array of arrays or of forwarded collections is published by the array forwarding template, and an array or list
             // of single-rank arrays also publishes compressed roots that compress each element.

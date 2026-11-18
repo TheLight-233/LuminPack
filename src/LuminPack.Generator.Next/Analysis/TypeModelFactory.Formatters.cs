@@ -62,7 +62,9 @@ internal static partial class TypeModelFactory
                         { Raw: true, RawStorage: true, Layout: null, Definition: FormatterDefinitions.Scalar or FormatterDefinitions.FrameworkScalar } &&
                         (formatter.Definition == FormatterDefinitions.Array && type is IArrayTypeSymbol { IsSZArray: true } ||
                          formatter.Definition == "System.Collections.Generic.List" && type is INamedTypeSymbol list &&
-                         IsFrameworkCollection(list, "System.Collections.Generic.List`1")));
+                         IsFrameworkCollection(list, "System.Collections.Generic.List`1")),
+                    nativeFrameworkScalar: !member.Volatile && type.IsUnmanagedType && type.DeclaringSyntaxReferences.IsEmpty &&
+                        formatter is { Definition: FormatterDefinitions.FrameworkScalar, Raw: true });
             issues.AddRange(specializedIssues);
             return specialized;
         }

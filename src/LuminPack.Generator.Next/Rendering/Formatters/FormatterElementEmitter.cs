@@ -7,6 +7,15 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// <summary>Emits static element operations without specializing the containing collection for its element type.</summary>
 internal static class FormatterElementEmitter
 {
+    /// <summary>Finds the concrete fixed class body a contiguous array can write inside a proven window.</summary>
+    /// <param name="set">The shared formatter facts and target.</param>
+    /// <param name="model">The exact array element contract.</param>
+    /// <returns>The fixed record model or null for an outlined element operation.</returns>
+    internal static PayloadRenderModel? FixedObject(SharedFormatterSet set, FormatterModel model) =>
+        model is { OrdinaryObject: true, Payload: RecordModel record } && set.Options?.Net8 == true &&
+        RenderModelFactory.Create(record, set.Options) is { } rendered && BinaryEmitter.CanReserveFixedObject(rendered)
+            ? rendered : null;
+
     /// <summary>Finds an ordinary positional element with public fixed, string or raw-list fields and no callbacks.</summary>
     /// <param name="set">The shared formatter publication facts.</param>
     /// <param name="model">The closed element formatter contract.</param>

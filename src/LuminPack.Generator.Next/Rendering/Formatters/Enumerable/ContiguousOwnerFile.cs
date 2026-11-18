@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
@@ -33,6 +35,8 @@ internal static class ContiguousOwnerFile
         PayloadRenderModel? checkedUnion = null)
     {
         FormatterModel element = model.Arguments[0];
+        PayloadRenderModel? fixedObject = shape == ContiguousShape.Array && (operations & GeneratedOperations.BinaryWrite) != 0
+            ? FormatterElementEmitter.FixedObject(set, element) : null;
         string suffix = ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type));
         bool reference = shape is ContiguousShape.Array or ContiguousShape.List;
         // A Union element of a list keeps the original fresh loop, which needs the root's case arms.
@@ -175,6 +179,8 @@ internal static class ContiguousOwnerFile
                 w.Line("int length = items.Length;");
                 w.Line("if (length != 0)");
                 w.Open();
+                if (fixedObject != null)
+                    WriteFixedWindow(w, fixedObject);
                 w.Line("ref var current = ref " + MemoryMarshal + ".GetReference(items);");
                 w.Line("do");
                 w.Open();
@@ -187,6 +193,40 @@ internal static class ContiguousOwnerFile
             }
 
             w.Line("writer.CheckBuffer();");
+        }
+
+        void WriteFixedWindow(CodeWriter w, PayloadRenderModel record)
+        {
+            // A failed bound proof keeps the original independently checked element loop, including for mostly null arrays.
+            string width = BinaryEmitter.FixedObjectWidth(record);
+            w.Line("ref byte cursor = ref writer.Cursor;");
+            w.Line("if (writer.RecordRoom(ref cursor) >= (long)length * " + width + ")");
+            w.Open();
+            w.Line("foreach (var item in items)");
+            w.Open();
+            w.Line("if (item is null)");
+            w.Open();
+            w.Line("cursor = (byte)255;");
+            w.Line("cursor = ref " + Unsafe + ".Add(ref cursor, 1);");
+            w.Line("continue;");
+            w.Close();
+            var stores = new List<string>();
+            BinaryEmitter.WriteFixedObject(record, w, stores, "item", "cursor", record.Members.Length.ToString(CultureInfo.InvariantCulture));
+            foreach (string line in stores)
+            {
+                if (line == "{")
+                    w.Open();
+                else if (line == "}")
+                    w.Close();
+                else if (line.StartsWith("\t", StringComparison.Ordinal))
+                    w.Indented(() => w.Line(line.Substring(1)));
+                else
+                    w.Line(line);
+            }
+            w.Close();
+            w.Line("writer.Cursor = ref cursor;");
+            w.Line("return;");
+            w.Close();
         }
 
         void RawSequenceWrite(CodeWriter w)

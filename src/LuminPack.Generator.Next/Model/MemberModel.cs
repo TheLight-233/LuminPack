@@ -201,6 +201,9 @@ internal sealed class SpecialMember : MemberModel
     /// <summary>Whether the ordinary binary writer can reserve the complete raw vector or list record.</summary>
     internal readonly bool ReservableSpan;
 
+    /// <summary>Whether the framework formatter's binary operation is a direct unmanaged store.</summary>
+    internal readonly bool NativeFrameworkScalar;
+
     /// <summary>Captures a framework member.</summary>
     /// <param name="name">The name used by this operation.</param>
     /// <param name="storage">The storage used by this operation.</param>
@@ -210,12 +213,14 @@ internal sealed class SpecialMember : MemberModel
     /// <param name="property">The property used by this operation.</param>
     /// <param name="formatter">The formatter used by this operation.</param>
     /// <param name="reservableSpan">Whether a scalar vector or list supports a reserved binary write.</param>
+    /// <param name="nativeFrameworkScalar">Whether the positional binary operation may write the scalar's native bytes.</param>
     internal SpecialMember(string name, MemberStorage storage, WirePolicy policy, string declared, bool nullable,
-        bool property, FormatterModel? formatter = null, bool reservableSpan = false)
+        bool property, FormatterModel? formatter = null, bool reservableSpan = false, bool nativeFrameworkScalar = false)
         : base(name, storage, policy)
     {
         Formatter = formatter;
         ReservableSpan = reservableSpan;
+        NativeFrameworkScalar = nativeFrameworkScalar;
         Property = property;
         Nullable = nullable;
         Declared = declared;
@@ -226,7 +231,7 @@ internal sealed class SpecialMember : MemberModel
     {
         var member = (SpecialMember)other;
         return Declared == member.Declared && Nullable == member.Nullable && Property == member.Property &&
-            ReservableSpan == member.ReservableSpan && Equals(Formatter, member.Formatter);
+            ReservableSpan == member.ReservableSpan && NativeFrameworkScalar == member.NativeFrameworkScalar && Equals(Formatter, member.Formatter);
     }
 }
 
