@@ -25,6 +25,31 @@ public static partial class LuminPackMarshal
     public static void CopyBlockUnaligned(ref byte destination, ref byte src, uint byteCount)
         => CopyBlockUnaligned(ref destination, ref src, byteCount, destinationIsNew: false);
 
+    /// <summary>Copies a collection payload after the writer has proved its capacity.</summary>
+    /// <param name="destination">The first writable byte of the complete reserved range.</param>
+    /// <param name="source">The first readable byte of the non-overlapping source.</param>
+    /// <param name="count">The complete byte width.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void CopyCollectionPayload(ref byte destination, ref byte source, uint count)
+    {
+#if NET8_0_OR_GREATER
+        if (Unsafe.SizeOf<IntPtr>() == 8 && Vector128.IsHardwareAccelerated && count <= LuminKernelPolicy.ShortCopyLimit)
+        {
+            CopyShortBlock(ref destination, ref source, count);
+            return;
+        }
+#endif
+        CopyCollectionPayloadFallback(ref destination, ref source, count);
+    }
+
+    /// <summary>Keeps runtime copy policy dispatch outside the inlined short collection path.</summary>
+    /// <param name="destination">The first writable byte of the reserved payload.</param>
+    /// <param name="source">The first readable byte of the complete source.</param>
+    /// <param name="count">The complete payload width.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void CopyCollectionPayloadFallback(ref byte destination, ref byte source, uint count) =>
+        CopyBlockUnaligned(ref destination, ref source, count);
+
     /// <summary>Copies the exact bytes into a destination that was just allocated and will be fully overwritten.</summary>
     /// <param name="destination">The first writable byte of the complete fresh destination range.</param>
     /// <param name="src">The first readable byte of the complete source range.</param>

@@ -900,7 +900,7 @@ namespace LuminPack.Core
             int bytes = elements.Length * Unsafe.SizeOf<T>();
             LuminPackWriter.Write<int>(ref destination, elements.Length);
             if (bytes != 0)
-                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref destination, sizeof(int)),
+                LuminPackMarshal.CopyCollectionPayload(ref Unsafe.Add(ref destination, sizeof(int)),
                     ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(elements)), (uint)bytes);
             return sizeof(int) + bytes;
         }

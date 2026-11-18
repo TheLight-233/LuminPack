@@ -205,7 +205,7 @@ namespace LuminPack.Core
             ref byte current = ref Current;
             LuminPackWriter.Write<int>(ref current, count);
             if (bytes != 0)
-                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref current, sizeof(int)),
+                LuminPackMarshal.CopyCollectionPayload(ref Unsafe.Add(ref current, sizeof(int)),
                     ref source, (uint)bytes);
         }
 
