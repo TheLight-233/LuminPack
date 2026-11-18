@@ -200,6 +200,11 @@ internal static class FormatterCapabilities
                 result.Add("ImmutableStringRun");
         }
 
+        if (definition == "System.Collections.Immutable.ImmutableDictionary" &&
+            named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].SpecialType == SpecialType.System_Int32 &&
+            FormatterImmutableTraits.HasTreeCopy(compilation, "ImmutableDictionary", 2) &&
+            FormatterRuntimeTraits.HasEnumeratedStringKeyCheck(compilation))
+            result.Add("SeedImmutableStringKeys");
         if (definition == "System.Collections.Generic.Dictionary" && named.TypeArguments[0].SpecialType == SpecialType.System_String && FormatterRuntimeTraits.HasEnumeratedStringKeyCheck(compilation))
             result.Add("EnumeratedStringKey");
         if (definition == "System.Collections.Generic.Dictionary" && modern && !unity && CallbackFree(named.TypeArguments[0]))

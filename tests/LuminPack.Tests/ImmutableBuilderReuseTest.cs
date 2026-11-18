@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
+using LuminPack;
 using LuminPack.Utility;
 using Xunit;
 
@@ -46,6 +47,33 @@ public sealed class ImmutableBuilderReuseTest
         Assert.Same(payload, result["first"]);
         LuminImmutableBuilders.ReturnDictionary(reused);
     }
+
+#if LUMINPACK_NEXT_GENERATOR
+    /// <summary>Reuses matching key strings while publishing an independent immutable dictionary.</summary>
+    [Fact]
+    public void MatchingImmutableKeysSurviveValueChanges()
+    {
+        string first = new string('a', 8), second = new string('b', 8);
+        var previous = ImmutableDictionary<string, int>.Empty.Add(first, 1).Add(second, 2);
+        var incoming = previous.SetItem(first, 3);
+        byte[] bytes = LuminPackSerializer.Serialize(incoming);
+        var target = previous;
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(bytes.AsSpan(0, bytes.Length - 1), ref target));
+        Assert.Same(previous, target);
+        LuminPackSerializer.Deserialize(bytes, ref target);
+        Assert.NotSame(previous, target);
+        Assert.True(target.TryGetKey(first, out var retained));
+        Assert.Same(first, retained);
+        Assert.Equal(3, target[first]);
+        Assert.Equal(1, previous[first]);
+
+        target = previous.WithComparers(StringComparer.OrdinalIgnoreCase);
+        LuminPackSerializer.Deserialize(bytes, ref target);
+        Assert.Same(EqualityComparer<string>.Default, target.KeyComparer);
+        Assert.True(target.TryGetKey(first, out var replaced));
+        Assert.NotSame(first, replaced);
+    }
+#endif
 
     /// <summary>Leaves already frozen collection roots independent from the next rental.</summary>
     [Fact]
