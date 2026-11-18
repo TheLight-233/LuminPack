@@ -1,0 +1,125 @@
+name: CI 57 round 4 matrix and memory policy probes
+
+on:
+  push:
+    branches: [claude/ci57-r3-matrix]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci57-r4-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_TieredCompilation: '0'
+  DOTNET_TieredPGO: '0'
+  DOTNET_PROCESSOR_COUNT: '4'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+
+jobs:
+  matrix:
+    name: Full FullOpts matrix (linux-x64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+      - name: Build the matrix
+        run: >
+          dotnet build benchmarks/LuminPack.MatrixBenchmark -c Release
+          -p:LuminPackLegacyGeneratorReference=false -p:LuminPackUseSatori=false
+          -p:GeneratePackageOnBuild=false
+      - name: Validate fixtures and sample the matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/matrix-artifacts
+          dotnet --info > .tmp/matrix-artifacts/dotnet-info.txt
+          lscpu > .tmp/matrix-artifacts/cpu.txt
+          git rev-parse HEAD > .tmp/matrix-artifacts/revision.txt
+          dll=benchmarks/LuminPack.MatrixBenchmark/bin/Release/net10.0/LuminPack.MatrixBenchmark.dll
+          for format in binary json; do
+            for scene in main small regular large changing; do
+              for process in 1 2 3; do
+                dotnet "$dll" "$format" "$scene" 9 ".tmp/matrix-artifacts/$format-$scene-$process.jsonl"
+              done
+            done
+          done
+      - name: Summarize the matrix
+        run: |
+          python3 benchmarks/LuminPack.MatrixBenchmark/report.py .tmp/matrix-artifacts
+          cat .tmp/matrix-artifacts/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci57-r4-matrix-linux-x64
+          path: .tmp/matrix-artifacts
+
+  memory:
+    name: Copy and allocation policy (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x64-a, runner: ubuntu-24.04 }
+          - { name: linux-x64-b, runner: ubuntu-22.04 }
+          - { name: linux-arm64, runner: ubuntu-24.04-arm }
+          - { name: windows-x64, runner: windows-2025 }
+          - { name: windows-arm64, runner: windows-11-arm }
+          - { name: macos-x64, runner: macos-15-intel }
+          - { name: macos-arm64, runner: macos-15 }
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: repo, persist-credentials: false }
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Probe and compare policy variants
+        shell: bash
+        run: python repo/.github/scripts/ci57-r4-hardware.py repo results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci57-r4-memory-${{ matrix.name }}
+          path: |
+            results/*.txt
+            results/*.json
+            results/*.jsonl
+            results/variants/*.jsonl
+
+  sorted-set:
+    name: Round-3 gated sorted set and probes (linux-x64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: stock, persist-credentials: false }
+      - uses: actions/checkout@v4
+        with: { path: gated, persist-credentials: false }
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+      - run: python3 stock/.github/scripts/ci57-r3-hardware.py stock gated results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci57-r4-sorted-set-linux-x64
+          path: |
+            results/*.txt
+            results/*.jsonl
+            results/*.csv
