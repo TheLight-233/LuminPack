@@ -15,10 +15,9 @@ public static partial class LuminPackMarshal
     /// <remarks>
     /// The caller supplies valid ranges; this method does not perform bounds checks or provide
     /// memmove, atomic or volatile semantics. Managed references stay tracked. On modern 64-bit
-    /// SIMD targets, blocks through 32 bytes use bounded cached accesses. Reused blocks from 256 bytes
-    /// through 32 KiB use destination-aligned 256-bit stores, and from 128 bytes on Intel processors
-    /// with accelerated 512-bit vectors, destination-aligned 512-bit stores (see <see cref="LuminKernelPolicy"/>
-    /// for the measurements behind both ranges). Other lengths, older targets,
+    /// SIMD targets, blocks through 32 bytes use bounded cached accesses. Larger reused blocks use
+    /// destination-aligned 256-bit or 512-bit stores over the ranges measured for the processor class
+    /// (<see cref="LuminKernelPolicy"/> records the measurements). Other lengths, older targets,
     /// 32-bit targets and unsupported hardware retain <c>Unsafe.CopyBlockUnaligned</c>.
     /// An explicitly registered netstandard2.1 native copy hook may handle complete blocks of at least sixteen bytes on 64-bit.
     /// </remarks>
@@ -54,13 +53,14 @@ public static partial class LuminPackMarshal
 
             if (!destinationIsNew)
             {
-                if (LuminKernelPolicy.UseWideCopy(true, WideCopyHardware.Preferred, byteCount))
+                // The short path above handled zero bytes, the only width an unused range matches.
+                if (MemoryProfile.Copy.Wide(byteCount))
                 {
                     CopyWideBlock(ref destination, ref src, byteCount);
                     return;
                 }
 
-                if (LuminKernelPolicy.UseMediumCopy(true, Vector256.IsHardwareAccelerated, byteCount))
+                if (MemoryProfile.Copy.Medium(byteCount))
                 {
                     CopyMediumBlock(ref destination, ref src, byteCount);
                     return;
@@ -78,10 +78,10 @@ public static partial class LuminPackMarshal
     }
 
 #if NET8_0_OR_GREATER
-    /// <summary>Copies 256 bytes through 32 KiB with 256-bit loads and destination-aligned stores.</summary>
+    /// <summary>Copies 80 bytes through 32 KiB with 256-bit loads and destination-aligned stores.</summary>
     /// <param name="destination">The valid writable byte range.</param>
     /// <param name="source">The valid readable non-overlapping byte range.</param>
-    /// <param name="count">A byte count from 256 through 32 KiB.</param>
+    /// <param name="count">A byte count from 80 through 32 KiB.</param>
     /// <remarks>The first and final vectors are stored unaligned and overlap the aligned body; every access stays inside the
     /// two complete ranges. The alignment is only a position hint: a relocation during the copy changes speed, not bytes.</remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -109,27 +109,38 @@ public static partial class LuminPackMarshal
         Vector256.LoadUnsafe(ref source, last).StoreUnsafe(ref destination, last);
     }
 
-    /// <summary>Selects 512-bit medium copies only where the CI 57 round-4 measurements showed a gain.</summary>
-    /// <remarks>
-    /// Accelerated 512-bit vectors alone do not decide it: on the EPYC 9V74 (Zen 4, which splits 512-bit operations into two
-    /// 256-bit halves) the matrix raw-collection reuse rows took 1.04 times as long with the 512-bit kernel, while on the
-    /// Xeon 6975P-C they took 0.87 to 0.92. Only the GenuineIntel vendor string is accepted; other vendors, including the
-    /// unsampled Zen 5, keep the 256-bit schedule.
-    /// </remarks>
-    private static class WideCopyHardware
+    /// <summary>The processor class and the copy and allocation thresholds measured for it, read once.</summary>
+    /// <remarks>The vendor comes from CPUID leaf 0 and the AMD family from leaf 1 (base family plus extended family when the
+    /// base is 0Fh). Family 1Ah is Zen 5; Zen 3 and Zen 4 report 19h. Without x86 the class is <c>Other</c>.</remarks>
+    private static class MemoryProfile
     {
-        /// <summary>Whether this processor uses the 512-bit medium schedule.</summary>
-        internal static readonly bool Preferred = Vector512.IsHardwareAccelerated && IsGenuineIntel();
+        /// <summary>The processor class.</summary>
+        internal static readonly LuminKernelPolicy.ProcessorClass Processor = Detect();
 
-        /// <summary>Reads the CPUID vendor string.</summary>
-        /// <returns>Whether the vendor is GenuineIntel.</returns>
-        private static bool IsGenuineIntel()
+        /// <summary>The reused-destination copy ranges.</summary>
+        internal static readonly LuminKernelPolicy.CopyRanges Copy = LuminKernelPolicy.SelectCopyRanges(
+            Unsafe.SizeOf<IntPtr>() == 8, Vector256.IsHardwareAccelerated, Vector512.IsHardwareAccelerated, Processor);
+
+        /// <summary>The smallest array, in bytes, allocated without zeroing.</summary>
+        internal static readonly ulong ZeroedArrayLimit = LuminKernelPolicy.SelectZeroedArrayLimit(Processor);
+
+        /// <summary>Classifies the processor from its CPUID vendor string and family.</summary>
+        /// <returns>The measured class, or <c>Other</c>.</returns>
+        private static LuminKernelPolicy.ProcessorClass Detect()
         {
             if (!X86Base.IsSupported)
-                return false;
+                return LuminKernelPolicy.ProcessorClass.Other;
             (_, int ebx, int ecx, int edx) = X86Base.CpuId(0, 0);
-            // "Genu" "ineI" "ntel" in EBX, EDX, ECX.
-            return ebx == 0x756E6547 && edx == 0x49656E69 && ecx == 0x6C65746E;
+            // "Genu" "ineI" "ntel" and "Auth" "enti" "cAMD" in EBX, EDX, ECX.
+            if (ebx == 0x756E6547 && edx == 0x49656E69 && ecx == 0x6C65746E)
+                return LuminKernelPolicy.ProcessorClass.Intel;
+            if (ebx != 0x68747541 || edx != 0x69746E65 || ecx != 0x444D4163)
+                return LuminKernelPolicy.ProcessorClass.Other;
+            int signature = X86Base.CpuId(1, 0).Eax;
+            int family = (signature >> 8) & 0xF;
+            if (family == 0xF)
+                family += (signature >> 20) & 0xFF;
+            return family == 0x1A ? LuminKernelPolicy.ProcessorClass.AmdZen5 : LuminKernelPolicy.ProcessorClass.Amd;
         }
     }
 
@@ -139,9 +150,9 @@ public static partial class LuminPackMarshal
     /// <param name="count">A byte count from 128 through 32 KiB.</param>
     /// <remarks>The same schedule as <see cref="CopyMediumBlock"/> at twice the width: the first and final vectors are stored
     /// unaligned and overlap the aligned body, and every access stays inside the two complete ranges. The alignment is only a
-    /// position hint: a relocation during the copy changes speed, not bytes. Measured against the runtime block copy on the
-    /// Xeon 6975P-C (reused destination, one cache-resident target): 0.81 at 128 bytes, 0.48 at 512 bytes, 0.57 at 1 KiB,
-    /// 0.86 at 4 KiB and 0.93 at 16 KiB; see <see cref="LuminKernelPolicy"/> for the matrix results.</remarks>
+    /// position hint: a relocation during the copy changes speed, not bytes. <see cref="LuminKernelPolicy"/> records where it
+    /// beats the 256-bit schedule and the runtime copy (Intel with 512-bit vectors from 128 bytes, Zen 5 from 512 bytes
+    /// through 24 KiB).</remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void CopyWideBlock(ref byte destination, ref byte source, uint count)
     {

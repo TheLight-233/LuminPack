@@ -1045,40 +1045,42 @@ public static partial class LuminPackMarshal
         return (T)RuntimeHelpers.GetUninitializedObject(typeof(T));
     }
 
-    // Zeroed-array threshold evidence (LuminPack's own CI 57 round-4 allocation probe, run 44205342061, .NET 10 FullOpts,
-    // Server GC, four reported processors). Each call allocated a byte array and overwrote every byte, as the callers of
-    // this helper do; values are uninitialized-allocation time / zeroed-allocation time, median of nine rounds:
+    // Zeroed-array thresholds, measured by LuminPack's own CI 57 allocation probes (.NET 10 FullOpts, four reported
+    // processors). Each call allocated a byte array and overwrote every byte, as the callers of this helper do; values are
+    // uninitialized-allocation time / zeroed-allocation time, median of nine rounds, ranges over the hosts of a class.
     //
-    //   host               2 KiB   4 KiB   8 KiB   16 KiB   32 KiB   64 KiB
-    //   Xeon 6975P-C        1.33    1.28    1.11    1.03     0.79     0.70
-    //   EPYC 9V74           1.23    1.02    0.89    0.95     0.88     0.87
-    //   EPYC 7763           1.28    1.04    0.88    0.87     0.67     0.82
-    //   i7-8700B            1.01    1.02    0.99    0.96     0.66     0.69
-    //   Neoverse N2         1.41    1.03    0.89    0.87     0.86     0.83
-    //   Cobalt 100          1.44    1.05    0.94    0.90     0.89     0.85
-    //   Apple M1            0.99    0.76    0.85    0.77     1.11     1.08
+    // Round 5 (run 44216361325; 30 sizes from 1 KiB to 4 MiB), Server GC:
+    //   processor                    4 KiB      5 KiB      6 KiB      8 KiB      12 KiB     16 KiB
+    //   Zen 5 (EPYC 9V45, 4 hosts)   0.91-1.03  0.83-0.97  0.83-0.92  0.85-0.89  0.81-0.90  0.76-0.88
+    //   Zen 4 (EPYC 9V74)            1.01       1.00       0.95       0.91       0.92       0.96
+    //   Zen 3 (EPYC 7763, 4 hosts)   0.97-1.03  0.93-0.95  0.86-0.91  0.88-0.89  0.84-0.90  0.85-0.88
+    //   Coffee Lake (i7-8700B)       1.04       0.98       0.92       0.89       0.86       0.87
+    //   Neoverse N2 (2 hosts)        1.04-1.08  0.97-0.98  0.90-0.94  0.90       0.85-0.86  0.84-0.87
+    //   Cobalt 100                   1.04       0.96       0.95       0.92       0.92       0.90
+    //   Apple M1                     0.92       0.87       1.02       0.98       0.81       0.89
+    // Workstation GC crossed over at the same size (5 KiB: 0.80 to 1.03; 8 KiB: 0.73 to 0.91, Apple M1 1.05). From 2 KiB
+    // through 4 KiB the uninitialized request leaves the runtime's inline allocation path and was slower on almost every
+    // host (2 KiB: 1.15 to 1.61), so arrays below 5 KiB are zeroed.
     //
-    // Below 2 KiB the runtime already returns a zeroed array. From 2 KiB through 4 KiB the uninitialized request is slower
-    // on six of seven hosts (it leaves the inline allocation path); from 8 KiB on it is faster on most hosts and then by a
-    // widening margin. Workstation GC gave the same crossover (2 KiB: 1.07 to 1.97; 8 KiB: 0.79 to 0.87 except 1.18 on the
-    // Xeon). End to end, zeroed arrays below 64 KiB made most matrix 4 KiB rows faster (main fresh reads 0.91 to 0.98 on six
-    // hosts, main writes 0.87 to 0.97 on five) and every 16 KiB write row slower (large writes 1.08 to 1.22 on all seven),
-    // placing the threshold at 8 KiB. The Apple M1 host was noisy (4 KiB rows 1.06 to 1.11) and is the main exception.
-
-    /// <summary>The smallest array, in bytes, requested without zeroing.</summary>
-    private const ulong ZeroedArrayLimit = 8 * 1024;
+    // Intel servers cross over later. Round 4 (run 44205342061) on the Xeon 6975P-C: 1.28 at 4 KiB, 1.11 at 8 KiB, 1.03 at
+    // 16 KiB and 0.79 at 32 KiB; a local i7-13650HX took 1.03 at 8 KiB and 0.95 at 16 KiB. Intel processors therefore zero
+    // below 16 KiB; the Coffee Lake client (0.86 to 0.89 from 8 to 16 KiB) is the cost of that choice.
+    //
+    // End to end (matrix raw-collection rows, round 5): zeroing only below 2 KiB slowed most 4 KiB write rows (up to 1.12),
+    // and zeroing below 32 KiB slowed every 16 KiB write row (1.07 to 1.24), bracketing both thresholds.
 
     /// <summary>Allocates an array that the caller overwrites completely before exposing it.</summary>
     /// <param name="length">The number of elements.</param>
     /// <typeparam name="T">The element type.</typeparam>
-    /// <returns>A zeroed array below 8 KiB, otherwise an array whose reference-free contents may be uninitialized.</returns>
-    /// <remarks>The threshold comes from the measurements above.</remarks>
+    /// <returns>A zeroed array below the processor's threshold (16 KiB on Intel, otherwise 5 KiB), otherwise an array whose
+    /// reference-free contents may be uninitialized.</returns>
+    /// <remarks>The thresholds come from the measurements above.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static T[] AllocateUninitializedArray<T>(int length)
     {
 #if NET8_0_OR_GREATER
         // A negative length fails the comparison and reaches the runtime, which rejects it exactly as before.
-        if ((ulong)(uint)length * (ulong)Unsafe.SizeOf<T>() < ZeroedArrayLimit)
+        if ((ulong)(uint)length * (ulong)Unsafe.SizeOf<T>() < MemoryProfile.ZeroedArrayLimit)
             return new T[length];
         return GC.AllocateUninitializedArray<T>(length);
 #else
