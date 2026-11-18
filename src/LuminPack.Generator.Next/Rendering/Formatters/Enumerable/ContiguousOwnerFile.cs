@@ -39,6 +39,7 @@ internal static class ContiguousOwnerFile
             ? FormatterElementEmitter.FixedObject(set, element) : null;
         string suffix = ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type));
         bool reference = shape is ContiguousShape.Array or ContiguousShape.List;
+        bool localTraversal = reference && set.Options?.Net8 == true;
         // A Union element of a list keeps the original fresh loop, which needs the root's case arms.
         PayloadRenderModel? freshUnion = checkedUnion ?? (element.Definition != FormatterDefinitions.GenericUnion &&
             element.Payload is UnionModel union && set.Options != null && set.Options.Net8
@@ -181,14 +182,30 @@ internal static class ContiguousOwnerFile
                 w.Open();
                 if (fixedObject != null)
                     WriteFixedWindow(w, fixedObject);
+                string state = localTraversal ? "loopWriter" : "writer";
+                if (localTraversal)
+                {
+                    w.Line("var loopWriter = writer;");
+                    w.Line("try");
+                    w.Open();
+                }
                 w.Line("ref var current = ref " + MemoryMarshal + ".GetReference(items);");
                 w.Line("do");
                 w.Open();
-                FormatterElementEmitter.Write(w, set, element, "current");
+                FormatterElementEmitter.Write(w, set, element, "current", state);
                 w.Line("if (--length == 0) break;");
                 w.Line("current = ref " + Unsafe + ".Add(ref current, 1);");
                 w.Close();
                 w.Line("while (true);");
+                if (localTraversal)
+                {
+                    w.Close();
+                    w.Line("finally");
+                    w.Open();
+                    // A formatter can relocate the owning buffer before throwing. Propagate the current storage even on failure.
+                    w.Line("loopWriter.CopyTo(ref writer);");
+                    w.Close();
+                }
                 w.Close();
             }
 
@@ -343,16 +360,20 @@ internal static class ContiguousOwnerFile
                 w.Line("var freshItems = reader.CreateFreshListArray<" + element.Type + ">(freshLength, out value);");
                 w.Line("if (freshLength != 0)");
                 w.Open();
+                if (localTraversal)
+                    w.Line("var loopReader = reader;");
                 w.Line("ref var first = ref " + Marshal + ".GetNotNullArrayReference(freshItems);");
                 w.Line("int i = 0;");
                 w.Line("do");
                 w.Open();
                 w.Line(element.Type + " item = default!;");
-                UnionEmitter.FreshElementRead(freshUnion, w, "item", "freshEnd");
+                UnionEmitter.FreshElementRead(freshUnion, w, "item", "freshEnd", localTraversal ? "loopReader" : "reader");
                 w.Line("freshEnd:");
                 w.Line(Unsafe + ".Add(ref first, (nint)(uint)i) = item;");
                 w.Close();
                 w.Line("while (++i < freshLength);");
+                if (localTraversal)
+                    w.Line("loopReader.CopyTo(ref reader);");
                 w.Close();
                 w.Line("return;");
                 w.Close();
@@ -673,8 +694,11 @@ internal static class ContiguousOwnerFile
 
         void ReadSlots(CodeWriter w, bool json)
         {
+            bool readLocal = !json && localTraversal;
             w.Line("if (length > 0)");
             w.Open();
+            if (readLocal)
+                w.Line("var loopReader = reader;");
             w.Line("ref var firstItem = ref " + MemoryMarshal + ".GetReference(items);");
             w.Line("int index = 0;");
             w.Line("do");
@@ -693,10 +717,12 @@ internal static class ContiguousOwnerFile
             {
                 // These backing arrays are fresh, so ordinary object slots already hold the null seed.
                 bool fresh = shape is ContiguousShape.ReadOnlyMemory or ContiguousShape.ReadOnlySequence or ContiguousShape.ImmutableArray;
-                FormatterElementEmitter.Read(w, set, element, slot, fresh: fresh);
+                FormatterElementEmitter.Read(w, set, element, slot, readLocal ? "loopReader" : "reader", fresh: fresh);
             }
             w.Close();
             w.Line("while (++index < length);");
+            if (readLocal)
+                w.Line("loopReader.CopyTo(ref reader);");
             w.Close();
         }
     }

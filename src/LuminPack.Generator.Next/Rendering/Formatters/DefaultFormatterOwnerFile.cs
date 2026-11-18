@@ -130,6 +130,11 @@ internal static class DefaultFormatterOwnerFile
     {
         string[] parts = model.Underlying!.Split('|');
         var closed = model.Payload as UnionModel;
+        // Checked projections with enclosing limits or a separately published case copy use the definition's read path.
+        PayloadRenderModel? read = closed is { Referenced: false, Rejection: null } && !closed.Policy.Limits.Explicit
+            ? RenderModelFactory.Create(closed, set.Options) : null;
+        if (read != null && Array.Exists(read.UnionCases, item => UnionEmitter.NeedsCheckedCase(read, item)))
+            read = null;
         string Call(string entry, bool write) => "global::LuminPack.LuminPackSerializer." + entry + "_" + parts[0] + "<" + parts[1] +
             ", TLuminProfile>(ref " + (write ? "writer, in" : "reader, ref") + " value);";
         return SpecialOwnerFile.Render(set, operations, ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type)), model.Type, true,
@@ -139,7 +144,13 @@ internal static class DefaultFormatterOwnerFile
                     UnionEmitter.EmitClosedWriteDispatch(closed, w);
                 else
                     w.Line(Call("Serialize", true));
-            }, (w, _) => w.Line(Call("Deserialize", false)),
+            }, (w, _) =>
+            {
+                if (read != null)
+                    UnionEmitter.ReadSwitch(read, w);
+                else
+                    w.Line(Call("Deserialize", false));
+            },
             (w, _) => w.Line(Call("SerializeJson", true)), (w, _) => w.Line(Call("DeserializeJson", false)));
     }
 

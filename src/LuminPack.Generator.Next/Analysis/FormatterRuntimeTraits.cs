@@ -116,6 +116,20 @@ internal static class FormatterRuntimeTraits
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, span.Construct(nullable.Construct(method.TypeParameters[0]))));
     }
 
+    /// <summary>Checks the referenced runtime for the present nullable native-payload reader.</summary>
+    /// <param name="compilation">The consuming compilation's runtime metadata.</param>
+    /// <returns>Whether the exact advancing reader entry is available.</returns>
+    internal static bool HasNativeNullablePayloadReader(Compilation compilation)
+    {
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader");
+        var nullable = compilation.GetSpecialType(SpecialType.System_Nullable_T);
+        return reader != null && reader.GetMembers("ReadNativeNullablePayload").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } &&
+            method.TypeParameters[0].HasUnmanagedTypeConstraint && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+            method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.Ref &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, nullable.Construct(method.TypeParameters[0])));
+    }
+
     /// <summary>Checks the optional owning reader for an exact scalar sorted list.</summary>
     /// <param name="compilation">The referenced framework and Core metadata.</param>
     /// <param name="list">The selected exact framework list.</param>

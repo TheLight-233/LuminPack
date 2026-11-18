@@ -30,6 +30,9 @@ internal static class FormatterCapabilities
         if (type is not INamedTypeSymbol { IsGenericType: true } named)
             return result.ToArray();
         string definition = named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.Name;
+        if (modern && !unity && named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T &&
+            named.TypeArguments[0].IsUnmanagedType && FormatterRuntimeTraits.HasNativeNullablePayloadReader(compilation))
+            result.Add("ReadNativeNullablePayload");
         if ((SequenceInterface(definition) || definition.StartsWith("System.Collections.Immutable.", StringComparison.Ordinal) ||
             definition is "System.Collections.Generic.Stack" or "System.Collections.Generic.SortedSet" or "System.Collections.Generic.LinkedList" or
                 "System.Collections.Concurrent.ConcurrentStack" or "System.Collections.Concurrent.ConcurrentBag" or "System.Collections.Frozen.FrozenSet") &&
@@ -455,7 +458,8 @@ internal static class FormatterCapabilities
             if (raw && FormatterConcurrentTraits.HasCapturedRawPairTransfer(compilation, interleave: false))
                 result.Add("PackedTreeRawPairs");
         }
-        if (definition == "System.Collections.Generic.Dictionary" && modern && !unity &&
+        if (definition is "System.Collections.Generic.Dictionary" or "System.Collections.Generic.IDictionary" or
+            "System.Collections.Generic.IReadOnlyDictionary" && modern && !unity &&
             named.TypeArguments.All(argument => argument.IsUnmanagedType && argument.SpecialType != SpecialType.System_Boolean) &&
             FormatterConcurrentTraits.HasRawDictionaryExpansion(compilation))
             result.Add("ExpandDenseRawPairs");
@@ -535,6 +539,11 @@ internal static class FormatterCapabilities
             compilation.GetTypeByMetadataName("System.Collections.Generic.Dictionary`2") is { } dictionary &&
             FormatterConcurrentTraits.HasDictionaryView(compilation, dictionary))
             result.Add("DenseDictionaryView");
+        if (definition == "System.Collections.Generic.Dictionary" && modern && !unity &&
+            named.TypeArguments[0].SpecialType == SpecialType.System_String &&
+            named.TypeArguments[1].SpecialType is SpecialType.System_String or SpecialType.System_Int32 &&
+            FormatterConcurrentTraits.HasBinaryTextPairCursor(compilation))
+            result.Add("BinaryStringPairCursor");
         if (definition.StartsWith("System.Collections.Concurrent.Concurrent", StringComparison.Ordinal) && FormatterConcurrentTraits.Available(compilation, named.Name, named.Arity))
             result.Add("ConcurrentTraversal");
         if (definition == "System.Collections.Frozen.FrozenSet")

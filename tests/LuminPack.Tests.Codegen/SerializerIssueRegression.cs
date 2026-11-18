@@ -3,6 +3,7 @@ extern alias ModelBasedAnalyzer;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 /// <summary>Exercises reported model-based generator regressions.</summary>
@@ -21,6 +22,15 @@ internal static partial class SerializerIssueRegression
             [LuminPackable] public abstract partial class ProbeBox<T> { public T V; }
             [LuminPackable] public sealed partial class ProbeBoxA : ProbeBox<int> { }
             [LuminPackable] public sealed partial class ProbeBoxB : ProbeBox<int> { }
+            [LuminPackable] public sealed partial class ProbeText : ProbeBox<string> { }
+            [LuminPackable, LuminPackUnion(1, typeof(ProbeRoute))] public abstract partial class ProbeRouteBase { }
+            [LuminPackable] public sealed partial class ProbeRoute : ProbeRouteBase
+            {
+                public int Distance;
+                public int Stages;
+                public ProbeStop Stop;
+            }
+            [LuminPackable] public sealed partial class ProbeStop { public string Name; public int Code; }
             public static class Entry
             {
                 public static void Check()
@@ -43,12 +53,69 @@ internal static partial class SerializerIssueRegression
                     copy = null;
                     LuminPackSerializer.DeserializeJson(json, ref copy);
                     if (copy is not ProbeBoxB { V: 73 }) throw new Exception("Union JSON round trip");
+
+                    ProbeBox<int>[] numbers = [null, new ProbeBoxA { V = 42 }, value];
+                    ProbeBox<int>[] numberCopies = null;
+                    var numberBytes = LuminPackSerializer.Serialize(numbers);
+                    LuminPackSerializer.Deserialize(numberBytes, ref numberCopies);
+                    if (numberCopies is not [null, ProbeBoxA { V: 42 }, ProbeBoxB { V: 73 }]) throw new Exception("Closed array read");
+                    var reused = numberCopies[1];
+                    LuminPackSerializer.Deserialize(numberBytes, ref numberCopies);
+                    if (!ReferenceEquals(reused, numberCopies[1])) throw new Exception("Closed array case reuse");
+
+                    ProbeBox<string>[] texts = [new ProbeText { V = "\u65E5\u672C\u8A9E" }];
+                    ProbeBox<string>[] textCopies = null;
+                    var textBytes = LuminPackSerializer.Serialize(texts);
+                    LuminPackSerializer.Deserialize(textBytes, ref textCopies);
+                    if (textCopies is not [ProbeText { V: "\u65E5\u672C\u8A9E" }]) throw new Exception("Managed closed array read");
+                    try
+                    {
+                        LuminPackSerializer.Deserialize(textBytes, ref numberCopies);
+                        throw new Exception("Tag of an unrelated closed Union root was accepted");
+                    }
+                    catch (Exception error) when (error.Message.Contains("Unknown Union hash")) { }
+
+                    var route = new ProbeRoute { Distance = 500, Stages = 3, Stop = new ProbeStop { Name = "Central", Code = 9 } };
+                    var routeBytes = LuminPackSerializer.Serialize(route);
+                    ProbeRoute routeCopy = null;
+                    LuminPackSerializer.Deserialize(routeBytes, ref routeCopy);
+                    if (routeCopy is not { Distance: 500, Stages: 3, Stop: { Name: "Central", Code: 9 } }) throw new Exception("Nested object read");
+                    ProbeRouteBase unionRoute = route;
+                    ProbeRouteBase unionRouteCopy = null;
+                    LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(unionRoute), ref unionRouteCopy);
+                    if (unionRouteCopy is not ProbeRoute { Distance: 500, Stages: 3, Stop: { Name: "Central", Code: 9 } }) throw new Exception("Nested payload read");
                 }
             }
             """;
         foreach (string mode in new[] { "Full", "Light", "Minimal" })
-            Execute(references, source.Replace("MODE", mode, StringComparison.Ordinal), "Union" + mode);
+            Execute(references, source.Replace("MODE", mode, StringComparison.Ordinal), "Union" + mode, InspectUnion);
         Console.WriteLine("Passed discovered closed generic Union case compilation, reuse, and round trips.");
+    }
+
+    /// <summary>Checks that closed Union readers keep only their own hashes and variable cases stay out of the switch.</summary>
+    /// <param name="result">The generated consumer source.</param>
+    private static void InspectUnion(GeneratorDriverRunResult result)
+    {
+        var owners = result.GeneratedTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<StructDeclarationSyntax>()).ToArray();
+        CheckReader("ProbeBoxOfIntFormatter", 2, outlined: false);
+        CheckReader("ProbeBoxOfStringFormatter", 1, outlined: true);
+        var nestedRead = owners.Where(item => item.Identifier.ValueText == "ProbeRouteFormatter").SelectMany(item => item.Members)
+            .OfType<MethodDeclarationSyntax>().Where(method => method.Identifier.ValueText == "Read")
+            .SelectMany(method => method.DescendantNodes().OfType<LocalFunctionStatementSyntax>())
+            .SingleOrDefault(method => method.Identifier.ValueText == "ReadNested");
+        if (nestedRead == null || !nestedRead.AttributeLists.ToString().Contains("NoInlining", StringComparison.Ordinal))
+            throw new InvalidOperationException("The two parent framings did not share one outlined child reader.");
+
+        void CheckReader(string owner, int cases, bool outlined)
+        {
+            var read = owners.Where(item => item.Identifier.ValueText == owner).SelectMany(item => item.Members)
+                .OfType<MethodDeclarationSyntax>().SingleOrDefault(method => method.Identifier.ValueText == "Read" && method.Body != null);
+            var dispatch = read?.Body?.Statements.OfType<SwitchStatementSyntax>().SingleOrDefault();
+            if (dispatch == null || dispatch.Sections.SelectMany(arm => arm.Labels).OfType<CaseSwitchLabelSyntax>().Count() != cases)
+                throw new InvalidOperationException(owner + " did not emit its own closed Union switch.");
+            if (read!.Body!.Statements.OfType<LocalFunctionStatementSyntax>().Any(method => method.AttributeLists.ToString().Contains("NoInlining", StringComparison.Ordinal)) != outlined)
+                throw new InvalidOperationException(owner + " has the wrong case boundary for its payloads.");
+        }
     }
 
     /// <summary>Compiles a Next consumer and executes its checks.</summary>

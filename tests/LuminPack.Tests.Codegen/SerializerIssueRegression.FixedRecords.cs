@@ -84,6 +84,8 @@ internal static partial class SerializerIssueRegression
                     if (!bytes.AsSpan().SequenceEqual(expected) ||
                         LuminPackSerializer.Deserialize<FixedRecord>(bytes).Position != record.Position)
                         throw new Exception("Fixed record width or bytes changed.");
+                    if (!LuminPackSerializer.Serialize<FixedRecord>(null).AsSpan().SequenceEqual(new byte[] { 255 }))
+                        throw new Exception("The allocating fixed root changed the null marker.");
 
                     using var buffer = new LuminBufferWriter(true);
                     foreach (int length in new[] { 3, 4096 })
@@ -97,11 +99,18 @@ internal static partial class SerializerIssueRegression
                         if (encoded.Length != length + 84 || encoded[45] != 255 || !encoded[4..45].SequenceEqual(expected) ||
                             !encoded[^41..].SequenceEqual(expected))
                             throw new Exception("Fixed array window or fallback changed the wire.");
+                        if (!LuminPackSerializer.Serialize(items).AsSpan().SequenceEqual(encoded))
+                            throw new Exception("The allocating array kept its excess null-element room or changed its bytes.");
                         FixedRecord[] copy = null;
                         LuminPackSerializer.Deserialize(encoded, ref copy);
                         if (copy[1] != null || copy[^1].Tag != tag)
                             throw new Exception("Fixed array null or non-null element changed.");
                     }
+                    buffer.Reset();
+                    var fixedItems = new[] { record, record, record };
+                    LuminPackSerializer.Serialize(fixedItems, buffer);
+                    if (buffer.CurrentIndex != 127 || !LuminPackSerializer.Serialize(fixedItems).AsSpan().SequenceEqual(buffer.GetSpan()))
+                        throw new Exception("The exact allocating array changed the non-null element bytes.");
 
                     var observed = new ObservedRecord { Number = 31 };
                     var observedCopy = LuminPackSerializer.Deserialize<ObservedRecord>(LuminPackSerializer.Serialize(observed));

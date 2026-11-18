@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using LuminPack.SourceGenerator.Next.Model;
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 using Microsoft.CodeAnalysis;
 
@@ -56,8 +57,21 @@ internal static partial class TypeModelFactory
 
             EntryShape write = EntryWriteShape(type, member, payload);
             bool stateless = payload == null ? IsStatelessMember(member) : IsStatelessPayload(payload);
-            return new EntryShape(write.Kind, write.Element, write.Width, stateless);
+            bool nullObjectRead = payload is RecordModel
+                { Callbacks: null, Recursive: false, Versioned: false, SequenceBase: null, Rejection: null } &&
+                !payload.Policy.TrackReferences && payload.Policy.Bound == null && !payload.Policy.Limits.Explicit;
+            return new EntryShape(write.Kind, write.Element, write.Width, stateless, nullObjectRead, HasRetainedDirectWrite);
         }
+
+        private bool? _hasRetainedDirectWrite;
+
+        /// <summary>Checks the referenced Core for the retained root storage API before emitting a call to it.</summary>
+        private bool HasRetainedDirectWrite => _hasRetainedDirectWrite ??=
+            _compilation.GetTypeByMetadataName("LuminPack.Utility.LuminBufferWriter")?.GetMembers("TryBeginFixedRoot")
+                .OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.DeclaredAccessibility == Accessibility.Public &&
+                    method.Arity == 0 && method.ReturnsByRef && method.ReturnType.SpecialType == SpecialType.System_Byte &&
+                    method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                    method.Parameters[0].Type.SpecialType == SpecialType.System_Int32) == true;
 
         /// <summary>Selects an allocating write only when its width matches the published writer's representation.</summary>
         /// <param name="type">The closed root type.</param>
@@ -75,6 +89,34 @@ internal static partial class TypeModelFactory
                 return new EntryShape(EntryKind.FixedWidthRecord, width: layout.WireSize);
             if (name == "global::System.TimeZoneInfo")
                 return new EntryShape(EntryKind.TimeZoneSnapshot);
+            if (name == "global::System.Version" && payload == null && type.DeclaringSyntaxReferences.IsEmpty)
+                return new EntryShape(EntryKind.FixedVersion);
+            if (name == "string")
+                return new EntryShape(EntryKind.RootString);
+            if (name == "global::System.Uri" && payload == null && type.DeclaringSyntaxReferences.IsEmpty)
+                return new EntryShape(EntryKind.RootUri);
+            if (name == "global::System.Globalization.CultureInfo" && payload == null && type.DeclaringSyntaxReferences.IsEmpty)
+                return new EntryShape(EntryKind.RootCulture);
+            if (type is INamedTypeSymbol { IsSealed: true, IsGenericType: false } && FixedRootObject(payload) is { } fixedRoot)
+                return new EntryShape(EntryKind.FixedObject, fixedRoot.Readable);
+            if (type is IArrayTypeSymbol { IsSZArray: true } array)
+            {
+                if (HasRetainedDirectWrite && IsKnownScalar(array.ElementType))
+                    return new EntryShape(EntryKind.RawArray, FormatterName(array.ElementType));
+                if (member is SpecialMember { Formatter.Arguments.Length: 1 } arrayMember)
+                {
+                    FormatterModel item = arrayMember.Formatter!.Arguments[0];
+                    if (HasRetainedDirectWrite && item is { RawCollection: true, Layout: null,
+                        Payload: StructModel { Storage: StructStorage.RawUnmanaged, Versioned: false, Rejection: null } })
+                        return new EntryShape(EntryKind.RawArray, item.Type);
+                    if (array.ElementType is INamedTypeSymbol { IsSealed: true, IsGenericType: false } &&
+                        item.OrdinaryObject && FixedRootObject(item.Payload) is { } fixedElement)
+                        return new EntryShape(EntryKind.FixedObjectArray, fixedElement.Readable);
+                }
+                if (member is CollectionMember { Nested: { } nested } && array.ElementType is INamedTypeSymbol
+                    { IsSealed: true, IsGenericType: false } && FixedRootObject(nested) is { } fixedNested)
+                    return new EntryShape(EntryKind.FixedObjectArray, fixedNested.Readable);
+            }
             if (type is INamedTypeSymbol { Name: "PriorityQueue", TypeArguments.Length: 2 } heap &&
                 IsFrameworkCollection(heap, "System.Collections.Generic.PriorityQueue`2") &&
                 FormatterOrderedCollectionTraits.HasPriorityAllocatingWriter(_compilation, heap))
@@ -140,6 +182,13 @@ internal static partial class TypeModelFactory
             }
             return EntryShape.Pooled;
         }
+
+        /// <summary>Finds a published positional class writer with an exact callback-free fixed width.</summary>
+        /// <param name="payload">The normalized class contract.</param>
+        /// <returns>The fixed record model, or null when the ordinary writer must be used.</returns>
+        private PayloadRenderModel? FixedRootObject(TypeModel? payload) =>
+            payload is RecordModel { Implicit: false, Derived: false, Versioned: false, SequenceBase: null } &&
+            RenderModelFactory.Create(payload, Options) is { } model && BinaryEmitter.CanReserveFixedObject(model) ? model : null;
 
         /// <summary>Proves a generated payload can be read without a preinitialized operation context.</summary>
         /// <param name="payload">The fully modeled generated payload.</param>

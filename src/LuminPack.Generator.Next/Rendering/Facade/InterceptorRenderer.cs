@@ -310,11 +310,14 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         if (root.Owner != null && bound.Json && !bound.Writes)
             target = "LuminPackSerializer.DeserializeJson_" + root.RootName + "<" + profile + ">";
 
-        bool binaryShape = api is SerializerApi.SerializeArray or SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef or
+        bool binaryShape = api is SerializerApi.SerializeArray or SerializerApi.SerializeBuffer or SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef or
             SerializerApi.DeserializeStream or SerializerApi.DeserializeStreamValue;
         var bodyKey = (Api: api, Shape: binaryShape ? bound.Shape : EntryShape.Pooled, Measured: binaryShape && measured);
         // The compound's exact writer encodes strings under its fixed profile. Read state follows the formatter graph.
         if (api == SerializerApi.SerializeArray && bodyKey.Shape.Kind == EntryKind.CompoundDirect && profile != RootEntry.DefaultProfile)
+            bodyKey = (api, EntryShape.Pooled, false);
+        if (api == SerializerApi.SerializeBuffer && profile != RootEntry.DefaultProfile &&
+            bodyKey.Shape.Kind is EntryKind.RootString or EntryKind.RootUri or EntryKind.RootCulture)
             bodyKey = (api, EntryShape.Pooled, false);
         if (!documentBodies.TryGetValue(bodyKey, out string? body))
         {
@@ -391,11 +394,18 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             else if (shape.StatelessRead)
                 binaryRead = shape.Kind == EntryKind.FixedEnum ? StatelessRead.Replace("%ENUMCHECK%", EnumCheck) : StatelessRead.Replace("%ENUMCHECK%", string.Empty);
         }
+        if (shape.NullObjectRead && api is SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef)
+        {
+            const string cap = "                        LuminPackInputPolicy.CheckInput(buffer.Length, %LIMIT%);\n";
+            binaryRead = NullObjectSpanRead + "\n" +
+                "                [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]\n" +
+                LocalRead("ReadNonNull", "ReadOnlySpan<byte>", binaryRead.Replace(cap, string.Empty));
+        }
         string statements = api switch
         {
             SerializerApi.SerializeArray => AllocatingWrite(shape, measured),
             SerializerApi.SerializeBufferWriter => BinaryBufferWriter,
-            SerializerApi.SerializeBuffer => BinaryBufferWrite,
+            SerializerApi.SerializeBuffer => RetainedWrite(shape),
             SerializerApi.SerializeStream => StreamWrite,
             SerializerApi.DeserializeSpan => ReturnValue(binaryRead, "buffer"),
             SerializerApi.DeserializeSpanRef => binaryRead,
@@ -469,6 +479,21 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     {
         if (shape.Kind == EntryKind.RawScalar)
             return RawWrite;
+        if (FixedRoot(shape) is { } fixedRoot)
+        {
+            if (shape.Kind != EntryKind.RawArray)
+                return fixedRoot.Prepare + "                var buffer = new byte[length];\n" +
+                    "                ref byte destination = ref MemoryMarshal.GetArrayDataReference(buffer);\n" +
+                    fixedRoot.Store + "                return buffer;\n";
+            return fixedRoot.Prepare +
+                "                var buffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(length);\n" +
+                "                ref byte destination = ref MemoryMarshal.GetArrayDataReference(buffer);\n" +
+                fixedRoot.Store + "                return buffer;\n";
+        }
+        if (shape.Kind == EntryKind.FixedObjectArray)
+            return FixedObjectArrayWrite.Replace("%ELEMENTOWNER%", FixedObjectOwner(shape.Element!)) + "\n" +
+                "                [MethodImpl(MethodImplOptions.NoInlining)]\n" +
+                "                static byte[] WriteOversized(in %TYPE% value)\n                {\n" + Indent(PooledWrite) + "                }\n";
         if (shape.Kind == EntryKind.BigInteger)
             return BigIntegerWrite;
         if (shape.Kind == EntryKind.TimeZoneSnapshot)
@@ -485,12 +510,18 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                 (shape.Width?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "Unsafe.SizeOf<" + shape.Element + ">()") + " : 1;\n",
             EntryKind.FixedWidthRecord => "                int directLength = " + shape.Width!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + ";\n",
             EntryKind.RawSequence => "                int directLength = checked(sizeof(int) + checked((int)value.Length) * Unsafe.SizeOf<" + shape.Element + ">());\n",
-            EntryKind.FixedRecord or EntryKind.DirectRecord when measured => MeasureRecord,
+            EntryKind.FixedRecord or EntryKind.DirectRecord or EntryKind.RootString or EntryKind.RootUri or EntryKind.RootCulture
+                when measured => MeasureRecord,
             EntryKind.CompoundDirect when measured => MeasureRecord,
             _ => null,
         };
         if (size == null)
-            return PooledWrite;
+            return shape.NullObjectRead
+                ? "                if (value is null) return new byte[] { LuminPackCode.NullObject };\n" +
+                    "                return WriteNonNull(in value);\n\n" +
+                    "                [MethodImpl(MethodImplOptions.NoInlining)]\n" +
+                    "                static byte[] WriteNonNull(in %TYPE% value)\n                {\n" + Indent(PooledWrite) + "                }\n"
+                : PooledWrite;
         bool exact = shape.Kind is EntryKind.FixedEnum or EntryKind.NullableDirect or EntryKind.FixedRecord or EntryKind.FixedWidthRecord;
         if (shape.Kind == EntryKind.CompoundDirect)
             return size + "                var directBuffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(directLength);\n" +
@@ -499,6 +530,163 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             "                var directBuffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(directLength);\n") +
             DirectWrite + (exact ? "                return directBuffer;\n" : MeasuredFallback);
     }
+
+    /// <summary>Returns the generated payload root that owns the proven fixed stores.</summary>
+    /// <param name="element">The published payload suffix.</param>
+    /// <returns>The qualified fixed object owner.</returns>
+    private static string FixedObjectOwner(string element) => "LuminPackSerializer.LuminRoots_" + element;
+
+    /// <summary>Describes the bound and address-only stores of a fixed wire record.</summary>
+    /// <param name="shape">The analyzed root contract.</param>
+    /// <returns>The generated bound and stores, or null for a variable/stateful root.</returns>
+    private static (string Prepare, string Store)? FixedRoot(EntryShape shape)
+    {
+        switch (shape.Kind)
+        {
+            case EntryKind.RawScalar:
+            case EntryKind.FixedEnum:
+                return ("                int length = Unsafe.SizeOf<%TYPE%>();\n",
+                    "                LuminPackWriter.Write(ref destination, in value);\n");
+            case EntryKind.NullableDirect when shape.Width == null && shape.RetainedDirect:
+                return ("                var record = value;\n" +
+                    "                int length = record.HasValue ? 1 + Unsafe.SizeOf<" + shape.Element + ">() : 1;\n",
+                    "                LuminPackWriter.WriteReservedNullable<" + shape.Element + ">(ref destination, record);\n");
+            case EntryKind.FixedObject:
+            case EntryKind.FixedVersion:
+                string owner = shape.Kind == EntryKind.FixedObject ? FixedObjectOwner(shape.Element!) : "LuminPackSerializer";
+                string width = shape.Kind == EntryKind.FixedObject ? owner + ".FixedRootWidth()" : "17";
+                string write = shape.Kind == EntryKind.FixedObject ? "WriteFixedRoot" : "WriteFixedRoot_Version";
+                return ("                var record = value;\n                int length = record is null ? 1 : " + width + ";\n",
+                    "                if (record is null) destination = LuminPackCode.NullObject;\n" +
+                    "                else " + owner + "." + write + "(ref destination, record);\n");
+            case EntryKind.RawArray:
+                return ("                var items = value;\n" +
+                    "                int length = LuminPackWriter.SpanRecordBound<" + shape.Element + ">(items is null, items?.Length ?? 0);\n",
+                    "                LuminPackWriter.WriteReservedSpan<" + shape.Element + ">(ref destination, items is null, items);\n");
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>Uses the existing retained window for state-free fixed records and bounded text roots.</summary>
+    /// <param name="shape">The analyzed root contract.</param>
+    /// <returns>The complete retained writer entry with its outlined original path.</returns>
+    private static string RetainedWrite(EntryShape shape)
+    {
+        if (!shape.RetainedDirect)
+            return BinaryBufferWrite;
+        string hot;
+        if (shape.Kind is EntryKind.RootString or EntryKind.RootUri or EntryKind.RootCulture)
+        {
+            hot = shape.Kind switch
+            {
+                EntryKind.RootString => RetainedTextRoot,
+                EntryKind.RootUri => RetainedTextObject.Replace("%TEXT%", "record.OriginalString").Replace("%EXACT%", string.Empty),
+                _ => RetainedTextObject.Replace("%TEXT%", "record.Name").Replace("%EXACT%",
+                    "                    if (record.GetType() != typeof(global::System.Globalization.CultureInfo))\n" +
+                    "                    {\n                        WriteRootSlow(in value, writerBuffer);\n                        return;\n                    }\n"),
+            };
+        }
+        else if (FixedRoot(shape) is { } fixedRoot)
+        {
+            hot = "                if (writerBuffer is not null)\n                {\n" + Indent(fixedRoot.Prepare) +
+                "                    ref byte destination = ref writerBuffer.TryBeginFixedRoot(length);\n" +
+                "                    if (!Unsafe.IsNullRef(ref destination))\n                    {\n" + Indent(Indent(fixedRoot.Store)) +
+                "                        writerBuffer.CompleteWrite(length);\n                        return;\n                    }\n                }\n";
+        }
+        else if (shape.NullObjectRead)
+            hot = RetainedNullRoot;
+        else
+            return BinaryBufferWrite;
+        return hot + "                WriteRootSlow(in value, writerBuffer);\n\n" +
+            "                [MethodImpl(MethodImplOptions.NoInlining)]\n" +
+            "                static void WriteRootSlow(in %TYPE% value, LuminBufferWriter writerBuffer)\n                {\n" +
+            Indent(BinaryBufferWrite) + "                }\n";
+    }
+
+    private const string FixedObjectArrayWrite = """
+                        var items = value;
+                        if (items is null) return new byte[] { 255, 255, 255, 255 };
+                        int width = %ELEMENTOWNER%.FixedRootWidth();
+                        long bound = sizeof(int) + (long)items.Length * width;
+                        if (bound > Array.MaxLength) return WriteOversized(in value);
+                        var buffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>((int)bound);
+                        ref byte start = ref MemoryMarshal.GetArrayDataReference(buffer);
+                        LuminPackWriter.Write(ref start, items.Length);
+                        ref byte destination = ref Unsafe.Add(ref start, sizeof(int));
+                        foreach (var item in items)
+                        {
+                            if (item is null)
+                            {
+                                destination = LuminPackCode.NullObject;
+                                destination = ref Unsafe.Add(ref destination, 1);
+                            }
+                            else
+                            {
+                                %ELEMENTOWNER%.WriteFixedRoot(ref destination, item);
+                                destination = ref Unsafe.Add(ref destination, width);
+                            }
+                        }
+                        if (Unsafe.ByteOffset(ref start, ref destination) != (nint)bound)
+                            Array.Resize(ref buffer, (int)Unsafe.ByteOffset(ref start, ref destination));
+                        return buffer;
+        """ + "\n";
+
+    private const string RetainedNullRoot = """
+                        if (value is null && writerBuffer is not null)
+                        {
+                            ref byte destination = ref writerBuffer.TryBeginFixedRoot(1);
+                            if (!Unsafe.IsNullRef(ref destination))
+                            {
+                                destination = LuminPackCode.NullObject;
+                                writerBuffer.CompleteWrite(1);
+                                return;
+                            }
+                        }
+        """ + "\n";
+
+    private const string RetainedTextRoot = """
+                        if (writerBuffer is not null)
+                        {
+                            var text = value;
+                            ref byte destination = ref writerBuffer.TryBeginFixedRoot(LuminPackWriter.Utf16RecordBound(text));
+                            if (!Unsafe.IsNullRef(ref destination))
+                            {
+                                int written = LuminPackWriter.WriteReservedUtf16Record(ref destination, text);
+                                writerBuffer.CompleteWrite(written);
+                                return;
+                            }
+                        }
+        """ + "\n";
+
+    private const string RetainedTextObject = """
+                        if (writerBuffer is not null)
+                        {
+                            var record = value;
+                            if (record is null)
+                            {
+                                ref byte marker = ref writerBuffer.TryBeginFixedRoot(1);
+                                if (!Unsafe.IsNullRef(ref marker))
+                                {
+                                    marker = LuminPackCode.NullObject;
+                                    writerBuffer.CompleteWrite(1);
+                                    return;
+                                }
+                            }
+                            else
+                            {
+        %EXACT%                        string text = %TEXT%;
+                                ref byte destination = ref writerBuffer.TryBeginFixedRoot(1 + LuminPackWriter.Utf16RecordBound(text));
+                                if (!Unsafe.IsNullRef(ref destination))
+                                {
+                                    destination = 0;
+                                    int written = LuminPackWriter.WriteReservedUtf16Record(ref Unsafe.Add(ref destination, 1), text);
+                                    writerBuffer.CompleteWrite(1 + written);
+                                    return;
+                                }
+                            }
+                        }
+        """ + "\n";
 
     /// <summary>Writes the proven exact interface implementation and keeps the existing pooled entry for other values.</summary>
     /// <param name="shape">The collection or payload shape to use.</param>
@@ -613,6 +801,13 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                         {
                             state.Release();
                         }
+        """ + "\n";
+
+    private const string NullObjectSpanRead = """
+                        LuminPackInputPolicy.CheckInput(buffer.Length, %LIMIT%);
+                        if (!buffer.IsEmpty && buffer[0] == global::LuminPack.Code.LuminPackCode.NullObject)
+                            return 1;
+                        return ReadNonNull(buffer, ref value);
         """ + "\n";
 
     private const string SequenceRead = """

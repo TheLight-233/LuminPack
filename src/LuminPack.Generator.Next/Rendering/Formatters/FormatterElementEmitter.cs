@@ -91,9 +91,19 @@ internal static class FormatterElementEmitter
             return;
         }
 
-        // Clear a reused slot on a null marker before the element's own read runs its deserializing callbacks.
+        // An equivalent fixed payload reader can share the slot's single checked object marker read.
         if (model.OrdinaryObject && !fresh)
         {
+            int count = FixedSlotMemberCount(set, model);
+            if (count != 0)
+            {
+                w.Line("if (global::LuminPack.Security.LuminPackInputPolicy.ReadNullMarker(ref " + state + ", " +
+                    count.ToString(System.Globalization.CultureInfo.InvariantCulture) + "))");
+                w.Indented(() => w.Line(expression + " = default!;"));
+                w.Line("else");
+                w.Indented(() => w.Line(FixedSlotPayloadOwner(model.Type) + "(ref " + state + ", ref " + expression + "!);"));
+                return;
+            }
             if (model.Definition == "$strategy")
             {
                 // The generated comment keeps the ordinary and nonordinary shared owner shapes distinct.
@@ -101,13 +111,37 @@ internal static class FormatterElementEmitter
             }
             else
             {
-                w.Line("if (" + state + ".PeekIsNullObject())");
+                string existing = CanSkipEmptySlotPeek(model) ? expression + " is not null && " : string.Empty;
+                w.Line("if (" + existing + state + ".PeekIsNullObject())");
                 w.Indented(() => w.Line(expression + " = default!;"));
             }
         }
 
         ForwardedElementRead.Emit(w, model.Type, state, expression, Owner(set, model) + ".Read<" + profile + ">(ref " + state + ", ref " + expression + ");");
     }
+
+    /// <summary>Finds the checked marker for a slot whose fixed payload read preserves the object read's storage checks.</summary>
+    /// <param name="set">The shared formatter facts.</param>
+    /// <param name="model">The ordinary object element model.</param>
+    /// <returns>The expected member count, or zero when the ordinary reader is required.</returns>
+    internal static int FixedSlotMemberCount(SharedFormatterSet set, FormatterModel model) =>
+        model.Payload is RecordModel { FixedUnionCase: true } record && set.Options?.Net8 == true &&
+        RenderModelFactory.Create(record, set.Options) is { } rendered && BinaryEmitter.HasEquivalentFixedPayloadRead(rendered)
+            ? rendered.Members.Length : 0;
+
+    /// <summary>Checks whether a null destination needs no pre-emptive clearing before its own checked record read.</summary>
+    /// <param name="model">The ordinary element reader contract.</param>
+    /// <returns>Whether a callback-free positional reader can skip the peek for an empty slot.</returns>
+    internal static bool CanSkipEmptySlotPeek(FormatterModel model) => model.Payload is RecordModel
+    {
+        Callbacks: null, Recursive: false, Rent: null, Constructor: null, SequenceBase: null, Versioned: false, Rejection: null,
+    };
+
+    /// <summary>Names the marker-free fixed payload operation after a checked object marker was consumed.</summary>
+    /// <param name="type">The exact ordinary element type.</param>
+    /// <returns>The existing payload reader.</returns>
+    internal static string FixedSlotPayloadOwner(string type) => "global::LuminPack.LuminPackSerializer.LuminRoots_" +
+        ReadableTypeName.Of(GeneratedNames.PayloadKey(type)) + ".RootReadUnion";
 
     /// <summary>Returns a minimum standalone record width without assuming that generic unmanaged arguments use raw storage.</summary>
     /// <param name = "model">The normalized formatter or storage contract.</param>

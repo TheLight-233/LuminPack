@@ -189,8 +189,17 @@ internal static partial class BinaryEmitter
         string span = RoleName(names, "span");
         string index = depth == 0 ? "i" : "i" + (depth + 1).ToString(CultureInfo.InvariantCulture);
         string innerIndex = "i" + (depth + 2).ToString(CultureInfo.InvariantCulture);
+        string source = owner + "." + member.Name;
+        if (element.Net8)
+        {
+            string helper = RoleName(names, "WriteNestedList");
+            body.Add(helper + "(ref writer, in " + source + ");");
+            body.Add(w.MethodImpl("NoInlining"));
+            body.Add("static void " + helper + "(scoped ref " + w.A("LuminPackWriter") + " writer, scoped in " + member.TypeName + " nestedList)");
+            source = "nestedList";
+        }
         body.Add("{");
-        body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
+        body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + source + ";");
         AddCollectionNull(body, local, exit, w, reserve: true, countMarker: true);
         body.Add("");
         body.Add("var " + span + " = " + w.A("LuminPackMarshal") + ".GetListSpan(" + w.A("Unsafe") + ".AsRef(in " + local + "));");

@@ -767,6 +767,10 @@ internal static class PairedDictionaryOwnerTemplate
             fact.Element, fact.ForwardedValue, fact.Contract, set, nativeEntries, checkedUnion);
         bool optimizeTreeWrite = context.OptimizedRoots &&
             (context.Supports("CopyImmutableHashTree") || context.Supports("CopyImmutableSortedTree"));
+        bool localReader = (fact.Element == null && !fact.ForwardedValue && fact.Contract == null) ||
+            (set.Options?.Net8 == true &&
+                (dictionary.StartsWith("global::System.Collections.Generic.Dictionary<", StringComparison.Ordinal) ||
+                 dictionary.StartsWith("global::System.Collections.Generic.SortedList<", StringComparison.Ordinal)));
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -863,13 +867,13 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Line("    scoped ref " + dictionary + " value)");
                     w.Line(generic + options);
                     w.Open();
-                    if (fact.Element != null || fact.ForwardedValue || fact.Contract != null)
-                        w.Line("ref var operationState = ref reader;");
-                    else
+                    if (localReader)
                     {
                         w.Line(reader + " operationState = default;");
                         w.Line("reader.CopyTo(ref operationState);");
                     }
+                    else
+                        w.Line("ref var operationState = ref reader;");
                     if (!spec.ReadsHeader)
                     {
                         // The original Dictionary, SortedDictionary and SortedList reads took TryReadCollectionHead: one byte per entry.
@@ -887,7 +891,7 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Blank();
                     w.Line("operationComplete_RootRead:");
                     w.Indented(() => w.Line(";"));
-                    if (fact.Element == null && !fact.ForwardedValue && fact.Contract == null)
+                    if (localReader)
                         w.Line("operationState.CopyTo(ref reader);");
                     w.Close();
                     w.Blank();

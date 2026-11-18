@@ -86,6 +86,19 @@ internal static class FormatterConcurrentTraits
                 (SpecialType.System_Int32, RefKind.None));
     }
 
+    /// <summary>Checks whether bounded string pairs can keep their cursor detached between records.</summary>
+    /// <param name="compilation">The consumer's runtime references.</param>
+    /// <returns>Whether the bounded record and cursor publication operations are available.</returns>
+    internal static bool HasBinaryTextPairCursor(Compilation compilation)
+    {
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        return writer != null && HasBinaryTextPairWriter(compilation) &&
+            HasBinaryWriterOperation(writer, "RecordRoom", false, SpecialType.System_Int32,
+                (SpecialType.System_Byte, RefKind.Ref)) &&
+            HasBinaryWriterOperation(writer, "CommitRecords", false, SpecialType.System_Void,
+                (SpecialType.System_Byte, RefKind.Ref));
+    }
+
     /// <summary>Checks the closed dictionary's nonthrowing layout probe.</summary>
     /// <param name="compilation">The compilation that supplies source symbols and references.</param>
     /// <param name="dictionary">The dictionary supplied to <c>HasDictionaryView</c>.</param>

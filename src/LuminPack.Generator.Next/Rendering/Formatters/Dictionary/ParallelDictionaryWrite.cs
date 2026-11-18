@@ -20,6 +20,27 @@ internal static class ParallelDictionaryWrite
     internal static bool SupportsMixed(PairedDictionaryContext c) => c.UsesRawOrStringEntries &&
         (c.Key == "string") != (c.Value == "string") && c.Supports("BinaryTextPair");
 
+    /// <summary>Emits the bounded stores and local cursor advance for a captured string-key pair.</summary>
+    /// <param name="w">The owner source writer.</param>
+    /// <param name="memory">The unsafe operations alias.</param>
+    /// <param name="rawWidth">The raw value width, or null for a string value.</param>
+    internal static void WriteStringKeyPairIfFits(CodeWriter w, string memory, string? rawWidth = null)
+    {
+        string valueBound = rawWidth ?? Writer + ".Utf16RecordBound(itemValue)";
+        w.Line("if ((long)room >= (long)" + Writer + ".Utf16RecordBound(key) + " + valueBound + ")");
+        w.Open();
+        w.Line("int keyBytes = " + Writer + ".WriteReservedUtf16Record(ref cursor, key);");
+        w.Line("ref byte valueStart = ref " + memory + ".Add(ref cursor, (nint)(uint)keyBytes);");
+        w.Line(rawWidth is null
+            ? "int valueBytes = " + Writer + ".WriteReservedUtf16Record(ref valueStart, itemValue);"
+            : "int valueBytes = " + Writer + ".Write(ref valueStart, in itemValue);");
+        w.Line("int width = keyBytes + valueBytes;");
+        w.Line("cursor = ref " + memory + ".Add(ref cursor, (nint)(uint)width);");
+        w.Line("room -= width;");
+        w.Line("continue;");
+        w.Close();
+    }
+
     /// <summary>Writes a complete mixed record when the fixed profile and current room permit it.</summary>
     /// <param name="c">The dictionary writer's contracts.</param>
     /// <param name="key">The current key expression.</param>

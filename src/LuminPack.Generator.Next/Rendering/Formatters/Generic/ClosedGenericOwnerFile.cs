@@ -180,6 +180,46 @@ internal static class ClosedGenericOwnerFile
                 w.Close();
             }
 
+            if (nullable)
+            {
+                FormatterModel argument = model.Arguments[0];
+                bool direct = argument.Raw && argument.Type != "bool" && (argument.Payload == null || argument.RawStorage);
+                w.Line("#if NET8_0_OR_GREATER");
+                // Native reads validate the payload before their single store. Stage compound reads to preserve failure publication.
+                if (direct)
+                {
+                    w.Line("if (global::System.IntPtr.Size == 8)");
+                    w.Open();
+                    if (model.Supports("ReadNativeNullablePayload"))
+                        w.Line("reader.ReadNativeNullablePayload<" + argument.Type + ">(ref value);");
+                    else
+                    {
+                        GenericOwnerFile.NullablePayload(w, argument.Type, "value");
+                        w.Line("reader.Read(ref payload);");
+                        GenericOwnerFile.PublishNullable(w, argument.Type, "value");
+                    }
+                    w.Line("return;");
+                    w.Close();
+                    w.Line("#endif");
+                }
+                else
+                {
+                    w.Line(model.Type + " staged = default;");
+                    GenericOwnerFile.NullablePayload(w, argument.Type, "staged");
+                    FormatterElementEmitter.Read(w, set, argument, "payload", fresh: true);
+                    GenericOwnerFile.PublishNullable(w, argument.Type, "staged");
+                    w.Line("value = staged;");
+                    w.Line("#else");
+                }
+
+                w.Line(argument.Type + " item0 = default!;");
+                FormatterElementEmitter.Read(w, set, argument, "item0", fresh: true);
+                w.Line("value = item0;");
+                if (!direct)
+                    w.Line("#endif");
+                return;
+            }
+
             // As in the original compound read, a string component starts from the existing component and keeps it when the text is equal.
             bool reuseText = ReusesStringComponents(model.Definition);
             for (int i = 0; i < model.Arguments.Length; i++)

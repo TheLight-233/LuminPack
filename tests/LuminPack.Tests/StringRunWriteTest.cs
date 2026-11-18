@@ -209,6 +209,47 @@ public sealed class StringRunWriteTest
         }
     }
 
+    /// <summary>Checks dense and sparse dictionary records and cursor publication across retained-buffer growth.</summary>
+    [Fact]
+    public void DictionaryStringPairsKeepRecordsAndFollowingCursor()
+    {
+        string?[] values = Mixed(200);
+        var strings = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var scalars = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int index = 0; index < values.Length; index++)
+        {
+            string key = index.ToString("D3") + (index == 41 ? new string('\u0100', 70_000) : "\u00e9");
+            strings.Add(key, values[index]);
+            scalars.Add(key, index);
+        }
+
+        Check();
+        strings.Remove("015\u00e9");
+        scalars.Remove("015\u00e9");
+        Check();
+
+        void Check()
+        {
+            const int tail = 91;
+            byte[] tailBytes = LuminPackSerializer.Serialize(tail);
+            byte[] expectedStrings = Counted(strings.Count, strings.SelectMany(pair => Records([pair.Key, pair.Value])));
+            byte[] expectedScalars = Counted(scalars.Count, scalars.SelectMany(pair =>
+                LuminPackSerializer.Serialize(pair.Key).Concat(LuminPackSerializer.Serialize(pair.Value))));
+            IReadOnlyDictionary<string, string?> textInterface = strings;
+            Assert.Equal(expectedStrings, LuminPackSerializer.Serialize(textInterface));
+            using var textBuffer = new LuminBufferWriter(true);
+            using var scalarBuffer = new LuminBufferWriter(true);
+            var textWriter = new LuminPackWriter(textBuffer);
+            var scalarWriter = new LuminPackWriter(scalarBuffer);
+            LuminPackSerializer.Serialize(ref textWriter, in strings);
+            LuminPackSerializer.Serialize(ref scalarWriter, in scalars);
+            textWriter.Write(tail);
+            scalarWriter.Write(tail);
+            Assert.Equal(expectedStrings.Concat(tailBytes), textWriter.GetSpan().ToArray());
+            Assert.Equal(expectedScalars.Concat(tailBytes), scalarWriter.GetSpan().ToArray());
+        }
+    }
+
     /// <summary>Checks the wire order of both parts of a wrapped queue and the bottom-to-top stack storage.</summary>
     [Fact]
     public void WrappedQueueAndStackMatchIndividualStringRecords()

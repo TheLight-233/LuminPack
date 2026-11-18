@@ -415,6 +415,20 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
         return BeginAppend(out index);
     }
 
+#if NET8_0_OR_GREATER
+    /// <summary>Gets the start of an initialized empty destination when a complete root fits in its current window.</summary>
+    /// <param name="length">The proven upper bound of the root's wire record.</param>
+    /// <returns>The destination start, or a null reference when the normal write session is required.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref byte TryBeginFixedRoot(int length)
+    {
+        if (_writtenCount == 0 && _liveIndex == 0 && length > 0 && _threshold >= length)
+            return ref Data;
+        return ref Unsafe.NullRef<byte>();
+    }
+#endif
+
     /// <summary>Acquires storage or restores fixed-record headroom for a nonempty cursor session.</summary>
     /// <param name="index">Receives the absolute start of the appended record.</param>
     /// <returns>The complete allocation after restoring fixed-record headroom.</returns>

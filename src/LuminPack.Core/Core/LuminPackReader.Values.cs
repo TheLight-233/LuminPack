@@ -345,19 +345,54 @@ namespace LuminPack.Core
             if (size == 1)
                 EnsureReadableByte(ref Current);
             else
-            {
-#if NET8_0_OR_GREATER
-                long remaining = (long)Unsafe.ByteOffset(ref Cursor, ref _end);
-#else
-                long remaining = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
-#endif
-                // A cursor before the buffer has more than its full length remaining.
-                if (remaining < size || remaining > _buffer.Length)
-                    LuminPackExceptionHelper.ThrowSpanOutOfRange((long)Position + size);
-            }
+                EnsureReadableScalar(size);
             Read(ref Current, out value);
             AdvanceValidated(size);
         }
+
+        /// <summary>Validates a fixed scalar against both ends of the active reader window.</summary>
+        /// <param name="size">The width of the scalar storage.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void EnsureReadableScalar(int size)
+        {
+#if NET8_0_OR_GREATER
+            long remaining = (long)Unsafe.ByteOffset(ref Cursor, ref _end);
+#else
+            long remaining = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
+#endif
+            // A cursor before the buffer has more than its full length remaining.
+            if (remaining < size || remaining > _buffer.Length)
+                LuminPackExceptionHelper.ThrowSpanOutOfRange((long)Position + size);
+        }
+
+#if NET8_0_OR_GREATER
+        /// <summary>Reads a present nullable's native payload and publishes the complete value.</summary>
+        /// <typeparam name="T">The native, unmanaged payload type.</typeparam>
+        /// <param name="value">The nullable destination after its present marker was consumed.</param>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void ReadNativeNullablePayload<T>(scoped ref T? value)
+            where T : unmanaged
+        {
+            ref T payload = ref Unsafe.AsRef(in Nullable.GetValueRefOrDefaultRef(in value));
+            if (Unsafe.SizeOf<T>() == 12 && Unsafe.SizeOf<T?>() == 16 && IntPtr.Size == 8 &&
+                BitConverter.IsLittleEndian && Vector128.IsHardwareAccelerated &&
+                Unsafe.AreSame(ref Unsafe.Add(ref Unsafe.As<T?, byte>(ref value), 4), ref Unsafe.As<T, byte>(ref payload)))
+            {
+                EnsureReadableScalar(12);
+                ref byte source = ref Cursor;
+                // The native value starts four bytes after HasValue. Read exactly twelve input bytes.
+                ulong low = 1u | ((ulong)Unsafe.ReadUnaligned<uint>(ref source) << 32);
+                ulong high = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, 4));
+                Unsafe.As<T?, Vector128<ulong>>(ref value) = Vector128.Create(low, high);
+                AdvanceValidated(12);
+                return;
+            }
+
+            Read(ref payload);
+            Unsafe.As<T?, bool>(ref value) = true;
+        }
+#endif
 
         /// <summary>Reads and returns complete scalar storage through the advancing API.</summary>
         /// <typeparam name = "T">The unmanaged storage type.</typeparam>

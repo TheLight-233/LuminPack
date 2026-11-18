@@ -32,6 +32,12 @@ internal static class SerializerBinaryEntryShapeRegression
             [LuminPackable] public sealed class ReadBoundaryCell { public int Number; }
             [LuminPackable(GeneratorType.VersionTolerant)] public sealed class VersionCell { public int Value; }
             [LuminPackable] public sealed class VersionGraph { public List<VersionCell> Cells; }
+            public sealed class ObservedCulture : global::System.Globalization.CultureInfo
+            {
+                public int Observations;
+                public ObservedCulture() : base("en-US") { }
+                public override string Name { get { Observations++; return base.Name; } }
+            }
             [LuminPackable] public sealed class CapturedRecord
             {
                 public int Id;
@@ -95,6 +101,8 @@ internal static class SerializerBinaryEntryShapeRegression
                 {
                     CheckCapturedRecord();
                     using var buffer = new LuminBufferWriter(true);
+                    CheckTextRoots(buffer);
+                    CheckFixedArray(buffer);
                     var raw = new NativeCell { X = -321, Y = 412 };
                     var rawBytes = LuminPackSerializer.Serialize(raw);
                     LuminPackSerializer.Serialize(raw, buffer);
@@ -105,6 +113,26 @@ internal static class SerializerBinaryEntryShapeRegression
                     try { LuminPackSerializer.Deserialize(rawBytes.AsSpan(1), ref result); }
                     catch { failed = true; }
                     if (!failed || result.X != raw.X || result.Y != raw.Y) throw new Exception("Raw read published a truncated value.");
+
+                    Span<byte> scratch = new byte[128];
+                    var direct = new LuminPackWriter(ref scratch);
+                    var rawArray = new[] { raw, raw };
+                    LuminPackSerializer.Serialize(ref direct, in rawArray);
+                    if (!LuminPackSerializer.Serialize(rawArray).AsSpan().SequenceEqual(direct.GetSpan()))
+                        throw new Exception("Raw array allocation changed its native binary framing.");
+
+                    NativeCell? nullable = raw;
+                    foreach (var cell in new NativeCell?[] { nullable, null })
+                    {
+                        var nullableWriter = new LuminPackWriter(ref scratch);
+                        LuminPackSerializer.Serialize(ref nullableWriter, in cell);
+                        buffer.ResetWrittenCount();
+                        LuminPackSerializer.Serialize(cell, buffer);
+                        if (!LuminPackSerializer.Serialize(cell).AsSpan().SequenceEqual(nullableWriter.GetSpan()) ||
+                            !buffer.GetSpan().SequenceEqual(nullableWriter.GetSpan()) ||
+                            LuminPackSerializer.Deserialize<NativeCell?>(buffer.GetSpan())?.Y != cell?.Y)
+                            throw new Exception("Native nullable write or read changed its payload or marker.");
+                    }
 
                     PackedCell? packed = new PackedCell { X = 23, Y = -4096 };
                     byte[] packedBytes = LuminPackSerializer.Serialize(packed.Value);
@@ -123,6 +151,13 @@ internal static class SerializerBinaryEntryShapeRegression
                     if (LuminPackSerializer.Deserialize<PlainGraph, LuminPackUtf8TokenOptions>(plainBytes, ref reused) != plainBytes.Length ||
                         reused.Text.Count != 1 || reused.Text[0] != "abc" || reused.Cell?.Y != -4096)
                         throw new Exception("Explicit-profile read changed data or consumed width.");
+                    byte[] nullObject = LuminPackSerializer.Serialize((ReadBoundaryCell)null);
+                    var cellAlias = new ReadBoundaryCell { Number = 23 };
+                    var existingCell = cellAlias;
+                    if (LuminPackSerializer.Deserialize(nullObject, ref existingCell) != 1 ||
+                        !ReferenceEquals(existingCell, cellAlias) ||
+                        LuminPackSerializer.Deserialize<ReadBoundaryCell>(nullObject) is not null)
+                        throw new Exception("The ordinary root null marker changed target publication.");
                     var version = new VersionGraph { Cells = new List<VersionCell> { new VersionCell { Value = 17 }, new VersionCell { Value = 31 } } };
                     var versionBytes = LuminPackSerializer.Serialize(version);
                     if (LuminPackSerializer.Deserialize<VersionGraph>(versionBytes).Cells[1].Value != 31)
@@ -130,6 +165,64 @@ internal static class SerializerBinaryEntryShapeRegression
                     var customBytes = LuminPackSerializer.Serialize(new CustomGraph { Cell = new CustomCell { Value = 71 } });
                     if (LuminPackSerializer.Deserialize<CustomGraph>(customBytes).Cell.Value != 71)
                         throw new Exception("Nested Custom read changed data.");
+                }
+
+                private static void CheckFixedArray(LuminBufferWriter buffer)
+                {
+                    foreach (var items in new[] {
+                        new[] { new ReadBoundaryCell { Number = 21 }, new ReadBoundaryCell { Number = -37 } },
+                        new[] { null, new ReadBoundaryCell { Number = 19 }, null },
+                        null })
+                    {
+                        buffer.ResetWrittenCount();
+                        LuminPackSerializer.Serialize(items, buffer);
+                        var bytes = LuminPackSerializer.Serialize(items);
+                        if (!buffer.GetSpan().SequenceEqual(bytes))
+                            throw new Exception("The allocating fixed collection changed null markers or field bytes.");
+                        var copy = LuminPackSerializer.Deserialize<ReadBoundaryCell[]>(bytes);
+                        if (items is null ? copy is not null : copy.Length != items.Length)
+                            throw new Exception("The allocating fixed collection changed its length.");
+                        if (items is not null)
+                            for (int i = 0; i < items.Length; i++)
+                                if (copy[i]?.Number != items[i]?.Number)
+                                    throw new Exception("The allocating fixed collection changed an element.");
+                    }
+                    buffer.ResetWrittenCount();
+                }
+
+                private static void CheckTextRoots(LuminBufferWriter buffer)
+                {
+                    Span<byte> scratch = new byte[256];
+                    foreach (var text in new string[] { null, "", "short-\u00E9", new string('s', 32), new string('\u5B57', 32) })
+                    {
+                        var sequential = new LuminPackWriter(ref scratch);
+                        sequential.Write(text);
+                        LuminPackSerializer.Serialize(text, buffer);
+                        if (!buffer.GetSpan().SequenceEqual(sequential.GetSpan()))
+                            throw new Exception("A retained text root changed bytes.");
+                        LuminPackSerializer.Serialize(text, buffer);
+                        if (buffer.CurrentIndex != sequential.CurrentIndex * 2 ||
+                            !buffer.GetSpan().Slice(sequential.CurrentIndex).SequenceEqual(sequential.GetSpan()))
+                            throw new Exception("A retained text root changed its append behavior.");
+                        buffer.ResetWrittenCount();
+                    }
+                    var uri = new Uri("https://example.com/\u77ED/absolute");
+                    var uriWriter = new LuminPackWriter(ref scratch);
+                    uriWriter.WriteObjectHeader(0);
+                    uriWriter.Write(uri.OriginalString);
+                    LuminPackSerializer.Serialize(uri, buffer);
+                    if (!buffer.GetSpan().SequenceEqual(uriWriter.GetSpan()))
+                        throw new Exception("The retained URI root changed bytes.");
+                    buffer.ResetWrittenCount();
+                    var culture = new ObservedCulture();
+                    LuminPackSerializer.Serialize<global::System.Globalization.CultureInfo>(culture, buffer);
+                    if (culture.Observations != 1)
+                        throw new Exception("The retained culture root repeated the Name observation.");
+                    buffer.ResetWrittenCount();
+                    LuminPackSerializer.Serialize<string, LuminPackUtf8TokenOptions>("hé", buffer);
+                    if (!buffer.GetSpan().SequenceEqual(new byte[] { 104, 195, 169, 0 }))
+                        throw new Exception("An alternate text profile changed wire.");
+                    buffer.ResetWrittenCount();
                 }
             }
             """;
@@ -157,10 +250,14 @@ internal static class SerializerBinaryEntryShapeRegression
         static string? Operation(InvocationExpressionSyntax call) => (call.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.ValueText;
         var methods = declarations.Where(method => method.Identifier.ValueText.StartsWith("LuminIntercept_", StringComparison.Ordinal)).ToArray();
         var native = methods.Where(method => method.Identifier.ValueText.StartsWith("LuminIntercept_NativeCell_", StringComparison.Ordinal)).ToArray();
+        var fixedArray = methods.Single(method => method.ReturnType.ToString() == "byte[]" &&
+            method.ParameterList.Parameters[0].Type!.ToString().EndsWith("ReadBoundaryCell[]", StringComparison.Ordinal));
         var plain = methods.Single(method => method.Identifier.ValueText.StartsWith("LuminIntercept_PlainGraph_", StringComparison.Ordinal) &&
             method.ParameterList.Parameters[0].Type!.ToString() == "ReadOnlySpan<byte>");
         if (!native.Any(method => method.ToString().Contains("LuminPackReader.ReadComplete", StringComparison.Ordinal)) ||
             !native.Any(method => method.ToString().Contains("AllocateUninitializedArray<byte>", StringComparison.Ordinal)) ||
+            !native.Any(method => method.ToString().Contains("TryBeginFixedRoot", StringComparison.Ordinal)) ||
+            !fixedArray.ToString().Contains("WriteFixedRoot(ref destination", StringComparison.Ordinal) ||
             !plain.ToString().Contains("new LuminPackReader(ref buffer)", StringComparison.Ordinal))
             throw new InvalidOperationException("A proven binary root did not select its direct entry.");
         foreach (string type in new[] { "VersionGraph", "CustomGraph" })

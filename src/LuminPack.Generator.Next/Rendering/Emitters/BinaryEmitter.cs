@@ -453,6 +453,16 @@ internal static partial class BinaryEmitter
             w.Line("internal static partial class " + container);
             w.Open();
             w.Suppressed = !writes;
+            if (CanReserveFixedObject(model))
+            {
+                w.Line(inline);
+                w.Line("internal static int FixedRootWidth() => " + FixedObjectWidth(model) + ";");
+                w.Blank();
+                var stores = new List<string>();
+                WriteFixedObject(model, w, stores, "value", "cursor", members.Length.ToString(CultureInfo.InvariantCulture));
+                Method(stores, "WriteFixedRoot", false, "(ref byte cursor, " + type + " value)", inline, prepared: true);
+                w.Blank();
+            }
             if (model.MemberWrite)
             {
                 Method(MemberWriteBody(model, w), "RootWriteMember", !fixedProfile, "(scoped ref " + writer + " writer, " + type + "? input)", inline);
@@ -751,7 +761,7 @@ internal static partial class BinaryEmitter
         string count = members.Length.ToString(CultureInfo.InvariantCulture);
         bool bounded = model.Bounded != null;
         if (!union && !structValue && CanReserveFixedObject(model))
-            return ReservedFixedObject(model, w, count);
+            return ReservedFixedObject(model, w);
         body.Add("var value = input;");
         if (bounded)
         {
@@ -1307,22 +1317,58 @@ internal static partial class BinaryEmitter
     private static void AddInlineObjectWrite(List<string> body, RenderMember member, string owner, int depth, CodeWriter w,
         Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
-        if (member.Nested.MemberWrite)
+        var child = member.Nested;
+        string input = owner + "." + member.Name;
+        bool outline = HasVariableNestedMembers(child);
+        if (outline)
         {
-            body.Add(w.A("LuminPackSerializer") + ".SerializeMember_" + member.Nested.Readable + "<" + Profile + ">(ref writer, " +
-                owner + "." + member.Name + ");");
+            string helper = RoleName(names, "WriteNested");
+            body.Add(helper + "(ref writer, " + input + ");");
+            body.Add(w.MethodImpl("NoInlining"));
+            body.Add("static void " + helper + "(scoped ref " + w.A("LuminPackWriter") + " writer, " + child.GlobalName + "? nestedInput)");
+            body.Add("{");
+            input = "nestedInput";
+        }
+        AddNestedObjectWrite(body, child, input, depth, w, names, ref ends, ref cursors, ref spans);
+        if (outline)
+            body.Add("}");
+    }
+
+    /// <summary>Whether the nested record can consume the caller's budget with string or child traversal operations.</summary>
+    /// <param name="child">The nested record's compiled shape.</param>
+    /// <returns>Whether member calls outline the existing child operation.</returns>
+    private static bool HasVariableNestedMembers(PayloadRenderModel child) => child.Net8 &&
+        child.Members.Any(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.Dictionary or RenderMemberKind.List ||
+            member.Nested != null && HasVariableNestedMembers(member.Nested));
+
+    /// <summary>Writes the existing child operation using the member value already selected by the caller.</summary>
+    /// <param name="body">The generated operation body.</param>
+    /// <param name="child">The nested record.</param>
+    /// <param name="input">The expression holding the selected child.</param>
+    /// <param name="depth">The nesting depth.</param>
+    /// <param name="w">The source writer.</param>
+    /// <param name="names">The occurrence counters for locals.</param>
+    /// <param name="ends">The shared counter for exit labels.</param>
+    /// <param name="cursors">The shared counter for cursors.</param>
+    /// <param name="spans">The shared counter for spans.</param>
+    private static void AddNestedObjectWrite(List<string> body, PayloadRenderModel child, string input, int depth, CodeWriter w,
+        Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
+    {
+        if (child.MemberWrite)
+        {
+            string entry = "SerializeMember" + (child.UniqueEntries ? "_" + child.Readable : string.Empty);
+            body.Add(w.A("LuminPackSerializer") + "." + entry + "<" + Profile + ">(ref writer, " + input + ");");
             return;
         }
-        var child = member.Nested;
         if (CanCallStreamMemberWriter(child))
         {
             string profile = HasWriteProfile(child) ? "<" + Profile + ">" : string.Empty;
             body.Add(BinaryRoot(w, child) + "RootWrite" + profile +
-                "(ref writer, " + owner + "." + member.Name + ");");
+                "(ref writer, " + input + ");");
             return;
         }
         string name = InlineName(names, "inlineValue", depth);
-        body.Add("var " + name + " = " + owner + "." + member.Name + ";");
+        body.Add("var " + name + " = " + input + ";");
         body.Add("if (" + name + " is null)");
         body.Add("{");
         body.Add("writer.Cursor = (byte)255;");
@@ -1330,9 +1376,9 @@ internal static partial class BinaryEmitter
         body.Add("}");
         body.Add("else");
         body.Add("{");
-        body.Add("writer.Cursor = (byte)" + member.Nested.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
+        body.Add("writer.Cursor = (byte)" + child.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
         body.Add("writer.Advance(1);");
-        AddStreamWrite(body, member.Nested, name, depth + 1, w, names, ref ends, ref cursors, ref spans);
+        AddStreamWrite(body, child, name, depth + 1, w, names, ref ends, ref cursors, ref spans);
         body.Add("}");
     }
 
@@ -3093,12 +3139,29 @@ internal static partial class BinaryEmitter
         string local = RoleName(names, "nestedValue");
         string profile = HasReadProfile(child) ? "<" + Profile + ">" : string.Empty;
         string root = BinaryRoot(w, child);
+        bool outline = HasVariableNestedMembers(child);
+        string call = root + (objectFraming ? "RootRead" : "RootReadUnion") + profile;
+        if (outline)
+        {
+            // Both parent framings share the helper declaration. The stateless framing argument keeps the call site precise.
+            string helper = RoleName(names, "ReadNested");
+            body.Add("{");
+            body.Add(w.MethodImpl("NoInlining"));
+            body.Add("static void " + helper + "<TNestedFraming>(scoped ref " + w.A("LuminPackReader") + " state, scoped ref " + child.GlobalName + "? nested)");
+            body.Add("{");
+            body.Add("if (typeof(TNestedFraming) == typeof(global::LuminPack.Code.LuminPackObjectFraming))");
+            body.Add("\t" + root + "RootRead" + profile + "(ref state, ref nested);");
+            body.Add("else");
+            body.Add("\t" + root + "RootReadUnion" + profile + "(ref state, ref nested);");
+            body.Add("}");
+            call = helper + (objectFraming ? "<global::LuminPack.Code.LuminPackObjectFraming>" : "<global::LuminPack.Code.LuminPackPayloadFraming>");
+        }
         body.Add("var " + local + " = " + target + ";");
         if (objectFraming)
         {
             body.Add("if (reader.PeekIsNullObject())");
             body.Add("\t" + local + " = default;");
-            body.Add(root + "RootRead" + profile + "(ref reader, ref " + local + ");");
+            body.Add(call + "(ref reader, ref " + local + ");");
         }
         else
         {
@@ -3108,9 +3171,11 @@ internal static partial class BinaryEmitter
             body.Add("if (" + marker + ")");
             body.Add("\t" + local + " = default;");
             body.Add("else");
-            body.Add("\t" + root + "RootReadUnion" + profile + "(ref reader, ref " + local + ");");
+            body.Add("\t" + call + "(ref reader, ref " + local + ");");
         }
         body.Add(target + " = " + local + "!;");
+        if (outline)
+            body.Add("}");
         body.Add(string.Empty);
     }
 

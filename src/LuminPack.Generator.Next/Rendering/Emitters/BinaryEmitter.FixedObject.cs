@@ -18,9 +18,8 @@ internal static partial class BinaryEmitter
     /// <summary>Writes one fixed class through a single checked reservation and cursor publication.</summary>
     /// <param name="model">The class record.</param>
     /// <param name="w">The generated source writer.</param>
-    /// <param name="count">The one-byte member marker.</param>
     /// <returns>The write statements.</returns>
-    private static List<string> ReservedFixedObject(PayloadRenderModel model, CodeWriter w, string count)
+    private static List<string> ReservedFixedObject(PayloadRenderModel model, CodeWriter w)
     {
         var body = new List<string>
         {
@@ -33,9 +32,10 @@ internal static partial class BinaryEmitter
             "writer.Cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, 1);",
             "return;",
             "}",
-            "cursor = ref writer.ReserveRecord(ref cursor, " + FixedObjectWidth(model) + ");",
+            "cursor = ref writer.ReserveRecord(ref cursor, FixedRootWidth());",
+            "WriteFixedRoot(ref cursor, value);",
         };
-        WriteFixedObject(model, w, body, "value", "cursor", count);
+        body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, FixedRootWidth());");
         body.Add("writer.Cursor = ref cursor;");
         return body;
     }

@@ -306,19 +306,7 @@ namespace LuminPack.Core
                     return;
                 }
 
-                // The static helpers keep this writer's address unexposed. An exactly sized destination may still
-                // hold the compact record; otherwise the raw form's capacity is established first.
-                int written = WriteUtf16RecordSlow(ref Current, _buffer.Length - Position, value);
-                if (written < 0)
-                {
-                    EnsureAdditionalCapacity(recordLength);
-                    written = WriteUtf16RecordSlow(ref Current, _buffer.Length - Position, value);
-                }
-
-                if (value is null)
-                    Advance(written);
-                else
-                    AdvanceSafe(written);
+                WriteUtf16RecordInShortWindow(value, recordLength);
                 return;
             }
 
@@ -459,9 +447,14 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ref byte ReserveRecord(ref byte cursor, int length)
         {
-            if (RecordDistance(ref cursor) >= (nint)(uint)length)
+            nint room = RecordDistance(ref cursor);
+            if (room >= (nint)(uint)length)
                 return ref cursor;
-            return ref GrowRecord(ref this, ref cursor, length);
+            CommitRecords(ref cursor);
+            if (room < 0 && Owner is { } owner)
+                Apply(GrowForThreshold(owner, Position, Position));
+            EnsureAdditionalCapacity(length);
+            return ref Current;
         }
 
         /// <summary>Writes one complete fixed value at a caller-held cursor.</summary>
@@ -515,9 +508,15 @@ namespace LuminPack.Core
         {
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && default(TOptions).StringRecording == LuminPackStringRecording.Length)
             {
-                if (RecordDistance(ref cursor) >= (nint)(uint)Utf16RecordBound(value))
+                int length = Utf16RecordBound(value);
+                if (RecordDistance(ref cursor) >= (nint)(uint)length)
                     return ref Unsafe.Add(ref cursor, (nint)(uint)WriteReservedUtf16Record(ref cursor, value));
-                return ref WriteRecordStringOutlined<TOptions>(ref this, ref cursor, value);
+                CommitRecords(ref cursor);
+                if (typeof(TOptions) == typeof(LuminPackDefaultOptions) || typeof(TOptions) == typeof(LuminPackUtf16LengthOptions))
+                    WriteUtf16RecordInShortWindow(value, length);
+                else
+                    Write<TOptions>(value);
+                return ref Current;
             }
 
             CommitRecords(ref cursor);
@@ -794,33 +793,25 @@ namespace LuminPack.Core
             public int Bound {[MethodImpl(MethodImplOptions.AggressiveInlining)] get => PairRecordBound<TKey, TValue>(Dictionary is null, Count); }
         }
 
-        /// <summary>Publishes a cursor, applies the collection threshold and grows for a record.</summary>
-        /// <param name = "writer">The writer.</param>
-        /// <param name = "cursor">The caller's current position.</param>
-        /// <param name = "length">The record width.</param>
-        /// <returns>The published cursor after growth.</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private static ref byte GrowRecord(scoped ref LuminPackWriter writer, ref byte cursor, int length)
+        /// <summary>Writes a UTF-16 length string when its raw bound did not pass the record check.</summary>
+        /// <param name = "value">The nullable string.</param>
+        /// <param name = "recordLength">The full raw width.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteUtf16RecordInShortWindow(string? value, int recordLength)
         {
-            writer.CommitRecords(ref cursor);
-            writer.CheckBuffer();
-            writer.EnsureAdditionalCapacity(length);
-            return ref writer.Current;
-        }
+            // A remaining window may still fit the compact record. Keep both the encoding and the
+            // growth calls static so neither requires the address of the current writer.
+            int written = WriteUtf16RecordSlow(ref Current, _buffer.Length - Position, value);
+            if (written < 0)
+            {
+                EnsureAdditionalCapacity(recordLength);
+                written = WriteUtf16RecordSlow(ref Current, _buffer.Length - Position, value);
+            }
 
-        /// <summary>Publishes a cursor and writes a string that did not fit through the original operation.</summary>
-        /// <typeparam name = "TOptions">The stateless binary string profile.</typeparam>
-        /// <param name = "writer">The writer.</param>
-        /// <param name = "cursor">The caller's current position.</param>
-        /// <param name = "value">The string.</param>
-        /// <returns>The position after the record.</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private static ref byte WriteRecordStringOutlined<TOptions>(scoped ref LuminPackWriter writer, ref byte cursor, string? value)
-            where TOptions : struct, ILuminPackOptions
-        {
-            writer.CommitRecords(ref cursor);
-            writer.Write<TOptions>(value);
-            return ref writer.Current;
+            if (value is null)
+                Advance(written);
+            else
+                AdvanceSafe(written);
         }
 
         #endregion
@@ -1163,8 +1154,8 @@ namespace LuminPack.Core
                 uint bound = 2 * sizeof(int) + ((key is null ? 0u : (uint)key.Length) + (value is null ? 0u : (uint)value.Length)) * sizeof(char);
                 if (bound > room - used)
                     break;
-                used += (uint)WriteUtf16Record(ref Unsafe.Add(ref current, (nint)used), key);
-                used += (uint)WriteUtf16Record(ref Unsafe.Add(ref current, (nint)used), value);
+                used += (uint)WriteUtf16Record(ref Unsafe.Add(ref current, (nint)used), key, outlineMedium: true);
+                used += (uint)WriteUtf16Record(ref Unsafe.Add(ref current, (nint)used), value, outlineMedium: true);
             } while (++i < count);
 
             index = i;
@@ -1210,7 +1201,7 @@ namespace LuminPack.Core
                 uint bound = sizeof(int) + (value is null ? 0u : (uint)value.Length * sizeof(char));
                 if (bound > remaining)
                     break;
-                int written = WriteUtf16Record(ref current, value);
+                int written = WriteUtf16Record(ref current, value, outlineMedium: true);
                 remaining -= (uint)written;
                 current = ref Unsafe.Add(ref current, (nint)(uint)written);
             } while (++i < count);
@@ -1313,9 +1304,10 @@ namespace LuminPack.Core
         /// <summary>Writes a UTF-16 length record after capacity for its raw form has been established.</summary>
         /// <param name="current">The record position.</param>
         /// <param name="value">The original nullable string.</param>
+        /// <param name="outlineMedium">Whether to keep the medium record kernel out of a mixed-width loop.</param>
         /// <returns>The complete written record width.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int WriteUtf16Record(ref byte current, string? value)
+        private static int WriteUtf16Record(ref byte current, string? value, bool outlineMedium = false)
         {
             if (string.IsNullOrEmpty(value))
             {
@@ -1324,7 +1316,7 @@ namespace LuminPack.Core
             }
 
 #if NET8_0_OR_GREATER
-            if (Vector256.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && (uint)(value.Length - 17) <= 15)
+            if (!outlineMedium && Vector256.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && (uint)(value.Length - 17) <= 15)
                 return WriteMediumUtf16Record(ref current, value);
 #endif
 

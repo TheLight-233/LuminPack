@@ -28,6 +28,16 @@ internal static class VersionOwnerFile
         w.Line("evaluator.Add(value is null ? 1 : 17);");
         w.Close();
         w.Blank();
+        w.Line(w.MethodImpl("AggressiveInlining"));
+        w.Line("internal static void WriteFixedRoot_Version(ref byte record, global::System.Version value)");
+        w.Open();
+        w.Line("record = 4;");
+        w.Line("LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref record, 1), value.Major);");
+        w.Line("LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref record, 5), value.Minor);");
+        w.Line("LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref record, 9), value.Build);");
+        w.Line("LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref record, 13), value.Revision);");
+        w.Close();
+        w.Blank();
     }
 
     /// <summary>Emits the fixed binary record writer.</summary>
@@ -45,12 +55,7 @@ internal static class VersionOwnerFile
         w.Line("#if NET8_0_OR_GREATER");
         w.Line("if (" + unsafeType + ".SizeOf<global::System.IntPtr>() == 8)");
         w.Open();
-        w.Line("ref byte record = ref writer.Cursor;");
-        w.Line("record = 4;");
-        w.Line("LuminPackWriter.Write(ref " + unsafeType + ".Add(ref record, 1), value.Major);");
-        w.Line("LuminPackWriter.Write(ref " + unsafeType + ".Add(ref record, 5), value.Minor);");
-        w.Line("LuminPackWriter.Write(ref " + unsafeType + ".Add(ref record, 9), value.Build);");
-        w.Line("LuminPackWriter.Write(ref " + unsafeType + ".Add(ref record, 13), value.Revision);");
+        w.Line("WriteFixedRoot_Version(ref writer.Cursor, value);");
         w.Line("writer.Advance(17);");
         w.Line("return;");
         w.Close();

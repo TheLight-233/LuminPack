@@ -75,6 +75,7 @@ internal static class DictionaryInterfaceOwnerFile
         bool textKernel = c.UsesRawOrStringEntries && (c.Key == "string" || c.Value == "string") && c.Supports("BinaryTextPair");
         bool textPair = c.Key == "string" && c.Value == "string";
         bool denseText = textKernel && textPair && c.Supports("DenseDictionaryView");
+        bool denseTextCursor = denseText && c.Supports("BinaryStringPairCursor");
         bool denseCompound = c.Key == "string" && c.Supports("DenseDictionaryView") && c.DenseCompoundValue;
         bool dense = denseText || denseCompound;
         bool frozenTraversal = c.Supports("FrozenDictionaryTraversal");
@@ -200,6 +201,12 @@ internal static class DictionaryInterfaceOwnerFile
             w.Open();
             w.Line("int version = view._version;");
             w.Line("ref var entry = ref " + marshal + ".GetNotNullArrayReference(entries!);");
+            if (denseTextCursor)
+            {
+                w.Line("bool bounded = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ";");
+                w.Line("ref byte cursor = ref operationState.Cursor;");
+                w.Line("int room = bounded ? operationState.RecordRoom(ref cursor) : 0;");
+            }
             w.Line("for (int remaining = count; remaining != 0; entry = ref " + c.Memory + ".Add(ref entry, 1), remaining--)");
             w.Open();
             w.Line("var key = entry.Key;");
@@ -208,6 +215,24 @@ internal static class DictionaryInterfaceOwnerFile
                 w.Line("var itemValue = entry.Value;");
                 c.WriteMember(c.Key, "key");
                 c.WriteMember(c.Value, "itemValue");
+            }
+            else if (denseTextCursor)
+            {
+                w.Line("if (bounded)");
+                w.Open();
+                w.Line("var itemValue = entry.Value;");
+                ParallelDictionaryWrite.WriteStringKeyPairIfFits(w, c.Memory);
+                w.Line("operationState.CommitRecords(ref cursor);");
+                w.Line("WritePairSlow(ref operationState, key, itemValue);");
+                w.Line("cursor = ref operationState.Cursor;");
+                w.Line("room = operationState.RecordRoom(ref cursor);");
+                w.Close();
+                w.Line("else");
+                w.Open();
+                c.WriteMember(c.Key, "key");
+                w.Line("var remainingValue = entry.Value;");
+                c.WriteMember(c.Value, "remainingValue");
+                w.Close();
             }
             else
             {
@@ -225,6 +250,8 @@ internal static class DictionaryInterfaceOwnerFile
                 c.WriteMember(c.Value, "remainingValue");
             }
             w.Close();
+            if (denseTextCursor)
+                w.Line("if (bounded) operationState.CommitRecords(ref cursor);");
             w.Line("if (view._version != version || view._count != count || view._freeCount != 0)");
             w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();"));
             w.Close();

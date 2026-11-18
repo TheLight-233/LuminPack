@@ -32,13 +32,13 @@ internal static class GenericOwnerFile
             case GenericIdentity.Nullable:
                 return SpecialOwnerFile.Render(set, operations, shortName, declared, false,
                     (w, c) => w.Line("writer.WriteNullable<" + args[0] + ">(value);"),
-                    (w, c) => ValueRead(w, c, args[0], "value = item;", "value = null;", null),
+                    (w, c) => ValueRead(w, c, args[0], "value = item;", "value = null;", nullable: true),
                     (w, c) => ValueJsonWrite(w, c, args[0], "!value.HasValue", "value.Value", extension, false),
                     (w, c) => ValueJsonRead(w, c, args[0], "value = null;", "value = item;", "value.GetValueOrDefault()", extension));
             case GenericIdentity.Lazy:
                 return SpecialOwnerFile.Render(set, operations, shortName, declared, true,
                     (w, c) => ValueWrite(w, c, args[0], "value is not null", "value.Value"),
-                    (w, c) => ValueRead(w, c, args[0], "value = new " + declared + "(item);", "value = null;", null),
+                    (w, c) => ValueRead(w, c, args[0], "value = new " + declared + "(item);", "value = null;"),
                     (w, c) => ValueJsonWrite(w, c, args[0], "value is null", "value.Value", extension, true),
                     (w, c) => LazyJsonRead(w, c, args[0], declared, extension));
             case GenericIdentity.Grouping:
@@ -101,6 +101,22 @@ internal static class GenericOwnerFile
     /// <returns>The resulting text.</returns>
     internal static string Declare(string type, string local) =>
         type == "string" ? "string? " + local + " = null;" : type + " " + local + " = default;";
+
+    /// <summary>Emits a mutable reference to the value storage of a modern .NET nullable.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="type">The nullable's underlying value type.</param>
+    /// <param name="destination">The destination nullable storage.</param>
+    internal static void NullablePayload(CodeWriter w, string type, string destination) =>
+        w.Line("ref " + type + " payload = ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in " +
+            "global::System.Nullable.GetValueRefOrDefaultRef(in " + destination + "));");
+
+    /// <summary>Publishes the validated payload through the runtime's leading nullable presence field.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="type">The nullable's underlying value type.</param>
+    /// <param name="destination">The nullable storage with its payload already populated.</param>
+    internal static void PublishNullable(CodeWriter w, string type, string destination) =>
+        w.Line("global::System.Runtime.CompilerServices.Unsafe.As<global::System.Nullable<" + type +
+            ">, bool>(ref " + destination + ") = true;");
 
     /// <summary>Handles pair write for <c>GenericOwnerFile</c>.</summary>
     /// <param name="w">The generated source writer.</param>
@@ -193,8 +209,8 @@ internal static class GenericOwnerFile
     /// <param name="type">The type being analyzed or emitted.</param>
     /// <param name="assign">The assign supplied to <c>ValueRead</c>.</param>
     /// <param name="none">The none supplied to <c>ValueRead</c>.</param>
-    /// <param name="unused">The unused supplied to <c>ValueRead</c>.</param>
-    private static void ValueRead(CodeWriter w, SpecialOwnerContext c, string type, string assign, string none, string? unused)
+    /// <param name="nullable">Whether the payload can populate an existing nullable storage slot on modern .NET.</param>
+    private static void ValueRead(CodeWriter w, SpecialOwnerContext c, string type, string assign, string none, bool nullable = false)
     {
         w.Line("if (!reader.TryReadObjectHead())");
         w.Open();
@@ -202,6 +218,18 @@ internal static class GenericOwnerFile
         w.Line("return;");
         w.Close();
         w.Blank();
+        if (nullable)
+        {
+            w.Line("#if NET8_0_OR_GREATER");
+            w.Line("if (global::System.IntPtr.Size == 8)");
+            w.Open();
+            NullablePayload(w, type, "value");
+            w.Line("reader.Read(ref payload);");
+            PublishNullable(w, type, "value");
+            w.Line("return;");
+            w.Close();
+            w.Line("#endif");
+        }
         w.Line(Declare(type, "item"));
         ReadItem(w, c, type, "item");
         w.Line(type == "string" ? assign.Replace("(item)", "(item!)").Replace("= item;", "= item!;") : assign);

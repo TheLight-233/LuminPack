@@ -185,7 +185,7 @@ internal static class GenericFormatterReuse
         private readonly SharedFormatterSet _set;
         private readonly int _mode;
         private readonly List<Plan> _plans = new();
-        private readonly HashSet<string> _ordinary = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, (int FixedMemberCount, bool SkipEmptyPeek)> _ordinary = new(StringComparer.Ordinal);
         private readonly Dictionary<string, FormatterStorageModel> _layouts = new(StringComparer.Ordinal);
         private readonly SortedDictionary<string, (string Type, GeneratedOperations Operations)> _compressed = new(StringComparer.Ordinal);
         private readonly Dictionary<string, (string Type, GeneratedOperations Operations)> _pendingCompressed = new(StringComparer.Ordinal);
@@ -639,7 +639,8 @@ internal static class GenericFormatterReuse
                 strategies[readable] = strategies.TryGetValue(readable, out var prior)
                     ? (type, prior.Operations | required, prior.Blocks | blocks) : (type, required, blocks);
                 if (plan.Closed.Arguments[index].OrdinaryObject)
-                    _ordinary.Add(readable);
+                    _ordinary[readable] = (FormatterElementEmitter.FixedSlotMemberCount(_set, plan.Closed.Arguments[index]),
+                        FormatterElementEmitter.CanSkipEmptySlotPeek(plan.Closed.Arguments[index]));
             }
             arguments.AddRange(formatters);
             GeneratedOperations compressed = plan.Compressed
@@ -756,7 +757,7 @@ internal static class GenericFormatterReuse
                 text.Append("        internal static partial class ").Append(strategy.Key).Append("Formatter : ")
                     .Append(string.Join(", ", Interfaces(type, operations).Concat(BlockInterfaces(type, blocks)))).Append("\n        {\n");
                 void Member(GeneratedOperations operation, string contract, string method, string stateType, string parameters, string arguments,
-                    string? prefix = null)
+                    string? prefix = null, string? fixedSlotPayload = null)
                 {
                     if ((operations & operation) == 0)
                         return;
@@ -766,13 +767,33 @@ internal static class GenericFormatterReuse
                     if (prefix == null)
                         text.Append("\n                => ").Append(state).Append('.').Append(method).Append("<TOptions>(").Append(arguments).Append(");\n");
                     else
-                        text.Append("\n            {\n                ").Append(prefix).Append("\n                ").Append(state).Append('.').Append(method)
-                            .Append("<TOptions>(").Append(arguments).Append(");\n            }\n");
+                    {
+                        text.Append("\n            {\n                ").Append(prefix).Append("\n                ");
+                        if (fixedSlotPayload == null)
+                            text.Append(state).Append('.').Append(method).Append("<TOptions>");
+                        else
+                            text.Append(fixedSlotPayload);
+                        text.Append('(').Append(arguments).Append(");\n            }\n");
+                    }
                 }
                 Member(GeneratedOperations.BinaryWrite, "ILuminPackWriter", "Write", "global::LuminPack.Core.LuminPackWriter writer", ", in " + type + " value", "ref writer, in value");
-                // As the closed element reads do, a null marker clears an ordinary object before its own read consumes the marker.
+                // Keep the slot reset before its reader or consume the marker once when the fixed payload is equivalent.
+                string? slotMarker = null;
+                string? fixedSlotPayload = null;
+                if (_ordinary.TryGetValue(strategy.Key, out var slot))
+                {
+                    if (slot.FixedMemberCount == 0)
+                        slotMarker = slot.SkipEmptyPeek ? "if (value is not null && reader.PeekIsNullObject()) value = default!;"
+                            : "if (reader.PeekIsNullObject()) value = default!;";
+                    else
+                    {
+                        slotMarker = "if (global::LuminPack.Security.LuminPackInputPolicy.ReadNullMarker(ref reader, " +
+                            slot.FixedMemberCount.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")) { value = default!; return; }";
+                        fixedSlotPayload = FormatterElementEmitter.FixedSlotPayloadOwner(type);
+                    }
+                }
                 Member(GeneratedOperations.BinaryRead, "ILuminPackReader", "Read", "global::LuminPack.Core.LuminPackReader reader", ", " + scoped + "ref " + type + " value",
-                    "ref reader, ref value", _ordinary.Contains(strategy.Key) ? "if (reader.PeekIsNullObject()) value = default!;" : null);
+                    "ref reader, ref value", slotMarker, fixedSlotPayload);
                 Member(GeneratedOperations.JsonWrite, "ILuminPackJsonWriter", "Write", "global::LuminPack.Core.LuminPackJsonWriter writer", ", in " + type + " value", "ref writer, value");
                 Member(GeneratedOperations.JsonRead, "ILuminPackJsonReader", "Read", "global::LuminPack.Core.LuminPackJsonReader reader", ", " + scoped + "ref " + type + " value", "ref reader, ref value");
                 if (blocks != GeneratedOperations.None)

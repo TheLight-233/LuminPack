@@ -99,6 +99,27 @@ internal enum EntryKind
     /// <summary>A record of fixed-width primitive members, measured and written into an exact array.</summary>
     FixedRecord,
 
+    /// <summary>An ordinary positional class with one marker and fixed-width fields.</summary>
+    FixedObject,
+
+    /// <summary>A contiguous array of fixed-width positional classes.</summary>
+    FixedObjectArray,
+
+    /// <summary>A count followed by a native contiguous payload.</summary>
+    RawArray,
+
+    /// <summary>A four-component framework version behind its object marker.</summary>
+    FixedVersion,
+
+    /// <summary>A UTF-16 length root that can use the bounded short-string writer.</summary>
+    RootString,
+
+    /// <summary>A UTF-16 length string behind the URI object marker.</summary>
+    RootUri,
+
+    /// <summary>A UTF-16 length string behind the culture object marker.</summary>
+    RootCulture,
+
     /// <summary>A portable record with a constant wire width independent of its native layout.</summary>
     FixedWidthRecord,
 
@@ -154,23 +175,35 @@ internal readonly struct EntryShape : IEquatable<EntryShape>
     /// <summary>Whether binary span reads can omit the operation-state lease.</summary>
     internal readonly bool StatelessRead;
 
+    /// <summary>Whether a span read can consume an ordinary null object marker directly.</summary>
+    internal readonly bool NullObjectRead;
+
+    /// <summary>Whether the runtime exposes direct storage access for an empty retained writer.</summary>
+    internal readonly bool RetainedDirect;
+
     /// <summary>Initializes a <c>EntryShape</c> from the supplied data.</summary>
     /// <param name="kind">The kind supplied to <c>EntryShape</c>.</param>
     /// <param name="element">The collection element or its formatter contract.</param>
     /// <param name="width">The exact portable width, if one is available.</param>
     /// <param name="statelessRead">Whether a binary span read needs no operation state.</param>
-    internal EntryShape(EntryKind kind, string? element = null, int? width = null, bool statelessRead = false)
+    /// <param name="nullObjectRead">Whether a null object marker has no reader side effects.</param>
+    /// <param name="retainedDirect">Whether the runtime exports the retained root destination check.</param>
+    internal EntryShape(EntryKind kind, string? element = null, int? width = null, bool statelessRead = false,
+        bool nullObjectRead = false, bool retainedDirect = false)
     {
         Kind = kind;
         Element = element;
         Width = width;
         StatelessRead = statelessRead;
+        NullObjectRead = nullObjectRead;
+        RetainedDirect = retainedDirect;
     }
 
     /// <summary>Compares this value with the supplied value.</summary>
     /// <param name="other">The value to compare with this instance.</param>
     /// <returns>Whether the values compare equal.</returns>
-    public bool Equals(EntryShape other) => Kind == other.Kind && Element == other.Element && Width == other.Width && StatelessRead == other.StatelessRead;
+    public bool Equals(EntryShape other) => Kind == other.Kind && Element == other.Element && Width == other.Width &&
+        StatelessRead == other.StatelessRead && NullObjectRead == other.NullObjectRead && RetainedDirect == other.RetainedDirect;
 
     /// <summary>Compares this value with the supplied value.</summary>
     /// <param name="obj">The obj supplied to <c>Equals</c>.</param>
@@ -179,7 +212,8 @@ internal readonly struct EntryShape : IEquatable<EntryShape>
 
     /// <summary>Computes a hash code from this value's comparison fields.</summary>
     /// <returns>The hash code.</returns>
-    public override int GetHashCode() => unchecked((int)Kind * 397 ^ (Element?.GetHashCode() ?? Width.GetValueOrDefault()) ^ StatelessRead.GetHashCode());
+    public override int GetHashCode() => unchecked((int)Kind * 397 ^ (Element?.GetHashCode() ?? Width.GetValueOrDefault()) ^
+        StatelessRead.GetHashCode() ^ (NullObjectRead ? 2 : 0) ^ (RetainedDirect ? 4 : 0));
 }
 
 /// <summary>Normalized root facts shared by all facade calls of one payload.</summary>
