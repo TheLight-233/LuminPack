@@ -509,14 +509,14 @@ namespace LuminPack.Core
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 &&
                 default(TOptions).StringRecording == LuminPackStringRecording.Length &&
                 Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 &&
-                !strings.IsEmpty && strings[0] is null)
+                !strings.IsEmpty)
             {
                 nint available = Unsafe.ByteOffset(ref Cursor, ref _end);
                 if (unchecked((nuint)(available - sizeof(int))) <= int.MaxValue - sizeof(int))
                 {
                     int header = Read<int>(ref Current);
                     if (IsShortLatin1Header(header))
-                        strings = strings.Slice(ReadFreshLatin1Prefix(strings, header, (uint)available));
+                        strings = strings.Slice(ReadShortLatin1Prefix(strings, header, (uint)available));
                 }
             }
 #endif
@@ -539,13 +539,13 @@ namespace LuminPack.Core
         private static bool IsShortLatin1Header(int header) =>
             (header & 1) != 0 && (uint)((header >> 1) - 4) <= 12;
 
-        /// <summary>Fills leading empty slots from short Latin-1 length records.</summary>
-        /// <param name="slots">The destination slots, starting with an empty slot.</param>
+        /// <summary>Reads consecutive short Latin-1 length records with one captured input window.</summary>
+        /// <param name="slots">The destination slots, including any candidates for reuse.</param>
         /// <param name="header">The first short Latin-1 header, already read at the cursor.</param>
         /// <param name="remaining">The validated number of bytes from the current position.</param>
         /// <returns>The number of complete string records read.</returns>
         [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
-        private int ReadFreshLatin1Prefix(Span<string?> slots, int header, uint remaining)
+        private int ReadShortLatin1Prefix(Span<string?> slots, int header, uint remaining)
         {
             int i = 0;
             ref string? first = ref MemoryMarshal.GetReference(slots);
@@ -556,8 +556,12 @@ namespace LuminPack.Core
                 int recordBytes = sizeof(int) + length;
                 AdvanceInStringWindow(recordBytes, remaining);
                 remaining -= (uint)recordBytes;
-                Unsafe.Add(ref first, (nint)(uint)i++) = StringSerializer.CreateShortLatin1String(ref payload, length);
-                if (i == slots.Length || Unsafe.Add(ref first, (nint)(uint)i) is not null || remaining < sizeof(int))
+                ref string? slot = ref Unsafe.Add(ref first, (nint)(uint)i++);
+                string? current = slot;
+                string decoded = StringSerializer.ReadShortLatin1Payload(ref payload, length, current);
+                if (!ReferenceEquals(current, decoded))
+                    slot = decoded;
+                if (i == slots.Length || remaining < sizeof(int))
                     break;
                 header = Read<int>(ref Current);
             } while (IsShortLatin1Header(header));
