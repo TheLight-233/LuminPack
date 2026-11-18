@@ -80,8 +80,9 @@ internal sealed partial class PairedDictionaryContext
     /// <summary>Whether the value uses the ordinary generated object contract.</summary>
     internal bool OrdinaryObjectValue => !_nativeEntries && _contract?.Arguments[1].OrdinaryObject == true;
 
-    /// <summary>Whether the value can run in a dense traversal without invoking user code.</summary>
-    internal bool DenseCompoundValue => FormatterElementEmitter.ReservableCollectionElement(_set, _contract?.Arguments[1] ?? _set.FindFormatter(Value)) != null;
+    /// <summary>The value that can run in a dense traversal without invoking user code.</summary>
+    internal PayloadRenderModel? DenseCompoundValue =>
+        FormatterElementEmitter.ReservableCollectionElement(_set, _contract?.Arguments[1] ?? _set.FindFormatter(Value));
 
     /// <summary>Whether the owner uses the direct scalar pair path.</summary>
     internal bool RawPairs => UsesRawOrStringEntries && Key != "string" && Value != "string";

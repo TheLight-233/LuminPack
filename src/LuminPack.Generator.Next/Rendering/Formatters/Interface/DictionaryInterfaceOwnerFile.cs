@@ -1,3 +1,4 @@
+using System.Linq;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
@@ -76,7 +77,11 @@ internal static class DictionaryInterfaceOwnerFile
         bool textPair = c.Key == "string" && c.Value == "string";
         bool denseText = textKernel && textPair && c.Supports("DenseDictionaryView");
         bool denseTextCursor = denseText && c.Supports("BinaryStringPairCursor");
-        bool denseCompound = c.Key == "string" && c.Supports("DenseDictionaryView") && c.DenseCompoundValue;
+        var compound = c.Key == "string" && c.Supports("DenseDictionaryView") ? c.DenseCompoundValue : null;
+        bool denseCompound = compound != null;
+        // A compound value that would inline here can make its reserved writes exceed the loop's inlining budget.
+        bool outlineDenseValue = compound is { Circle: false, Recursive: false, UnionRoot: false } &&
+            compound.Members.Any(member => member.Kind == RenderMemberKind.Text) && DirectInlining.Write(compound, union: false, sizes: 0);
         bool dense = denseText || denseCompound;
         bool frozenTraversal = c.Supports("FrozenDictionaryTraversal");
         const string runtimeWriter = "global::LuminPack.Core.LuminPackWriter";
@@ -159,6 +164,14 @@ internal static class DictionaryInterfaceOwnerFile
             c.WriteMember(c.Value, "itemValue");
             w.Close();
         }
+        if (outlineDenseValue)
+        {
+            w.Line(w.MethodImpl("NoInlining"));
+            w.Line("static void WriteDenseValue(scoped ref " + writer + " operationState, " + c.Value + " itemValue)");
+            w.Open();
+            c.WriteMember(c.Value, "itemValue");
+            w.Close();
+        }
 
         string ImmutableType(string family) => "global::System.Collections.Immutable." + family + "<" + c.Key + ", " + c.Value + ">";
 
@@ -214,7 +227,10 @@ internal static class DictionaryInterfaceOwnerFile
             {
                 w.Line("var itemValue = entry.Value;");
                 c.WriteMember(c.Key, "key");
-                c.WriteMember(c.Value, "itemValue");
+                if (outlineDenseValue)
+                    w.Line("WriteDenseValue(ref operationState, itemValue);");
+                else
+                    c.WriteMember(c.Value, "itemValue");
             }
             else if (denseTextCursor)
             {

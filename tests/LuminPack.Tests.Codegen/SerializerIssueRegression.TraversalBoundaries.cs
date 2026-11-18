@@ -18,6 +18,30 @@ internal static partial class SerializerIssueRegression
             using LuminPack.Utility;
             [LuminPackable] public sealed class FlatTraversalChild { public int Number; public string Text; }
             [LuminPackable] public sealed class CompoundTraversalChild { public List<string> Items; }
+            [LuminPackable] public sealed class DenseTraversalBody
+            {
+                public int Number;
+                public string Text;
+                public long Extra;
+                public List<int> Items;
+                public int Third;
+                public string More;
+            }
+            [LuminPackable] public sealed class WideDenseTraversalBody
+            {
+                public int First;
+                public long Second;
+                public int Third;
+                public string Text;
+                public string More;
+                public List<int> Items;
+            }
+            [LuminPackable, LuminPackUnion(1, typeof(DenseTraversalCase))] public abstract partial class DenseTraversalUnion { }
+            [LuminPackable] public sealed partial class DenseTraversalCase : DenseTraversalUnion
+            {
+                public string Text;
+                public List<int> Items;
+            }
             [LuminPackable] public sealed class ScalarPrefix { public short Id; public List<TraversalParent> Items; }
             [LuminPackable] public sealed class FieldRunPrefix { public int A; public int B; public List<TraversalParent> Items; }
             public sealed class DerivedHashSet : HashSet<int> { }
@@ -64,6 +88,43 @@ internal static partial class SerializerIssueRegression
                     CheckConcurrentPairs<LuminPackUtf16LengthOptions>();
                     CheckConcurrentPairs<LuminPackUtf8LengthOptions>();
                     CheckJsonHashTraversal();
+                    CheckDenseDictionary();
+                }
+
+                private static void CheckDenseDictionary()
+                {
+                    var exact = new Dictionary<string, DenseTraversalBody>
+                    {
+                        ["key"] = new() { Number = 12, Extra = 100, Third = 3, Text = new string('\u96ea', 1600), More = "mixed", Items = new() { 9, 10 } },
+                        ["removed"] = new(),
+                        ["null"] = null,
+                    };
+                    IReadOnlyDictionary<string, DenseTraversalBody> view = exact;
+                    RequireSameBytes();
+                    exact.Remove("removed");
+                    RequireSameBytes();
+                    IReadOnlyDictionary<string, FlatTraversalChild> compact = new Dictionary<string, FlatTraversalChild> { ["x"] = new() { Number = 1, Text = "y" } };
+                    var wide = new Dictionary<string, WideDenseTraversalBody> { ["x"] = new() { First = 1, Second = 2, Third = 3, Text = "a", More = "b", Items = new() { 7 } } };
+                    IReadOnlyDictionary<string, WideDenseTraversalBody> wideView = wide;
+                    IReadOnlyDictionary<string, DenseTraversalUnion> tagged = new Dictionary<string, DenseTraversalUnion> { ["x"] = new DenseTraversalCase { Text = "case", Items = new() { 5 } } };
+                    _ = LuminPackSerializer.Serialize(compact);
+                    if (!LuminPackSerializer.Serialize(wideView).AsSpan().SequenceEqual(LuminPackSerializer.Serialize(wide)))
+                        throw new Exception("A wide dictionary value changed the binary dictionary representation.");
+                    byte[] wire = LuminPackSerializer.Serialize(tagged);
+                    IReadOnlyDictionary<string, DenseTraversalUnion> decoded = null;
+                    if (LuminPackSerializer.Deserialize(wire, ref decoded) != wire.Length || decoded["x"] is not DenseTraversalCase { Text: "case", Items: [5] })
+                        throw new Exception("The Union dictionary lost its original case framing.");
+
+                    void RequireSameBytes()
+                    {
+                        byte[] wire = LuminPackSerializer.Serialize(view);
+                        if (!wire.AsSpan().SequenceEqual(LuminPackSerializer.Serialize(exact)))
+                            throw new Exception("Dense or sparse interface traversal changed the binary dictionary wire.");
+                        IReadOnlyDictionary<string, DenseTraversalBody> decoded = null;
+                        if (LuminPackSerializer.Deserialize(wire, ref decoded) != wire.Length ||
+                            decoded["key"] is not { Number: 12, Extra: 100, Third: 3, More: "mixed", Items: [9, 10] } || decoded["null"] != null)
+                            throw new Exception("A dictionary value call boundary lost the original record payload.");
+                    }
                 }
 
                 private static void CheckConcurrentPairs<TProfile>() where TProfile : struct, ILuminPackOptions
@@ -152,6 +213,22 @@ internal static partial class SerializerIssueRegression
                 !concurrentBody.Contains("CommitRecords(ref cursor)", StringComparison.Ordinal) ||
                 !concurrentBody.Contains("WritePairSlow", StringComparison.Ordinal))
                 throw new InvalidOperationException("The concurrent text writer lost its bounded traversal or growth fallback.");
+
+            foreach (var expected in new[] { ("IReadOnlyDictionaryOfStringAndDenseTraversalBodyFormatter", true),
+                ("IReadOnlyDictionaryOfStringAndFlatTraversalChildFormatter", false),
+                ("IReadOnlyDictionaryOfStringAndWideDenseTraversalBodyFormatter", false),
+                ("IReadOnlyDictionaryOfStringAndDenseTraversalUnionFormatter", false) })
+            {
+                var methods = owners.Where(owner => owner.Identifier.ValueText == expected.Item1).SelectMany(owner => owner.Members)
+                    .OfType<MethodDeclarationSyntax>().Where(method => method.Identifier.ValueText == "Write" && method.Body != null).ToArray();
+                if (methods.Length != 1)
+                    throw new InvalidOperationException("Expected the binary formatter for " + expected.Item1);
+                var boundary = methods[0].DescendantNodes().OfType<LocalFunctionStatementSyntax>()
+                    .SingleOrDefault(method => method.Identifier.ValueText == "WriteDenseValue");
+                if ((boundary != null) != expected.Item2 || boundary != null &&
+                    !boundary.AttributeLists.ToString().Contains("NoInlining", StringComparison.Ordinal))
+                    throw new InvalidOperationException("Unexpected dense value boundary for " + expected.Item1);
+            }
 
             CheckJsonTier("HashSetOfIntFormatter", "ReadJson", fullOptimization: false);
             CheckJsonTier("QueueOfLongFormatter", "ReadJson", fullOptimization: false);
