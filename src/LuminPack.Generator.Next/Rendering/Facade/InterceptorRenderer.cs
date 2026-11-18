@@ -496,8 +496,14 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             return FixedObjectArrayWrite.Replace("%ELEMENTOWNER%", FixedObjectOwner(shape.Element!)) + "\n" +
                 "                [MethodImpl(MethodImplOptions.NoInlining)]\n" +
                 "                static byte[] WriteOversized(in %TYPE% value)\n                {\n" + Indent(PooledWrite) + "                }\n";
-        if (shape.Kind == EntryKind.TimeZoneSnapshot)
-            return TimeZoneSnapshotWrite + PooledWrite;
+        if (shape.Kind is EntryKind.TimeZoneSnapshot or EntryKind.TimeZoneCatalog)
+        {
+            const string cache = "global::LuminPack.Code.LuminPackTimeZoneInfoCache";
+            bool catalog = shape.Kind == EntryKind.TimeZoneCatalog;
+            return TimeZoneSnapshotWrite.Replace("%TIMEZONE_TEXT%", catalog ? cache + ".GetBinaryText(value, out byte marker)" :
+                    "value is null ? null : " + cache + ".GetText(value)")
+                .Replace("%TIMEZONE_MARKER%", catalog ? "marker, " : string.Empty) + PooledWrite;
+        }
         if (shape.Kind == EntryKind.PackedPriorityQueue)
             return PackedPriorityQueueWrite + PooledWrite;
         if (shape.Kind is EntryKind.ExactList or EntryKind.ExactCapturedList or
@@ -791,12 +797,12 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                         if (default(%PROFILE%).StringEncoding == LuminPackStringEncoding.UTF16 &&
                             default(%PROFILE%).StringRecording == global::LuminPack.Option.LuminPackStringRecording.Length)
                         {
-                            string? snapshot = value is null ? null : global::LuminPack.Code.LuminPackTimeZoneInfoCache.GetText(value);
+                            string? snapshot = %TIMEZONE_TEXT%;
                             int length = global::LuminPack.Code.LuminPackTimeZoneInfoCache.Utf16SnapshotRecordLength(snapshot);
                             var buffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(length);
                             var span = buffer.AsSpan();
                             var writer = new LuminPackWriter(ref span);
-                            global::LuminPack.Code.LuminPackTimeZoneInfoCache.WriteTimeZoneText<%PROFILE%>(ref writer, snapshot, capacityReserved: true);
+                            global::LuminPack.Code.LuminPackTimeZoneInfoCache.WriteTimeZoneText<%PROFILE%>(ref writer, snapshot, %TIMEZONE_MARKER%capacityReserved: true);
                             return buffer;
                         }
         """ + "\n";

@@ -63,6 +63,8 @@ Token mode writes a terminated string with no `null` marker; `null` and `""` bot
 
 `Nullable<T>` scalars, reference `Tuple`, `Lazy`, `Version`, `Uri`, `CultureInfo`, `TimeZoneInfo` and `Type` write a non-null marker before their payload; `null` is the single byte `255`.
 
+A binary `TimeZoneInfo` record with marker `0` carries the sender’s complete serialized snapshot. Marker `1` carries the system zone identifier as a string in the current profile. The Next writer selects marker `1` for `TimeZoneInfo.Utc` and for values whose exact runtime instance belongs to the system catalog. Custom zones preserve the full snapshot, including custom names and rules for a catalog ID. The receiver resolves a system identifier using its own rules. A missing identifier raises `TimeZoneNotFoundException`. Use a reader with marker `1` support to consume these records. JSON carries the complete snapshot.
+
 ## JSON
 
 The default text encoding is UTF-16; select UTF-8 with `[LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8)]` on the root type. Both ends must use the same encoding.

@@ -45,6 +45,7 @@ The history of individual approvals lives in Git. When this document, the code a
 - **Byte order** is little-endian. No mode performs endian conversion.
 - **Compression** uses `LUM2` frames with single-byte length extensions below 255 and an escaped canonical unsigned base-128 remainder for longer lengths, a 64 KiB match window and the per-thread position table. High-ratio allocating reads validate complete sequence structure before allocation. Earlier `LUMZ` frames are rejected. Match hooks, bounded SIMD tails, decoder checks and 32-bit access rules remain in force; see [compression](compression.md).
 - Changing any wire byte needs explicit approval and updated wire fixtures.
+- **Binary system time zones.** A recognized catalog instance can carry its identifier after marker `1`; the null marker and complete snapshot marker `0` retain their established meanings. Catalog eligibility uses reference identity. The receiving catalog provides the system rules, and a missing identifier fails before publishing the destination. The selected string profile and input limits apply to the identifier. For built-in UTF-16 length UTC output, a single fixed write requires enough space for the complete record before the growth threshold. Short windows use the original framed string operations.
 
 ### Dispatch
 

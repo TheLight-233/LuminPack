@@ -6,6 +6,48 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Preserves the runtime capability checks of specialized framework formatters.</summary>
 internal static class FormatterBuiltinCapabilities
 {
+    /// <summary>Checks the catalog record operations against the referenced runtime.</summary>
+    /// <param name="compilation">The consuming compilation and its runtime references.</param>
+    /// <param name="type">The time-zone type.</param>
+    /// <returns>Whether the reader and writer can use both binary record forms.</returns>
+    internal static bool HasBinaryTimeZoneCatalog(Compilation compilation, ITypeSymbol type)
+    {
+        var cache = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackTimeZoneInfoCache");
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        if (cache is not { IsStatic: true, DeclaredAccessibility: Accessibility.Public } || writer is null || options is null)
+            return false;
+        return cache.GetMembers("SystemTimeZoneMarker").OfType<IFieldSymbol>().Any(field =>
+                field is { IsConst: true, DeclaredAccessibility: Accessibility.Public, Type.SpecialType: SpecialType.System_Byte }) &&
+            cache.GetMembers("GetBinaryText").OfType<IMethodSymbol>().Any(method =>
+                IsPublicStatic(method, 0, 2) && method.ReturnType.SpecialType == SpecialType.System_String &&
+                method.Parameters[0].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, type) &&
+                method.Parameters[1].RefKind == RefKind.Out && method.Parameters[1].Type.SpecialType == SpecialType.System_Byte) &&
+            cache.GetMembers("ResolveSystemTimeZone").OfType<IMethodSymbol>().Any(method =>
+                IsPublicStatic(method, 0, 1) && SymbolEqualityComparer.Default.Equals(method.ReturnType, type) &&
+                method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type.SpecialType == SpecialType.System_String) &&
+            cache.GetMembers("WriteBinaryTimeZone").OfType<IMethodSymbol>().Any(method =>
+                IsWriterExtension(method, 2, writer, options) && method.Parameters[1].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, type)) &&
+            cache.GetMembers("WriteTimeZoneText").OfType<IMethodSymbol>().Any(method =>
+                IsWriterExtension(method, 4, writer, options) &&
+                method.Parameters.Skip(1).All(parameter => parameter.RefKind == RefKind.None) &&
+                method.Parameters[1].Type.SpecialType == SpecialType.System_String &&
+                method.Parameters[2].Type.SpecialType == SpecialType.System_Byte &&
+                method.Parameters[3] is { IsOptional: true, Type.SpecialType: SpecialType.System_Boolean });
+
+        static bool IsWriterExtension(IMethodSymbol method, int count, INamedTypeSymbol writer, INamedTypeSymbol options) =>
+                IsPublicStatic(method, 1, count) && method.IsExtensionMethod && method.ReturnsVoid &&
+                method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+                method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+                SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options) &&
+                method.Parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, writer);
+
+        static bool IsPublicStatic(IMethodSymbol method, int arity, int count) =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+            method.Arity == arity && method.Parameters.Length == count;
+    }
+
     /// <summary>Checks the exact optional shared quoted scalar operation.</summary>
     /// <param name="compilation">The consuming compilation and runtime references.</param>
     /// <returns>Whether both type arguments and the return value match the generated call.</returns>
@@ -43,6 +85,8 @@ internal static class FormatterBuiltinCapabilities
 
         if (display == "global::System.TimeZoneInfo")
         {
+            if (HasBinaryTimeZoneCatalog(compilation, type))
+                result.Add("BinaryTimeZoneCatalog");
             var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
             var methods = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonReader")?.GetMembers("ReadTimeZoneInfo").OfType<IMethodSymbol>().Where(method => !method.IsStatic && method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 0 && !method.ReturnsByRef && !method.ReturnsByRefReadonly && SymbolEqualityComparer.Default.Equals(method.ReturnType, type) && (method.Arity == 0 || method.Arity == 1 && method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint && method.TypeParameters[0].ConstraintTypes.Length == 1 && SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options))).ToArray();
             if (methods != null && methods.Any(method => method.Arity == 0) && methods.Any(method => method.Arity == 1))

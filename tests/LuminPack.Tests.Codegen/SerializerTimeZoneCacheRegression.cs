@@ -1,8 +1,11 @@
+extern alias ModelBasedAnalyzer;
+
 using System.Reflection;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 /// <summary>Checks concrete snapshot entry generation, profile propagation and nested operation boundaries.</summary>
 internal static class SerializerTimeZoneCacheRegression
@@ -84,10 +87,52 @@ internal static class SerializerTimeZoneCacheRegression
             var emitted = output.Emit(image);
             Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
             Assembly.Load(image.ToArray()).GetType("TimeZoneCases")!.GetMethod("Check")!.Invoke(null, null);
+            VerifyNextCatalog(compilation, parse);
         }
         VerifyAsyncPinScope(references);
         VerifyReadCases(references);
         Console.WriteLine("Passed time-zone concrete entries, compiled profiles, nested contracts and all four generation tiers.");
+    }
+
+    /// <summary>Checks the catalog representation in a separately generated Next consumer.</summary>
+    /// <param name="compilation">The consumer source and platform references.</param>
+    /// <param name="parse">The options that enable interceptors.</param>
+    private static void VerifyNextCatalog(CSharpCompilation compilation, CSharpParseOptions parse)
+    {
+        const string bounded = """
+            using System;
+            using LuminPack;
+            using LuminPack.Attribute;
+            [LuminPackable, LuminPackOption(UntrustedData = true, MaxStringLength = 2)]
+            public sealed class ShortIdentifier { public TimeZoneInfo Zone; }
+            public static class BoundedCatalog
+            {
+                public static bool RejectsLongIdentifier()
+                {
+                    byte[] bytes = LuminPackSerializer.Serialize(new ShortIdentifier { Zone = TimeZoneInfo.Utc });
+                    try { _ = LuminPackSerializer.Deserialize<ShortIdentifier>(bytes.AsSpan()); }
+                    catch (Exception) { return true; }
+                    return false;
+                }
+            }
+            """;
+        compilation = compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(bounded, parse));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+        Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+        Require(driver.GetRunResult().GeneratedTrees.Any(tree => tree.ToString().Contains("ResolveSystemTimeZone", StringComparison.Ordinal)),
+            "The Next binary time-zone reader did not select the receiving catalog in " + compilation.AssemblyName);
+        using var image = new MemoryStream();
+        var emitted = output.Emit(image);
+        Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
+        var assembly = Assembly.Load(image.ToArray());
+        var entry = assembly.GetType("TimeZoneCases")!;
+        entry.GetMethod("Check")!.Invoke(null, null);
+        var bytes = (byte[])entry.GetMethod("Write")!.Invoke(null, [TimeZoneInfo.Utc])!;
+        Require(bytes.AsSpan().SequenceEqual(new byte[] { 1, 7, 0, 0, 0, (byte)'U', (byte)'T', (byte)'C' }),
+            "The Next system time-zone marker or compact identifier changed in " + compilation.AssemblyName);
+        Require((bool)assembly.GetType("BoundedCatalog")!.GetMethod("RejectsLongIdentifier")!.Invoke(null, null)!,
+            "The Next system time-zone identifier bypassed its enclosing string length limit in " + compilation.AssemblyName);
     }
 
     /// <summary>Keeps compatibility-runtime pins inside synchronous scopes of newer async consumers.</summary>

@@ -5,6 +5,7 @@ using LuminPack;
 using LuminPack.Code;
 using LuminPack.Core;
 using LuminPack.Option;
+using LuminPack.Utility;
 using Xunit;
 
 namespace LuminPackUnitTest;
@@ -13,9 +14,9 @@ namespace LuminPackUnitTest;
 [Collection(nameof(RuntimeStateCollection))]
 public class TimeZoneInfoCacheTest
 {
-    /// <summary>Retains the original complete UTF-16 record and exact evaluator width.</summary>
+    /// <summary>Reads persisted UTF-16 snapshots and retains exact bytes for zones written as snapshots.</summary>
     [Fact]
-    public void CompleteSnapshotBytesRemainUnchanged()
+    public void LegacySnapshotsAndExactSnapshotBytesRemainSupported()
     {
         foreach (var zone in new[] { TimeZoneInfo.Local, TimeZoneInfo.Utc, CreateZone("Bytes"), CreateDaylightZone() })
         {
@@ -27,6 +28,11 @@ public class TimeZoneInfoCacheTest
             TimeZoneInfo? fromRaw = null;
             Assert.Equal(raw.Length, LuminPackSerializer.Deserialize(raw.AsSpan(), ref fromRaw));
             Assert.Equal(text, fromRaw!.ToSerializedString());
+#if LUMINPACK_NEXT_GENERATOR
+            if (ReferenceEquals(zone, TimeZoneInfo.Utc) ||
+                TimeZoneInfo.TryFindSystemTimeZoneById(zone.Id, out var system) && ReferenceEquals(zone, system))
+                continue;
+#endif
             byte[] expected = raw;
             if (text.All(character => character <= 'ÿ'))
             {
@@ -51,7 +57,57 @@ public class TimeZoneInfoCacheTest
         VerifyProfile<LuminPackUtf16TokenOptions>(zone);
         VerifyProfile<LuminPackUtf8LengthOptions>(zone);
         VerifyProfile<LuminPackUtf8TokenOptions>(zone);
+        VerifyProfile<LuminPackUtf16LengthOptions>(TimeZoneInfo.Utc);
+        VerifyProfile<LuminPackUtf16TokenOptions>(TimeZoneInfo.Utc);
+        VerifyProfile<LuminPackUtf8LengthOptions>(TimeZoneInfo.Utc);
+        VerifyProfile<LuminPackUtf8TokenOptions>(TimeZoneInfo.Utc);
     }
+
+#if LUMINPACK_NEXT_GENERATOR
+    /// <summary>Uses the catalog for its own instances while preserving a same-ID custom snapshot.</summary>
+    [Fact]
+    public void BinaryCatalogKeepsSystemAndCustomZonesDistinct()
+    {
+        byte[] utc = LuminPackSerializer.Serialize(TimeZoneInfo.Utc);
+        Assert.Equal(new byte[] { 1, 7, 0, 0, 0, (byte)'U', (byte)'T', (byte)'C' }, utc);
+        TimeZoneInfo? copy = null;
+        Assert.Equal(utc.Length, LuminPackSerializer.Deserialize(utc, ref copy));
+        Assert.Same(TimeZoneInfo.Utc, copy);
+        using var retained = new LuminBufferWriter(true);
+        LuminPackSerializer.Serialize(TimeZoneInfo.Utc, retained);
+        Assert.Equal(utc, retained.ToArrayAndReset());
+
+        var custom = TimeZoneInfo.CreateCustomTimeZone(TimeZoneInfo.Utc.Id, TimeSpan.Zero, "Custom display", "Custom standard");
+        byte[] customBytes = LuminPackSerializer.Serialize(custom);
+        Assert.Equal((byte)0, customBytes[0]);
+        Assert.Equal(customBytes.Length, LuminPackSerializer.Deserialize(customBytes, ref copy));
+        Assert.Equal(custom.ToSerializedString(), copy!.ToSerializedString());
+
+        var system = TimeZoneInfo.GetSystemTimeZones().FirstOrDefault(zone => zone.Id != TimeZoneInfo.Utc.Id &&
+            TimeZoneInfo.TryFindSystemTimeZoneById(zone.Id, out var found) && ReferenceEquals(zone, found));
+        if (system is not null)
+        {
+            byte[] bytes = LuminPackSerializer.Serialize(system);
+            Assert.Equal((byte)1, bytes[0]);
+            Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref copy));
+            Assert.Same(system, copy);
+        }
+    }
+
+    /// <summary>Leaves the caller's zone intact when a catalog reference cannot be resolved.</summary>
+    [Fact]
+    public void InvalidCatalogReferencesLeaveTheTargetUntouched()
+    {
+        var sentinel = CreateZone("CatalogSentinel");
+        TimeZoneInfo? copy = sentinel;
+        byte[] missing = [1, ..LuminPackSerializer.Serialize("LuminPack/Missing-Catalog-Zone-79b21bfd")];
+        Assert.Throws<TimeZoneNotFoundException>(() => LuminPackSerializer.Deserialize(missing, ref copy));
+        Assert.Same(sentinel, copy);
+        byte[] empty = [1, ..LuminPackSerializer.Serialize(string.Empty)];
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(empty, ref copy));
+        Assert.Same(sentinel, copy);
+    }
+#endif
 
     /// <summary>Distinguishes same-ID snapshots with different offsets and names, including equal-length collisions.</summary>
     [Fact]

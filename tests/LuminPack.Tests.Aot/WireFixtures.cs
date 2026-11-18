@@ -44,6 +44,9 @@ internal static class WireFixtures
         LuminPackSerializer.Register<int[,], LuminPackUtf16LengthOptions>(WriteFixture10<LuminPackUtf16LengthOptions>, ReadFixture10<LuminPackUtf16LengthOptions>);
         LuminPackSerializer.Register<WireModel, LuminPackUtf8LengthOptions>(WriteFixture11<LuminPackUtf8LengthOptions>, ReadFixture11<LuminPackUtf8LengthOptions>);
         LuminPackSerializer.Register<WireModel, LuminPackUtf16LengthOptions>(WriteFixture11<LuminPackUtf16LengthOptions>, ReadFixture11<LuminPackUtf16LengthOptions>);
+#if LUMINPACK_NEXT_WIRE
+        LuminPackSerializer.Register<TimeZoneInfo, LuminPackUtf16LengthOptions>(WriteTimeZone, ReadTimeZone);
+#endif
     }
 
     /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
@@ -214,6 +217,25 @@ internal static class WireFixtures
     private static void ReadFixture11<TOptions>(ref LuminPackReader state, ref WireModel value) where TOptions : struct, ILuminPackOptions
         => LuminPackSerializer.Deserialize<WireModel, TOptions>(ref state, ref value);
 
+#if LUMINPACK_NEXT_WIRE
+    /// <summary>Writes one closed time-zone fixture using its established UTF-16 profile.</summary>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The system or custom fixture zone.</param>
+    private static void WriteTimeZone(ref LuminPackWriter state, in TimeZoneInfo value)
+        => LuminPackSerializer.Serialize<TimeZoneInfo, LuminPackUtf16LengthOptions>(ref state, in value);
+
+    /// <summary>Reads a closed time-zone fixture using its established UTF-16 profile.</summary>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The destination fixture zone.</param>
+    private static void ReadTimeZone(ref LuminPackReader state, ref TimeZoneInfo value)
+        => LuminPackSerializer.Deserialize<TimeZoneInfo, LuminPackUtf16LengthOptions>(ref state, ref value);
+
+    /// <summary>Uses a custom zone with a catalog ID so the fixture requires an explicit snapshot.</summary>
+    /// <returns>The complete sender-side custom zone.</returns>
+    private static TimeZoneInfo CreateCustomZone() =>
+        TimeZoneInfo.CreateCustomTimeZone("UTC", TimeSpan.FromMinutes(345), "Fixture custom", "Fixture standard");
+#endif
+
 
     /// <summary>Writes  to the current output.</summary>
     /// <param name="directory">The directory used by this operation.</param>
@@ -237,6 +259,10 @@ internal static class WireFixtures
         Put(directory, "string-builder", new StringBuilder("Unity-LuminPack-\u754C-\uD83D\uDE00"));
         Put(directory, "multi-array", CreateGrid());
         Put(directory, "generated-model", CreateModel());
+#if LUMINPACK_NEXT_WIRE
+        Put(directory, "time-zone-system", TimeZoneInfo.Utc, Utf16Length);
+        Put(directory, "time-zone-custom", CreateCustomZone(), Utf16Length);
+#endif
     }
 
     /// <summary>Verifies verify.</summary>
@@ -270,6 +296,10 @@ internal static class WireFixtures
         Check(grid.GetLength(0) == 3 && grid.GetLength(1) == 4 && grid[2, 3] == 203, "multi-array");
         var model = Get<WireModel>(directory, "generated-model");
         Check(model.Id == 42 && model.Name == "wire" && model.Stats.Health == 900 && model.Stats.Alive && model.Values.SequenceEqual(new[] { 3, 5, 8 }), "generated-model");
+#if LUMINPACK_NEXT_WIRE
+        Check(ReferenceEquals(Get<TimeZoneInfo>(directory, "time-zone-system", Utf16Length), TimeZoneInfo.Utc), "time-zone-system");
+        Check(Get<TimeZoneInfo>(directory, "time-zone-custom", Utf16Length).ToSerializedString() == CreateCustomZone().ToSerializedString(), "time-zone-custom");
+#endif
     }
 
     /// <summary>Compares newly emitted records with retained fixture bytes without modifying the baseline.</summary>

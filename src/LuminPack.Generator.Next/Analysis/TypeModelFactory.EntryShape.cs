@@ -158,7 +158,8 @@ internal static partial class TypeModelFactory
                 lazy.TypeArguments[0].SpecialType == SpecialType.System_String && IsFrameworkCollection(lazy, "System.Lazy`1"))
                 return new EntryShape(EntryKind.LazyString);
             if (name == "global::System.TimeZoneInfo")
-                return new EntryShape(EntryKind.TimeZoneSnapshot);
+                return new EntryShape(FormatterBuiltinCapabilities.HasBinaryTimeZoneCatalog(_compilation, type)
+                    ? EntryKind.TimeZoneCatalog : EntryKind.TimeZoneSnapshot);
             if (name == "global::System.Version" && payload == null && type.DeclaringSyntaxReferences.IsEmpty)
                 return new EntryShape(EntryKind.FixedVersion);
             if (name == "string")

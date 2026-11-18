@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants Condition="'$(LuminPackGenerator)' == 'Next' Or '$(LuminPackPackageVersion)' != ''">$(DefineConstants);LUMINPACK_NEXT_WIRE</DefineConstants>
     <PublishTrimmed Condition="'$(LuminPackPublish)' == 'trim' Or '$(LuminPackPublish)' == 'aot'">true</PublishTrimmed>
     <PublishAot Condition="'$(LuminPackPublish)' == 'aot'">true</PublishAot>
     <DefineConstants Condition="'$(PublishAot)' == 'true'">$(DefineConstants);LUMINPACK_NATIVE_AOT</DefineConstants>

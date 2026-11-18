@@ -156,6 +156,9 @@ internal enum EntryKind
     /// <summary>A UTF-16 length-prefixed time zone snapshot sized from its cached text.</summary>
     TimeZoneSnapshot,
 
+    /// <summary>A UTF-16 length-prefixed time zone catalog identifier or snapshot.</summary>
+    TimeZoneCatalog,
+
     /// <summary>An exact built-in list implementation of a scalar interface.</summary>
     ExactList,
 

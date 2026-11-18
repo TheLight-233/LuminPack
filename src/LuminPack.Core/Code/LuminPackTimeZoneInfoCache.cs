@@ -13,6 +13,9 @@ namespace LuminPack.Code;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class LuminPackTimeZoneInfoCache
 {
+    /// <summary>The binary marker followed by an operating-system time-zone identifier.</summary>
+    public const byte SystemTimeZoneMarker = 1;
+
     internal const int MaximumCachedTextLength = 256;
     private static readonly ConditionalWeakTable<TimeZoneInfo, string> Texts = new();
     private static readonly string UtcText = TimeZoneInfo.Utc.ToSerializedString();
@@ -44,6 +47,49 @@ public static class LuminPackTimeZoneInfoCache
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static string GetText(TimeZoneInfo value)
         => ReferenceEquals(value, TimeZoneInfo.Utc) ? UtcText : GetOtherText(value);
+
+    /// <summary>Chooses the sender snapshot or a proven system zone's identifier for its binary record.</summary>
+    /// <param name="value">The immutable source zone, or null.</param>
+    /// <param name="marker">The selected nonnull record marker.</param>
+    /// <returns>The snapshot, system identifier, or null.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static string? GetBinaryText(TimeZoneInfo? value, out byte marker)
+    {
+        marker = 0;
+        if (value is null)
+            return null;
+        if (ReferenceEquals(value, TimeZoneInfo.Utc)
+#if NET8_0_OR_GREATER
+            || IsSystemInstance(value)
+#endif
+           )
+        {
+            marker = SystemTimeZoneMarker;
+            return value.Id;
+        }
+        return GetOtherText(value);
+    }
+
+#if NET8_0_OR_GREATER
+    /// <summary>Checks the current platform instance without treating same-name custom zones as system zones.</summary>
+    /// <param name="value">The source zone.</param>
+    /// <returns>Whether the current catalog resolves this exact immutable instance.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static bool IsSystemInstance(TimeZoneInfo value) =>
+        TimeZoneInfo.TryFindSystemTimeZoneById(value.Id, out var system) && ReferenceEquals(system, value);
+#endif
+
+    /// <summary>Resolves a validated binary identifier against the receiving machine's current catalog.</summary>
+    /// <param name="id">The nonempty identifier carried by the record.</param>
+    /// <returns>The receiver's immutable system zone.</returns>
+    /// <remarks>A missing catalog entry propagates the platform lookup error before publishing a result.</remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static TimeZoneInfo ResolveSystemTimeZone(string? id)
+    {
+        if (string.IsNullOrEmpty(id))
+            LuminPackExceptionHelper.ThrowFormatException("A system time-zone record requires a nonempty identifier.");
+        return string.Equals(id, TimeZoneInfo.Utc.Id, StringComparison.Ordinal) ? TimeZoneInfo.Utc : TimeZoneInfo.FindSystemTimeZoneById(id);
+    }
 
     /// <summary>Looks up repeated writers while avoiding weak-table registration for one-use instances.</summary>
     /// <param name="value">The immutable source zone.</param>
@@ -79,14 +125,49 @@ public static class LuminPackTimeZoneInfoCache
     /// <param name="capacityReserved">Whether the caller already reserved the complete record width.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteTimeZoneText<TOptions>(this ref LuminPackWriter writer, string? text, bool capacityReserved = false)
+        where TOptions : struct, ILuminPackOptions => WriteTimeZoneText<TOptions>(ref writer, text, 0, capacityReserved);
+
+    /// <summary>Writes a time-zone marker and its selected text through the normal string kernel.</summary>
+    /// <typeparam name="TOptions">The stateless binary profile.</typeparam>
+    /// <param name="writer">The output state.</param>
+    /// <param name="text">The complete snapshot, system identifier, or null.</param>
+    /// <param name="marker">The nonnull record marker selected for the text.</param>
+    /// <param name="capacityReserved">Whether the caller already reserved the complete record width.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void WriteTimeZoneText<TOptions>(this ref LuminPackWriter writer, string? text, byte marker, bool capacityReserved = false)
         where TOptions : struct, ILuminPackOptions
     {
         if (text is null)
         {
             writer.WriteNullObjectHeader();
             return; }
-        writer.WriteObjectHeader(0);
+        writer.WriteObjectHeader(marker);
         writer.Write<TOptions>(text, capacityReserved);
+    }
+
+    /// <summary>Writes a complete binary record for a snapshot or a proven system zone.</summary>
+    /// <typeparam name="TOptions">The stateless binary profile.</typeparam>
+    /// <param name="writer">The output state.</param>
+    /// <param name="value">The immutable zone, or null.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void WriteBinaryTimeZone<TOptions>(this ref LuminPackWriter writer, TimeZoneInfo? value)
+        where TOptions : struct, ILuminPackOptions
+    {
+        if (typeof(TOptions) == typeof(LuminPackUtf16LengthOptions) && BitConverter.IsLittleEndian &&
+            ReferenceEquals(value, TimeZoneInfo.Utc))
+        {
+            ref byte cursor = ref writer.CurrentReference;
+            if (writer.RecordRoom(ref cursor) >= sizeof(ulong))
+            {
+                // System marker, compact UTF-16 length header (3 << 1 | 1), then the three ASCII bytes of UTC.
+                ulong utcRecord = 0x4354550000000701;
+                writer.CommitRecords(ref LuminPackWriter.WriteReserved(ref cursor, in utcRecord));
+                return;
+            }
+        }
+
+        string? text = GetBinaryText(value, out byte marker);
+        writer.WriteTimeZoneText<TOptions>(text, marker);
     }
 
     /// <summary>Selects a reuse hint from a complete string-length prefix without changing the input cursor.</summary>

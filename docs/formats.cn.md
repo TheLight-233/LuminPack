@@ -63,6 +63,8 @@ Token 模式写以终止符结束的字符串，没有 `null` 标记；`null` �
 
 标量 `Nullable<T>`、引用类型 `Tuple`、`Lazy`、`Version`、`Uri`、`CultureInfo`、`TimeZoneInfo` 和 `Type` 在负载前写一个非空标记；`null` 是单字节 `255`。
 
+二进制 `TimeZoneInfo` 记录使用标记 `0` 携带发送端的完整序列化快照，标记 `1` 按当前配置的字符串格式携带系统时区标识。Next 写入器仅为 `TimeZoneInfo.Utc` 或系统目录中身份相同的实例选择标记 `1`。自定义时区写入完整快照，同名的自定义名称和规则也会保留。接收端使用自身时区目录中的规则解析标识，缺少对应标识时引发 `TimeZoneNotFoundException`。读取这类记录需要支持标记 `1` 的读取器。JSON 携带完整快照。
+
 ## JSON
 
 默认文本编码为 UTF-16；在根类型上使用 `[LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8)]` 选择 UTF-8。双方必须使用相同编码。
