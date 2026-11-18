@@ -55,17 +55,19 @@ internal static partial class SerializerIssueRegression
     /// <param name="references">Platform and runtime references.</param>
     /// <param name="source">Consumer source.</param>
     /// <param name="name">Unique compilation name.</param>
-    private static void Execute(MetadataReference[] references, string source, string name)
+    /// <param name="inspect">An optional assertion over the emitted source.</param>
+    private static void Execute(MetadataReference[] references, string source, string name, Action<GeneratorDriverRunResult>? inspect = null)
     {
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
         var compilation = TestCompilation.Create("IssueRegression" + name, [CSharpSyntaxTree.ParseText(source, parse, "Models.cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
-        var driver = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse);
-        driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
         using var image = new MemoryStream();
         var result = output.Emit(image);
         if (!result.Success || diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error))
             throw new InvalidOperationException(string.Join(Environment.NewLine, diagnostics.Concat(result.Diagnostics).Where(item => item.Severity == DiagnosticSeverity.Error)));
+        inspect?.Invoke(driver.GetRunResult());
         Assembly.Load(image.ToArray()).GetType("Entry")!.GetMethod("Check")!.Invoke(null, null);
     }
 }
