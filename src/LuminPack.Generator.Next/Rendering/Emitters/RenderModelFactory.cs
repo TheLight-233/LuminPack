@@ -56,7 +56,7 @@ internal static class RenderModelFactory
             return null;
         string extension = GeneratedNames.Extension(options.AssemblyName);
         var members = new RenderMember[model.Members.Length];
-        bool reserveRawSpans = !json && record?.Version == null && structure?.Version == null &&
+        bool reserveRawSpans = !json &&
             !model.Members.Any(member => member is ScalarMember { Volatile: true });
         for (int index = 0; index < members.Length; index++)
         {
@@ -375,6 +375,7 @@ internal static class RenderModelFactory
                 return new RenderMember(special.Name, RenderMemberKind.Special, ReadableTypeName.Of(special.Declared), special.Declared, 0,
                     "global::LuminPack." + GeneratedNames.Owner(extension, special.Declared), ScalarKind.Other, mirrored,
                     property: property, nullObjectGuard: special.Formatter?.OrdinaryObject == true, referencePayload: special.Nullable,
+                    dictionary: ReservedPairs(special, extension),
                     seedExisting: special.Formatter?.Payload is StructModel { Storage: StructStorage.ManagedRecord },
                     reservableSpan: reserveRawSpans && special.ReservableSpan,
                     nativeNullablePayload: special.Formatter?.NativeNullablePayload);
@@ -400,6 +401,19 @@ internal static class RenderModelFactory
             default:
                 return null;
         }
+    }
+
+    /// <summary>Retains the native pair framing of a dictionary whose other operations use its concrete owner.</summary>
+    /// <param name="member">The forwarded dictionary member.</param>
+    /// <param name="extension">The generated assembly owner.</param>
+    /// <returns>A captured pair shape or null for formatter-dependent entry storage.</returns>
+    private static RenderDictionary? ReservedPairs(SpecialMember member, string extension)
+    {
+        if (member.Formatter is not { Definition: "System.Collections.Generic.Dictionary", Arguments.Length: 2 } pairs ||
+            !pairs.Arguments.All(entry => entry is { Raw: true, RawStorage: true, Layout: null }))
+            return null;
+        return new RenderDictionary(pair: true, keyText: false, valueText: false, pairs.Arguments[0].Type, pairs.Arguments[1].Type,
+            member.Declared, "global::LuminPack." + GeneratedNames.Owner(extension, member.Declared));
     }
 
     /// <summary>Maps a sequence member onto the emitter's collection shapes.</summary>

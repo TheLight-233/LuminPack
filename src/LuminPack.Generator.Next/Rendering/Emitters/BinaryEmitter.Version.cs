@@ -43,7 +43,7 @@ internal static partial class BinaryEmitter
         for (int index = 0; index <= members.Length;)
         {
             int end = index;
-            while (end < members.Length && VersionReservable(members[end], schema.Widths[end]))
+            while (end < members.Length && VersionReservable(model, members[end], schema.Widths[end]))
                 end++;
             if (prefix || end > index)
             {
@@ -64,12 +64,21 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Whether the complete slot can be written inside a fixed reservation.</summary>
+    /// <param name="model">The complete versioned contract.</param>
     /// <param name="member">The member being analyzed or emitted.</param>
     /// <param name="width">The width of the storage or input range.</param>
     /// <returns>Whether the input satisfies the version reservable check.</returns>
-    private static bool VersionReservable(RenderMember member, int width) => width != 255 ||
+    private static bool VersionReservable(PayloadRenderModel model, RenderMember member, int width) => width != 255 ||
         member.Kind == RenderMemberKind.Text ||
-        member.Kind == RenderMemberKind.List && member.Nested == null && member.Scalar != "string";
+        member.Kind == RenderMemberKind.List && member.Nested == null && member.Scalar != "string" ||
+        model.Net8 && (member.IsFixed || VersionCapture(member));
+
+    /// <summary>Whether the existing binary member is a raw vector or dictionary pair record.</summary>
+    /// <param name="member">The projected field operation.</param>
+    /// <returns>Whether the established runtime snapshot yields its exact payload width.</returns>
+    private static bool VersionCapture(RenderMember member) =>
+        member.Kind == RenderMemberKind.Array && !member.FormatterCall ||
+        member.Dictionary?.Pair == true || member.ReservableSpan;
 
     /// <summary>Reserves one run of fixed or measured slots and optionally stores the schema prefix.</summary>
     /// <param name="model">The normalized model for this contract.</param>
@@ -88,12 +97,22 @@ internal static partial class BinaryEmitter
             terms.Add(model.Version.Schema + ".Prefix.Length");
         for (int index = first; index < end; index++)
         {
-            if (members[index].Kind == RenderMemberKind.List)
+            RenderMember member = members[index];
+            if (model.Version.Widths[index] == 255 && member.IsFixed)
             {
-                // A reserved-span list captures its complete payload bound before the record is reserved.
-                body.Add("var " + VersionSnapshot(model, index) + " = " + w.A("LuminPackWriter") + ".Capture(value." + members[index].Name + ");");
+                // The existing table marks this type as variable. Keep its four-byte length even when the operation knows it.
                 terms.Add("4");
-                terms.Add(VersionSnapshot(model, index) + ".Bound");
+                terms.Add(member.Width);
+                continue;
+            }
+            if (member.Kind == RenderMemberKind.List || model.Net8 && VersionCapture(member))
+            {
+                // The captured span or pair count fixes the complete field size before the record is reserved.
+                string snapshot = VersionSnapshot(model, index);
+                body.Add("var " + snapshot + " = " + w.A("LuminPackWriter") + ".Capture(value." + member.Name + ");");
+                body.Add("int " + snapshot + "Width = " + snapshot + ".Bound;");
+                terms.Add("4");
+                terms.Add(snapshot + "Width");
                 continue;
             }
             if (members[index].Kind != RenderMemberKind.Text)
@@ -111,16 +130,30 @@ internal static partial class BinaryEmitter
         for (int index = first; index < end; index++)
         {
             var member = members[index];
-            if (member.Kind is RenderMemberKind.Text or RenderMemberKind.List)
+            if (model.Version.Widths[index] == 255 && member.IsFixed)
             {
-                // A string or reserved-span list payload is preceded by its byte length, patched afterwards.
+                body.Add(w.A("Unsafe") + ".WriteUnaligned(ref cursor, " + member.Width + ");");
+                body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, 4);");
+                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReserved<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
+                continue;
+            }
+            if (member.Kind == RenderMemberKind.List || model.Net8 && VersionCapture(member))
+            {
+                string snapshot = VersionSnapshot(model, index);
+                body.Add(w.A("Unsafe") + ".WriteUnaligned(ref cursor, " + snapshot + "Width);");
+                body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, 4);");
+                string store = member.Dictionary?.Pair == true ? ".WriteReserved" : ".WriteReservedSpanRecord";
+                body.Add("cursor = ref " + w.A("LuminPackWriter") + store + "(ref cursor, " + snapshot + ");");
+                continue;
+            }
+            if (member.Kind == RenderMemberKind.Text)
+            {
+                // A string's actual byte count can be smaller than its reservation.
                 string length = lengths++ == 0 ? "length" : "length" + (lengths - 1).ToString(CultureInfo.InvariantCulture);
                 body.Add("// Field: " + member.Name);
                 body.Add("ref byte " + length + " = ref cursor;");
                 body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, 4);");
-                body.Add(member.Kind == RenderMemberKind.Text
-                    ? "cursor = ref writer.WriteReservedRecordString<" + WriteProfile(model, w, member) + ">(ref cursor, " + VersionSnapshot(model, index) + ");"
-                    : "cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + VersionSnapshot(model, index) + ");");
+                body.Add("cursor = ref writer.WriteReservedRecordString<" + WriteProfile(model, w, member) + ">(ref cursor, " + VersionSnapshot(model, index) + ");");
                 body.Add(w.A("Unsafe") + ".WriteUnaligned(ref " + length + ", (int)" + w.A("Unsafe") + ".ByteOffset(ref " + w.A("Unsafe") + ".Add(ref " + length + ", 4), ref cursor));");
                 continue;
             }
@@ -240,9 +273,24 @@ internal static partial class BinaryEmitter
             {
                 string length = "length" + index.ToString(CultureInfo.InvariantCulture), end = End();
                 body.Add("int " + length + " = reader.ReadVersionPayloadLength();");
+                if (model.Net8 && member.IsFixed)
+                {
+                    // ReadVersionPayloadLength validated the whole field before this direct native load.
+                    body.Add("if (" + length + " == " + member.Width + ")");
+                    body.Add("{");
+                    body.Add(temps[index] + " = " + (member.IsBoolean && !model.Trusted
+                        ? Policy() + ".ReadBoolean(ref reader.Cursor);"
+                        : Reader() + ".Read<" + member.Scalar + ">(ref reader.Cursor);"));
+                    body.Add("reader.Cursor = ref " + w.A("Unsafe") + ".Add(ref reader.Cursor, " + length + ");");
+                    body.Add("}");
+                    body.Add("else");
+                    body.Add("{");
+                }
                 body.Add("int " + end + " = reader.Position + " + length + ";");
                 AddMemberRead(body, model, member, w, "reader", temps[index]);
                 body.Add(Reader() + ".ValidateVersionFieldEnd(reader.Position, " + end + ");");
+                if (model.Net8 && member.IsFixed)
+                    body.Add("}");
                 continue;
             }
             if (last == index)
