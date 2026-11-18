@@ -198,8 +198,8 @@ internal sealed class SpecialMember : MemberModel
     /// <summary>The general formatter contract when the member uses recursive static forwarding.</summary>
     internal readonly FormatterModel? Formatter;
 
-    /// <summary>Whether the ordinary binary writer can reserve the raw vector's complete record.</summary>
-    internal readonly bool ReservableArray;
+    /// <summary>Whether the ordinary binary writer can reserve the complete raw vector or list record.</summary>
+    internal readonly bool ReservableSpan;
 
     /// <summary>Captures a framework member.</summary>
     /// <param name="name">The name used by this operation.</param>
@@ -209,13 +209,13 @@ internal sealed class SpecialMember : MemberModel
     /// <param name="nullable">The nullable used by this operation.</param>
     /// <param name="property">The property used by this operation.</param>
     /// <param name="formatter">The formatter used by this operation.</param>
-    /// <param name="reservableArray">Whether a plain scalar vector supports a reserved binary write.</param>
+    /// <param name="reservableSpan">Whether a scalar vector or list supports a reserved binary write.</param>
     internal SpecialMember(string name, MemberStorage storage, WirePolicy policy, string declared, bool nullable,
-        bool property, FormatterModel? formatter = null, bool reservableArray = false)
+        bool property, FormatterModel? formatter = null, bool reservableSpan = false)
         : base(name, storage, policy)
     {
         Formatter = formatter;
-        ReservableArray = reservableArray;
+        ReservableSpan = reservableSpan;
         Property = property;
         Nullable = nullable;
         Declared = declared;
@@ -226,7 +226,7 @@ internal sealed class SpecialMember : MemberModel
     {
         var member = (SpecialMember)other;
         return Declared == member.Declared && Nullable == member.Nullable && Property == member.Property &&
-            ReservableArray == member.ReservableArray && Equals(Formatter, member.Formatter);
+            ReservableSpan == member.ReservableSpan && Equals(Formatter, member.Formatter);
     }
 }
 

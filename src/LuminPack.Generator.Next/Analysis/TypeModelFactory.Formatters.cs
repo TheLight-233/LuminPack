@@ -58,8 +58,11 @@ internal static partial class TypeModelFactory
                 return specialized;
             if (formatter != null)
                 return new SpecialMember(member.Name, storage, policy, formatter.Type, type.IsReferenceType, storage == MemberStorage.AutoProperty,
-                    formatter, reservableArray: !member.Volatile && formatter.Definition == FormatterDefinitions.Array &&
-                        type is IArrayTypeSymbol { IsSZArray: true } array && Scalar(array.ElementType) != null);
+                    formatter, reservableSpan: !member.Volatile && formatter.Arguments.Length == 1 && formatter.Arguments[0] is
+                        { Raw: true, RawStorage: true, Layout: null, Definition: FormatterDefinitions.Scalar or FormatterDefinitions.FrameworkScalar } &&
+                        (formatter.Definition == FormatterDefinitions.Array && type is IArrayTypeSymbol { IsSZArray: true } ||
+                         formatter.Definition == "System.Collections.Generic.List" && type is INamedTypeSymbol list &&
+                         IsFrameworkCollection(list, "System.Collections.Generic.List`1")));
             issues.AddRange(specializedIssues);
             return specialized;
         }

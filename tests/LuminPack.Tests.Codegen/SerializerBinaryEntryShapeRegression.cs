@@ -32,6 +32,13 @@ internal static class SerializerBinaryEntryShapeRegression
             [LuminPackable] public sealed class ReadBoundaryCell { public int Number; }
             [LuminPackable(GeneratorType.VersionTolerant)] public sealed class VersionCell { public int Value; }
             [LuminPackable] public sealed class VersionGraph { public List<VersionCell> Cells; }
+            [LuminPackable] public sealed class CapturedRecord
+            {
+                public int Id;
+                public string Name;
+                public List<int> Items;
+                public uint[] Values;
+            }
 
             [LuminPackable(GeneratorType.Custom)] public struct CustomCell
             {
@@ -53,8 +60,40 @@ internal static class SerializerBinaryEntryShapeRegression
                 public static int ReadRecords(ReadOnlySpan<byte> data, ref List<ReadBoundaryCell> value) => LuminPackSerializer.Deserialize(data, ref value);
                 public static int ReadCompact(ReadOnlySpan<byte> data, ref List<int> value) => LuminPackSerializer.Deserialize(data, ref value);
 
+                private static void CheckCapturedRecord()
+                {
+                    var record = new CapturedRecord { Id = 31, Name = "wire", Items = new List<int> { 2, -7, 19 }, Values = new uint[] { 13, 17 } };
+                    Span<byte> scratch = new byte[256];
+                    var sequential = new LuminPackWriter(ref scratch);
+                    sequential.WriteObjectHeader(4);
+                    sequential.Write(record.Id);
+                    sequential.Write(record.Name);
+                    sequential.Write<int>(record.Items.ToArray(), record.Items.Count);
+                    sequential.Write<uint>(record.Values, record.Values.Length);
+                    var bytes = LuminPackSerializer.Serialize(record);
+                    if (!bytes.AsSpan().SequenceEqual(sequential.GetSpan())) throw new Exception("Captured fields changed binary framing.");
+
+                    using var buffer = new LuminBufferWriter(true);
+                    ((global::System.Buffers.IBufferWriter<byte>)buffer).GetSpan(1)[0] = 0xA5;
+                    buffer.Advance(1);
+                    LuminPackSerializer.Serialize(record, buffer);
+                    if (buffer.GetSpan()[0] != 0xA5 || !buffer.GetSpan().Slice(1).SequenceEqual(bytes))
+                        throw new Exception("Captured fields changed the buffer's appended record.");
+
+                    var retained = new List<int>(record.Items.Count);
+                    var reused = new CapturedRecord { Items = retained };
+                    if (LuminPackSerializer.Deserialize(bytes, ref reused) != bytes.Length || !ReferenceEquals(retained, reused.Items) ||
+                        reused.Items[1] != -7 || reused.Values[1] != 17)
+                        throw new Exception("Captured fields lost the normal scalar collection read or reuse contract.");
+                    var json = LuminPackSerializer.SerializeJson(record);
+                    var jsonCopy = LuminPackSerializer.DeserializeJson<CapturedRecord>(json);
+                    if (jsonCopy.Items[2] != 19 || jsonCopy.Values[0] != 13)
+                        throw new Exception("Captured fields lost their published JSON formatters.");
+                }
+
                 public static void Run()
                 {
+                    CheckCapturedRecord();
                     using var buffer = new LuminBufferWriter(true);
                     var raw = new NativeCell { X = -321, Y = 412 };
                     var rawBytes = LuminPackSerializer.Serialize(raw);
@@ -104,6 +143,17 @@ internal static class SerializerBinaryEntryShapeRegression
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
         var declarations = driver.GetRunResult().GeneratedTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
         VerifyCollectionReadBoundaries(declarations);
+        var capturedRoot = declarations.FirstOrDefault(method => method.Body != null &&
+            method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().Contains("CapturedRecord", StringComparison.Ordinal) == true) &&
+            method.Body.ToString().Contains(".ReserveRecord(", StringComparison.Ordinal));
+        var capturedCalls = capturedRoot?.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray() ?? [];
+        var reservations = capturedCalls.Where(call => Operation(call) == "ReserveRecord").ToArray();
+        // Object and Union payload framing differ in their header byte but share both snapshots and span stores.
+        if (reservations.Length is < 1 or > 2 || capturedCalls.Count(call => Operation(call) == "Capture") != 2 ||
+            capturedCalls.Count(call => Operation(call) == "WriteReservedSpanInline") != 2 ||
+            reservations.Any(call => !call.ToString().Contains("ItemsSnapshot.Bound + ValuesSnapshot.Bound", StringComparison.Ordinal)))
+            throw new InvalidOperationException("The positional root did not reserve its captured vector and list together.\n" + capturedRoot);
+        static string? Operation(InvocationExpressionSyntax call) => (call.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.ValueText;
         var methods = declarations.Where(method => method.Identifier.ValueText.StartsWith("LuminIntercept_", StringComparison.Ordinal)).ToArray();
         var native = methods.Where(method => method.Identifier.ValueText.StartsWith("LuminIntercept_NativeCell_", StringComparison.Ordinal)).ToArray();
         var plain = methods.Single(method => method.Identifier.ValueText.StartsWith("LuminIntercept_PlainGraph_", StringComparison.Ordinal) &&

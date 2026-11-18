@@ -824,7 +824,7 @@ internal static partial class BinaryEmitter
             members.All(member => member.IsFixed || member.NativeNullablePayload != null);
         // Inline objects and reserving members alternate: the leading members share the header's reservation, each object
         // writes in place, and every following run reserves on its own.
-        if (!nullableRecord && (model.MixedRecord || members.Any(member => member.ReservableArray)))
+        if (!nullableRecord && (model.MixedRecord || members.Any(member => member.ReservableSpan)))
         {
             MixedWriteBody(model, w, union, body);
             AddBoundExit(body, model, union);
@@ -1231,7 +1231,7 @@ internal static partial class BinaryEmitter
                 continue;
             }
             // A framework member writes through its shared formatter owner, which frames its own null record.
-            if (member.Kind == RenderMemberKind.Special && !member.ReservableArray)
+            if (member.Kind == RenderMemberKind.Special && !member.ReservableSpan)
             {
                 body.Add(member.BinaryFormatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
                 index++;
@@ -1580,7 +1580,7 @@ internal static partial class BinaryEmitter
             body.Add("// Field: " + member.Name);
             if (member.Kind == RenderMemberKind.Text)
                 body.Add(elementCursor + " = ref " + state + ".WriteReservedRecordString<" + Profile + ">(ref " + elementCursor + ", " + Snapshot(element, index, camel: true) + ");");
-            else if (inlineSpan)
+            else if (inlineSpan || member.ReservableSpan)
             {
                 string snapshot = Snapshot(element, index, camel: true);
                 body.Add(elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanInline(ref " + elementCursor +
@@ -1755,7 +1755,7 @@ internal static partial class BinaryEmitter
             {
                 body.Add("var " + snapshot + " = " + w.A("LuminPackWriter") + ".Capture(value." + member.Name + ");");
                 terms.Add(snapshot + ".Bound");
-                inlineSpans |= member.ReservableArray;
+                inlineSpans |= member.ReservableSpan;
             }
         }
         body.Add("cursor = ref writer.ReserveRecord(ref cursor, checked(" + string.Join(" + ", terms) + "));");
@@ -2060,7 +2060,7 @@ internal static partial class BinaryEmitter
     /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
     /// <param name="member">The member being analyzed or emitted.</param>
     /// <returns>Whether the input is inline segment.</returns>
-    private static bool IsInlineSegment(RenderMember member) => !member.ReservableArray && (member.Kind == RenderMemberKind.Object || IsTextList(member) ||
+    private static bool IsInlineSegment(RenderMember member) => !member.ReservableSpan && (member.Kind == RenderMemberKind.Object || IsTextList(member) ||
         IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall ||
         member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.Sequence);
 

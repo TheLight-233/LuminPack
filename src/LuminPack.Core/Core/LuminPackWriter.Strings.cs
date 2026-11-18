@@ -679,7 +679,10 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static RawRecord<T> Capture<T>(List<T>? list)
             where T : unmanaged
-            => new RawRecord<T>(list is null ? default : LuminPackMarshal.GetListSpan(list), list is null);
+        {
+            Span<T> span = LuminPackMarshal.GetListSpan(list);
+            return new RawRecord<T>(LuminPackMarshal.CreateReadOnlySpan(ref MemoryMarshal.GetReference(span), span.Length), list is null);
+        }
 
         /// <summary>Captures a raw-pair dictionary record with its current count.</summary>
         /// <typeparam name = "TKey">The raw key type.</typeparam>

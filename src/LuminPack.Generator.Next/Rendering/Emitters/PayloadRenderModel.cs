@@ -183,8 +183,8 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <summary>Whether the member is a managed struct whose own read reuses the references the existing value holds, so a
     /// fresh enclosing struct starts it from the existing member, as the original expanded read reused them.</summary>
     internal readonly bool SeedExisting;
-    /// <summary>Whether a forwarded scalar vector can write inside an ordinary positional reservation.</summary>
-    internal readonly bool ReservableArray;
+    /// <summary>Whether a forwarded scalar vector or list can write inside an ordinary positional reservation.</summary>
+    internal readonly bool ReservableSpan;
     /// <summary>The unmanaged payload type of a nullable member with a one-byte marker, or null.</summary>
     internal readonly string NativeNullablePayload;
     /// <summary>Whether the member's declared type is a reference type, whose temporary local carries the nullable annotation.</summary>
@@ -221,18 +221,18 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <param name="sequence">The sequence supplied to <c>RenderMember</c>.</param>
     /// <param name="isVolatile">Whether to enable is volatile for this operation.</param>
     /// <param name="seedExisting">Whether to enable seed existing for this operation.</param>
-    /// <param name="reservableArray">Whether to enable reservable array for this operation.</param>
+    /// <param name="reservableSpan">Whether the contiguous member may use the enclosing reservation.</param>
     /// <param name="fixedPayloadMemberCount">The checked marker's member count, or zero when the object reader is required.</param>
     /// <param name="nativeNullablePayload">The nullable member's native payload type, or null.</param>
     internal RenderMember(string name, RenderMemberKind kind, string scalar, string typeName, int size, string formatter, ScalarKind fieldType,
         bool mirrored, string underlying = null, bool raw = false, bool builtin = false, PayloadRenderModel nested = null, bool formatterCall = false,
         bool property = false, RenderDictionary dictionary = null, RenderCollection collection = null, bool valueTypeParameter = false,
         bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false, string scopeProfile = null, SequenceFormatter sequence = null, bool isVolatile = false,
-        bool seedExisting = false, bool reservableArray = false, int fixedPayloadMemberCount = 0, string nativeNullablePayload = null)
+        bool seedExisting = false, bool reservableSpan = false, int fixedPayloadMemberCount = 0, string nativeNullablePayload = null)
     {
         NativeNullablePayload = nativeNullablePayload;
         SeedExisting = seedExisting;
-        ReservableArray = reservableArray;
+        ReservableSpan = reservableSpan;
         Volatile = isVolatile;
         Sequence = sequence;
         ScopeProfile = scopeProfile;
@@ -292,7 +292,7 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <returns>The compiled member scope.</returns>
     internal RenderMember WithScope(string profile) => new RenderMember(Name, Kind, Scalar, TypeName, Size, Formatter, FieldType,
         Mirrored, Underlying, Raw, Builtin, Nested, FormatterCall, Property, Dictionary, Collection, ValueTypeParameter,
-        BareParameter, NullObjectGuard, ReferencePayload, profile, Sequence, Volatile, reservableArray: ReservableArray,
+        BareParameter, NullObjectGuard, ReferencePayload, profile, Sequence, Volatile, reservableSpan: ReservableSpan,
         fixedPayloadMemberCount: FixedPayloadMemberCount, nativeNullablePayload: NativeNullablePayload);
 
     /// <summary>Whether fixed field access is volatile and excluded from adjacent-field copies.</summary>
@@ -321,7 +321,7 @@ internal sealed class RenderMember : IEquatable<RenderMember>
         Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Collection, other.Collection) &&
         ValueTypeParameter == other.ValueTypeParameter && BareParameter == other.BareParameter &&
         NullObjectGuard == other.NullObjectGuard && FixedPayloadMemberCount == other.FixedPayloadMemberCount && ReferencePayload == other.ReferencePayload &&
-        Volatile == other.Volatile && ReservableArray == other.ReservableArray && NativeNullablePayload == other.NativeNullablePayload && ReferenceEquals(Sequence, other.Sequence) &&
+        Volatile == other.Volatile && ReservableSpan == other.ReservableSpan && NativeNullablePayload == other.NativeNullablePayload && ReferenceEquals(Sequence, other.Sequence) &&
         ScopeProfile == other.ScopeProfile && Equals(Nested, other.Nested);
 
     /// <inheritdoc/>
@@ -378,11 +378,11 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// collection that writes through the writer in place.</summary>
     /// <param name="member">The member being analyzed or emitted.</param>
     /// <returns>Whether the input satisfies the segment check.</returns>
-    private static bool Segment(RenderMember member) => member.Kind == RenderMemberKind.Object || InlineBlock(member) ||
+    private static bool Segment(RenderMember member) => !member.ReservableSpan && (member.Kind == RenderMemberKind.Object || InlineBlock(member) ||
         member.Kind == RenderMemberKind.Array && member.FormatterCall ||
         member.Kind is RenderMemberKind.SortedList or
             RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary ||
-        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.Sequence;
+        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.Sequence);
     /// <summary>Whether every member is a write segment or a fixed scalar, which takes the stream record protocol alone: a
     /// member count, then each member, with no reservation.</summary>
     internal bool StreamRecord => (ManagedStruct || !IsStruct) && Members.Any(Segment) && Members.All(member => member.IsFixed || Segment(member));
