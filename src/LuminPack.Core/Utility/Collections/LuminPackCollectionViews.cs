@@ -843,13 +843,13 @@ public static partial class LuminPackCollectionAccess
     /// <param name="items">The items, in the order they were read.</param>
     /// <param name="count">The number of items.</param>
     /// <typeparam name="T">The element type.</typeparam>
-    /// <remarks>An empty list of the exact type links nodes created by the public constructor in one pass through the probed
-    /// node and list fields, producing the circular list <c>AddLast</c> produces; any other list appends item by item.</remarks>
+    /// <remarks>An empty list of the exact type with a verified closed layout links nodes in one pass through the probed
+    /// fields, producing the same ring as <c>AddLast</c>. Other lists append item by item.</remarks>
     public static void FillLinkedList<T>(LinkedList<T> list, T[] items, int count)
     {
         if (count == 0)
             return;
-        if (!LinkedListLinking.Available || list.Count != 0 || list.GetType() != typeof(LinkedList<T>))
+        if (list.Count != 0 || list.GetType() != typeof(LinkedList<T>) || !LinkedListReadLayout<T>.CanLink)
         {
             for (int i = 0; i < count; i++)
                 list.AddLast(items[i]);

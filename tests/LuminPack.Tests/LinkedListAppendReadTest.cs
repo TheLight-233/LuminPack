@@ -1,6 +1,7 @@
 #if NET8_0_OR_GREATER && LUMINPACK_NEXT_GENERATOR
 using LuminPack;
 using LuminPack.Attribute;
+using LuminPack.Code;
 using Xunit;
 
 namespace LuminPackUnitTest;
@@ -34,15 +35,35 @@ public sealed class LinkedListAppendReadTest
         }
     }
 
+    /// <summary>Fills an exact empty list from staged items and preserves ring ownership and order.</summary>
+    [Fact]
+    public void StagedFillLinksAnExactList()
+    {
+        string?[] items = ["a", null, "c", "unused"];
+        var actual = new LinkedList<string?>();
+        LuminPackCollectionAccess.FillLinkedList(actual, items, 3);
+        Check(new LinkedList<string?>(items.Take(3)), actual);
+        actual.RemoveLast();
+        actual.AddFirst("head");
+        Assert.Equal(new[] { "head", "a", null }, actual);
+    }
+
     /// <summary>A truncated record leaves a fresh-or-cleared list empty and a reused list with its completed prefix.</summary>
     [Fact]
     public void TruncatedReadsKeepAConsistentList()
     {
         var source = new LinkedList<string?>(new[] { "a", "b", "c" });
         byte[] wire = LuminPackSerializer.Serialize(source);
-        var empty = new LinkedList<string?>();
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(wire.AsSpan(0, wire.Length - 1), ref empty));
-        Assert.Empty(empty);
+        foreach (var original in new LinkedList<string?>[] { new(), new DerivedStringList() })
+        {
+            var empty = original;
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(wire.AsSpan(0, wire.Length - 1), ref empty));
+            Assert.Same(original, empty);
+            Assert.Empty(empty);
+            Assert.Equal(wire.Length, LuminPackSerializer.Deserialize(wire, ref empty));
+            Assert.Same(original, empty);
+            Check(source, empty);
+        }
 
         var target = new LinkedList<string?>(new[] { "old" });
         Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(wire.AsSpan(0, wire.Length - 1), ref target));
@@ -96,6 +117,9 @@ public sealed class LinkedListAppendReadTest
         Assert.Null(actual.First!.Previous);
         Assert.Null(actual.Last!.Next);
     }
+
+    /// <summary>A destination whose derived type requires the public staged fill path.</summary>
+    private sealed class DerivedStringList : LinkedList<string?> { }
 }
 /// <summary>An ordinary element reused in place by linked-list reads.</summary>
 [LuminPackable]

@@ -88,10 +88,33 @@ public static partial class LuminPackCollectionAccess
     /// and the caller uses <see cref="FillLinkedList{T}"/>.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static LinkedListAppender<T> BeginLinkedList<T>(LinkedList<T> list) =>
-        LinkedListLinking.Available && list.Count == 0 && list.GetType() == typeof(LinkedList<T>) &&
-        LinkedNodeView<T>.Available
+        list.Count == 0 && list.GetType() == typeof(LinkedList<T>) && LinkedListReadLayout<T>.CanAppendDirectly
             ? new LinkedListAppender<T>(list)
             : default;
+
+    /// <summary>Caches the closed framework layout checks required by the two read paths.</summary>
+    /// <typeparam name="T">The linked-list element type.</typeparam>
+    private static class LinkedListReadLayout<T>
+    {
+        internal static readonly bool CanLink = CheckPhysicalLayout();
+        internal static readonly bool CanAppendDirectly = CanLink && LinkedNodeView<T>.MatchesOffsets();
+
+        /// <summary>Checks the exact list and node fields against the offsets verified by the ring probe.</summary>
+        /// <returns>Whether raw field access can build a ring for this element type.</returns>
+        private static bool CheckPhysicalLayout()
+        {
+            if (!LinkedListLinking.Available)
+                return false;
+            var list = typeof(LinkedList<T>);
+            var node = typeof(LinkedListNode<T>);
+            return LuminFieldLayout.ObjectField(list, "head") == LuminCollectionLayouts.LinkedListHead &&
+                   LuminFieldLayout.ObjectField(list, "count") == LuminCollectionLayouts.LinkedListCount &&
+                   LuminFieldLayout.ObjectField(list, "version") == LuminCollectionLayouts.LinkedListVersion &&
+                   LuminFieldLayout.ObjectField(node, "list") == LuminCollectionLayouts.LinkedNodeList &&
+                   LuminFieldLayout.ObjectField(node, "next") == LuminCollectionLayouts.LinkedNodeNext &&
+                   LuminFieldLayout.ObjectField(node, "prev") == LuminCollectionLayouts.LinkedNodePrevious;
+        }
+    }
 }
 
 /// <summary>Links new nodes, created by the public node constructor, in read order and publishes them to the list once.</summary>
@@ -159,29 +182,13 @@ internal sealed class LinkedNodeView<T>
     internal LinkedListNode<T>? Previous;
     internal T Item = default!;
 
-    internal static readonly bool Available = CheckLayout();
-
-    /// <summary>Checks each written reference field against the framework node and the probed ring layout.</summary>
-    /// <returns>Whether direct field assignments target the same reference slots.</returns>
-    private static bool CheckLayout()
+    /// <summary>Checks each stored reference against the previously verified physical offsets.</summary>
+    /// <returns>Whether the typed stores target the verified slots.</returns>
+    internal static bool MatchesOffsets()
     {
         var view = new LinkedNodeView<T>();
-        var node = typeof(LinkedListNode<T>);
-        return Matches(view, node, ref view.List, LuminCollectionLayouts.LinkedNodeList, "list") &&
-               Matches(view, node, ref view.Next, LuminCollectionLayouts.LinkedNodeNext, "next") &&
-               Matches(view, node, ref view.Previous, LuminCollectionLayouts.LinkedNodePrevious, "prev");
+        return LuminFieldLayout.OffsetOf(view, ref Unsafe.As<LinkedList<T>?, byte>(ref view.List)) == LuminCollectionLayouts.LinkedNodeList &&
+               LuminFieldLayout.OffsetOf(view, ref Unsafe.As<LinkedListNode<T>?, byte>(ref view.Next)) == LuminCollectionLayouts.LinkedNodeNext &&
+               LuminFieldLayout.OffsetOf(view, ref Unsafe.As<LinkedListNode<T>?, byte>(ref view.Previous)) == LuminCollectionLayouts.LinkedNodePrevious;
     }
-
-    /// <summary>Compares the compiled view field offset with the verified framework field offset.</summary>
-    /// <typeparam name="TLink">The reference field type.</typeparam>
-    /// <param name="view">The view that owns the field.</param>
-    /// <param name="node">The exact closed framework node type.</param>
-    /// <param name="field">The compiled view field.</param>
-    /// <param name="offset">The offset already verified by the ring probe.</param>
-    /// <param name="name">The framework field name.</param>
-    /// <returns>Whether the field is valid for the compiled view.</returns>
-    private static bool Matches<TLink>(LinkedNodeView<T> view, global::System.Type node, ref TLink? field, int offset, string name)
-        where TLink : class =>
-        offset >= 0 && offset == LuminFieldLayout.OffsetOf(view, ref Unsafe.As<TLink?, byte>(ref field)) &&
-        offset == LuminFieldLayout.ObjectField(node, name);
 }
