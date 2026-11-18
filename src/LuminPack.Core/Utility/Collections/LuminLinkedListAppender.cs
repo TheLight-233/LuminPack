@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using LuminPack.Core;
 using LuminPack.Option;
 
@@ -87,7 +88,8 @@ public static partial class LuminPackCollectionAccess
     /// and the caller uses <see cref="FillLinkedList{T}"/>.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static LinkedListAppender<T> BeginLinkedList<T>(LinkedList<T> list) =>
-        LinkedListLinking.Available && list.Count == 0 && list.GetType() == typeof(LinkedList<T>)
+        LinkedListLinking.Available && list.Count == 0 && list.GetType() == typeof(LinkedList<T>) &&
+        LinkedNodeView<T>.Available
             ? new LinkedListAppender<T>(list)
             : default;
 }
@@ -121,13 +123,14 @@ public struct LinkedListAppender<T>
     public void Append(T item)
     {
         var node = new LinkedListNode<T>(item);
-        LuminFieldLayout.Field<object?>(node, LuminCollectionLayouts.LinkedNodeList) = _list;
+        var view = Unsafe.As<LinkedNodeView<T>>(node);
+        view.List = _list;
         if (_last is null)
             _first = node;
         else
         {
-            LuminFieldLayout.Field<object?>(node, LuminCollectionLayouts.LinkedNodePrevious) = _last;
-            LuminFieldLayout.Field<object?>(_last, LuminCollectionLayouts.LinkedNodeNext) = node;
+            view.Previous = _last;
+            Unsafe.As<LinkedNodeView<T>>(_last).Next = node;
         }
         _last = node;
     }
@@ -138,10 +141,47 @@ public struct LinkedListAppender<T>
     {
         if (_first is null || _last is null)
             return;
-        LuminFieldLayout.Field<object?>(_last, LuminCollectionLayouts.LinkedNodeNext) = _first;
-        LuminFieldLayout.Field<object?>(_first, LuminCollectionLayouts.LinkedNodePrevious) = _last;
+        Unsafe.As<LinkedNodeView<T>>(_last).Next = _first;
+        Unsafe.As<LinkedNodeView<T>>(_first).Previous = _last;
         LuminFieldLayout.Field<object?>(_list!, LuminCollectionLayouts.LinkedListHead) = _first;
         LuminFieldLayout.Field<int>(_list!, LuminCollectionLayouts.LinkedListCount) = count;
         LuminFieldLayout.Field<int>(_list!, LuminCollectionLayouts.LinkedListVersion)++;
     }
+}
+
+/// <summary>Mirrors the link fields of an exact closed linked-list node after checking their offsets.</summary>
+/// <typeparam name="T">The linked-list element type.</typeparam>
+[StructLayout(LayoutKind.Auto)]
+internal sealed class LinkedNodeView<T>
+{
+    internal LinkedList<T>? List;
+    internal LinkedListNode<T>? Next;
+    internal LinkedListNode<T>? Previous;
+    internal T Item = default!;
+
+    internal static readonly bool Available = CheckLayout();
+
+    /// <summary>Checks each written reference field against the framework node and the probed ring layout.</summary>
+    /// <returns>Whether direct field assignments target the same reference slots.</returns>
+    private static bool CheckLayout()
+    {
+        var view = new LinkedNodeView<T>();
+        var node = typeof(LinkedListNode<T>);
+        return Matches(view, node, ref view.List, LuminCollectionLayouts.LinkedNodeList, "list") &&
+               Matches(view, node, ref view.Next, LuminCollectionLayouts.LinkedNodeNext, "next") &&
+               Matches(view, node, ref view.Previous, LuminCollectionLayouts.LinkedNodePrevious, "prev");
+    }
+
+    /// <summary>Compares the compiled view field offset with the verified framework field offset.</summary>
+    /// <typeparam name="TLink">The reference field type.</typeparam>
+    /// <param name="view">The view that owns the field.</param>
+    /// <param name="node">The exact closed framework node type.</param>
+    /// <param name="field">The compiled view field.</param>
+    /// <param name="offset">The offset already verified by the ring probe.</param>
+    /// <param name="name">The framework field name.</param>
+    /// <returns>Whether the field is valid for the compiled view.</returns>
+    private static bool Matches<TLink>(LinkedNodeView<T> view, global::System.Type node, ref TLink? field, int offset, string name)
+        where TLink : class =>
+        offset >= 0 && offset == LuminFieldLayout.OffsetOf(view, ref Unsafe.As<TLink?, byte>(ref field)) &&
+        offset == LuminFieldLayout.ObjectField(node, name);
 }
