@@ -578,7 +578,7 @@ internal static class GenericFormatterReuse
             bool inlineIntegerJsonWrite = (family == ArrayFamily || family.Definition is "System.Collections.Generic.List" or
                 GenericIdentity.Memory or GenericIdentity.ReadOnlyMemory or GenericIdentity.ArraySegment or "System.Collections.Frozen.FrozenSet") &&
                 JsonIntegerRunWriter.Supports(_set, plan.Closed.Type, plan.Closed.Arguments[0].Type);
-            text = NoInliningRoots(text, inlineRawStorage, inlineIntegerJsonWrite);
+            text = NoInliningRoots(text, inlineRawStorage, inlineIntegerJsonWrite, _set.OptimizedRoots);
             string state = "global::LuminPack.Binary_" + _set.Extension + "_";
             // The template names its own roots after the placeholder spelling; inside the generic owner they are unqualified.
             string own = ReadableTypeName.Of(GeneratedNames.PayloadKey(spelling));
@@ -884,13 +884,16 @@ internal static class GenericFormatterReuse
     /// <param name="text">The placeholder owner render.</param>
     /// <param name="inlineRawStorage">Whether to keep the original inlining hints on loop-free binary storage operations.</param>
     /// <param name="inlineIntegerJsonWrite">Whether the JSON root only frames an out-of-line integer run.</param>
+    /// <param name="optimized">Whether outlined traversal roots should receive optimized code on their first execution.</param>
     /// <returns>The render with <c>NoInlining</c> on the outlined binary and JSON roots.</returns>
     /// <remarks>LuminPack trades one call into a collection for inlining inside it: an inlined collection root would spend the
     /// caller's inline budget on the loop and leave the element calls in the loop uninlined. Local helpers and private
     /// continuations keep their own attributes.</remarks>
-    private static string NoInliningRoots(string text, bool inlineRawStorage, bool inlineIntegerJsonWrite)
+    private static string NoInliningRoots(string text, bool inlineRawStorage, bool inlineIntegerJsonWrite, bool optimized)
     {
-        const string attribute = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]";
+        const string options = "global::System.Runtime.CompilerServices.MethodImplOptions.";
+        string attribute = "[global::System.Runtime.CompilerServices.MethodImpl(" + options + "NoInlining" +
+            (optimized ? " | " + options + "AggressiveOptimization" : string.Empty) + ")]";
         string[] lines = text.Split('\n');
         var keep = new bool[lines.Length];
         var replace = new string?[lines.Length];
