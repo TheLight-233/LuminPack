@@ -228,7 +228,9 @@ internal static class GroupingOwnerFile
                 w.Line("return;");
                 w.Close();
                 w.Blank();
-                w.Line("var dict = new global::System.Collections.Generic.Dictionary<" + key + ", " + grouping + ">();");
+                // Null grouping records count toward the wire length. Bound the initial reservation even when
+                // the declared groups fit in the remaining input.
+                w.Line("var dict = new global::System.Collections.Generic.Dictionary<" + key + ", " + grouping + ">(global::System.Math.Min(length, 64));");
                 w.Line("if (length != 0)");
                 w.Open();
                 w.Line("int index = 0;");
