@@ -35,8 +35,9 @@ internal static class ClosedGenericOwnerFile
     /// <param name = "set">The shared formatter publication facts.</param>
     /// <param name = "model">The normalized formatter or storage contract.</param>
     /// <param name = "operations">The binary and JSON operations to publish.</param>
+    /// <param name = "allowFreshStruct">Whether the enclosing policy can use the ordinary fresh struct reader.</param>
     /// <returns>The generated source or selected source-ready name.</returns>
-    internal static string Render(SharedFormatterSet set, FormatterModel model, GeneratedOperations operations)
+    internal static string Render(SharedFormatterSet set, FormatterModel model, GeneratedOperations operations, bool allowFreshStruct = true)
     {
         string suffix = ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type));
         bool tuple = model.Definition is GenericIdentity.Tuple or GenericIdentity.ValueTuple;
@@ -193,6 +194,22 @@ internal static class ClosedGenericOwnerFile
             if (nullable)
             {
                 FormatterModel argument = model.Arguments[0];
+                if (allowFreshStruct && !model.UnmanagedNullablePayload &&
+                    argument.Payload is StructModel { Storage: StructStorage.ManagedRecord } managed &&
+                    set.Options != null && RenderModelFactory.Create(managed, set.Options) is { } render &&
+                    BinaryEmitter.CanReturnFreshStruct(render))
+                {
+                    // The nullable starts with a default payload. Keep the reader isolation of the ordinary struct state entry.
+                    w.Line(w.A("LuminPackReader") + " isolated = default;");
+                    w.Line("reader.CopyTo(ref isolated);");
+                    w.Line("isolated.EnsureReadable(1);");
+                    w.Line("isolated.Cursor = ref " + w.A("Unsafe") + ".Add(ref isolated.Cursor, 1);");
+                    w.Line("var item0 = " + w.A("LuminPackSerializer") + ".LuminRoots_" + render.Readable +
+                        ".RootReadFresh<TLuminProfile>(ref isolated);");
+                    w.Line("isolated.CopyTo(ref reader);");
+                    w.Line("value = item0;");
+                    return;
+                }
                 bool direct = model.UnmanagedNullablePayload && argument.Raw && argument.Type != "bool" &&
                     (argument.Payload == null || argument.RawStorage);
                 bool staged = model.UnmanagedNullablePayload && !direct;

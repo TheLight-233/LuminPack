@@ -29,6 +29,12 @@ internal static class SerializerBinaryEntryShapeRegression
             public struct PackedCell { public byte X; public long Y; }
 
             [LuminPackable] public struct ManagedCell { public int Id; public string Name; public double Score; }
+            [LuminPackable, LuminPackOption(UntrustedData = true, MaxStringLength = 3)]
+            public sealed class BoundedManagedGraph { public ManagedCell? Value; }
+            [LuminPackable, LuminPackOption(UntrustedData = false)]
+            public struct TrustedManagedCell { public bool Flag; public string Name; }
+            [LuminPackable, LuminPackOption(UntrustedData = true)]
+            public sealed class CheckedManagedGraph { public TrustedManagedCell? Value; }
 
             [LuminPackable] public sealed class PlainGraph { public List<string> Text; public PackedCell? Cell; }
             [LuminPackable] public sealed class ReadBoundaryCell { public int Number; }
@@ -168,6 +174,7 @@ internal static class SerializerBinaryEntryShapeRegression
                     catch { failed = true; }
                     if (!failed || managedCopy is not { Id: 41, Name: "previous", Score: 7.5 })
                         throw new Exception("A truncated managed nullable changed the existing value.");
+                    CheckManagedNullablePolicies(managed.Value);
 
                     var plain = new PlainGraph { Text = new List<string> { "abc" }, Cell = packed };
                     byte[] plainBytes = LuminPackSerializer.Serialize<PlainGraph, LuminPackUtf8TokenOptions>(plain);
@@ -190,6 +197,39 @@ internal static class SerializerBinaryEntryShapeRegression
                     var customBytes = LuminPackSerializer.Serialize(new CustomGraph { Cell = new CustomCell { Value = 71 } });
                     if (LuminPackSerializer.Deserialize<CustomGraph>(customBytes).Cell.Value != 71)
                         throw new Exception("Nested Custom read changed data.");
+                }
+
+                private static void CheckManagedNullablePolicies(ManagedCell value)
+                {
+                    byte[] ordinaryBytes = LuminPackSerializer.Serialize(value);
+                    var ordinary = LuminPackSerializer.Deserialize<ManagedCell>(ordinaryBytes);
+                    if (ordinary.Id != value.Id || ordinary.Name != value.Name || ordinary.Score != value.Score)
+                        throw new Exception("The ordinary struct fresh entry changed its payload.");
+                    string existingName = ordinary.Name;
+                    LuminPackSerializer.Deserialize(ordinaryBytes, ref ordinary);
+                    if (!ReferenceEquals(existingName, ordinary.Name))
+                        throw new Exception("The ordinary struct read lost string reuse.");
+
+                    byte[] boundedBytes = LuminPackSerializer.Serialize(new BoundedManagedGraph { Value = value });
+                    Reject(() => LuminPackSerializer.Deserialize<BoundedManagedGraph>(boundedBytes));
+
+                    byte[] checkedBytes = LuminPackSerializer.Serialize(new CheckedManagedGraph
+                    {
+                        Value = new TrustedManagedCell { Flag = true, Name = "ok" },
+                    });
+                    if (checkedBytes[3] != 1 ||
+                        LuminPackSerializer.Deserialize<CheckedManagedGraph>(checkedBytes).Value is not { Flag: true, Name: "ok" })
+                        throw new Exception("The checked nullable fixture changed its Boolean position or payload.");
+                    checkedBytes[3] = 2;
+                    Reject(() => LuminPackSerializer.Deserialize<CheckedManagedGraph>(checkedBytes));
+
+                    static void Reject(Action action)
+                    {
+                        try { action(); }
+                        catch (Exception error) when (error is global::System.IO.InvalidDataException ||
+                            error.GetType().Name == "LuminPackException") { return; }
+                        throw new Exception("An enclosing input policy accepted an invalid nullable payload.");
+                    }
                 }
 
                 private static void CheckNullReadOutlining(byte[] nullObject)
@@ -299,6 +339,17 @@ internal static class SerializerBinaryEntryShapeRegression
         if (managedNullableReader.Body!.ToString().Contains("GetValueRefOrDefaultRef", StringComparison.Ordinal) ||
             managedNullableReader.Body.ToString().Contains("ReadNativeNullablePayload", StringComparison.Ordinal))
             throw new InvalidOperationException("A managed nullable reader populated nullable storage in place.");
+        var managedFreshReader = declarations.Single(method => (method.Identifier.ValueText is "ReadFresh" or "RootReadFresh") &&
+            method.ReturnType.ToString() is "ManagedCell" or "global::ManagedCell");
+        var managedStructReader = declarations.Single(method => (method.Identifier.ValueText is "Read" or "RootRead") &&
+            method.ParameterList.Parameters.Count == 2 &&
+            method.ParameterList.Parameters[1].Type?.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>()
+                .Any(name => name.Identifier.ValueText == "ManagedCell") == true &&
+            method.Body?.ToString().Contains("ReadExisting", StringComparison.Ordinal) == true);
+        string freshCall = managedFreshReader.Identifier.ValueText + "<";
+        if (!managedNullableReader.Body.ToString().Contains(freshCall, StringComparison.Ordinal) ||
+            !managedStructReader.Body!.ToString().Contains(freshCall, StringComparison.Ordinal))
+            throw new InvalidOperationException("The ordinary and nullable struct roots did not share the fresh reader.");
         var capturedRoot = declarations.FirstOrDefault(method => method.Body != null &&
             method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().Contains("CapturedRecord", StringComparison.Ordinal) == true) &&
             method.Body.ToString().Contains(".ReserveRecord(", StringComparison.Ordinal));

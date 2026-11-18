@@ -18,6 +18,9 @@ internal static class InputFormatterRenderer
         foreach (FormatterModel owner in set.GeneralOwners ?? Array.Empty<FormatterModel>())
             if (owner.Definition != FormatterDefinitions.PayloadReference && Matches(owner.Type, target))
             {
+                // Keep the element owner call so the enclosing policy can redirect it to its checked payload.
+                if (owner.Definition == GenericIdentity.Nullable)
+                    return ClosedGenericOwnerFile.Render(set, owner, GeneratedOperations.BinaryRead, allowFreshStruct: false);
                 if (owner.Definition == "System.Collections.ObjectModel.ReadOnlyDictionary" &&
                     owner.Supports("StableReadOnlyDictionaryRead") && FormatterRegistry.FindDictionary(owner.Type) is { } wrapper)
                 {

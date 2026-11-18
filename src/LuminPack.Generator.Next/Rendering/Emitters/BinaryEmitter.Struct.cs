@@ -27,6 +27,7 @@ internal static partial class BinaryEmitter
         bool genericWrite = model.Version != null || model.ProfilePayload || model.InlineArray;
         bool genericRead = model.Version != null || model.ProfilePayload || model.InlineArray || model.InlineList ||
             members.Any(member => member.Kind is not (RenderMemberKind.Fixed or RenderMemberKind.Object));
+        bool typedFreshRead = CanReturnFreshStruct(model);
         string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
         const string writer = "LuminPackWriter", reader = "LuminPackReader";
         string Options() => w.A("ILuminPackOptions");
@@ -53,7 +54,8 @@ internal static partial class BinaryEmitter
                 WriteBody(model, w, union, structValue: true)), model.WriteBefore, model.WriteAfter);
         List<string> ReadBody(bool union) => model.Rejection != null ? new List<string> { RejectUnsupported(model.Rejection) } :
             InputChecks(model, w,
-            AddReadCallbacks(model, model.Version != null ? VersionReadBody(model, w) : StructReadBody(model, w, union)), read: true);
+            AddReadCallbacks(model, model.Version != null ? VersionReadBody(model, w) : StructReadBody(model, w, union,
+                typedFreshRead && !union ? Invoke("RootReadFresh", genericRead ? StructProfile : Standard()) : null)), read: true);
         string inline = w.MethodImpl("AggressiveInlining");
         string suffix = model.UniqueEntries ? "_" + readable : string.Empty;
         string polymorphic = "[" + w.Attribute("MethodImpl") + "(MethodImplOptions.AggressiveInlining)]";
@@ -91,6 +93,15 @@ internal static partial class BinaryEmitter
         w.Suppressed = !reads;
         Method(w, ReadBody(union: false), "RootRead", genericRead, RootArguments(genericRead), ConstraintLine(genericRead),
             "(scoped ref " + reader + " reader, scoped ref " + type + " value)", ReadHint(model, inline));
+        if (typedFreshRead)
+        {
+            var fresh = new List<string>();
+            AddFreshStructFields(fresh, model, w, seedExisting: false);
+            fresh.Add("return result;");
+            w.Blank();
+            Method(w, fresh, "RootReadFresh", true, RootArguments(true), ConstraintLine(true),
+                "(scoped ref " + reader + " reader)", inline, returnType: type);
+        }
         w.Blank();
         w.Suppressed = !writes;
         var unionBody = WriteRecord(union: true);
@@ -229,8 +240,9 @@ internal static partial class BinaryEmitter
     /// <param name="model">The managed struct.</param>
     /// <param name="w">The file writer.</param>
     /// <param name="union">Whether this is the Union payload without the member-count byte.</param>
+    /// <param name="freshRead">The shared by-value read after the header and reuse checks, if available.</param>
     /// <returns>The read body lines.</returns>
-    private static List<string> StructReadBody(PayloadRenderModel model, CodeWriter w, bool union)
+    private static List<string> StructReadBody(PayloadRenderModel model, CodeWriter w, bool union, string freshRead = null)
     {
         var members = model.Members;
         var body = new List<string>();
@@ -309,18 +321,46 @@ internal static partial class BinaryEmitter
             AddStructMirrorAssignments(body, model, w, mirrored.Where(member => model.ConstructorMembers == null ||
                 !model.ConstructorMembers.Contains(member.Name)).ToArray());
         }
+        else if (freshRead != null)
+        {
+            body.Add("value = " + freshRead + "(ref reader);");
+        }
         else
         {
-            body.Add("var result = new " + model.GlobalName + "();");
-            foreach (var member in members.Where(item => item.SeedExisting && !item.Mirrored))
-                body.Add("result." + member.Name + " = value." + member.Name + ";");
-            foreach (var member in members)
-                AddMemberRead(body, model, member, w, "reader", member.Mirrored ? Camel(member.Name) + "Temp" : "result." + member.Name);
+            AddFreshStructFields(body, model, w, seedExisting: true);
             body.Add("// Construct the object and populate its members.");
             body.Add("value = result;");
             AddStructMirrorAssignments(body, model, w, mirrored);
         }
         return body;
+    }
+
+    /// <summary>Checks whether an ordinary managed struct can share a compact, by-value fresh reader.</summary>
+    /// <param name="model">The managed struct's payload render.</param>
+    /// <returns>Whether the field reads can run without access to an existing value.</returns>
+    internal static bool CanReturnFreshStruct(PayloadRenderModel model) =>
+        model.ManagedStruct && model.Net8 && model.Mirror == null && model.Version == null &&
+        model.ConstructorArguments == null && model.Rent == null && !model.HasCallbacks && !model.Recursive &&
+        model.Rejection == null && model.Redirect == null && model.Limits?.Bounded != true &&
+        model.TypeParameters.Length == 0 && DirectInlining.Read(model, 0) &&
+        model.Members.All(member => !member.Volatile && !member.Property && !member.SeedExisting &&
+            (member.Kind == RenderMemberKind.Text || member.IsFixed && !member.Raw));
+
+    /// <summary>Reads the existing serialized fields into fresh managed storage.</summary>
+    /// <param name="body">The enclosing statements.</param>
+    /// <param name="model">The managed struct's payload render.</param>
+    /// <param name="w">The source writer.</param>
+    /// <param name="seedExisting">Whether existing nested members can supply values for reuse.</param>
+    private static void AddFreshStructFields(List<string> body, PayloadRenderModel model, CodeWriter w, bool seedExisting)
+    {
+        body.Add("var result = new " + model.GlobalName + "();");
+        if (seedExisting)
+        {
+            foreach (var member in model.Members.Where(item => item.SeedExisting && !item.Mirrored))
+                body.Add("result." + member.Name + " = value." + member.Name + ";");
+        }
+        foreach (var member in model.Members)
+            AddMemberRead(body, model, member, w, "reader", member.Mirrored ? Camel(member.Name) + "Temp" : "result." + member.Name);
     }
 
     /// <summary>Reads one member in place for a managed struct's existing-instance path.</summary>
@@ -418,13 +458,14 @@ internal static partial class BinaryEmitter
     /// <param name="constraint">The constraint clauses of the root, or an empty string.</param>
     /// <param name="parameters">The parameter list.</param>
     /// <param name="attribute">The inlining attribute, or null.</param>
+    /// <param name="returnType">The return type of the generated method.</param>
     private static void Method(CodeWriter w, List<string> body, string name, bool generic, string arguments, string constraint,
-        string parameters, string attribute)
+        string parameters, string attribute, string returnType = "void")
     {
         w.Line(w.Preserve);
         if (attribute != null)
             w.Line(attribute);
-        w.Line("internal static void " + name + arguments + parameters);
+        w.Line("internal static " + returnType + " " + name + arguments + parameters);
         if (constraint.Length != 0)
             w.Indented(() => w.Line(constraint));
         w.Open();
