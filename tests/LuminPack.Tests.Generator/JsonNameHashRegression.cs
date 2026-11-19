@@ -6,7 +6,6 @@ using System.Runtime.Loader;
 using System.Text;
 using LuminPack.Build;
 using LuminPack.Code.Core;
-using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -16,13 +15,12 @@ using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminP
 /// <summary>Checks compile-time name constants against the runtime's shared XXH3 implementation.</summary>
 internal static class JsonNameHashRegression
 {
-    /// <summary>Checks both generators at every length boundary and with non-ASCII code units.</summary>
+    /// <summary>Checks Next at every length boundary and with non-ASCII code units.</summary>
     internal static void Run()
     {
-        Type legacy = typeof(LuminPackJsonCodeGenerator);
         Type next = typeof(ModelBasedGenerator).Assembly.GetType("LuminPack.SourceGenerator.Next.Rendering.Emitters.JsonNames", true)!;
-        var byteHashes = new[] { Bind<byte[]>(legacy, "ComputeUtf8BytesHash"), Bind<byte[]>(next, "ComputeUtf8BytesHash") };
-        var charHashes = new[] { Bind<string>(legacy, "ComputeUtf16Hash"), Bind<string>(next, "ComputeUtf16Hash") };
+        var byteHash = Bind<byte[]>(next, "ComputeUtf8BytesHash");
+        var charHash = Bind<string>(next, "ComputeUtf16Hash");
         byte[] storage = new byte[8192];
         new Random(73681).NextBytes(storage);
         for (int length = 0; length <= 4096; length++)
@@ -30,22 +28,18 @@ internal static class JsonNameHashRegression
         {
             byte[] input = storage.AsSpan(offset, length).ToArray();
             ulong expected = LuminPack.Internal.XxHash3.Hash64Utf8(input);
-            foreach (var hash in byteHashes)
-                Require(hash(input) == expected, "UTF-8 bytes", length, offset);
+            Require(byteHash(input) == expected, "UTF-8 bytes", length, offset);
             string text = new string(MemoryMarshal.Cast<byte, char>(input.AsSpan(0, length & ~1)));
             expected = LuminPack.Internal.XxHash3.Hash64Utf16(text);
-            foreach (var hash in charHashes)
-                Require(hash(text) == expected, "UTF-16 code units", length, offset);
+            Require(charHash(text) == expected, "UTF-16 code units", length, offset);
         }
         foreach (string text in new[] { "", "Count", "\u540d\u79f0\U0001f680", "\u00e9", "e\u0301", "\uD800", "\u0000Name" })
         {
             byte[] input = Encoding.UTF8.GetBytes(text);
-            foreach (var hash in byteHashes)
-                Require(hash(input) == LuminPack.Internal.XxHash3.Hash64Utf8(input), "encoded name", input.Length, 0);
-            foreach (var hash in charHashes)
-                Require(hash(text) == LuminPack.Internal.XxHash3.Hash64Utf16(text), "raw code units", text.Length, 0);
+            Require(byteHash(input) == LuminPack.Internal.XxHash3.Hash64Utf8(input), "encoded name", input.Length, 0);
+            Require(charHash(text) == LuminPack.Internal.XxHash3.Hash64Utf16(text), "raw code units", text.Length, 0);
         }
-        Console.WriteLine("JSON name hashes: both generators match Core for 65,552 byte ranges and UTF-16 ranges, plus Unicode names.");
+        Console.WriteLine("JSON name hashes: Next matches Core for 65,552 byte ranges and UTF-16 ranges, plus Unicode names.");
         VerifyGeneratedLookups();
     }
 
@@ -59,13 +53,12 @@ internal static class JsonNameHashRegression
     /// <returns>The selected member index, or minus one.</returns>
     private delegate int CharLookup(ReadOnlySpan<char> name);
 
-    /// <summary>Compiles real name tables from both generators against the portable runtime and executes their lookups.</summary>
+    /// <summary>Compiles Next name tables against the portable runtime and executes their lookups.</summary>
     private static void VerifyGeneratedLookups()
     {
         MetadataReference[] references = CompatibilityCompilationReferences.Create();
         string runtime = references.OfType<PortableExecutableReference>().Single(r => Path.GetFileName(r.FilePath) == "LuminPack.Core.dll").FilePath!;
         var parse = new CSharpParseOptions(LanguageVersion.CSharp10).WithPreprocessorSymbols("LUMINPACK_IL_REWRITE");
-        foreach (bool next in new[] { false, true })
         foreach (string shape in new[] { "Sparse", "FourPerLength", "FivePerLength", "Encoding", "Dense", "Circle", "Aliases" })
         {
             string[] names = Enumerable.Range(0, 16).Select(i => shape switch
@@ -107,11 +100,10 @@ internal static class JsonNameHashRegression
             }
             else
                 source.AppendLine("public static class Entry { public static void Main() {} }");
-            string assemblyName = "HashLookup" + shape + (next ? "Next" : "Legacy");
+            string assemblyName = "HashLookup" + shape;
             var input = CSharpCompilation.Create(assemblyName, new[] { CSharpSyntaxTree.ParseText(source.ToString(), parse, assemblyName + ".cs", Encoding.UTF8) }, references,
                 new CSharpCompilationOptions(OutputKind.ConsoleApplication, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
-            ISourceGenerator[] generators = next ? new[] { new ModelBasedGenerator().AsSourceGenerator() } :
-                new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator() };
+            ISourceGenerator[] generators = { new ModelBasedGenerator().AsSourceGenerator() };
             var driver = CSharpGeneratorDriver.Create(generators, parseOptions: parse).RunGeneratorsAndUpdateCompilation(input, out Compilation output, out _);
             var lookups = driver.GetRunResult().Results.SelectMany(r => r.GeneratedSources)
                 .SelectMany(s => s.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
@@ -156,7 +148,7 @@ internal static class JsonNameHashRegression
                 context.Unload();
             }
         }
-        Console.WriteLine("JSON name lookup: both generators passed sparse/dense tables, aliases, reference metadata and unknown names on the portable runtime.");
+        Console.WriteLine("JSON name lookup: Next passed sparse/dense tables, aliases, reference metadata and unknown names on the portable runtime.");
     }
 
     /// <summary>Recognizes the emitted by-reference hash call independently of line wrapping and aliases.</summary>
