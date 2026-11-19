@@ -177,6 +177,27 @@ internal static class FormatterConcurrentTraits
                 method.Parameters[2].RefKind == RefKind.Out && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32);
     }
 
+    /// <summary>Checks the runtime's optional complete record writer for small dense Int32 dictionaries.</summary>
+    /// <param name="compilation">The consuming compilation and its runtime references.</param>
+    /// <returns>Whether the consumer can call the bounded operation.</returns>
+    internal static bool HasSmallDenseInt32DictionaryWriter(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackMarshal");
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        var dictionary = compilation.GetTypeByMetadataName("System.Collections.Generic.Dictionary`2");
+        if (owner is not { IsStatic: true, DeclaredAccessibility: Accessibility.Public } || writer == null || dictionary == null)
+            return false;
+
+        var integer = compilation.GetSpecialType(SpecialType.System_Int32);
+        var concrete = dictionary.Construct(integer, integer);
+        return owner.GetMembers("TryWriteSmallDenseInt32Dictionary").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 0,
+                ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+            method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 2 &&
+            method.Parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, writer) &&
+            method.Parameters[1].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, concrete));
+    }
+
     /// <summary>Checks the expansion helper that consumes a validated byte span and a fresh dictionary view.</summary>
     /// <param name="compilation">The consumer's Core and framework references.</param>
     /// <returns>Whether generated code can call the expansion before the bucket builder.</returns>

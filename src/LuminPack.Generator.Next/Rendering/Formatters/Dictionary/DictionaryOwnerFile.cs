@@ -71,6 +71,7 @@ internal static class DictionaryOwnerFile
         string dictionary = fact.DeclaredType;
         var contractModel = set.FindFormatter(dictionary);
         bool rawPairWrite = pair && contractModel?.Supports("BinaryRawPairs") == true;
+        bool smallDenseInt32Write = rawPairWrite && contractModel?.Supports("SmallDenseInt32Dictionary") == true;
         bool packedPairRead = pair && contractModel?.Supports("ReadPackedRawPairs") == true;
         bool expandPairs = pair && contractModel?.Supports("ExpandDenseRawPairs") == true;
         bool textPairWrite = !sparse && rawKey != rawValue && contractModel?.Supports("BinaryTextPair") == true;
@@ -153,12 +154,26 @@ internal static class DictionaryOwnerFile
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    w.Line(w.MethodImpl("NoInlining"));
+                    w.Line(smallDenseInt32Write ? inline : w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWrite<TLuminProfile>(");
                     w.Line("    scoped ref " + writer + " writer,");
                     w.Line("    " + dictionary + " input)");
                     w.Line(generic + options);
                     w.Open();
+                    if (smallDenseInt32Write)
+                    {
+                        w.Line("if (input is not null && global::LuminPack.Code.LuminPackMarshal.TryWriteSmallDenseInt32Dictionary(ref writer, input))");
+                        w.Indented(() => w.Line("return;"));
+                        w.Line("RootWriteFallback<TLuminProfile>(ref writer, input);");
+                        w.Close();
+                        w.Blank();
+                        w.Line(w.MethodImpl("NoInlining"));
+                        w.Line("private static void RootWriteFallback<TLuminProfile>(");
+                        w.Line("    scoped ref " + writer + " writer,");
+                        w.Line("    " + dictionary + " input)");
+                        w.Line(generic + options);
+                        w.Open();
+                    }
                     w.Line(writer + " operationState = default;");
                     w.Line("writer.CopyTo(ref operationState);");
                     w.Line("var value = input;");

@@ -460,6 +460,10 @@ internal static class FormatterCapabilities
         if (definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" &&
             modern && !unity && FormatterConcurrentTraits.HasBoundedDenseRawPairs(compilation))
             result.Add("BoundedDenseRawPairs");
+        if (definition == "System.Collections.Generic.Dictionary" && modern && !unity &&
+            named.TypeArguments.All(argument => argument.SpecialType == SpecialType.System_Int32) &&
+            FormatterConcurrentTraits.HasSmallDenseInt32DictionaryWriter(compilation))
+            result.Add("SmallDenseInt32Dictionary");
         if (definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" && modern && !unity)
         {
             bool raw = named.TypeArguments.All(argument => argument.IsUnmanagedType);

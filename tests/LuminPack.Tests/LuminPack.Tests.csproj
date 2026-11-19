@@ -64,6 +64,7 @@
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' == 'Safety'">
     <Compile Include="BinaryStringHotPathTest.StringList.cs" />
+    <Compile Include="SmallDenseDictionaryWriteTest.cs" />
     <Compile Include="TestSuites.cs;AuditSafetyRegressionTest.cs;UntrustedInputTest.cs;ReaderBoundaryValidationTest.cs;ReaderFixedBoundsPolicyTest.cs;ReaderPreaccessBoundsTest.cs;RawScalarSpanSafetyTest.cs;TruncatedFixedHeaderTest.cs;CompressionSafetyPerfTest.cs;PrimitivesSerializationTest.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' == 'Simd'">

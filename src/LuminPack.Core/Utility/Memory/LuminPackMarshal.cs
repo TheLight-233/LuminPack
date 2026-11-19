@@ -692,6 +692,46 @@ public static partial class LuminPackMarshal
         writer.Advance(count * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>()));
     }
 
+    /// <summary>Writes a small dictionary of dense Int32 pairs in a proven retained output window.</summary>
+    /// <param name="writer">The writer positioned at the collection header.</param>
+    /// <param name="dictionary">The concrete dictionary candidate.</param>
+    /// <returns>Whether the complete record was written and committed.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static bool TryWriteSmallDenseInt32Dictionary(ref LuminPackWriter writer, Dictionary<int, int> dictionary)
+    {
+        if (IntPtr.Size != 8 || dictionary.GetType() != typeof(Dictionary<int, int>))
+            return false;
+
+        int count = dictionary.Count;
+        if ((uint)(count - 1) >= 8)
+            return false;
+
+        int bytes = sizeof(int) + count * (2 * sizeof(int));
+        Span<byte> window = writer.Buffer;
+        ref byte destination = ref writer.CurrentReference;
+        nint position = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(window), ref destination);
+        if ((nuint)position > (nuint)(uint)window.Length || bytes > writer.RecordRoom() ||
+            !TryGetDictionaryView(dictionary, out var view) || view._count != count || view._freeCount != 0 ||
+            view._entries is not { } entries || count > entries.Length)
+            return false;
+
+        ref var entry = ref GetArrayReference(entries);
+        ref byte source = ref Unsafe.As<DictionaryView<int, int>.Entry, byte>(ref entry);
+        nint displacement = Unsafe.ByteOffset(ref source, ref destination);
+        if (displacement > -bytes && displacement < count * Unsafe.SizeOf<DictionaryView<int, int>.Entry>())
+            return false;
+
+        int version = view._version;
+        CopyDenseRawPairEntries(ref Unsafe.Add(ref destination, sizeof(int)), ref entry, count);
+        if (view._version != version || view._count != count || view._freeCount != 0 || !ReferenceEquals(view._entries, entries))
+            LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
+
+        LuminPackWriter.Write(ref destination, count);
+        writer.CompleteRun(bytes);
+        return true;
+    }
+
     /// <summary>Writes the packed pairs of an exact dictionary if the complete dense payload fits the current output window.</summary>
     /// <typeparam name="TKey">The raw key type.</typeparam>
     /// <typeparam name="TValue">The raw value type.</typeparam>
