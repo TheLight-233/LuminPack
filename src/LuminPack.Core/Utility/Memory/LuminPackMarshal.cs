@@ -19,7 +19,7 @@ public static partial class LuminPackMarshal
     [EditorBrowsable(EditorBrowsableState.Never)]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool CanBatchFields(ref byte first, ref byte next, int width) =>
-        IntPtr.Size == 8 && Unsafe.ByteOffset(ref first, ref next) == width;
+        IntPtr.Size == 8 && Unsafe.ByteOffset(ref first, ref next) == (nint)width;
 
     /// <summary>Tests whether the validated native entry layout can be populated directly for this dictionary.</summary>
     /// <typeparam name="TKey">The dictionary key type.</typeparam>
