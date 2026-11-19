@@ -85,6 +85,14 @@ internal static partial class BinaryEmitter
 
         body.Add("");
         string writerType = w.A("LuminPackWriter");
+        bool outlineStrings = OutlineVersionStrings(model);
+        if (outlineStrings)
+        {
+            body.Add(w.MethodImpl("NoInlining"));
+            body.Add("static void WriteStringField(scoped ref " + writerType + " writer, string? field) => writer.WriteVersionString<" +
+                profile + ">(field);");
+            body.Add("");
+        }
         for (int index = 0; index < model.Members.Length; index++)
         {
             RenderMember member = model.Members[index];
@@ -93,7 +101,8 @@ internal static partial class BinaryEmitter
                 schema.TempTypes[index] + " field)";
             if (width == 254)
             {
-                body.Add(signature + " => writer.WriteVersionString<" + profile + ">(field);");
+                string write = outlineStrings ? "WriteStringField(ref writer, field);" : "writer.WriteVersionString<" + profile + ">(field);";
+                body.Add(signature + " => " + write);
                 continue;
             }
             if (width <= 250 && member.IsFixed)
@@ -118,6 +127,12 @@ internal static partial class BinaryEmitter
         }
         return body;
     }
+
+    /// <summary>Keeps repeated string codec expansion inside one closed method for larger records.</summary>
+    /// <param name="model">The version-tolerant payload.</param>
+    /// <returns>Whether at least five members use unframed string records.</returns>
+    private static bool OutlineVersionStrings(PayloadRenderModel model) =>
+        model.Version.Descriptors.Count(word => word >> 56 == 254) >= 5;
 
     /// <summary>Selects the inline hint for a small fixed version-tolerant record.</summary>
     /// <param name="model">The version-tolerant payload.</param>
@@ -191,8 +206,17 @@ internal static partial class BinaryEmitter
         AppendMappedRead(model, w, body, fieldsType, profile, temps);
         if (members.Length != 0)
             body.Add("");
+        bool outlineStrings = OutlineVersionStrings(model);
+        if (outlineStrings)
+        {
+            body.Add(w.MethodImpl("NoInlining"));
+            body.Add("static void ReadStringField<TStringProfile>(scoped ref " + w.A("LuminPackReader") +
+                " reader, scoped ref string? field) where TStringProfile : struct, " + w.A("ILuminPackOptions") +
+                " => reader.Read<TStringProfile>(ref field);");
+            body.Add("");
+        }
         for (int index = 0; index < members.Length; index++)
-            AppendVersionFieldRead(model, w, body, fieldsType, index, temps[index]);
+            AppendVersionFieldRead(model, w, body, fieldsType, index, temps[index], outlineStrings);
         return body;
     }
 
@@ -299,8 +323,9 @@ internal static partial class BinaryEmitter
     /// <param name="fieldsType">The fully qualified staged state type.</param>
     /// <param name="index">The member's slot.</param>
     /// <param name="target">The staged field expression.</param>
+    /// <param name="outlineStrings">Whether direct string reads share an outlined codec call.</param>
     private static void AppendVersionFieldRead(PayloadRenderModel model, CodeWriter w, List<string> body, string fieldsType,
-        int index, string target)
+        int index, string target, bool outlineStrings)
     {
         var member = model.Members[index];
         var schema = model.Version;
@@ -308,6 +333,11 @@ internal static partial class BinaryEmitter
         bool padded = schema.FixedNullable[index];
         string signature = "static void Read" + VersionMemberName(member) + "(scoped ref " + w.A("LuminPackReader") +
             " reader, scoped ref " + fieldsType + " fields" + (padded ? ", bool legacy" : "") + ")";
+        if (outlineStrings && width == 254)
+        {
+            body.Add(signature + " => ReadStringField<" + ReadProfile(model, w, member) + ">(ref reader, ref " + target + ");");
+            return;
+        }
         var read = new List<string>();
         AddMemberRead(read, model, member, w, "reader", target);
         if (!padded && read.Count == 1)
