@@ -7,6 +7,70 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// <summary>Renders the existing dictionary slot refill and its staged continuation from normalized contracts.</summary>
 internal static class DictionarySlotReuseEmitter
 {
+    /// <summary>Retains existing string key instances before a staged dictionary refill publishes its entries.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="dictionary">The exact binary dictionary type.</param>
+    /// <param name="pair">The type of a staged key and value pair.</param>
+    /// <param name="destination">The destination whose comparer defines key equivalence.</param>
+    /// <param name="items">The staged pair array.</param>
+    /// <param name="length">The number of completed pairs in the array.</param>
+    /// <param name="alternateLookup">Whether the compiler accepts the .NET 9 alternate lookup's span type argument.</param>
+    internal static void PreserveStringKeys(CodeWriter w, string dictionary, string pair, string destination, string items, string length,
+        bool alternateLookup)
+    {
+        w.Line("var keyComparer = " + destination + ".Comparer;");
+        w.Line("if (!global::System.Object.ReferenceEquals(keyComparer, global::System.Collections.Generic.EqualityComparer<string>.Default) &&");
+        w.Line("    !global::System.Object.ReferenceEquals(keyComparer, global::System.StringComparer.Ordinal) && " + destination + ".Count != 0)");
+        w.Indented(() => w.Line("RetainExistingStringKeys(" + destination + ", " + items + ", " + length + ", keyComparer);"));
+        w.Line(w.MethodImpl("NoInlining"));
+        w.Line("static void RetainExistingStringKeys(" + dictionary + " existing, " + pair + "[] staged, int count,");
+        w.Line("    global::System.Collections.Generic.IEqualityComparer<string> comparer)");
+        w.Open();
+        w.Line("if (count == 1 || existing.Count == 1)");
+        w.Open();
+        w.Line("foreach (var prior in existing)");
+        w.Open();
+        w.Line("for (int itemIndex = 0; itemIndex < count; itemIndex++)");
+        w.Open();
+        w.Line("ref var item = ref staged[itemIndex];");
+        w.Line("if (item.Key is null) continue;");
+        w.Line("bool sameKey = global::System.Object.ReferenceEquals(prior.Key, item.Key);");
+        w.Line("if (!sameKey && !comparer.Equals(prior.Key, item.Key)) continue;");
+        w.Line("if (!sameKey) item = new " + pair + "(prior.Key, item.Value);");
+        w.Line("if (count == 1) return;");
+        w.Close();
+        w.Close();
+        w.Line("return;");
+        w.Close();
+        if (alternateLookup)
+        {
+            w.Line("#if NET9_0_OR_GREATER");
+            w.Line("if (global::System.Object.ReferenceEquals(comparer, global::System.StringComparer.OrdinalIgnoreCase) &&");
+            w.Line("    existing.TryGetAlternateLookup<global::System.ReadOnlySpan<char>>(out var lookup))");
+            w.Open();
+            w.Line("for (int keyIndex = 0; keyIndex < count; keyIndex++)");
+            w.Open();
+            w.Line("ref var stagedPair = ref staged[keyIndex];");
+            w.Line("if (stagedPair.Key is not null &&");
+            w.Line("    lookup.TryGetValue(global::System.MemoryExtensions.AsSpan(stagedPair.Key), out string existingKey, out _) &&");
+            w.Line("    !global::System.Object.ReferenceEquals(stagedPair.Key, existingKey))");
+            w.Indented(() => w.Line("stagedPair = new " + pair + "(existingKey, stagedPair.Value);"));
+            w.Close();
+            w.Line("return;");
+            w.Close();
+            w.Line("#endif");
+        }
+        w.Line("var keys = new global::System.Collections.Generic.HashSet<string>(existing.Keys, comparer);");
+        w.Line("for (int keyIndex = 0; keyIndex < count; keyIndex++)");
+        w.Open();
+        w.Line("ref var stagedPair = ref staged[keyIndex];");
+        w.Line("if (stagedPair.Key is not null && keys.TryGetValue(stagedPair.Key, out string existingKey) &&");
+        w.Line("    !global::System.Object.ReferenceEquals(stagedPair.Key, existingKey))");
+        w.Indented(() => w.Line("stagedPair = new " + pair + "(existingKey, stagedPair.Value);"));
+        w.Close();
+        w.Close();
+    }
+
     /// <summary>Emits a callback-free existing-target branch with the original dense prefix and cold continuation.</summary>
     /// <param name = "w">The generated source writer.</param>
     /// <param name = "set">The shared formatter publication facts.</param>

@@ -566,6 +566,9 @@ internal static class DictionaryOwnerFile
                     w.Line("while (--remaining != 0);");
                     if (packedPairRead)
                         w.Close();
+                    if (key == "string")
+                        DictionarySlotReuseEmitter.PreserveStringKeys(w, dictionary, entry, "destination", "items", "count",
+                            alternateLookup: set.Options?.CSharpVersion >= 1300);
                     w.Line("destination.Clear();");
                     w.Line("slot = ref firstPair;");
                     w.Line("remaining = count;");

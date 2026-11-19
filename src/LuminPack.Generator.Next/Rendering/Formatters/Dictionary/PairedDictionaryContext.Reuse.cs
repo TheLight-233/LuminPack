@@ -32,6 +32,9 @@ internal sealed partial class PairedDictionaryContext
         W.Line(Memory + ".Add(ref firstPair, (nint)(uint)index) = new " + Pair + "(key!, item);");
         W.Close();
         W.Line("while (++index < length);");
+        if (Key == "string")
+            DictionarySlotReuseEmitter.PreserveStringKeys(W, Dictionary, Pair, "value", "pairs", "length",
+                alternateLookup: _set.Options?.CSharpVersion >= 1300);
         W.Line("value.Clear();");
         W.Line("index = 0;");
         W.Line("do");
