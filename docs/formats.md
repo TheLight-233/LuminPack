@@ -20,22 +20,23 @@ The member count is 0 to 249. `255` means `null`. Values follow in member order.
 
 ### Version-tolerant object
 
-`(251, 2, byte profile, byte memberCount, [UTF-8 name/type metadata...], [byte widths...], [payloads...])`
+| Record | Bytes |
+| --- | --- |
+| Full | `251, 0x40 + profile, byte count, u64 schema, u64 descriptors[count], payloads` |
+| Short | `251, 0x50 + profile, canonical unsigned base-128 ordinal, payloads` |
+| Null | `255` |
 
-A width below 255 is a raw member's exact width; 255 marks a payload preceded by its `int` length. Readers also accept revision `1`, which stores every payload length before the payloads.
-
-`(251, 3, byte profile, byte memberCount, ulong fingerprint, [payloads...])`
-
-After the first full record of a model in one write operation, later records of that model are short: the 64-bit FNV-1a fingerprint of the metadata and width table replaces them. A reader resolves the fingerprint to a table read earlier in the same operation.
-
-`255` means `null`. See [Version tolerance](versioning.md#binary-framing).
+In a full record, each descriptor holds a name key, a type-contract hash and a width code. Codes 0–250 give the exact byte width, 254 uses the record's string framing, and 255 gives a payload prefixed by an unsigned four-byte length. A short record refers to an earlier descriptor table that is visible in its current scope. Readers also accept revision 1, which stores every payload length before the payloads. See [version tolerance](versioning.md#binary-framing).
 
 ### Reference-tracked object
 
-`(byte slotCount, [byte slot widths...], VarInt referenceId, [values...])`
-`(250, VarInt referenceId)`
+| Record | Bytes |
+| --- | --- |
+| First occurrence | `byte memberCount, VarInt referenceId, Object or VersionTolerant body` |
+| Back reference | `250, VarInt referenceId` |
+| Null | `255` |
 
-A new object writes its slot table and then its reference id. A slot width is a raw member's width, `0` for an empty slot, or `255` for a value preceded by its `int` length (raw values of 255 bytes or more included). `250` refers back to an object already read, and `255` is `null`. The slot count is below 250.
+The first marker gives the writer's member count (0–249). It is followed by the explicit reference id and a record of the selected format. A VersionTolerant body can be a full or short record.
 
 ### String
 
@@ -43,7 +44,7 @@ Length mode, UTF-16: `(int header, payload)`. `-1` is `null`, `0` is `""`. A pos
 
 Length mode, UTF-8: `(int utf8ByteCount, int utf16Length, utf8Bytes)`. `utf16Length` may be `-1` when unknown.
 
-Opt-in `VarInt` mode replaces each length field with canonical unsigned base-128 of `header + 1` (one to five bytes), preserving the payload. Zero is null; one is an empty length. UTF-16 keeps its Latin-1 discriminator before this mapping; UTF-8 writes both counts, using two zero headers for null and two one headers for empty. UTF-8 variable records require an exact nonnegative character count for a non-null string. Both endpoints must select `VarInt`; fixed length remains the default and collection counts stay fixed. Named version records use distinct profile tags 4 (UTF-8 VarInt) and 5 (UTF-16 VarInt), preserving the four existing tags.
+Opt-in `VarInt` mode replaces each length field with canonical unsigned base-128 of `header + 1` (one to five bytes), preserving the payload. Zero is null; one is an empty length. UTF-16 keeps its Latin-1 discriminator before this mapping; UTF-8 writes both counts, using two zero headers for null and two one headers for empty. UTF-8 variable records require an exact nonnegative character count for a non-null string. Both endpoints must select `VarInt`; fixed length remains the default and collection counts stay fixed. Version-tolerant records use profile tags 4 for UTF-8 VarInt and 5 for UTF-16 VarInt.
 
 Token mode writes a terminated string with no `null` marker; `null` and `""` both read back as `""`.
 

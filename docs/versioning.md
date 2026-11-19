@@ -4,13 +4,7 @@
 
 ## Choosing a mode
 
-The default `Object` mode identifies members by position. It is the fastest form, but you cannot remove, reorder or retype members without breaking existing data. Raw unmanaged structs can't add or remove fields compatibly either.
-
-| Need | Mode |
-| --- | --- |
-| Stable model, best speed | `GeneratorType.Object` |
-| Members added, removed, reordered or renamed over time | `GeneratorType.VersionTolerant` |
-| Shared objects and cycles in the graph | `GeneratorType.CircleReference` |
+The default `Object` mode identifies members by position. Use it for stable models whose readers and writers agree on member order and type. Select `VersionTolerant` when members may be added, removed, reordered or renamed. Either format supports shared objects and cycles when the concrete class declares `[LuminPackOption(TrackReferences = true)]`.
 
 ## Version-tolerant objects
 
@@ -35,13 +29,10 @@ public partial class PlayerV2
 }
 ```
 
-These two models read each other's data in both directions.
+These two models can read each other's data. The reader skips unknown members and resets missing members to `default`, including when it fills an existing object. `LuminPackOrder` is optional and determines write order.
 
-Each model caches its complete record prefix (header, name/type metadata and member widths) and writes it in one copy, with the selected compiled binary profile stamped into the header. Records are written in one pass; a record of fixed-width members has a constant size and is written straight into the result array. A reader whose model matches compares the prefix once and reads the members in order; other readers map the members by name.
-
-- Members are identified by their exact, case-sensitive names. `LuminPackOrder` is optional and only sets the write order.
-- Unknown members are skipped by their recorded length. Missing members are set to `default`, also when reading into an existing object.
-- `[LuminPackOldName]` keeps a renamed member readable. Binary writes keep the oldest name, so older readers still understand new data. After several renames, keep every old name in chronological order:
+- Names are case-sensitive. Diagnostic `LuminPack062` reports duplicate names and name-key collisions among current and old names, including inherited members. `LuminPack018` reports a model with more than 249 serialized members. Reserve the names of removed members for their original meaning.
+- `[LuminPackOldName]` lets readers match a previous name. Binary writes use the oldest name key. List every previous name in chronological order after multiple renames.
 
   ```csharp
   [LuminPackOldName("Name")]
@@ -49,36 +40,48 @@ Each model caches its complete record prefix (header, name/type metadata and mem
   public string? Label;
   ```
 
-- Names and aliases must be unique across the whole member set, including inherited members. Do not reuse a removed member's name for a different meaning.
-- JSON reads accept old names too; JSON writes use the current name.
-- Nested models that evolve independently must also be `VersionTolerant`, including those inside arrays, collections and generic members. A nested `Object` model or raw struct keeps its own positional format.
-- Keep member types, their namespaces and binary string options compatible. Matching names with incompatible type metadata are rejected; there is no automatic type conversion.
+- JSON readers accept the old names and JSON writers use the current name.
+- Use `VersionTolerant` for nested models that evolve independently, including elements of a collection and members of a generic model. Nested `Object` models and raw structs keep their own positional layout.
+- Keep member types, their namespaces and binary string options compatible. For a known name key, the reader requires the expected type-contract hash and width. A mismatch is an error. To change a member's type, introduce a new name and handle the conversion in application code.
 
-Reading into an existing object reuses it and its children like an ordinary binary read (see [Reuse](reuse.md)).
+Existing objects and children follow the [reuse rules](reuse.md).
 
 ### Binary framing
 
-`null` is the single byte `255`. A record starts with four bytes: marker `251`, format revision `2`, the binary string profile and the member count (0 to 249). The profile stores the string encoding in bit 1 and the recording mode in bit 0, and it must match the reader's profile.
+An untracked null is the single byte `255`. Non-null records start with marker `251`. The high nibble of the next byte, `form`, selects the revision. Bits 0–2 give the string profile and bit 3 is reserved at zero. The reader requires the same profile as the writer. Tags 0–5 represent UTF-8 Length, UTF-8 Token, UTF-16 Length, UTF-16 Token, UTF-8 VarInt and UTF-16 VarInt, respectively.
 
-A metadata block follows, one entry per member with its UTF-8 name and UTF-8 type contract, each prefixed by an unsigned base-128 length. Then comes one width byte per member: the exact width of a raw member below 255, or 255 for a payload that starts with its four-byte length. The payloads follow in the same order. Metadata is compared byte for byte, so hash collisions cannot alias members. Generated code caches the metadata per model and compares it directly against the input; it never decodes names into strings or uses reflection.
+| Revision | Record |
+| --- | --- |
+| 4, full | `251, form, count, u64 schema, u64 descriptors[count], payloads` |
+| 5, short | `251, form, canonical unsigned base-128 ordinal, payloads` |
 
-Within one write operation, only the first record of a model carries the metadata and width table. Later records of the same model use revision `3`: the same four-byte header followed by the 64-bit fingerprint of the table, then the payloads. Readers resolve a fingerprint only to a table read earlier in the same operation and reject any other. A record read alone is therefore always a full record.
+The schema is the 64-bit FNV-1a hash of the count byte and descriptor bytes in wire order. Each little-endian descriptor packs the FNV-1a-32 key of the UTF-8 member name in bits 0–31, the low 24 bits of the type contract's FNV-1a-32 hash in bits 32–55 and the width code in bits 56–63. Widths 0–250 give the exact payload length, for example for `DateTime`, `Guid`, `decimal`, enums, and structs with a proven fixed representation. Code 254 uses the record's string codec and its own framing. Code 255 prefixes the payload with a four-byte unsigned length. A string with a different member profile uses code 255 so another model can skip it. A fixed-width `Nullable<T>` uses a presence marker and a payload slot of the same width for null and present values. The writer fills the absent payload slot with zeros.
 
-Readers also accept revision `1`, written by earlier releases, which stores every payload length (LuminPack VarInt) before the payloads. Earlier releases cannot read revisions `2` and `3`.
+The reader checks a full record's descriptor count, widths and unique name keys. It compares the complete descriptor bytes before selecting a positional path or reusing a cached member map. A schema hash alone cannot establish that two tables match. The individual name and type fields are finite hashes, so independently defined contracts can still collide.
+
+### Schema registration and scope
+
+Each read or write operation keeps an ordered table of the complete schemas visible at the current position. A full record appends an entry. A short record uses its zero-based ordinal. The first record of a schema that is absent from the active table carries the full table. Subsequent records can use the ordinal.
+
+When a reader or writer enters a length-prefixed member (width code 255), outer entries remain visible. Entries added inside the member disappear when it ends. A reader can skip an unknown member in one step, and its later ordinals still have the same meaning as the writer's. Two sibling collections may each contain a full record for the same schema if the enclosing scope has no entry for it. Read a short record with the state that read its preceding full record.
+
+### Reading persisted data
+
+Version-tolerant readers also accept revision 1, whose field lengths are stored before the payloads. Revision 2 and 3 development records and the old reference-tracked slot format require a reader that supports those bytes. To convert a stored record, decode it with that reader and serialize the resulting value using the current format.
 
 ## Reference tracking
 
 ```csharp
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(TrackReferences = true)]
 public partial class Node
 {
-    [LuminPackOrder(0)] public Node? Parent { get; set; }
-    [LuminPackOrder(1)] public Node[]? Children { get; set; }
+    public Node? Parent { get; set; }
+    public Node[]? Children { get; set; }
 }
 ```
 
-- Every serialized member needs a `[LuminPackOrder]`. The numbers form a slot table of one width byte per slot; when adding or removing members, keep the existing numbers. A variable-size value records its length in front of the value, so a record is written in one pass. A reader skips trailing slots it does not know and leaves its own extra members at their defaults.
-- Records written by earlier releases, which stored variable slot lengths in the table, are not readable.
-- Only objects of `CircleReference` types are tracked. Wrap any other object you need to track in such a type.
-- Records written into the same `LuminBufferWriter` share one reference table; read them back in order with one reader and one reader state (see [Getting started](getting-started.md#reusing-a-buffer)).
-- JSON uses `$id` for the first occurrence of an object and `$ref` for later references. These names are reserved.
+The declaration applies only to the annotated class. For polymorphic values, the concrete case's declaration controls tracking. Add `GeneratorType.VersionTolerant` to `[LuminPackable]` when the class also needs schema evolution. `LuminPackOrder` only determines write order in either format.
+
+Binary tracks the first occurrence with an explicit id followed by its Object or VersionTolerant body. A back reference uses marker `250` and that id instead of a body. Records appended to the same `LuminBufferWriter` share reference state. Read them in order with the same reader state (see [reusing a buffer](getting-started.md#reusing-a-buffer)). A back reference can only resolve an object the reader has seen. When evolving a version-tolerant model, keep the first occurrence of a referenced object in a member the older reader will read. JSON uses `$id` on the first occurrence and `$ref` for later references. These property names are reserved.
+
+The obsolete `GeneratorType.CircleReference` declaration means `GeneratorType.VersionTolerant` with tracking enabled. Apply the IDE code fix or change the declaration to `[LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]`. Existing `LuminPackOrder` values can stay in place.

@@ -59,11 +59,11 @@ experiments/    untracked, isolated performance experiments; nothing here ships
 ## Mechanism rules
 
 1. **Keep every established mechanism.** Local + As storage views, virtual Union dispatch and its cached generic
-   slots, version-tolerant name tables, reference tracking, raw unmanaged paths and `StructLayout`,
-   constructor/pool/reuse behavior, callbacks, specialized formatters, registration through typed delegates, compiled
-   options and state ownership. A faster design needs an isolated experiment in `experiments/` with same-run reference
-   ratios, allocations and IL/native evidence, and the owner's explicit approval of that concrete proposal. A
-   performance goal is not approval.
+   slots, version-tolerant descriptor tables and scoped schema registration, reference tracking, raw unmanaged paths and
+   `StructLayout`, constructor/pool/reuse behavior, callbacks, specialized formatters, registration through typed
+   delegates, compiled options and state ownership. A faster design needs an isolated experiment in `experiments/` with
+   same-run reference ratios, allocations and IL/native evidence, and the owner's explicit approval of that concrete
+   proposal. A performance goal is not approval.
 2. **Reader checks stay on in Release.** `EnsureReadable` and its callers (`Advance`, fixed storage batches, Union
    framing) run in Debug and Release. Generated cursor arithmetic keeps its check before moving the cursor. Collection,
    string and bulk-payload checks stay. Fixed Writer stores and address-only raw kernels keep their separate unchecked

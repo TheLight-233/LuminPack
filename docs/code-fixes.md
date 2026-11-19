@@ -27,6 +27,7 @@ In an IDE with Roslyn code-fix support, place the cursor on a diagnostic and ope
 | `LuminPack033`, `LuminPack101` | Add `static` to a pool-rent or Custom formatter method. Abstract, virtual, override and explicit interface methods are excluded. |
 | `LuminPack034` | Remove `[LuminPackCompress]` from a managed collection member. |
 | `LuminPack035` | Make a Union participant and every containing type partial across source files. |
+| `CS0618` on `GeneratorType.CircleReference` in `[LuminPackable]` | Select `VersionTolerant` and enable `TrackReferences` in `[LuminPackOption]`. |
 
 Mechanical actions support Fix All in a document, project or solution. Constructor choices intentionally have no Fix All action: each type needs an explicit construction decision. Adding `static`, changing accessibility or making a Union abstract can require related application changes; review the preview and rebuild afterward.
 

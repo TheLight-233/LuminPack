@@ -28,9 +28,10 @@ A struct or record struct that contains no references (a C# unmanaged type) is c
 | --- | --- |
 | `Object` (default) | Positional members. The fastest and most compact form; use it for stable models. |
 | `VersionTolerant` | Members identified by name; fields can be added, removed, reordered and renamed. See [Version tolerance](versioning.md). |
-| `CircleReference` | Reference tracking with shared objects and cycles. See [Reference tracking](versioning.md#reference-tracking). |
 | `Custom` | Your own static read/write methods. See [Custom formatters](custom-formatters.md). |
 | `NonGenerator` | No generated formatter for the type. |
+
+For shared objects and cycles, add `[LuminPackOption(TrackReferences = true)]` to an Object or VersionTolerant class. See [reference tracking](versioning.md#reference-tracking).
 
 ## Members
 

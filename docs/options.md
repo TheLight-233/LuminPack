@@ -6,7 +6,7 @@ LuminPack has no runtime options object. Settings are declared with `[LuminPackO
 
 ## `[LuminPackOption]`
 
-The attribute is valid on an assembly, a type, a field or a property. Only the properties you set override the enclosing scope; the rest are inherited.
+The attribute is valid on an assembly, a type, a field or a property. Inheritable settings use the enclosing value until you set them explicitly. Type contract switches apply at the declaration.
 
 ```csharp
 using LuminPack.Attribute;
@@ -34,6 +34,7 @@ public partial class Message
 | `StandardFormat` | `"G"` | A constant handed to explicit formatted and `Custom` kernels. It does not change built-in number or date formats. |
 | `WideTag` | `false` | Wide numeric tags for the registered Union path in Next. The option does not inherit enclosing settings. |
 | `SingleImplementation` | `false` | This class or interface promises one implementation everywhere. Next selects the write tier by generated case count. |
+| `TrackReferences` | `false` | Track shared objects and cycles for the annotated class in binary and JSON. |
 | `ReuseRectangularArraySlots` | `true` | Next reuses existing objects in binary rank-two arrays on .NET 8 and later. Set it to `false` directly on the ordinary object element class to replace the array. See [object matrix reuse](reuse.md#binary-object-matrix-reuse). |
 | `StructLayout` | `Tagged` | Storage of unmanaged structs; see below. Only valid on assemblies and structs. |
 | `UntrustedData` and limits | on, limits unbounded | Checked reads for untrusted input; declare limits for hostile input; see [Security](security.md). |
@@ -58,6 +59,10 @@ These switches apply only to the annotated class or interface. They are invalid 
 
 `[LuminPackWideTag]` and `[LuminPackSingleImplementation]` remain compatible spellings; prefer the grouped options. A legacy marker remains enabled even when the corresponding option is explicitly false. `SingleImplementation` is a caller guarantee, not a request to remove Union framing or virtual dispatch; use it only when no other assembly can add an implementation. In Next, generated cases use hash framing and the write tier is selected by case count.
 
+## Reference tracking
+
+Set `[LuminPackOption(TrackReferences = true)]` directly on an Object or VersionTolerant class. The annotated class alone owns this contract and the attribute is its only configuration API. The normal string declarations and operation profiles still select the encoding. Using this option on an assembly, struct, interface, field or property reports `LuminPack110`. See [reference tracking](versioning.md#reference-tracking).
+
 ## Explicit profiles
 
 Every entry point also accepts a stateless option profile as a type argument. The profile flows through all nested operations; members with their own `[LuminPackOption]` keep it.
@@ -81,7 +86,14 @@ using TextOptions = LuminPack.Option.LuminPackOptions<
     LuminPack.Option.LuminPackStrictJson>;
 ```
 
-A directly implemented profile forwards every member of `ILuminPackStringCodec` to its codec. The **Forward string operations to LuminPack…Strings** code fix adds the missing members and retains existing implementations. It selects the codec from constant encoding and recording properties, or offers the six built-in codecs when those values are computed. Keep the metadata properties consistent with the forwarded representation. A custom codec's record bound covers the complete framed record. Its reserved write returns the next cursor and preserves the writer's published prefix on failure.
+A directly implemented profile forwards every member of `ILuminPackStringCodec` to its codec. The **Forward string operations to LuminPack…Strings** code fix adds the missing members and retains existing implementations. It selects the codec from constant encoding and recording properties, or offers the six built-in codecs when those values are computed. Keep the metadata properties consistent with the forwarded representation. A custom codec's record bound covers the complete framed record. Its reserved write returns the next cursor and preserves the writer's published prefix on failure. Its `Skip` method advances over one complete record under the same input and string-length limits as the corresponding read.
+
+For a directly implemented profile, forward the skip operation to the codec that handles its reads. For example, a UTF-8 VarInt profile delegates as follows.
+
+```csharp
+public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue)
+    => default(LuminPackUtf8VarIntStrings).Skip(ref reader, maxStringLength);
+```
 
 ## Compact length headers
 

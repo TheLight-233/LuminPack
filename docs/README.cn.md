@@ -230,11 +230,11 @@ public partial class Bullet
 <summary><b>🔗 共享引用与循环</b></summary>
 
 ```csharp
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(TrackReferences = true)]
 public partial class Node
 {
-    [LuminPackOrder(0)] public Node? Parent;
-    [LuminPackOrder(1)] public List<Node>? Children;
+    public Node? Parent;
+    public List<Node>? Children;
 }
 ```
 

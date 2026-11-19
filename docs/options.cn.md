@@ -6,7 +6,7 @@ LuminPack 没有运行时选项对象。设置通过 `[LuminPackOption]` 声明�
 
 ## `[LuminPackOption]`
 
-该特性可以标在程序集、类型、字段或属性上。只有你显式设置的属性会覆盖外层作用域，其余继承外层。
+该特性可以标在程序集、类型、字段或属性上。可继承的选项默认使用外层设置，可显式覆盖。类型契约开关仅作用于声明处。
 
 ```csharp
 using LuminPack.Attribute;
@@ -34,6 +34,7 @@ public partial class Message
 | `StandardFormat` | `"G"` | 传给显式格式化与 `Custom` 核心方法的常量，不会改变内置数值、日期格式。 |
 | `WideTag` | `false` | 在 Next 中，为注册 Union 路径启用宽数字标签；不继承外层选项。 |
 | `SingleImplementation` | `false` | 当前类或接口保证所有程序集中只有一个实现。Next 按生成 case 数选择写入档位。 |
+| `TrackReferences` | `false` | 在二进制和 JSON 中跟踪标注类的共享对象和循环。 |
 | `ReuseRectangularArraySlots` | `true` | 在 .NET 8 及更高版本上，Next 复用二进制二维数组中已有的对象。在普通对象的元素类上设为 `false` 可改为替换数组。参见[对象矩阵复用](reuse.cn.md#二进制对象矩阵复用)。 |
 | `StructLayout` | `Tagged` | 非托管结构体的存储方式，见下文。只能用于程序集和结构体。 |
 | `UntrustedData` 及各项限额 | 开启，限额不设上限 | 面向不可信输入的带检查读取；面对恶意输入时请声明限额，见[安全](security.cn.md)。 |
@@ -58,6 +59,10 @@ public sealed partial class MessageBody : MessageBase { public int Id; }
 
 `[LuminPackWideTag]` 和 `[LuminPackSingleImplementation]` 保留兼容，推荐集中使用 Option。旧标记存在时，即使对应 Option 显式为 false，也仍然启用旧标记。`SingleImplementation` 是调用者保证，不是移除 Union 帧或虚方法派发的指令；只有确定其他程序集不会增加实现时才能使用。在 Next 中，生成 case 使用哈希帧，写入档位由 case 数决定。
 
+## 引用跟踪
+
+将 `[LuminPackOption(TrackReferences = true)]` 直接声明在采用 Object 或 VersionTolerant 格式的类上。该契约仅作用于标注的类，也只能通过此特性配置。字符串编码仍由通常的选项声明或操作配置决定。在程序集、结构体、接口、字段或属性上声明该属性会报告 `LuminPack110`。详见[引用跟踪](versioning.cn.md#reference-tracking)。
+
 ## 显式配置
 
 每个入口都接受一个无状态的配置类型作为泛型参数。该配置会传递到所有嵌套操作；自己声明了 `[LuminPackOption]` 的成员保持自己的设置。
@@ -81,7 +86,14 @@ using TextOptions = LuminPack.Option.LuminPackOptions<
     LuminPack.Option.LuminPackStrictJson>;
 ```
 
-直接实现 `ILuminPackOptions` 的结构体要把 `ILuminPackStringCodec` 的各成员转发给所选编解码器。**Forward string operations to LuminPack…Strings** 代码修复会补齐缺少的成员并保留已有实现。编码与记录方式为常量时会匹配相应编解码器，计算属性可从六种内置实现中选择。元数据属性须与实际使用的编码一致。自定义编解码器返回的预留上界须涵盖完整记录。预留写入返回下一个游标，异常时须保留 writer 已发布的前缀。
+直接实现 `ILuminPackOptions` 的结构体要把 `ILuminPackStringCodec` 的各成员转发给所选编解码器。**Forward string operations to LuminPack…Strings** 代码修复会补齐缺少的成员并保留已有实现。编码与记录方式为常量时会匹配相应编解码器，计算属性可从六种内置实现中选择。元数据属性须与实际使用的编码一致。自定义编解码器返回的预留上界须涵盖完整记录。预留写入返回下一个游标，异常时须保留 writer 已发布的前缀。`Skip` 方法跳过一条完整字符串记录，遵循与读取相同的输入边界和字符串长度限制。
+
+直接实现配置时，应将跳过操作转发给负责读取的编解码器。例如 UTF-8 VarInt 配置可这样转发。
+
+```csharp
+public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue)
+    => default(LuminPackUtf8VarIntStrings).Skip(ref reader, maxStringLength);
+```
 
 ## 紧凑长度头
 

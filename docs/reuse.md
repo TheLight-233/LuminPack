@@ -55,7 +55,7 @@ When the objects, collection storage and strings already match, repeated reads r
 
 - Reuse is not transactional. If a read fails, or a callback throws, members already read stay updated.
 - An ordinary `null` object record leaves a supplied root untouched. Specialized modes and collections follow their own null rules.
-- If two members of your target share one instance, both reads fill that same instance. Use `CircleReference` when the incoming identities must be reconstructed.
+- If two members of your target share one instance, both reads fill that same instance. Declare `[LuminPackOption(TrackReferences = true)]` when the incoming identities must be reconstructed.
 
 ## Binary object matrix reuse
 

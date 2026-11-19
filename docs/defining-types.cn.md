@@ -28,9 +28,10 @@ Union 的根类型、它的所有 case 以及外层包含类型都必须声明�
 | --- | --- |
 | `Object`（默认） | 按位置写成员，最快、最紧凑，适合结构稳定的模型。 |
 | `VersionTolerant` | 按名称识别成员，可以增删、重排、重命名字段。见[版本容忍](versioning.cn.md)。 |
-| `CircleReference` | 引用跟踪，支持共享对象和循环。见[引用跟踪](versioning.cn.md#reference-tracking)。 |
 | `Custom` | 使用你手写的静态读写方法。见[自定义格式化器](custom-formatters.cn.md)。 |
 | `NonGenerator` | 不为该类型生成格式化器。 |
+
+如果需要共享对象与循环，在 Object 或 VersionTolerant 类上添加 `[LuminPackOption(TrackReferences = true)]`。见[引用跟踪](versioning.cn.md#reference-tracking)。
 
 ## 成员
 

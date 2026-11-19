@@ -63,10 +63,11 @@ public partial class Message
 | `MaxJsonDepth` | 1024 | ≤ 0 disables. |
 | `ValidateJsonSyntax` | false | Enable for external JSON. |
 | `StandardFormat` | `"G"` | Constant for Custom/formatted kernels. |
+| `TrackReferences` | false | Annotated Object or VersionTolerant class only. Preserves reference identity in binary and JSON. |
 | `StructLayout` | `Tagged` | Assembly or struct only: `Tagged`, `Packed`, `Native`. |
 | `UntrustedData` | true | Checked binary reads on the ordinary wire format (no envelope; only the reader changes), for objects, version tolerance, reference tracking and Unions. `false` restores trusted reads. Limits are unbounded unless declared: `MaxInputBytes`, `MaxCollectionLength`, `MaxStringLength`, `MaxDepth` (≥ 1, recursive values and JSON depth); `UntrustedData = true` or any declared limit also makes JSON strict. `MaxDecompressedBytes`, `MaxAllocationBytes`, `MaxObjectCount`, `MaxReadWork` are obsolete. Input-selected types (`object`, `System.Type`) fail closed. |
 
-Only explicitly set properties override the enclosing scope. Built-in profiles: `LuminPackDefaultOptions` (UTF-16 length), `LuminPackUtf8LengthOptions`, `LuminPackUtf8TokenOptions`, `LuminPackUtf16LengthOptions`, `LuminPackUtf16TokenOptions`. Compose a custom profile as `LuminPackOptions<LuminPackUtf8VarIntStrings, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>`. Direct implementations of `ILuminPackOptions` forward `ILuminPackStringCodec` members to one of the six built-in string codecs. The compiler code fix generates missing forwarders.
+Inheritable properties override the enclosing scope when explicitly set. Built-in profiles: `LuminPackDefaultOptions` (UTF-16 length), `LuminPackUtf8LengthOptions`, `LuminPackUtf8TokenOptions`, `LuminPackUtf16LengthOptions`, `LuminPackUtf16TokenOptions`, `LuminPackUtf8VarIntOptions` and `LuminPackUtf16VarIntOptions`. Compose a custom profile as `LuminPackOptions<LuminPackUtf8VarIntStrings, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>`. Direct implementations of `ILuminPackOptions` forward `ILuminPackStringCodec` members, including `Skip(ref reader, maxStringLength)`, to the selected string codec. The compiler code fix generates missing forwarders.
 
 `StringSerializer.Serialize<TOptions>(ReadOnlySpan<char>, Span<byte>, out int charsRead, out int bytesWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)` and the matching `Deserialize<TOptions>` transcode text without headers and return `OperationStatus`.
 
@@ -161,6 +162,7 @@ Readers and writers advance a managed cursor (`ref byte` on modern .NET and a on
 ## Formats
 
 - Binary object: `(byte memberCount 0..249, values...)`, `255` = null. Collection: `(int count, values...)`, `-1` = null. Union: `(byte tag, value)` or `(250, ushort tag, value)`, `255` = null.
-- Version-tolerant: `(251, 2, profile, count, metadata..., widths..., payloads...)`; later records of the same model in one write operation are `(251, 3, profile, count, u64 fingerprint, payloads...)`. Reference tracking: `(slotCount, width byte per slot, VarInt id, values...)`, width `255` means an `int` length precedes the value; `250` refers back.
+- Version-tolerant full record: `(251, form, count, u64 schema, descriptors..., payloads...)`. A short record uses `(251, form, canonical unsigned base-128 ordinal, payloads...)`. The high nibble of `form` is revision 4 or 5 and bits 0–2 give the string profile. Width 255 payloads have a four-byte length and a nested schema scope. Width 254 is a string in the record's profile. See [version tolerance](../../../docs/versioning.md#binary-framing).
+- Reference tracking adds the first-occurrence header `(memberCount, VarInt id)` before the selected record body. A back reference is `(250, VarInt id)`.
 - UTF-16 strings: `(int header, payload)`; `-1` null, `0` empty, odd header = compact Latin-1. UTF-8: `(int byteCount, int utf16Length, bytes)`.
 - JSON: objects by member name; arrays for sequences and tuples; framework string-key dictionaries as objects (readers also accept `[[k, v], ...]`), other key types and unrecognized dictionary implementations as pairs; Unions `{"$type":tag,"$value":{...}}`; references `$id` / `$ref`; multidimensional arrays `{"Lengths":[..],"LowerBounds":[..],"Values":[..]}`.

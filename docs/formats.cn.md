@@ -20,22 +20,23 @@
 
 ### 版本容忍对象
 
-`(251, 2, byte profile, byte memberCount, [UTF-8 名称/类型元数据...], [byte 宽度...], [负载...])`
+| 记录 | 字节 |
+| --- | --- |
+| 完整 | `251, 0x40 + profile, byte count, u64 schema, u64 descriptors[count], payloads` |
+| 简写 | `251, 0x50 + profile, 规范无符号 base-128 序号, payloads` |
+| 空值 | `255` |
 
-小于 255 的宽度是原始成员的精确宽度；255 表示该负载前带有 `int` 长度。读取方也接受修订版 `1`，它把所有负载长度写在负载之前。
-
-`(251, 3, byte profile, byte memberCount, ulong fingerprint, [负载...])`
-
-同一次写入操作中，某个模型的第一条完整记录之后，该模型后续的记录使用短格式：用元数据和宽度表的 64 位 FNV-1a 指纹代替它们。读取方把指纹解析为同一次操作中先前读到的表。
-
-`255` 表示 `null`。详见[版本容忍](versioning.cn.md#binary-framing)。
+完整记录的每个描述符包含名称键、类型契约哈希及宽度码。宽度码 0–250 表示确切字节数，254 使用记录自身的字符串分帧，255 表示负载前带四字节无符号长度。简写记录引用当前作用域内可见的既有描述符表。读取方也接受修订版 1，它把所有负载长度写在负载之前。详见[版本容忍](versioning.cn.md#binary-framing)。
 
 ### 引用跟踪对象
 
-`(byte slotCount, [byte 槽位宽度...], VarInt referenceId, [values...])`
-`(250, VarInt referenceId)`
+| 记录 | 字节 |
+| --- | --- |
+| 初次出现 | `byte memberCount, VarInt referenceId, Object 或 VersionTolerant 记录体` |
+| 回引用 | `250, VarInt referenceId` |
+| 空值 | `255` |
 
-新对象先写槽位表，再写引用 id。槽位宽度是原始成员的宽度，空槽位为 `0`，`255` 表示该值前带有 `int` 长度（包括 255 字节及以上的原始值）。`250` 表示引用一个已经读过的对象，`255` 表示 `null`。槽位数小于 250。
+初次出现的标记为写入方的成员数（0–249），接着是显式引用 id 及所选格式的记录。VersionTolerant 记录体可以是完整或简写记录。
 
 ### 字符串
 
@@ -43,7 +44,7 @@
 
 长度模式，UTF-8：`(int utf8ByteCount, int utf16Length, utf8Bytes)`。未知时 `utf16Length` 可以为 `-1`。
 
-可选的 `VarInt` 模式将每个长度字段替换为 `header + 1` 的规范无符号 base-128 编码（1–5 字节），负载不变。零表示 null，一表示空长度。UTF-16 在该映射前保留 Latin-1 标记；UTF-8 写两个长度字段，null 使用两个零头，空字符串使用两个一头。非 null 的 UTF-8 可变长度记录要求精确的非负字符数。读写双方必须选择 `VarInt`；默认仍为固定长度，集合元素数保持固定宽度。具名版本记录使用独立的配置标签 4（UTF-8 VarInt）和 5（UTF-16 VarInt），保留已有四个标签。
+可选的 `VarInt` 模式将每个长度字段替换为 `header + 1` 的规范无符号 base-128 编码（1–5 字节），负载不变。零表示 null，一表示空长度。UTF-16 在该映射前保留 Latin-1 标记；UTF-8 写两个长度字段，null 使用两个零头，空字符串使用两个一头。非 null 的 UTF-8 可变长度记录要求精确的非负字符数。读写双方必须选择 `VarInt`；默认仍为固定长度，集合元素数保持固定宽度。版本容忍记录使用配置标签 4 表示 UTF-8 VarInt，标签 5 表示 UTF-16 VarInt。
 
 Token 模式写以终止符结束的字符串，没有 `null` 标记；`null` 和 `""` 读回来都是 `""`。
 

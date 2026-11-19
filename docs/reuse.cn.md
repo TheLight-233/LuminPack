@@ -55,7 +55,7 @@ LuminPackSerializer.Deserialize(nextPayload, ref target);   // 仍然是同一�
 
 - 复用不是事务性的。读取失败或回调抛出异常时，已经读完的成员保持更新后的值。
 - 普通模式的 `null` 对象记录不会覆盖传入的根对象。专用模式和集合遵循各自的 null 规则。
-- 如果目标中的两个成员共享同一个实例，两次读取都会填充这个实例。需要还原传入数据的对象身份时使用 `CircleReference`。
+- 如果目标中的两个成员共享同一个实例，两次读取都会填充这个实例。需要还原传入数据的对象身份时，请声明 `[LuminPackOption(TrackReferences = true)]`。
 
 ## 二进制对象矩阵复用
 
