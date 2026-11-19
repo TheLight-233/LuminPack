@@ -364,6 +364,14 @@ public sealed class LuminPackOptionAttribute : System.Attribute
     /// <summary>Gets or sets whether binary strings use fixed lengths, variable lengths or encoding-specific terminators.</summary>
     public LuminPackStringRecording StringRecording { get; set; } = LuminPackStringRecording.Length;
 
+    /// <summary>Gets or sets whether binary groupings use an explicit presence marker before their keys.</summary>
+    /// <remarks>Next assembly option. Select the same setting at both endpoints, including for groups within lookups.</remarks>
+    public bool FramedGroupings { get; set; }
+
+    /// <summary>Gets or sets whether an ordinary packable list subclass serializes its inherited elements.</summary>
+    /// <remarks>Apply the same type option at both binary endpoints.</remarks>
+    public bool IncludeCollectionBase { get; set; }
+
     /// <summary>Gets or sets the profile's standard-format constant, available to explicit formatted and Custom kernels.</summary>
     public string StandardFormat { get; set; } = "G";
 
@@ -381,6 +389,10 @@ public sealed class LuminPackOptionAttribute : System.Attribute
     public bool UntrustedData { get; set; } = true;
     /// <summary>Gets or sets the maximum encoded input size accepted by the generated facades; unbounded unless declared.</summary>
     public int MaxInputBytes { get; set; } = int.MaxValue;
+
+    /// <summary>Requires binary document overloads that return a value to consume the entire supplied input.</summary>
+    /// <remarks>Assembly declaration only. By-reference and advancing reads retain prefix consumption.</remarks>
+    public bool RequireCompleteBinaryInput { get; set; }
     /// <summary>Retained for source compatibility; compressed collections are bounded by their encoded size and the collection limit.</summary>
     [Obsolete("Compressed collections are bounded by their encoded size and MaxCollectionLength; this limit has no effect.")]
     public int MaxDecompressedBytes { get; set; } = 16 * 1024 * 1024;

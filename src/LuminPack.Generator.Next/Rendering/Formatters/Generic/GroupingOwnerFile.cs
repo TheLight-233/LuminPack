@@ -4,9 +4,9 @@ using LuminPack.SourceGenerator.Next.Model;
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the standalone owners of <c>IGrouping&lt;TKey, TElement&gt;</c> and <c>ILookup&lt;TKey, TElement&gt;</c>.</summary>
-/// <remarks>A grouping stores the null object header or its key followed by its elements as an enumerable sequence; a lookup stores
-/// the count of its groupings followed by each grouping. The JSON form of a grouping is an object with a key and an elements array,
-/// and a lookup is an array of such objects. The read builds the framework's own grouping and lookup types.</remarks>
+/// <remarks>A grouping stores the null object header or its key followed by its elements as an enumerable sequence. Opt-in
+/// framing adds a presence marker before the key. A lookup stores its group count and then each grouping. JSON stores groupings
+/// as objects with a key and an elements array, and a lookup as an array of those objects.</remarks>
 internal static class GroupingOwnerFile
 {
     /// <summary>The enumerable sequence spelling of an element type.</summary>
@@ -33,20 +33,25 @@ internal static class GroupingOwnerFile
         string groupingOwner = GenericOwnerFile.Owner(extension, "System.Linq.IGrouping<" + key + "," + element + ">");
         string ownedGrouping = "global::LuminPack.Utility.LuminPackGrouping<" + key + ", " + element + ">";
         string ownedLookup = "global::LuminPack.Utility.LuminPackLookup<" + key + ", " + element + ">";
+        var contract = set.FindFormatter(declared);
         if (definition == GenericIdentity.Grouping)
         {
-            var contract = set.FindFormatter(declared);
             bool canReadJsonStringChoice = contract?.Supports("CanReadJsonStringChoice") == true;
             bool capture = contract?.Supports("CopyFrameworkGrouping") == true;
+            bool framed = set.Options.FramedGroupings;
             return SpecialOwnerFile.Render(set, operations, shortName, declared, true,
                 (w, c) =>
                 {
+                    if (framed)
+                        w.Line("writer.EnsureAdditionalCapacity(sizeof(byte));");
                     w.Line("if (value is null)");
                     w.Open();
                     w.Line("writer.WriteNullObjectHeader();");
                     w.Line("return;");
                     w.Close();
                     w.Blank();
+                    if (framed)
+                        w.Line("writer.WriteObjectHeader(0);");
                     w.Line(key + " key = value.Key;");
                     FormatterElementEmitter.Write(w, set, set.FindFormatter(key) ?? new FormatterModel(key, FormatterDefinitions.Scalar, raw: GenericIdentity.IsRaw(key)), "key");
                     if (capture && set.FindFormatter(element) is { } elementModel)
@@ -56,9 +61,12 @@ internal static class GroupingOwnerFile
                 },
                 (w, c) =>
                 {
-                    w.Line("if (reader.PeekIsNullObject())");
+                    w.Line(framed
+                        ? "if (global::LuminPack.Security.LuminPackInputPolicy.ReadNullMarker(ref reader, 0))"
+                        : "if (reader.PeekIsNullObject())");
                     w.Open();
-                    w.Line("reader.Advance(1);");
+                    if (!framed)
+                        w.Line("reader.Advance(1);");
                     w.Line("value = null;");
                     w.Line("return;");
                     w.Close();
@@ -133,7 +141,8 @@ internal static class GroupingOwnerFile
                 });
         }
 
-        return LookupOwner(set, operations, shortName, declared, grouping, groupingOwner, ownedLookup, key, element);
+        return LookupOwner(set, operations, shortName, declared, grouping, groupingOwner, ownedLookup, key,
+            contract?.Supports("CreateLookupWithNullKey") == true);
     }
 
     /// <summary>Copies framework grouping elements once and writes their existing sequence representation.</summary>
@@ -196,10 +205,10 @@ internal static class GroupingOwnerFile
     /// <param name="groupingOwner">The grouping owner supplied to <c>LookupOwner</c>.</param>
     /// <param name="ownedLookup">The owned lookup supplied to <c>LookupOwner</c>.</param>
     /// <param name="key">The key identifying the entry.</param>
-    /// <param name="element">The collection element or its formatter contract.</param>
+    /// <param name="supportsNullKey">Whether the referenced runtime can preserve a null-key group.</param>
     /// <returns>The resulting text.</returns>
     private static string LookupOwner(SharedFormatterSet set, GeneratedOperations operations, string shortName, string declared,
-        string grouping, string groupingOwner, string ownedLookup, string key, string element) =>
+        string grouping, string groupingOwner, string ownedLookup, string key, bool supportsNullKey) =>
         SpecialOwnerFile.Render(set, operations, shortName, declared, true,
             (w, c) =>
             {
@@ -231,6 +240,8 @@ internal static class GroupingOwnerFile
                 // Null grouping records count toward the wire length. Bound the initial reservation even when
                 // the declared groups fit in the remaining input.
                 w.Line("var dict = new global::System.Collections.Generic.Dictionary<" + key + ", " + grouping + ">(global::System.Math.Min(length, 64));");
+                if (supportsNullKey)
+                    DeclareNullGroup(w, grouping);
                 w.Line("if (length != 0)");
                 w.Open();
                 w.Line("int index = 0;");
@@ -239,11 +250,18 @@ internal static class GroupingOwnerFile
                 w.Line(grouping + " group = default !;");
                 w.Line(groupingOwner + ".Read<" + c.Profile + ">(ref reader, ref group);");
                 w.Line("if (group != null)");
-                w.Indented(() => w.Line("dict.Add(group.Key, group);"));
+                if (supportsNullKey)
+                {
+                    w.Open();
+                    AddGroup(w, supportsNullKey);
+                    w.Close();
+                }
+                else
+                    w.Indented(() => AddGroup(w, supportsNullKey));
                 w.Close();
                 w.Line("while (++index < length);");
                 w.Close();
-                w.Line("value = new " + ownedLookup + "(dict);");
+                PublishLookup(w, ownedLookup, supportsNullKey);
             },
             (w, c) =>
             {
@@ -277,6 +295,8 @@ internal static class GroupingOwnerFile
                 w.Blank();
                 w.Line("reader.TryConsumeArrayStart<" + c.Profile + ">();");
                 w.Line("var dict = new global::System.Collections.Generic.Dictionary<" + key + ", " + grouping + ">();");
+                if (supportsNullKey)
+                    DeclareNullGroup(w, grouping);
                 w.Line("while (reader.Read<" + c.Profile + ">())");
                 w.Open();
                 w.Line("if (reader.CurrentTokenType == " + c.JsonReader + ".JsonTokenType.ArrayEnd)");
@@ -285,8 +305,52 @@ internal static class GroupingOwnerFile
                 w.Line("    continue;");
                 w.Line(grouping + " group = default !;");
                 w.Line(groupingOwner + ".Read<" + c.Profile + ">(ref reader, ref group);");
-                w.Line("dict.Add(group.Key, group);");
+                AddGroup(w, supportsNullKey);
                 w.Close();
-                w.Line("value = new " + ownedLookup + "(dict);");
+                PublishLookup(w, ownedLookup, supportsNullKey);
             });
+
+    /// <summary>Stages an optional null-key group separately from the dictionary.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="grouping">The closed grouping type.</param>
+    private static void DeclareNullGroup(CodeWriter w, string grouping)
+    {
+        w.Line(grouping + "? nullGroup = null;");
+        w.Line("int nullGroupIndex = 0;");
+    }
+
+    /// <summary>Adds a decoded group, retaining ordinary duplicate-key rejection.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="supportsNullKey">Whether the receiver accepts a null-key group.</param>
+    private static void AddGroup(CodeWriter w, bool supportsNullKey)
+    {
+        if (!supportsNullKey)
+        {
+            w.Line("dict.Add(group.Key, group);");
+            return;
+        }
+
+        w.Line("var groupKey = group.Key;");
+        w.Line("if (groupKey is null)");
+        w.Open();
+        w.Line("if (nullGroup != null)");
+        w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException(\"An item with the same key has already been added.\");"));
+        w.Line("nullGroup = group;");
+        w.Line("nullGroupIndex = dict.Count;");
+        w.Close();
+        w.Line("else");
+        w.Indented(() => w.Line("dict.Add(groupKey, group);"));
+    }
+
+    /// <summary>Publishes the complete lookup after all its groups were read.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="ownedLookup">The runtime lookup implementation type.</param>
+    /// <param name="supportsNullKey">Whether a staged null-key group may be present.</param>
+    private static void PublishLookup(CodeWriter w, string ownedLookup, bool supportsNullKey)
+    {
+        string ordinary = "new " + ownedLookup + "(dict)";
+        w.Line(supportsNullKey
+            ? "value = nullGroup is null ? " + ordinary + " : " + ownedLookup + ".CreateWithNullKey(dict, nullGroup, nullGroupIndex);"
+            : "value = " + ordinary + ";");
+    }
 }

@@ -85,7 +85,8 @@ internal static partial class TypeModelFactory
             model.Definition == FormatterDefinitions.Registered && model.RawCollection ||
             model.Definition == FormatterDefinitions.FrameworkScalar && model.Type is not
                 ("global::System.DateTime" or "global::System.Guid" or "global::System.DateTimeOffset" or "global::System.TimeSpan") ||
-            model.PublishPayload || model.Definition is FormatterDefinitions.GenericUnion or FormatterDefinitions.CompilerUnion || FormatterDefinitions.HasGeneric(model.Definition) ||
+            model.PublishPayload || model.Definition is FormatterDefinitions.GenericUnion or FormatterDefinitions.CompilerUnion or FormatterDefinitions.CollectionSubclass ||
+            FormatterDefinitions.HasGeneric(model.Definition) ||
             model.Arguments.Any(RequiresDefault);
         /// <summary>Analyzes one closed formatter graph independently of its containing collection.</summary>
         /// <param name = "type">The declared type or its source-ready spelling.</param>
@@ -214,6 +215,9 @@ internal static partial class TypeModelFactory
                     ReadableTypeName.Of(GeneratedNames.PayloadKey(named.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))) +
                     "|" + string.Join(", ", named.TypeArguments.Select(argument => argument.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))),
                     ordinaryObject: false);
+            if (CollectionSubclassBase(named) is { } collectionBase && Formatter(collectionBase, depth + 1, path) is { } baseFormatter)
+                return new FormatterModel(spelling, FormatterDefinitions.CollectionSubclass, new[] { baseFormatter },
+                    underlying: ProfileNames.Type(_assemblyPolicy.Strings), checkedCollectionSubclass: _assemblyPolicy.Input == InputPolicy.Untrusted);
             if (!Owned(named) || genericUnion && !ExplicitMarker(named))
                 return new FormatterModel(spelling, FormatterDefinitions.Registered, rawCollection: rawCollection, layout: layout, ordinaryObject: ordinary);
             if (IsPackable(named) || Marked(named))
@@ -238,6 +242,24 @@ internal static partial class TypeModelFactory
             }
 
             return null;
+        }
+
+        /// <summary>Finds a collection-only source subclass that can be constructed and refilled through its base API.</summary>
+        /// <param name="type">The concrete candidate.</param>
+        /// <returns>The supported closed collection base, or null.</returns>
+        private INamedTypeSymbol? CollectionSubclassBase(INamedTypeSymbol type)
+        {
+            if (type is not { TypeKind: TypeKind.Class, IsAbstract: false, BaseType.SpecialType: not SpecialType.System_Object } ||
+                !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly) || IsPackable(type) ||
+                ContainsTypeParameter(type) || Marked(type) ||
+                !_compilation.IsSymbolAccessibleWithin(type, _compilation.Assembly) ||
+                !type.InstanceConstructors.Any(ctor => ctor.Parameters.IsEmpty && _compilation.IsSymbolAccessibleWithin(ctor, _compilation.Assembly)) ||
+                CollectionBaseType(type, includeSortedDictionary: true) is not { } collectionBase)
+                return null;
+            for (INamedTypeSymbol? level = type; level != null && !SymbolEqualityComparer.Default.Equals(level, collectionBase); level = level.BaseType)
+                if (IsPackable(level) || level.GetMembers().Any(member => member is IFieldSymbol { IsStatic: false }))
+                    return null;
+            return collectionBase;
         }
 
         /// <summary>Builds the closed case owners in compiler Union declaration order.</summary>

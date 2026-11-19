@@ -42,6 +42,8 @@ namespace LuminPack
     /// the reference-tracking state owned by that writer for a ThreadStatic-free high-performance path.</remarks>
     public static partial class LuminPackSerializer
     {
+        static partial void CheckCompleteBinaryInput(int consumed, long length);
+
         // One weak immutable candidate per closed generated set; every input is still fully decoded.
         private static class LuminImmutableCandidate<TValue> where TValue : class
         {
@@ -189,7 +191,10 @@ namespace LuminPack
         {
             LuminPackInputPolicy.CheckInput(buffer.Length, LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<T>());
             T value = default !;
-            Deserialize<T, TLuminProfile>(buffer, ref value);
+            if (FormatterDispatch.RequireCompleteBinaryInput)
+                CheckCompleteBinaryInput(Deserialize<T, TLuminProfile>(buffer, ref value), buffer.Length);
+            else
+                Deserialize<T, TLuminProfile>(buffer, ref value);
             return value;
         }
 
@@ -277,7 +282,10 @@ namespace LuminPack
         {
             LuminPackInputPolicy.CheckInput(bufferWriter.GetSpan().Length, LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<T>());
             T value = default !;
-            Deserialize<T, TLuminProfile>(bufferWriter, ref value);
+            if (FormatterDispatch.RequireCompleteBinaryInput)
+                CheckCompleteBinaryInput(Deserialize<T, TLuminProfile>(bufferWriter, ref value), bufferWriter.GetSpan().Length);
+            else
+                Deserialize<T, TLuminProfile>(bufferWriter, ref value);
             return value;
         }
 
@@ -366,7 +374,10 @@ namespace LuminPack
         {
             LuminPackInputPolicy.CheckInput(buffer.Length, LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<T>());
             T value = default !;
-            Deserialize<T, TLuminProfile>(buffer, ref value);
+            if (FormatterDispatch.RequireCompleteBinaryInput)
+                CheckCompleteBinaryInput(Deserialize<T, TLuminProfile>(buffer, ref value), buffer.Length);
+            else
+                Deserialize<T, TLuminProfile>(buffer, ref value);
             return value;
         }
 

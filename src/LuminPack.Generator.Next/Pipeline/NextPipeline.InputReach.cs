@@ -6,26 +6,30 @@ namespace LuminPack.SourceGenerator.Next.Pipeline;
 
 internal static partial class NextPipeline
 {
-    /// <summary>Finds unbounded roots whose generated nested reads can reach trusted storage.</summary>
+    /// <summary>Finds unbounded roots whose generated nested reads can reach a formatter requiring an input check.</summary>
     private sealed class TrustedReadReach
     {
         private readonly Dictionary<string, TypeModel> _payloads = new(StringComparer.Ordinal);
         private readonly HashSet<string> _visited = new(StringComparer.Ordinal);
+        private readonly bool _checkCultureInfo;
 
-        /// <summary>Indexes named reads only when the project has trusted payloads.</summary>
+        /// <summary>Stores the optional checked culture resolver capability.</summary>
+        /// <param name="checkCultureInfo">Whether a culture formatter needs the checked input path.</param>
+        private TrustedReadReach(bool checkCultureInfo) => _checkCultureInfo = checkCultureInfo;
+
+        /// <summary>Indexes named reads when the project can reach a trusted payload or culture formatter.</summary>
         /// <param name="payloads">The retained declarations and implicit payloads.</param>
-        /// <returns>The dependency walk, or null when every declaration checks input.</returns>
-        internal static TrustedReadReach? Create(List<TypeModel> payloads)
+        /// <param name="checkCultureInfo">Whether the project retains culture reads with a separate checked path.</param>
+        /// <returns>The dependency walk, or null when no read requires checking in a copy.</returns>
+        internal static TrustedReadReach? Create(List<TypeModel> payloads, bool checkCultureInfo = false)
         {
-            foreach (TypeModel payload in payloads)
-                if (payload.Policy.Input == InputPolicy.Trusted)
-                {
-                    var reach = new TrustedReadReach();
-                    foreach (TypeModel item in payloads)
-                        reach._payloads[item.Identity.GlobalName] = item;
-                    return reach;
-                }
-            return null;
+            if (!checkCultureInfo && !payloads.Exists(item => item.Policy.Input == InputPolicy.Trusted))
+                return null;
+
+            var reach = new TrustedReadReach(checkCultureInfo);
+            foreach (TypeModel item in payloads)
+                reach._payloads[item.Identity.GlobalName] = item;
+            return reach;
         }
 
         /// <summary>Checks whether any declared Union case uses trusted reads.</summary>
@@ -66,7 +70,7 @@ internal static partial class NextPipeline
             foreach (MemberModel member in payload.Members)
                 if (VisitMember(member))
                     return true;
-            return false;
+            return payload is RecordModel { CollectionBase: { } collectionBase } && VisitFormatter(collectionBase);
         }
 
         /// <summary>Follows a member's modeled read dependencies.</summary>
@@ -74,6 +78,7 @@ internal static partial class NextPipeline
         /// <returns>Whether a dependent read is trusted.</returns>
         private bool VisitMember(MemberModel member) => member switch
         {
+            CultureInfoMember => _checkCultureInfo,
             PayloadMember payload => VisitNamed(payload.Type.GlobalName, payload.Nested),
             CollectionMember collection => VisitNamed(collection.Element.GlobalName, collection.Nested) ||
                 collection.ForwardedElement != null && VisitMember(collection.ForwardedElement),
@@ -89,6 +94,7 @@ internal static partial class NextPipeline
         /// <param name="payload">The inline model, when available.</param>
         /// <returns>Whether the named dependency reaches a trusted read.</returns>
         private bool VisitNamed(string name, TypeModel? payload) =>
+            _checkCultureInfo && name is "global::System.Globalization.CultureInfo" or "System.Globalization.CultureInfo" ||
             (payload != null || _payloads.TryGetValue(name, out payload)) && Visit(payload, name);
 
         /// <summary>Follows the payload and arguments of a shared formatter.</summary>

@@ -27,14 +27,14 @@ internal static partial class BinaryEmitter
     /// <returns>True when the write root is generic over the operation profile.</returns>
     private static bool HasWriteProfile(PayloadRenderModel model) =>
         !(model.DeclaredProfile != null && model.MemberWrite) &&
-        (model.SequenceBase != null || model.Version != null || model.ProfilePayload || model.InlineArray);
+        (model.SequenceBase != null || model.CollectionBase != null || model.Version != null || model.ProfilePayload || model.InlineArray);
 
     /// <summary>Determines whether the generated binary read root takes a profile type parameter.</summary>
     /// <param name="model">The payload being read.</param>
     /// <returns>True when the read root is generic over the operation profile.</returns>
     private static bool HasReadProfile(PayloadRenderModel model) =>
         !(model.DeclaredProfile != null && model.MemberWrite) &&
-        (model.SequenceBase != null || model.Version != null || model.ProfilePayload || model.InlineArray || model.InlineList ||
+        (model.SequenceBase != null || model.CollectionBase != null || model.Version != null || model.ProfilePayload || model.InlineArray || model.InlineList ||
             model.Members.Any(member => member.Kind is not (RenderMemberKind.Fixed or RenderMemberKind.Object)));
 
     /// <summary>Emits the complete binary file body.</summary>
@@ -1059,6 +1059,8 @@ internal static partial class BinaryEmitter
 
         void CloseBound()
         {
+            if (model.CollectionBase != null)
+                body.Add(model.CollectionBaseOwner + ".Write<" + Profile + ">(ref writer, (" + model.CollectionBase + ")value);");
             if (bounded)
                 AddBoundExit(body, model, union);
         }
@@ -2921,11 +2923,11 @@ internal static partial class BinaryEmitter
         // A selected constructor builds the instance from temporary locals; a raw struct's arguments only reach its JSON
         // read, so the binary body keeps the struct paths.
         if (!model.IsStruct && model.ConstructorArguments != null)
-            return ConstructedReadBody(model, w, union);
+            return AppendCollectionBase(ConstructedReadBody(model, w, union));
         // A mixed record reads with the stream protocol: the inline objects keep their markers, so the reserved write
         // segments change nothing about the order and shape of the reads.
         if (model.StreamRecord || model.MixedRecord)
-            return StreamReadBody(model, w, union, allowStringPairs && !union);
+            return AppendCollectionBase(StreamReadBody(model, w, union, allowStringPairs && !union));
         var members = model.Members;
         var body = new List<string>();
         string Policy() => w.A("LuminPackInputPolicy");
@@ -3055,7 +3057,35 @@ internal static partial class BinaryEmitter
         while (body[body.Count - 1].Length == 0)
             body.RemoveAt(body.Count - 1);
         RenameCheckedReadInstance(body, model);
-        return body;
+        return AppendCollectionBase(body);
+
+        List<string> AppendCollectionBase(List<string> statements)
+        {
+            if (model.CollectionBase == null)
+                return statements;
+            statements.Add(model.CollectionBase + "? luminCollectionBaseItems = value;");
+            if (!model.Trusted && model.CollectionBase == "global::System.Collections.Generic.List<bool>")
+                statements.Add(w.A("LuminPackInputPolicy") + ".ReadBooleans(ref reader, ref luminCollectionBaseItems);");
+            else
+                statements.Add(model.CollectionBaseOwner + ".Read<" + Profile + ">(ref reader, ref luminCollectionBaseItems!);");
+            AddCollectionBaseRefill(statements, model.CollectionBase, w);
+            return statements;
+        }
+    }
+
+    /// <summary>Transfers a replacement list into the existing derived record without replacing its identity.</summary>
+    /// <param name="body">The statements receiving the copy.</param>
+    /// <param name="baseType">The closed List type.</param>
+    /// <param name="w">The source writer.</param>
+    internal static void AddCollectionBaseRefill(List<string> body, string baseType, CodeWriter w)
+    {
+        body.Add("if (!object.ReferenceEquals(value, luminCollectionBaseItems))");
+        body.Add("{");
+        body.Add("if (luminCollectionBaseItems is null)");
+        body.Add("\t" + w.A("LuminPackExceptionHelper") + ".ThrowInvalidCollection();");
+        body.Add("((" + baseType + ")value!).Clear();");
+        body.Add("((" + baseType + ")value).AddRange(luminCollectionBaseItems!);");
+        body.Add("}");
     }
 
     /// <summary>Gives both checked framing bodies the same instance local before sharing their statements.</summary>

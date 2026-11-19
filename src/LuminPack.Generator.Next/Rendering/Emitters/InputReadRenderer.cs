@@ -19,11 +19,15 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 /// </remarks>
 internal sealed class InputRedirect
 {
+    /// <summary>The read scope shared by framework roots in the consuming assembly.</summary>
+    internal const string FrameworkHelper = "LuminFrameworkInputReads";
+
     private readonly HashSet<string> _copyable;
     private readonly HashSet<string> _unchanged;
     private readonly IReadOnlyDictionary<string, string> _compressedChildren;
     private readonly HashSet<(string Name, InputReadKind Kind)> _requested = new();
     private Dictionary<string, PayloadRenderModel> _unionCases;
+    private Dictionary<string, string> _frameworkAdapters;
 
     /// <summary>Captures the root and the targets whose read bodies can be copied.</summary>
     /// <param name="root">The root's readable name, whose own entry already applies these limits.</param>
@@ -32,13 +36,14 @@ internal sealed class InputRedirect
     /// <param name="copyable">The readable names of owners and payloads with a copyable read body.</param>
     /// <param name="unchanged">Payloads that already check their input and need no copy for an unbounded root.</param>
     /// <param name="compressedChildren">Jagged compressed owners and their immediate child owner names.</param>
+    /// <param name="framework">Whether this scope belongs to the assembly's framework roots.</param>
     internal InputRedirect(string root, string extension, InputLimits limits, HashSet<string> copyable,
-        HashSet<string> unchanged, IReadOnlyDictionary<string, string> compressedChildren)
+        HashSet<string> unchanged, IReadOnlyDictionary<string, string> compressedChildren, bool framework = false)
     {
         Root = root;
         Limits = limits;
         OwnerPrefix = "Binary_" + extension + "_";
-        Helpers = "LuminInputReads_" + root;
+        Helpers = framework ? FrameworkHelper : "LuminInputReads_" + root;
         _copyable = copyable;
         _unchanged = unchanged;
         _compressedChildren = compressedChildren;
@@ -129,6 +134,20 @@ internal sealed class InputRedirect
     /// <returns>The resulting <c>PayloadRenderModel</c>.</returns>
     internal PayloadRenderModel UnionCase(string target) => _unionCases[target];
 
+    /// <summary>Registers a framework root whose runtime kernel accepts this scope's policy directly.</summary>
+    /// <param name="target">The readable owner name.</param>
+    /// <param name="type">The framework type key.</param>
+    internal void RequestFrameworkAdapter(string target, string type)
+    {
+        (_frameworkAdapters ??= new Dictionary<string, string>(StringComparer.Ordinal))[target] = type;
+        Request(target, InputReadKind.Ordinary);
+    }
+
+    /// <summary>Gets the framework type key if the scope requested a direct adapter.</summary>
+    /// <param name="target">The readable owner name.</param>
+    /// <returns>The framework type key, or null for a normal owner copy.</returns>
+    internal string FrameworkType(string target) => _frameworkAdapters?.TryGetValue(target, out string type) == true ? type : null;
+
     /// <summary>Applies the collection limit at the compressed child before its read can allocate.</summary>
     /// <param name="line">The line supplied to <c>ApplyCompressedChild</c>.</param>
     /// <param name="target">The target of the operation.</param>
@@ -161,12 +180,20 @@ internal enum InputReadKind
 internal static class InputReadRenderer
 {
     private const string Policy = "global::LuminPack.Security.LuminPackInputPolicy";
-    private static readonly string[] Readers = { "reader", "operationState", "state", "reader2" };
-    private static readonly Regex StringBlocks = new(
-        @"(?<![\w.])(reader|operationState|state|reader2)\.ReadStrings<([^>]+)>\(([^()]*)\)", RegexOptions.CultureInvariant);
+    private static readonly string[] Readers = { "reader", "operationState", "state", "reader2", "loopReader" };
     private static readonly Regex StringOwners = new(
-        @"global::LuminPack\.Binary_\w+_String\.Read<([^>]+)>\(ref (reader|operationState|state|reader2), (ref [^;]+)\);", RegexOptions.CultureInvariant);
-    private const string ForwardedBooleanRead = Policy + ".ReadBooleans(ref reader, ref ";
+        @"global::LuminPack\.Binary_\w+_String\.Read<([^>]+)>\(ref (reader|operationState|state|reader2|loopReader), (ref [^;]+)\);", RegexOptions.CultureInvariant);
+    private static readonly Regex BooleanCollections = new(
+        @"LuminPackInputPolicy\.ReadBooleans\(ref (?:reader|operationState|state|reader2|loopReader), ref [^;]+\);", RegexOptions.CultureInvariant);
+    /// <summary>Recognizes framework reads whose bounded or checked kernel needs no copied owner body.</summary>
+    /// <param name="type">The normalized framework type key.</param>
+    /// <param name="limits">The assembly's frozen limits.</param>
+    /// <param name="temporal">Whether the referenced Core exposes the temporal reader kernels.</param>
+    /// <returns>Whether the scope needs a direct checked adapter.</returns>
+    internal static bool HasFrameworkAdapter(string type, InputLimits limits, bool temporal) =>
+        type is "bool" or "bool[]" or "System.Collections.Generic.List<bool>" ||
+        type == "string" && limits.String != int.MaxValue ||
+        temporal && type is ("System.DateOnly" or "System.TimeOnly");
 
     /// <summary>Checks for a supported binary read body in a published owner.</summary>
     /// <param name="source">The original shared owner file.</param>
@@ -194,6 +221,13 @@ internal static class InputReadRenderer
     internal static string Project(string line, InputLimits limits, string policy)
     {
         if (limits.Collection != int.MaxValue)
+        {
+            if (line.IndexOf(".ReadBooleans(", StringComparison.Ordinal) >= 0)
+                line = BooleanCollections.Replace(line, match => match.Value.Substring(0, match.Length - 2) + ", " + Literal(limits.Collection) + ");");
+            // A matching rectangular destination proves the encoded count. For an oversized destination, the ordinary
+            // checked header rejects the incoming count before copying or allocating any storage.
+            if (line.IndexOf("if (reader.CanReadRectangularRecord(", StringComparison.Ordinal) >= 0)
+                line = line.Replace("if (reader.CanReadRectangularRecord(", "if (target.Length <= " + Literal(limits.Collection) + " && reader.CanReadRectangularRecord(");
             foreach (string reader in Readers)
             {
                 // A compressed payload's element count is not bounded by its input bytes; its header is checked before the
@@ -207,21 +241,28 @@ internal static class InputReadRenderer
                 if (site >= 0 && (site == 0 || !(char.IsLetterOrDigit(line[site - 1]) || line[site - 1] is '_' or '.')))
                     line = line.Substring(0, site) + policy + ".CheckCompressedCount(" + reader + ".GetSpan().Slice(" + reader + ".Position), " +
                         Literal(limits.Collection) + "); " + line.Substring(site);
+                if (line.IndexOf(reader + ".ReadRawImmutableArray<", StringComparison.Ordinal) >= 0)
+                {
+                    int statement = line.Length - line.TrimStart().Length;
+                    line = line.Insert(statement, policy + ".PeekCollectionHeader(ref " + reader + ", out _, 0, " +
+                        Literal(limits.Collection) + "); ");
+                }
                 line = Kernel(line, reader, "ReadLength", policy, limits.Collection, defaultMinimum: true);
                 line = Kernel(line, reader, "TryReadCollectionHead", policy, limits.Collection, defaultMinimum: false);
                 line = Kernel(line, reader, "PeekCollectionHeader", policy, limits.Collection, defaultMinimum: false);
             }
+        }
         if (limits.String != int.MaxValue)
         {
             string limit = Literal(limits.String);
-            if (line.IndexOf(".ReadStrings<", StringComparison.Ordinal) >= 0)
-                line = StringBlocks.Replace(line, match => policy + ".ReadStrings<" + match.Groups[2].Value + ">(ref " +
-                    match.Groups[1].Value + ", " + match.Groups[3].Value + ", " + limit + ")");
             if (line.IndexOf("_String.Read<", StringComparison.Ordinal) >= 0)
                 line = StringOwners.Replace(line, match => policy + ".ReadStringRecord<" + match.Groups[1].Value + ">(ref " +
                     match.Groups[2].Value + ", " + match.Groups[3].Value + ", " + limit + ");");
             foreach (string reader in Readers)
-                line = Strings(line, reader, policy, limit);
+            {
+                line = Strings(line, reader, policy, limit, "Read");
+                line = Strings(line, reader, policy, limit, "ReadStrings");
+            }
         }
         return line;
     }
@@ -261,17 +302,18 @@ internal static class InputReadRenderer
         return line;
     }
 
-    /// <summary>Redirects string record and reused string reads to the checked adapters.</summary>
+    /// <summary>Redirects string record, reused string and string span reads to the checked adapters.</summary>
     /// <param name="line">The statement.</param>
     /// <param name="reader">The reader local.</param>
     /// <param name="policy">The policy class spelling.</param>
     /// <param name="limit">The string limit.</param>
+    /// <param name="method">The string reader's kernel.</param>
     /// <returns>The checked statement.</returns>
     /// <remarks>A string record reads through <c>reader.Read&lt;TProfile&gt;(ref storage)</c> and a reused string through
     /// <c>reader.Read&lt;TProfile&gt;(current)</c>; scalar reads carry no argument and stay unchanged.</remarks>
-    private static string Strings(string line, string reader, string policy, string limit)
+    private static string Strings(string line, string reader, string policy, string limit, string method)
     {
-        string call = reader + ".Read<";
+        string call = reader + "." + method + "<";
         int search = 0;
         while ((search = line.IndexOf(call, search, StringComparison.Ordinal)) >= 0)
         {
@@ -295,9 +337,9 @@ internal static class InputReadRenderer
                 search += call.Length;
                 continue;
             }
-            string replacement = argument.StartsWith("ref ", StringComparison.Ordinal)
-                ? policy + ".ReadStringRecord<" + profile + ">(ref " + reader + ", " + argument + ", " + limit + ")"
-                : policy + ".ReadString<" + profile + ">(ref " + reader + ", " + argument + ", " + limit + ")";
+            string adapter = method == "ReadStrings" ? method :
+                argument.StartsWith("ref ", StringComparison.Ordinal) ? "ReadStringRecord" : "ReadString";
+            string replacement = policy + "." + adapter + "<" + profile + ">(ref " + reader + ", " + argument + ", " + limit + ")";
             line = line.Substring(0, search) + replacement + line.Substring(end + 1);
             search += replacement.Length;
         }
@@ -326,6 +368,11 @@ internal static class InputReadRenderer
         {
             var (target, kind) = redirect.Targets[index];
             bool compressed = kind == InputReadKind.Compressed;
+            if (!compressed && redirect.FrameworkType(target) is { } frameworkType)
+            {
+                methods.Add(FrameworkAdapter(target, frameworkType, redirect.Limits, scoped));
+                continue;
+            }
             PayloadRenderModel payload = null;
             if (kind == InputReadKind.UnionCase)
                 payload = redirect.UnionCase(target);
@@ -348,7 +395,7 @@ internal static class InputReadRenderer
                 if (trimmed.StartsWith("using ", StringComparison.Ordinal) && trimmed.EndsWith(";", StringComparison.Ordinal))
                     usings.Add(trimmed);
             }
-            methods.Add(Copy(source, target, redirect, compressed));
+            methods.Add(Copy(source, target, redirect, compressed, scoped));
         }
         payloadCopies = payloadWriter.Complete();
         if (methods.Count == 0)
@@ -363,6 +410,37 @@ internal static class InputReadRenderer
         file.Append(string.Join("\n", methods));
         file.Append("        }\n    }\n}\n");
         return file.ToString();
+    }
+
+    /// <summary>Renders the direct binary reader for a checked framework root without duplicating its runtime kernel.</summary>
+    /// <param name="target">The readable framework owner name.</param>
+    /// <param name="type">The normalized framework type key.</param>
+    /// <param name="limits">The assembly's frozen limits.</param>
+    /// <param name="scoped">Whether the consumer supports scoped reader parameters.</param>
+    /// <returns>The checked framework root method.</returns>
+    private static string FrameworkAdapter(string target, string type, InputLimits limits, bool scoped)
+    {
+        string modifier = scoped ? "scoped " : string.Empty;
+        string valueType = type switch
+        {
+            "bool" => type,
+            "bool[]" or "string" => type + "?",
+            "System.Collections.Generic.List<bool>" => "global::" + type + "?",
+            _ => "global::" + type,
+        };
+        string operation = type switch
+        {
+            "bool" => "value = " + Policy + ".ReadBoolean(ref reader)",
+            "System.DateOnly" => "value = " + Policy + ".ReadDateOnly(ref reader)",
+            "System.TimeOnly" => "value = " + Policy + ".ReadTimeOnly(ref reader)",
+            "string" => Policy + ".ReadStringRecord<TOptions>(ref reader, ref value, " + Literal(limits.String) + ")",
+            _ => Policy + ".ReadBooleans(ref reader, ref value, " + Literal(limits.Collection) + ")",
+        };
+        return "            [global::LuminPack.Attribute.Preserve]\n" +
+            "            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]\n" +
+            "            internal static void Read_" + target + "<TOptions>(" + modifier + "ref global::LuminPack.Core.LuminPackReader reader, " +
+            modifier + "ref " + valueType + " value)\n" +
+            "                where TOptions : struct, global::LuminPack.Option.ILuminPackOptions => " + operation + ";\n";
     }
 
     /// <summary>Opens a source writer only when a requested copy has a payload model.</summary>
@@ -428,8 +506,9 @@ internal static class InputReadRenderer
     /// <param name="target">The target's readable name.</param>
     /// <param name="redirect">The root's checked-copy context.</param>
     /// <param name="compressed">Whether the target's compressed operation is being copied.</param>
+    /// <param name="scoped">Whether the consumer supports scoped reader parameters.</param>
     /// <returns>The helper method.</returns>
-    private static string Copy(string source, string target, InputRedirect redirect, bool compressed)
+    private static string Copy(string source, string target, InputRedirect redirect, bool compressed, bool scoped)
     {
         int classStart = FindClass(source, "LuminRoots_" + target);
         int classOpen = source.IndexOf('{', classStart);
@@ -463,12 +542,12 @@ internal static class InputReadRenderer
         if (arrow >= 0 && (bodyOpen < 0 || arrow < bodyOpen))
         {
             int semicolon = container.IndexOf(';', arrow);
-            body = container.Substring(arrow + 2, semicolon - arrow - 1).Trim() + ";";
+            body = "                " + container.Substring(arrow + 2, semicolon - arrow - 1).Trim();
         }
         else
             body = container.Substring(bodyOpen + 1, Matching(container, bodyOpen, '{', '}') - bodyOpen - 1);
         // A shared record read freezes ordinary framing before projecting this root's input limits onto its statements.
-        if (body.StartsWith("Read<", StringComparison.Ordinal))
+        if (body.TrimStart().StartsWith("Read<", StringComparison.Ordinal))
         {
             var shared = GeneratedText.ReadMethods(source).FirstOrDefault(candidate => candidate.Owner == "LuminRoots_" + target &&
                 candidate.Name == "Read" && candidate.Generics.LastOrDefault() == "TLuminFraming");
@@ -482,8 +561,11 @@ internal static class InputReadRenderer
         string valueType = ValueType(parameters);
         var helper = new StringBuilder(1024);
         helper.Append("            [global::LuminPack.Attribute.Preserve]\n");
+        if (!compressed && target == "CultureInfo")
+            helper.Append("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]\n");
+        string modifier = scoped ? "scoped " : string.Empty;
         helper.Append(compressed ? "            internal static void ReadCompressed_" : "            internal static void Read_")
-            .Append(target).Append('<').Append(profile).Append(">(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref ")
+            .Append(target).Append('<').Append(profile).Append(">(").Append(modifier).Append("ref global::LuminPack.Core.LuminPackReader reader, ").Append(modifier).Append("ref ")
             .Append(valueType).Append(" value)\n");
         helper.Append("                where ").Append(profile).Append(" : struct, global::LuminPack.Option.ILuminPackOptions\n");
         helper.Append("            {\n");
@@ -522,6 +604,11 @@ internal static class InputReadRenderer
         {
             if (compressed)
                 return LuminPackExceptionHelper.ThrowInvalidOperation<string>("The compressed read of '" + target + "' requires a closed root body.");
+            // An array's layout-specific private storage types stay in its owner. Check its count at the current cursor
+            // before forwarding, including zero-width Packed arrays for which the input byte count bounds nothing.
+            if (redirect.Limits.Collection != int.MaxValue && valueType.EndsWith("[]", StringComparison.Ordinal))
+                helper.Append("                ").Append(Policy).Append(".PeekCollectionHeader(ref reader, out _, 0, ")
+                    .Append(Literal(redirect.Limits.Collection)).Append(");\n");
             helper.Append("                global::LuminPack.").Append(redirect.OwnerPrefix).Append(target)
                 .Append(".Read<").Append(profile).Append(">(ref reader, ref value);\n");
         }
@@ -533,16 +620,6 @@ internal static class InputReadRenderer
                     line = redirect.ApplyCompressedChild(line, target, Policy);
                 line = Project(redirect.Apply(line), redirect.Limits, Policy);
                 helper.Append(line).Append('\n');
-                // Forwarded Boolean arrays retain the fused validating copy used by the ordinary owner.
-                if (redirect.Limits.Collection != int.MaxValue &&
-                    line.IndexOf(ForwardedBooleanRead, StringComparison.Ordinal) is int booleanSite && booleanSite >= 0 &&
-                    line.EndsWith(");", StringComparison.Ordinal))
-                {
-                    int valueStart = booleanSite + ForwardedBooleanRead.Length;
-                    helper.Append(line, 0, booleanSite).Append(Policy).Append(".CheckLength(")
-                        .Append(line, valueStart, line.Length - valueStart - 2).Append(", ")
-                        .Append(Literal(redirect.Limits.Collection)).Append(");\n");
-                }
             }
         helper.Append("            }\n");
         if (!forward)

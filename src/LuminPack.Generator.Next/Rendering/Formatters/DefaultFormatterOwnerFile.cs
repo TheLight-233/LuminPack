@@ -25,6 +25,8 @@ internal static class DefaultFormatterOwnerFile
             return GenericUnion(set, model, operations);
         if (model.Definition == FormatterDefinitions.CompilerUnion)
             return CompilerUnionOwnerFile.Render(set, model, operations);
+        if (model.Definition == FormatterDefinitions.CollectionSubclass)
+            return CollectionSubclassOwnerFile.Render(set, model, operations);
         if (model.Definition == FormatterDefinitions.Array)
         {
             if (model.Rank > 1)

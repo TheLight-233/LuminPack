@@ -11,6 +11,7 @@ internal static class FormatterDefinitions
     internal const string Array = "$array";
     internal const string Object = "$object";
     internal const string Registered = "$registered";
+    internal const string CollectionSubclass = "$collection-subclass";
 
     /// <summary>A closed construction of a local generic Union, which forwards to its definition's generic Union roots; the
     /// formatter's <c>Underlying</c> holds the definition's root stem and the closed type arguments, separated by a bar.</summary>

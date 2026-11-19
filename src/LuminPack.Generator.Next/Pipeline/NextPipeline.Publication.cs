@@ -163,16 +163,17 @@ internal static partial class NextPipeline
                 if (snapshot.SharedInputs == null || !snapshot.SharedInputs.Matches(retained, roots, _options))
                     snapshot.SharedInputs = new SharedFormatterInputs(retained, roots, _options);
                 SharedFormatterSet formatters = snapshot.SharedInputs.Set;
-                var sources = NextPipeline.Render(_payloads, formatters, _options, _policy, snapshot, plan);
+                var sources = NextPipeline.Render(_payloads, formatters, _options, _policy, snapshot, plan, out var checkedFrameworkReads);
                 bool register = _options.RegisterMode != RegisterMode.Disabled;
                 bool intercept = _options.Interceptors && !_calls.IsEmpty;
                 var sharedRoots = register || intercept ? snapshot.SharedInputs.PublishedRoots : null;
                 if (register)
-                    AddFormatterRegistration(sources, _payloads, _calls, formatters, sharedRoots!, plan, _options, _policy);
+                    AddFormatterRegistration(sources, _payloads, _calls, formatters, sharedRoots!, plan, _options, _policy, checkedFrameworkReads);
                 // Compiler interception needs the host's location API; the IL rewriter binds the same entries after compilation.
                 if (intercept)
                 {
-                    string interceptors = InterceptorRenderer.Render(_calls, Catalog(_payloads, formatters, sharedRoots!, snapshot.SharedSources, _policy), _options.IlRewrite);
+                    string interceptors = InterceptorRenderer.Render(_calls, Catalog(_payloads, formatters, sharedRoots!,
+                        snapshot.SharedSources, _policy, checkedFrameworkReads), _options.IlRewrite, _options.RequireCompleteBinaryInput);
                     if (interceptors.Length != 0)
                         sources.Add(new GeneratedSource("LuminPackGen.Interceptors.g.cs", interceptors, GenerationKind.Binary));
                 }
@@ -301,11 +302,13 @@ internal static partial class NextPipeline
     /// <param name="set">The shared formatter requirements.</param>
     /// <param name="snapshot">The independently owned publication snapshot.</param>
     /// <param name="plan">The operations each payload and the shared owners keep.</param>
+    /// <param name="checkedFrameworkReads">Receives the framework owners whose roots apply the assembly's input policy.</param>
     /// <returns>The rendered source contributions or statement representation.</returns>
     // AggressiveOptimization is available in newer hosts but unnamed by netstandard2.0.
     [MethodImpl((MethodImplOptions)512)]
     private static List<GeneratedSource> Render(ImmutableArray<ModeledPayload> payloads, SharedFormatterSet set,
-        GeneratorOptions options, WirePolicy policy, PublicationSnapshot snapshot, OperationPlan plan)
+        GeneratorOptions options, WirePolicy policy, PublicationSnapshot snapshot, OperationPlan plan,
+        out HashSet<string>? checkedFrameworkReads)
     {
         var sources = new List<GeneratedSource>();
         var retained = new List<TypeModel>();
@@ -343,7 +346,10 @@ internal static partial class NextPipeline
         List<string>? sharedInputSources = null;
         Dictionary<string, string>? compressedChildren = null;
         HashSet<string>? unchangedUnboundedReads = null;
-        var trustedReads = TrustedReadReach.Create(retained);
+        bool checkCultureInfo = options.CheckCultureInfo &&
+            (Array.IndexOf(set.Owners ?? Array.Empty<string>(), FormatterRegistry.CultureInfo) >= 0 ||
+                set.FindFormatter(FormatterRegistry.CultureInfo) != null);
+        var trustedReads = TrustedReadReach.Create(retained, checkCultureInfo);
         Dictionary<string, (TypeModel Payload, GeneratedOperations Operations)>? checkedOwners = null;
         foreach (FormatterModel owner in set.GeneralOwners ?? Array.Empty<FormatterModel>())
         {
@@ -459,7 +465,7 @@ internal static partial class NextPipeline
         bool NeedsInputScope(TypeModel model) => model.Policy.Input == InputPolicy.Untrusted &&
             (model.Policy.Limits.Bounded || trustedReads?.Reaches(model) == true);
 
-        InputRedirect CreateRedirect(string readable, InputLimits limits)
+        InputRedirect CreateRedirect(string readable, InputLimits limits, bool framework = false)
         {
             if (copyable == null)
             {
@@ -512,7 +518,7 @@ internal static partial class NextPipeline
                         AddCompressedChild(owner.DeclaredType, child);
             }
             return new InputRedirect(readable, GeneratedNames.Extension(options.AssemblyName), limits, copyable,
-                limits.Bounded ? null : unchangedUnboundedReads, compressedChildren!);
+                limits.Bounded ? null : unchangedUnboundedReads, compressedChildren!, framework);
 
             void AddCompressedChild(string type, string child)
             {
@@ -530,6 +536,7 @@ internal static partial class NextPipeline
             Add(hint + ".InputPayloadReads.g.cs", payloadCopies, GenerationKind.Binary);
         }
 
+        checkedFrameworkReads = policy.Input == InputPolicy.Untrusted ? AddFrameworkReads() : null;
         var obsolete = new List<string>();
         foreach (string name in snapshot.Payloads.Keys)
             if (!seen.Contains(name))
@@ -539,9 +546,65 @@ internal static partial class NextPipeline
         Add("LuminPackGen.Registration.g.cs", SerializerRegistrationSource.Render(options), GenerationKind.Formatter);
         Add("LuminPackGen.FormatterDispatch.Options.g.cs", DispatchOptionsSource.Render(ProfileNames.Type(policy.Strings),
             policy.Strings.Encoding == StringEncoding.Utf8 ? 0 : 1, policy.Input == InputPolicy.Untrusted, policy.Limits.Input,
-            options.RegisterMode != RegisterMode.Disabled, ProfileNames.Type(policy.JsonInput)), GenerationKind.Formatter);
+            options.RegisterMode != RegisterMode.Disabled, ProfileNames.Type(policy.JsonInput), options.RequireCompleteBinaryInput), GenerationKind.Formatter);
         Add("LuminPackGen.Options.g.cs", ProfileSource.Render(retained, policy), GenerationKind.Formatter);
         return sources;
+
+        HashSet<string>? AddFrameworkReads()
+        {
+            InputRedirect? redirect = null;
+            bool bounded = policy.Limits.Collection != int.MaxValue || policy.Limits.String != int.MaxValue;
+            bool scopedOwners = bounded || checkCultureInfo;
+            var checkedReads = new HashSet<string>(StringComparer.Ordinal);
+            foreach (FormatterModel owner in set.GeneralOwners ?? Array.Empty<FormatterModel>())
+                if (owner.Definition is not (FormatterDefinitions.PayloadReference or FormatterDefinitions.GenericUnion))
+                    Request(owner.Type, temporal: owner.Supports("CanReadBinaryTemporalScalar"));
+            foreach (SequenceOwnerFact owner in set.SequenceOwners ?? Array.Empty<SequenceOwnerFact>())
+                Request(owner.DeclaredType);
+            foreach (DictionaryOwnerFact owner in set.DictionaryOwners ?? Array.Empty<DictionaryOwnerFact>())
+                Request(owner.DeclaredType);
+            foreach (string owner in set.Owners ?? Array.Empty<string>())
+                Request(owner);
+            foreach (string owner in set.Scalars ?? Array.Empty<string>())
+                Request(owner.Split('=')[0]);
+            if (options.KnownFormatters && options.RegisterMode != RegisterMode.Disabled)
+            {
+                Request("bool", registered: true);
+                if (policy.Limits.String != int.MaxValue)
+                    Request("string", registered: true);
+            }
+            if (redirect != null)
+            {
+                if (scopedOwners)
+                    AddCopies("LuminPackGen.Framework", redirect);
+                else
+                    Add("LuminPackGen.Framework.InputReads.g.cs", InputReadRenderer.RenderCopies(redirect, null!,
+                        Array.Empty<string>(), options.AvailableAliases, options.Net8, set, out _), GenerationKind.Binary);
+            }
+            return checkedReads.Count == 0 ? null : checkedReads;
+
+            void Request(string type, bool temporal = false, bool registered = false)
+            {
+                string key = GeneratedNames.PayloadKey(type);
+                if (!registered && (plan.Owners.For(key) & GeneratedOperations.BinaryRead) == 0)
+                    return;
+                string readable = ReadableTypeName.Of(key);
+                bool special = InputReadRenderer.HasFrameworkAdapter(key, policy.Limits, temporal);
+                if (!special && !bounded &&
+                    !(checkCultureInfo && key.IndexOf(FormatterRegistry.CultureInfo, StringComparison.Ordinal) >= 0))
+                    return;
+                redirect ??= scopedOwners
+                    ? CreateRedirect(string.Empty, policy.Limits, framework: true)
+                    : new InputRedirect(string.Empty, GeneratedNames.Extension(options.AssemblyName), policy.Limits, null!, null!, null!, framework: true);
+                if (special)
+                {
+                    if (checkedReads.Add(readable))
+                        redirect.RequestFrameworkAdapter(readable, key);
+                }
+                else if (copyable!.Contains(readable) && !inputCandidates!.ContainsKey(readable) && checkedReads.Add(readable))
+                    redirect.Request(readable, InputReadKind.Ordinary);
+            }
+        }
 
         void Add(string hint, string text, GenerationKind family)
         {
@@ -568,9 +631,11 @@ internal static partial class NextPipeline
     /// <param name="shared">The already rendered shared formatter sources.</param>
     /// <param name="sharedRoots">The shared roots with unambiguous names.</param>
     /// <param name="assemblyPolicy">The consuming assembly's default wire policy.</param>
+    /// <param name="checkedFrameworkReads">The framework owners whose roots apply the assembly's input policy.</param>
     /// <returns>The closed operation catalog.</returns>
     private static RootCatalog Catalog(ImmutableArray<ModeledPayload> payloads, SharedFormatterSet set,
-        HashSet<string> sharedRoots, KeyValuePair<string, string>[] shared, WirePolicy assemblyPolicy)
+        HashSet<string> sharedRoots, KeyValuePair<string, string>[] shared, WirePolicy assemblyPolicy,
+        HashSet<string>? checkedFrameworkReads)
     {
         var entries = new List<KeyValuePair<string, RootEntry>>();
         foreach (ModeledPayload payload in payloads)
@@ -600,6 +665,6 @@ internal static partial class NextPipeline
             foreach (Match match in Regex.Matches(source.Value, @"static void MeasureRecord_(\w+?)(?:<TLuminProfile>)?\(", RegexOptions.CultureInvariant))
                 measures.Add(match.Groups[1].Value);
         return new RootCatalog(entries, sharedRoots, set.Extension, ProfileNames.Type(assemblyPolicy.Strings),
-            ProfileNames.Type(assemblyPolicy.JsonInput), measures);
+            ProfileNames.Type(assemblyPolicy.JsonInput), measures, checkedFrameworkReads);
     }
 }

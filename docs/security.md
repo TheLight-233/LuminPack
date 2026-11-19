@@ -22,7 +22,9 @@ Generated binary reads treat their input as untrusted unless a declaration says 
 
 - **Bounds.** The Reader checks every load against the input in Debug and Release. A collection or string count can never require more bytes than remain, so allocations stay proportional to the input actually consumed.
 - **Object markers.** An object's member marker must equal its declared member count or the null marker.
-- **Boolean domains.** Boolean members, Boolean arrays and `List<bool>` reject every storage value except `0` and `1`. Bulk storage uses bounded vector loads on modern .NET and word groups on every target.
+- **Boolean domains.** Standalone Booleans, Boolean members, Boolean arrays and `List<bool>` reject every storage value except `0` and `1`. Bulk storage uses bounded vector loads on modern .NET and word groups on every target.
+- **Date and time domains.** Standalone `DateOnly` and `TimeOnly` binary reads reject values outside the framework types' representable ranges.
+- **Culture names.** Binary `CultureInfo` reads accept names enumerated by the current platform, the invariant culture and supported compatibility aliases. The allowed name is checked before framework resolution, so input cannot grow the framework culture cache beyond this finite set.
 - **Version-tolerant records.** The reader checks the form, active ordinal, descriptor table range, name-key uniqueness and width codes. A known member requires the expected complete descriptor. A length-prefixed member is constrained to its checked payload range and must consume that range before it is published.
 - **Reference tracking.** A back reference must name an object already read, of the type expected at that position. The selected Object or VersionTolerant reader checks the first occurrence's record body.
 - **Unions.** An undeclared tag is rejected. Case payloads are read with the same checks, under the enclosing root's limits.
@@ -43,6 +45,8 @@ public partial class Request
 `MaxCollectionLength` bounds each binary collection and `MaxStringLength` each binary string, in UTF-16 code units. `MaxDepth` bounds the nesting of recursive values; the generator counts depth only in recursive types, because every other graph has a finite static depth. Without it, recursive reads keep their stack guard. `MaxInputBytes` caps the input accepted by the generated facades, including stream and sequence staging. An unbounded limit is a constant the JIT removes, so undeclared limits cost nothing. Limits must be nonnegative; zero rejects any value requiring that resource. Assembly limits are inherited and explicit type limits override them. Nested types read through a root use the root's limits; a type read through a trusted parent uses its own. `MaxDecompressedBytes`, `MaxAllocationBytes`, `MaxObjectCount` and `MaxReadWork` are obsolete and have no effect. Safety declarations on individual members are rejected.
 
 A declaration that explicitly selects hostile input, with `UntrustedData = true` or any `Max*` limit, also reads JSON with the strict grammar (`ValidateJsonSyntax`) and, when declared, the `MaxDepth` document depth, in addition to `MaxInputBytes`. Without such a declaration JSON keeps the declared profile. Collection and string limits apply to binary records; JSON values are bounded by the document size.
+
+For inputs that contain exactly one binary record, `[assembly: LuminPackOption(RequireCompleteBinaryInput = true)]` makes value-returning document reads reject trailing bytes after decoding. The option is independent of `UntrustedData`. Use a `ref` overload or an advancing reader to consume one record from concatenated input.
 
 Declare `UntrustedData = false` on an assembly or type to read trusted data with the unchecked reads and the lenient JSON grammar. A trusted parent can contain an untrusted child; the child keeps its own checks.
 

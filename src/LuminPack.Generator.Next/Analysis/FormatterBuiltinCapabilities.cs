@@ -71,6 +71,9 @@ internal static class FormatterBuiltinCapabilities
     internal static void Capture(Compilation compilation, ITypeSymbol type, List<string> result)
     {
         string display = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        if (display is "global::System.DateOnly" or "global::System.TimeOnly" && HasCheckedBinaryTemporalScalar(compilation, type))
+            result.Add("CanReadBinaryTemporalScalar");
+
         if (display == "global::System.DateOnly")
         {
             var chars = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1")?.Construct(compilation.GetSpecialType(SpecialType.System_Char));
@@ -143,6 +146,35 @@ internal static class FormatterBuiltinCapabilities
             if (FormatterRuntimeTraits.CanMarkBitArrayRefilled(compilation))
                 result.Add("CanMarkBitArrayRefilled");
         }
+    }
+
+    /// <summary>Checks both guarded standalone temporal read signatures in the referenced Core asset.</summary>
+    /// <param name="compilation">The consuming compilation and runtime metadata.</param>
+    /// <param name="type">The time or date payload type.</param>
+    /// <returns>Whether the advancing and fixed read operations are available.</returns>
+    private static bool HasCheckedBinaryTemporalScalar(Compilation compilation, ITypeSymbol type)
+    {
+        var policy = compilation.GetTypeByMetadataName("LuminPack.Security.LuminPackInputPolicy");
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader");
+        if (policy is not { IsStatic: true, DeclaredAccessibility: Accessibility.Public } || reader is null)
+            return false;
+
+        bool advancing = false, fixedInput = false;
+        foreach (var member in policy.GetMembers("Read" + type.Name))
+        {
+            if (member is not IMethodSymbol { IsStatic: true, Arity: 0, DeclaredAccessibility: Accessibility.Public,
+                    ReturnsByRef: false, ReturnsByRefReadonly: false } method)
+                continue;
+            var parameters = method.Parameters;
+            if (parameters.Length == 1 && parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(parameters[0].Type, reader) &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, type))
+                advancing = true;
+            if (parameters.Length == 2 && parameters[0] is { RefKind: RefKind.Ref, Type.SpecialType: SpecialType.System_Byte } &&
+                parameters[1].RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(parameters[1].Type, type) &&
+                method.ReturnType.SpecialType == SpecialType.System_Int32)
+                fixedInput = true;
+        }
+        return advancing && fixedInput;
     }
 
     /// <summary>Checks the referenced runtime for a profile-aware comparison of two decoded JSON names.</summary>

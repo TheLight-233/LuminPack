@@ -49,7 +49,7 @@ internal static partial class TypeModelFactory
         /// <summary>Validates constants before any generated upper bound can rely on their encoding widths.</summary>
         /// <param name="symbol">An assembly, type, field or property declaration.</param>
         /// <param name="diagnostics">Receives errors at the original attribute syntax.</param>
-        private static void ValidateCompiledOptions(ISymbol symbol, ref DeclarationDiagnosticBag diagnostics)
+        private void ValidateCompiledOptions(ISymbol symbol, ref DeclarationDiagnosticBag diagnostics)
         {
             foreach (var attribute in symbol.GetAttributes().Where(attribute => attribute.AttributeClass?.ToDisplayString() == OptionAttribute))
                 foreach (var argument in attribute.NamedArguments)
@@ -72,6 +72,10 @@ internal static partial class TypeModelFactory
                         error = "the value must be a declared LuminPackStructLayout member.";
                     if (argument.Key == "StructLayout" && symbol is not (IAssemblySymbol or INamedTypeSymbol { TypeKind: TypeKind.Struct }))
                         error = "StructLayout applies only to assembly and struct declarations.";
+                    if (argument.Key is "FramedGroupings" or "RequireCompleteBinaryInput" && symbol is not IAssemblySymbol)
+                        error = argument.Key + " applies only to assembly declarations.";
+                    if (argument.Key == "IncludeCollectionBase" && (symbol is not INamedTypeSymbol declaration || !CanIncludeCollectionBase(declaration)))
+                        error = "IncludeCollectionBase applies to a concrete LuminPackable Object class with a closed List<T> base and no reference tracking.";
                     if (argument.Key is "WideTag" or "SingleImplementation" && symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Interface })
                         error = "Union contract switches apply only to class and interface declarations.";
                     if (argument.Key == "ReuseRectangularArraySlots" && symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class })

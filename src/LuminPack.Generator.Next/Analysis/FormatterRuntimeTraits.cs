@@ -545,4 +545,30 @@ internal static class FormatterRuntimeTraits
                 method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, bits)) == true;
     }
+
+    /// <summary>Checks the optional factory for lookups with a null key.</summary>
+    /// <param name="compilation">The consuming compilation and runtime references.</param>
+    /// <returns>Whether the complete factory signature is available.</returns>
+    internal static bool CanCreateLookupWithNullKey(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminPackLookup`2");
+        var lookup = compilation.GetTypeByMetadataName("System.Linq.ILookup`2");
+        var grouping = compilation.GetTypeByMetadataName("System.Linq.IGrouping`2");
+        var dictionary = compilation.GetTypeByMetadataName("System.Collections.Generic.Dictionary`2");
+        if (owner is null || lookup is null || grouping is null || dictionary is null)
+            return false;
+
+        var keyType = owner.TypeParameters[0];
+        var elementType = owner.TypeParameters[1];
+        var groupType = grouping.Construct(keyType, elementType);
+        var lookupType = lookup.Construct(keyType, elementType);
+        var dictionaryType = dictionary.Construct(keyType, groupType);
+        return owner.GetMembers("CreateWithNullKey").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: true, Arity: 0, DeclaredAccessibility: Accessibility.Public, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+            method.Parameters.Length == 3 && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+            SymbolEqualityComparer.Default.Equals(method.ReturnType, lookupType) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, dictionaryType) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, groupType) &&
+            method.Parameters[2].Type.SpecialType == SpecialType.System_Int32);
+    }
 }

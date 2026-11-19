@@ -35,6 +35,20 @@ internal static class GeneratorOptionsFactory
         return RegisterMode.Enabled;
     }
 
+    /// <summary>Reads a Boolean option declared on the consuming assembly.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <param name="option">The named option to read.</param>
+    /// <returns>Whether the assembly enables the option.</returns>
+    private static bool AssemblySwitch(Compilation compilation, string option)
+    {
+        foreach (AttributeData attribute in compilation.Assembly.GetAttributes())
+            if (attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOptionAttribute")
+                foreach (var argument in attribute.NamedArguments)
+                    if (argument.Key == option && argument.Value.Value is true)
+                        return true;
+        return false;
+    }
+
     /// <summary>Reads the cursor field type from the selected Core reference.</summary>
     /// <param name="compilation">The consuming compilation.</param>
     /// <returns>The runtime cursor type or null when the runtime is unavailable.</returns>
@@ -82,8 +96,20 @@ internal static class GeneratorOptionsFactory
             readOnlyDictionaryRefill: FormatterConcurrentTraits.HasReadOnlyDictionaryRefill(compilation),
             concurrentDictionaryRefill: FormatterConcurrentTraits.HasConcurrentDictionaryRefill(compilation),
             concurrentStackSeed: FormatterConcurrentTraits.HasConcurrentStackSeed(compilation),
-            binaryStringPairReader: net8 && !unity && HasBinaryStringPairReader(compilation));
+            binaryStringPairReader: net8 && !unity && HasBinaryStringPairReader(compilation),
+            framedGroupings: AssemblySwitch(compilation, "FramedGroupings"), checkCultureInfo: HasCheckedCultureResolver(compilation),
+            requireCompleteBinaryInput: AssemblySwitch(compilation, "RequireCompleteBinaryInput"));
     }
+
+    /// <summary>Checks that the selected Core exposes the checked culture resolver.</summary>
+    /// <param name="compilation">The compilation binding the referenced Core.</param>
+    /// <returns>Whether the generated call can bind to the resolver.</returns>
+    private static bool HasCheckedCultureResolver(Compilation compilation) =>
+        compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCultureInfoInput") is { DeclaredAccessibility: Accessibility.Public } input &&
+        input.GetMembers("ResolveCulture").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 0 &&
+            method.DeclaredAccessibility == Accessibility.Public && !method.ReturnsByRef && !method.ReturnsByRefReadonly &&
+            method.ReturnType.ToDisplayString() == "System.Globalization.CultureInfo" && method.Parameters.Length == 1 &&
+            method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type.SpecialType == SpecialType.System_String);
 
     /// <summary>Checks the complete shape of the optional binary reader entry.</summary>
     /// <param name="compilation">The compilation binding the referenced Core.</param>

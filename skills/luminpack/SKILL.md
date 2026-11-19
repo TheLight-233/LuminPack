@@ -59,6 +59,7 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 - Binary and JSON are separate protocols; never mix their outputs.
 - Optional Unity native-owner codecs remain binary-only. For precompiled `LuminPack.Unity` builds against Unity 6000.2 or later, pass `-p:DefineConstants=UNITY_6000_2_OR_NEWER` to enable public Span key APIs; Unity source integration supplies it automatically. Retained output and warmed scratch pools avoid temporary managed allocations for modern curve/gradient writes and reuse reads. Earlier engines still allocate key arrays for curve reads and gradient operations; pool misses can allocate on modern engines. See [Unity version limits](../../docs/unity.md#native-owner-scratch-and-unity-versions).
 - Default strings are UTF-16 with length prefixes. Reader and writer must use the same options (attribute declarations or explicit profile).
+- Use `[assembly: LuminPackOption(FramedGroupings = true)]` at both binary endpoints to round-trip `IGrouping` keys whose encoded first byte is `FF`, including groups in `ILookup`. The default preserves the key-first wire layout. JSON preserves null-key groups without this setting.
 - Binary is little-endian. Raw unmanaged structs are copied with padding unless `StructLayout` says otherwise.
 - Next class/interface binary Unions use four-byte FNV-1a hashes of qualified case names. Explicit numeric tags remain JSON case IDs. WideTag controls the existing numeric header of explicitly registered cases. Names are part of the binary schema. See [polymorphism](../../docs/polymorphism.md).
 - There is **no runtime options object**. Options are `[LuminPackOption(...)]` declarations or an explicit payload and profile, such as `Serialize<Message, LuminPackUtf8LengthOptions>(value)`.
@@ -102,6 +103,7 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 | Same bytes on 32-bit and 64-bit | `[LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]` on the struct or assembly |
 | UTF-8 strings | `[LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8)]` or the `LuminPackUtf8LengthOptions` profile |
 | Hostile input | Checked reads are the default; add `[LuminPackOption(MaxInputBytes = ..., MaxCollectionLength = ..., MaxDepth = ...)]` limits on the root type or assembly |
+| Require a complete binary record | `[assembly: LuminPackOption(RequireCompleteBinaryInput = true)]` rejects trailing bytes at value-returning binary document reads; use `ref` or advancing reads for concatenated records |
 | Trusted data only | `[LuminPackOption(UntrustedData = false)]` restores unchecked reads |
 | Hand-written format | `[LuminPackable(GeneratorType.Custom)]` with static `Serialize`/`Deserialize` |
 | Generated code selection | Automatic: declared model graphs plus statically required operations; no generation mode setting |
@@ -118,6 +120,9 @@ For ordinary objects with `[LuminPackPoolRent]`, binary and JSON reads without `
 - Don't use `$type`, `$value`, `$id`, `$ref` as JSON member names.
 - `NaN`/infinity cannot be written to JSON.
 - `DateOnly`, `TimeOnly`, `Int128` and `UInt128` use JSON strings: round-trip dates/times and invariant decimal integers. Modern Core assets expose typed `LuminPackJsonWriter.Write` / `Write<TOptions>` overloads that avoid intermediate strings. Generated code selects them from the referenced Core API; older assets automatically retain their text conversion fallback.
+- `Index` writes a JSON integer. From-end indexes use the bitwise complement of the value, so `^0` is `-1`. `Range` writes an array of its start and end indexes.
+- Apply `[LuminPackOption(IncludeCollectionBase = true)]` to an ordinary `[LuminPackable]` class with a closed `List<T>` base to include inherited elements after the declared binary members or in the JSON `$items` property. Select the same option at both binary endpoints.
+- A closed source subclass of `List<T>` or `SortedDictionary<TKey, TValue>` can use its base formatter when it has an accessible parameterless constructor and adds no instance storage. Explicitly registered formatters take precedence.
 - Under NativeAOT, reading a non-null `System.Type` throws `PlatformNotSupportedException`.
 - A `Custom` type used as a member of another model needs `[LuminPackableObject]` on that member.
 - `[LuminPackBounded(n)]` is a promise; a wrong bound can write past the buffer.

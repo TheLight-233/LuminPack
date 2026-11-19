@@ -294,6 +294,10 @@ internal static class FormatterCapabilities
             (named.TypeArguments[1].SpecialType != SpecialType.System_String ||
                 FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteStrings", named.TypeArguments[1])))
             result.Add("CopyFrameworkGrouping");
+        if (definition == "System.Linq.ILookup" &&
+            (!named.TypeArguments[0].IsValueType || named.TypeArguments[0] is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T }) &&
+            FormatterRuntimeTraits.CanCreateLookupWithNullKey(compilation))
+            result.Add("CreateLookupWithNullKey");
 
         if (definition == "System.Collections.Generic.HashSet")
         {

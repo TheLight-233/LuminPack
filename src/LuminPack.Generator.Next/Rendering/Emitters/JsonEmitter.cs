@@ -243,7 +243,7 @@ internal static class JsonEmitter
             body.Add("}");
             body.Add("");
         }
-        if (model.Members.Length == 0)
+        if (model.Members.Length == 0 && model.CollectionBase == null)
         {
             body.Add("writer.WriteObjectStart<" + Profile + ">();");
             body.Add("writer.WriteObjectEnd<" + Profile + ">();");
@@ -340,6 +340,13 @@ internal static class JsonEmitter
             }
             body.Add("}");
             body.Add("");
+        }
+        if (model.CollectionBase != null)
+        {
+            if (model.Members.Length == 0)
+                body.Add("writer.WriteObjectStart<" + Profile + ">();");
+            body.Add("writer.WritePropertyName<" + Profile + ">(\"$items\");");
+            body.Add(model.CollectionBaseOwner + ".Write<" + Profile + ">(ref writer, (" + model.CollectionBase + ")" + value + ");");
         }
         body.Add("writer.WriteObjectEnd<" + Profile + ">();");
         return body;
@@ -566,6 +573,11 @@ internal static class JsonEmitter
                 body.Add("ref var reuseLocal = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " +
                     (model.IsStruct ? "value" : "value!") + ");");
         }
+        if (model.CollectionBase != null)
+        {
+            body.Add(model.CollectionBase + "? luminCollectionBaseItems = " + (fresh ? "result" : "value") + ";");
+            body.Add("bool luminCollectionBaseSeen = false;");
+        }
         body.Add("reader.TryConsumeObjectStart<" + Profile + ">();");
         body.Add("bool isUtf8 = default(" + Profile + ").JsonByteCount(1) == 1;");
         body.Add("int nextPropertyIndex = 0;");
@@ -656,6 +668,17 @@ internal static class JsonEmitter
             caseLines.Add("}");
             caseLines.Add("");
         }
+        if (model.CollectionBase != null)
+        {
+            caseLines.Add("case " + members.Length.ToString(CultureInfo.InvariantCulture) + ":");
+            caseLines.Add("{");
+            caseLines.Add("if (reader.IsNull())");
+            caseLines.Add("\t" + w.A("LuminPackExceptionHelper") + ".ThrowInvalidCollection();");
+            caseLines.Add(model.CollectionBaseOwner + ".Read<" + Profile + ">(ref reader, ref luminCollectionBaseItems!);");
+            caseLines.Add("luminCollectionBaseSeen = true;");
+            caseLines.Add("break;");
+            caseLines.Add("}");
+        }
         caseLines.Add("default:");
         caseLines.Add("\treader.Skip<" + Profile + ">();");
         caseLines.Add("\tbreak;");
@@ -728,6 +751,14 @@ internal static class JsonEmitter
             body.Add("{");
             foreach (var member in members)
                 body.Add((model.Mirror == null || !members.Any(member => member.Mirrored) ? Value(model) : "reuseLocal.") + member.Name + " = " + Camel(member.Name) + "Temp!;");
+            body.Add("}");
+        }
+
+        if (model.CollectionBase != null)
+        {
+            body.Add("if (luminCollectionBaseSeen)");
+            body.Add("{");
+            BinaryEmitter.AddCollectionBaseRefill(body, model.CollectionBase, w);
             body.Add("}");
         }
 
@@ -946,6 +977,14 @@ internal static class JsonEmitter
         string element = utf8 ? "byte" : "char";
         w.Line("internal static int GetJsonPropertyIndex" + (utf8 ? "Utf8" : "Utf16") + "(global::System.ReadOnlySpan<" + element + "> name)");
         var body = new List<string>();
+        if (model.CollectionBase != null)
+        {
+            const string items = "$items";
+            body.Add("if (name.Length == " + items.Length.ToString(CultureInfo.InvariantCulture) + " && " +
+                string.Join(" && ", items.Select((unit, index) => "name[" + index.ToString(CultureInfo.InvariantCulture) + "] == " +
+                    (utf8 ? "(byte)" : string.Empty) + "'" + unit + "'")) + ")");
+            body.Add("\treturn " + members.Length.ToString(CultureInfo.InvariantCulture) + ";");
+        }
         body.Add(small ? "switch (name.Length)" : "switch (" + JsonNameDispatch.HashExpression(utf8) + ")");
         body.Add("{");
         var groups = candidates.Select(item => (item.Name, item.Index, item.Table, Bytes: Encoding.UTF8.GetBytes(item.Name)))

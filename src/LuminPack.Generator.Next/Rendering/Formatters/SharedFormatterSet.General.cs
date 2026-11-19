@@ -30,6 +30,8 @@ internal readonly partial struct SharedFormatterSet
     {
         if (!payloads.Add(model.Identity.GlobalName))
             return;
+        if (model is RecordModel { CollectionBase: { } collectionBase })
+            CollectFormatter(collectionBase, formatters, payloads);
         foreach (MemberModel member in model.Members)
         {
             if (member is SpecialMember { Formatter: { } formatter })

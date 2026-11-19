@@ -12,7 +12,14 @@ internal static class CultureInfoOwnerFile
     /// <param name="set">The required owners and the extension container.</param>
     /// <param name="operations">The operations requested for this owner.</param>
     /// <returns>The complete source.</returns>
-    internal static string Render(SharedFormatterSet set, GeneratedOperations operations)
+    internal static string Render(SharedFormatterSet set, GeneratedOperations operations) => Render(set, operations, checkInput: false);
+
+    /// <summary>Renders the owner with a checked name resolver for untrusted binary input.</summary>
+    /// <param name="set">The required owners and extension container.</param>
+    /// <param name="operations">The operations requested for this owner.</param>
+    /// <param name="checkInput">Whether the binary read must check culture names.</param>
+    /// <returns>The complete source.</returns>
+    internal static string Render(SharedFormatterSet set, GeneratedOperations operations, bool checkInput)
     {
         using var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
@@ -29,6 +36,7 @@ internal static class CultureInfoOwnerFile
         string extension = set.Extension!;
         string cache = "global::LuminPack.Code.LuminPackCultureInfoCache";
         string resolve = set.CultureInfoReuse ? cache + ".ResolveCulture" : "global::System.Globalization.CultureInfo.GetCultureInfo";
+        string resolveBinary = checkInput ? "global::LuminPack.Code.LuminPackCultureInfoInput.ResolveCulture" : resolve;
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class LuminRoots_CultureInfo", "internal static partial class Binary_" + extension + "_CultureInfo",
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -155,7 +163,7 @@ internal static class CultureInfoOwnerFile
                     else
                         w.Line("var name = value?.GetType() == typeof(global::System.Globalization.CultureInfo) && value.IsReadOnly ? value.Name : null;");
                     w.Line("var str = reader.Read<TLuminProfile>(name);");
-                    w.Line("value = " + resolve + "(str ?? string.Empty);");
+                    w.Line("value = " + resolveBinary + "(str ?? string.Empty);");
                     w.Close();
                     w.Blank();
                     break;

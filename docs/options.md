@@ -29,6 +29,7 @@ public partial class Message
 | --- | --- | --- |
 | `StringEncoding` | `UTF16` | Binary string encoding, per member. For JSON, the encoding of the whole document, chosen by its root type. |
 | `StringRecording` | `Length` | Fixed-width length headers, opt-in `VarInt` headers, or `Token` (terminated; `null` and `""` both read back as `""`). |
+| `FramedGroupings` | `false` | Next assembly option for unambiguous binary `IGrouping<TKey, TElement>` records, including groups in an `ILookup<TKey, TElement>`. |
 | `MaxJsonDepth` | `1024` | JSON nesting limit; zero or less disables it. |
 | `ValidateJsonSyntax` | `false` | Strict JSON grammar checking. Turn it on for JSON from outside sources. |
 | `StandardFormat` | `"G"` | A constant handed to explicit formatted and `Custom` kernels. It does not change built-in number or date formats. |
@@ -38,10 +39,21 @@ public partial class Message
 | `ReuseRectangularArraySlots` | `true` | Next reuses existing objects in binary rank-two arrays on .NET 8 and later. Set it to `false` directly on the ordinary object element class to replace the array. See [object matrix reuse](reuse.md#binary-object-matrix-reuse). |
 | `StructLayout` | `Tagged` | Storage of unmanaged structs; see below. Only valid on assemblies and structs. |
 | `UntrustedData` and limits | on, limits unbounded | Checked reads for untrusted input; declare limits for hostile input; see [Security](security.md). |
+| `RequireCompleteBinaryInput` | `false` | Assembly only. Binary document reads that return a value reject trailing bytes. |
 
 Binary data may mix encodings member by member, but the writer and reader must use the same declarations. JSON encoding, depth and syntax checking always apply to a complete document.
 
 JSON property names use encoding-specific, generated [name lookups](json-name-lookup.md); hashes never replace exact name comparison.
+
+## Complete binary input
+
+Use `[assembly: LuminPackOption(RequireCompleteBinaryInput = true)]` to require one complete binary record in each `Deserialize<T>` or `DeserializeAsync<T>` call that returns a value. This applies to spans, sequences, reusable buffers and streams, including calls with an explicit operation profile. A successful decode followed by trailing bytes throws `InvalidDataException`. The `ref` overloads still return the bytes consumed by one record, and advancing readers still leave the cursor after that record.
+
+## Binary grouping framing
+
+Use `[assembly: LuminPackOption(FramedGroupings = true)]` in projects that need to distinguish a null grouping from a present grouping whose key begins with the byte `FF`. This includes null string keys under the default length profile and raw byte keys with the value `255`. Each present grouping starts with `00`, followed by the key and element sequence. A null grouping is one byte `FF`.
+
+Configure the same option in the assemblies that generate both endpoints, including when a grouping is nested or part of a lookup. Existing binary data uses the default key-first layout if written without this option. The string profile continues to select the key's encoding, including `Token`'s shared representation for null and empty strings. JSON needs no option to preserve null-key groups.
 
 ## Union contract switches
 

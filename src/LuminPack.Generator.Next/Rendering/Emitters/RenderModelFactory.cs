@@ -118,7 +118,7 @@ internal static class RenderModelFactory
             trackReferences: model.Policy.TrackReferences, referenceConstruction: record?.ReferenceConstruction!,
             generatedPropertyHeads: model.Policy.TrackReferences && options.GeneratedJsonPropertyWriter && options.CSharpVersion >= 1100,
             sequenceBase: record?.SequenceBase!, sequenceElement: record?.SequenceElement!, scalarHeader: record?.ScalarHeader ?? false,
-            stringPairs: !json && record?.StringPairs == true);
+            stringPairs: !json && record?.StringPairs == true, collectionBase: record?.CollectionBase?.Type!);
     }
 
     /// <summary>Maps a Union root when its declared profile, slots, cases and framing are the ones the direct Union emitters
@@ -459,7 +459,7 @@ internal static class RenderModelFactory
     /// <summary>Accepts the expandable element record shapes the direct emitters write in place.</summary>
     /// <param name="element">The element render model.</param>
     /// <returns>Whether the element's complete record body expands in a loop.</returns>
-    internal static bool Covered(PayloadRenderModel element) => !element.IsStruct && element.Version == null &&
+    internal static bool Covered(PayloadRenderModel element) => !element.IsStruct && element.Version == null && element.CollectionBase == null &&
         element.ConstructorArguments == null && element.Mirror == null && !element.HasCallbacks && element.Rent == null &&
         !element.MixedRecord && element.Members.Length != 0 &&
         element.Members.All(member => !member.Mirrored && !(member.Kind == RenderMemberKind.Dictionary && member.Dictionary.Pair) &&

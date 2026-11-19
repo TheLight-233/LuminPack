@@ -48,6 +48,9 @@ internal sealed class RootEntry
     /// <summary>Whether the payload's own roots publish its exact record measure.</summary>
     internal readonly bool Measured;
 
+    /// <summary>Whether a framework root reads under the assembly's frozen input policy.</summary>
+    internal readonly bool CheckedFrameworkRead;
+
     /// <summary>Describes a published root.</summary>
     /// <param name="readable">The payload's readable name.</param>
     /// <param name="declaredProfile">The effective declaration profile.</param>
@@ -60,9 +63,12 @@ internal sealed class RootEntry
     /// <param name="rootArguments">The root's closed type arguments before the profile.</param>
     /// <param name="genericUnion">Whether the entry describes an open Union definition.</param>
     /// <param name="measured">Whether the root has an exact record measurement.</param>
+    /// <param name="checkedFrameworkRead">Whether the framework binary read has a checked entry.</param>
     internal RootEntry(string readable, string declaredProfile, bool binary, bool json, string? owner = null, int? limit = null,
-        string? jsonReadProfile = null, string? rootName = null, string rootArguments = "", bool genericUnion = false, bool measured = false)
+        string? jsonReadProfile = null, string? rootName = null, string rootArguments = "", bool genericUnion = false, bool measured = false,
+        bool checkedFrameworkRead = false)
     {
+        CheckedFrameworkRead = checkedFrameworkRead;
         Measured = measured;
         GenericUnion = genericUnion;
         RootName = rootName ?? readable;
@@ -85,8 +91,9 @@ internal static class InterceptorRenderer
     /// <param name="calls">The bound facade calls.</param>
     /// <param name="roots">The published roots keyed by payload spelling.</param>
     /// <param name="il">Whether the installed IL postprocessor binds the calls.</param>
+    /// <param name="requireCompleteBinaryInput">Whether binary document reads returning a value must consume all input.</param>
     /// <returns>The interceptor source, or an empty string when no root binds.</returns>
-    internal static string Render(IReadOnlyList<SerializerCallModel> calls, RootCatalog roots, bool il)
+    internal static string Render(IReadOnlyList<SerializerCallModel> calls, RootCatalog roots, bool il, bool requireCompleteBinaryInput = false)
     {
         var writer = new StringBuilder();
         var documentBodies = new Dictionary<(SerializerApi Api, EntryShape Shape, bool Measured), string>();
@@ -103,7 +110,8 @@ internal static class InterceptorRenderer
                 writer.Append("        ").Append(location).Append('\n');
             string profile = call.OpenProfile ? "TLuminProfile" :
                 call.Json && !call.Writes ? root.JsonReadProfile ?? root.DeclaredProfile : root.DeclaredProfile;
-            Interceptor(writer, call, root, profile, index++, root.Owner == null ? root.Measured : roots.Measured.Contains(root.RootName), documentBodies);
+            Interceptor(writer, call, root, profile, index++, root.Owner == null ? root.Measured : roots.Measured.Contains(root.RootName),
+                documentBodies, requireCompleteBinaryInput);
         }
         return index == 0 ? string.Empty : writer.Append("    }\n}\n").ToString();
     }
@@ -184,8 +192,9 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     /// <param name="index">The unique interceptor index.</param>
     /// <param name="measured">Whether the root has an exact record measurement.</param>
     /// <param name="documentBodies">The document templates already assembled for this publication.</param>
+    /// <param name="requireCompleteBinaryInput">Whether binary document reads returning a value must consume all input.</param>
     private static void Interceptor(StringBuilder w, SerializerCallModel bound, RootEntry root, string profile, int index, bool measured,
-        Dictionary<(SerializerApi Api, EntryShape Shape, bool Measured), string> documentBodies)
+        Dictionary<(SerializerApi Api, EntryShape Shape, bool Measured), string> documentBodies, bool requireCompleteBinaryInput)
     {
         SerializerApi api = bound.Api;
         string type = bound.Payload;
@@ -299,6 +308,8 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         string target = root.Owner != null
             ? root.Owner + (bound.Writes ? ".Write" : ".Read") + "<" + profile + ">"
             : "LuminPackSerializer." + operation + "_" + root.RootName + "<" + root.RootArguments + profile + ">";
+        if (root.CheckedFrameworkRead && !bound.Writes && !bound.Json)
+            target = "LuminPackSerializer." + Emitters.InputRedirect.FrameworkHelper + ".Read_" + root.Readable + "<" + profile + ">";
         if (api is SerializerApi.SerializeWriter or SerializerApi.DeserializeReader or SerializerApi.SerializeJsonWriter or SerializerApi.DeserializeJsonReader)
         {
             w.Append("            => ").Append(target).Append(bound.Writes ? "(ref state, in value);\n\n" : "(ref state, ref value);\n\n");
@@ -321,11 +332,18 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             bodyKey = (api, EntryShape.Pooled, false);
         if (!documentBodies.TryGetValue(bodyKey, out string? body))
         {
-            body = DocumentBody(bodyKey.Api, bodyKey.Shape, bodyKey.Measured);
+            body = DocumentBody(bodyKey.Api, bodyKey.Shape, bodyKey.Measured, requireCompleteBinaryInput);
             documentBodies.Add(bodyKey, body);
         }
         string measure = "LuminPackSerializer.MeasureRecord_" + root.RootName + "<" + root.RootArguments + profile + ">";
-        AppendBody(w, Limits(body, type, root), type, profile, measure, target, root.RootName);
+        string? checkedScalar = root.CheckedFrameworkRead ? type switch
+        {
+            "bool" => "ReadBoolean",
+            "global::System.DateOnly" => "ReadDateOnly",
+            "global::System.TimeOnly" => "ReadTimeOnly",
+            _ => null,
+        } : null;
+        AppendBody(w, Limits(body, type, root), type, profile, measure, target, root.RootName, checkedScalar);
         w.Append('\n');
     }
 
@@ -337,8 +355,9 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     /// <param name="measure">The exact record measurement call target.</param>
     /// <param name="target">The existing static read or write target.</param>
     /// <param name="rootName">The nested root's published suffix.</param>
+    /// <param name="checkedScalar">The input-policy method for a validated direct load, if needed.</param>
     private static void AppendBody(StringBuilder writer, string body, string type, string profile, string measure, string target,
-        string rootName)
+        string rootName, string? checkedScalar)
     {
         int start = 0;
         for (int marker = body.IndexOf('%'); marker >= 0; marker = body.IndexOf('%', start))
@@ -370,6 +389,12 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                 case "READ":
                     writer.Append(target).Append("(ref reader, ref value);");
                     break;
+                case "RAWREAD":
+                    if (checkedScalar == null)
+                        writer.Append("LuminPackReader.ReadComplete(ref MemoryMarshal.GetReference(buffer), ref value)");
+                    else
+                        writer.Append("LuminPackInputPolicy.").Append(checkedScalar).Append("(ref MemoryMarshal.GetReference(buffer), out value)");
+                    break;
                 default:
                     writer.Append(body, marker, end - marker + 1);
                     break;
@@ -383,8 +408,9 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     /// <param name="api">The intercepted facade overload.</param>
     /// <param name="shape">The payload's specialized binary entry form.</param>
     /// <param name="measured">Whether the root publishes its record measure.</param>
+    /// <param name="requireCompleteBinaryInput">Whether binary document reads returning a value must consume all input.</param>
     /// <returns>The interceptor body template.</returns>
-    private static string DocumentBody(SerializerApi api, EntryShape shape, bool measured)
+    private static string DocumentBody(SerializerApi api, EntryShape shape, bool measured, bool requireCompleteBinaryInput)
     {
         string binaryRead = BinarySpanRead;
         if (api is SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef or SerializerApi.DeserializeStream or SerializerApi.DeserializeStreamValue)
@@ -407,13 +433,14 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             SerializerApi.SerializeBufferWriter => BinaryBufferWriter,
             SerializerApi.SerializeBuffer => RetainedWrite(shape),
             SerializerApi.SerializeStream => StreamWrite,
-            SerializerApi.DeserializeSpan => ReturnValue(binaryRead, "buffer"),
+            SerializerApi.DeserializeSpan => ReturnValue(binaryRead, "buffer", requireComplete: requireCompleteBinaryInput),
             SerializerApi.DeserializeSpanRef => binaryRead,
             SerializerApi.DeserializeSequenceRef => SequenceRead,
-            SerializerApi.DeserializeSequence => ReturnValue(SequenceRead, "buffer", "global::System.Buffers.ReadOnlySequence<byte>"),
-            SerializerApi.DeserializeBuffer => ReturnValue(BinaryBufferRead, "bufferWriter"),
+            SerializerApi.DeserializeSequence => ReturnValue(SequenceRead, "buffer", "global::System.Buffers.ReadOnlySequence<byte>", requireCompleteBinaryInput),
+            SerializerApi.DeserializeBuffer => ReturnValue(BinaryBufferRead, "bufferWriter", requireComplete: requireCompleteBinaryInput),
             SerializerApi.DeserializeBufferRef => BinaryBufferRead,
-            SerializerApi.DeserializeStream or SerializerApi.DeserializeStreamValue => StreamRead + ReturnValue(binaryRead, "data.Span"),
+            SerializerApi.DeserializeStream or SerializerApi.DeserializeStreamValue => StreamRead +
+                ReturnValue(binaryRead, "data.Span", requireComplete: requireCompleteBinaryInput),
             SerializerApi.SerializeJsonString => JsonStringWrite,
             SerializerApi.SerializeJsonBufferWriter => JsonBufferWriter,
             SerializerApi.SerializeJsonBuffer => JsonBufferWrite,
@@ -454,11 +481,18 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     /// <param name="body">The established ref read boundary.</param>
     /// <param name="buffer">The input expression.</param>
     /// <param name="input">The local function's input type when inference is unavailable.</param>
+    /// <param name="requireComplete">Whether this binary document must consume the complete input.</param>
     /// <returns>The statements of the return-value read.</returns>
-    private static string ReturnValue(string body, string buffer, string? input = null) =>
-        "                %TYPE% result = default!;\n                ReadValue(" + buffer + ", ref result);\n                return result;\n\n" +
-        LocalRead("ReadValue", input ?? (buffer == "bufferWriter" ? "LuminBufferWriter" : "ReadOnlySpan<byte>"),
-            buffer == "bufferWriter" ? body.Replace("bufferWriter", "buffer") : body);
+    private static string ReturnValue(string body, string buffer, string? input = null, bool requireComplete = false)
+    {
+        bool retained = buffer == "bufferWriter";
+        string read = "ReadValue(" + buffer + ", ref result)";
+        if (requireComplete)
+            read = "CheckCompleteBinaryInput(" + read + ", " + buffer + (retained ? ".GetSpan()" : string.Empty) + ".Length)";
+        return "                %TYPE% result = default!;\n                " + read + ";\n                return result;\n\n" +
+            LocalRead("ReadValue", input ?? (retained ? "LuminBufferWriter" : "ReadOnlySpan<byte>"),
+                retained ? body.Replace("bufferWriter", "buffer") : body);
+    }
 
     /// <summary>Converts UTF-16 characters when necessary and passes the resulting bytes to the JSON document reader.</summary>
     /// <returns>The character read boundary and its local byte reader.</returns>
@@ -1064,7 +1098,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     private const string RawRead = """
                         if (buffer.Length < Unsafe.SizeOf<%TYPE%>())
                             LuminPackExceptionHelper.ThrowSpanOutOfRange(Unsafe.SizeOf<%TYPE%>());
-                        return LuminPackReader.ReadComplete(ref MemoryMarshal.GetReference(buffer), ref value);
+                        return %RAWREAD%;
         """ + "\n";
 
     private const string StatelessRead = """
@@ -1153,6 +1187,7 @@ internal sealed class RootCatalog
     private readonly string? _extension;
     private readonly string _assemblyProfile;
     private readonly string _assemblyJsonReadProfile;
+    private readonly HashSet<string>? _checkedFrameworkReads;
 
     /// <summary>Indexes the published roots by payload identity.</summary>
     /// <param name="entries">The payload roots keyed by payload spelling.</param>
@@ -1161,13 +1196,16 @@ internal sealed class RootCatalog
     /// <param name="assemblyProfile">The consuming assembly's compiled default profile.</param>
     /// <param name="assemblyJsonReadProfile">The default profile for JSON reads, including its grammar policy.</param>
     /// <param name="measured">The shared roots with exact record measurements.</param>
+    /// <param name="checkedFrameworkReads">Framework owners with a checked binary root.</param>
     internal RootCatalog(IEnumerable<KeyValuePair<string, RootEntry>> entries, IEnumerable<string> shared, string? extension,
-        string assemblyProfile, string assemblyJsonReadProfile, IEnumerable<string>? measured = null)
+        string assemblyProfile, string assemblyJsonReadProfile, IEnumerable<string>? measured = null,
+        HashSet<string>? checkedFrameworkReads = null)
     {
         Measured = new HashSet<string>(measured ?? Array.Empty<string>(), StringComparer.Ordinal);
         _extension = extension;
         _assemblyProfile = assemblyProfile;
         _assemblyJsonReadProfile = assemblyJsonReadProfile;
+        _checkedFrameworkReads = checkedFrameworkReads;
         var ordered = shared.OrderBy(name => name, StringComparer.Ordinal).ToArray();
         Shared = new HashSet<string>(ordered, StringComparer.Ordinal);
         _canonical = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -1207,7 +1245,8 @@ internal sealed class RootCatalog
                 jsonReadProfile: union.JsonReadProfile, rootName: union.RootName, rootArguments: call.TypeArguments + ", ");
         if (call.Root != null && _extension != null && Shared.Contains(key))
             return new RootEntry(readable, _assemblyProfile, binary: true, json: true,
-                owner: "global::LuminPack.Binary_" + _extension + "_" + readable, jsonReadProfile: _assemblyJsonReadProfile);
+                owner: "global::LuminPack.Binary_" + _extension + "_" + readable, jsonReadProfile: _assemblyJsonReadProfile,
+                checkedFrameworkRead: _checkedFrameworkReads?.Contains(readable) == true);
         // Without a closed owner, a closed generic payload calls its definition's generic roots from an entry named for the closed type.
         if (call.Definition != null && _entries.TryGetValue(call.Definition, out RootEntry? definition) && definition.Owner == null)
             return new RootEntry(readable, definition.DeclaredProfile, definition.Binary, definition.Json, limit: definition.Limit,

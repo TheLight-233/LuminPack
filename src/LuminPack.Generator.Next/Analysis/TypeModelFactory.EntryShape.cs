@@ -19,7 +19,7 @@ internal static partial class TypeModelFactory
         "global::System.Numerics.Matrix3x2", "global::System.Numerics.Matrix4x4", "global::System.Numerics.Vector2",
         "global::System.Numerics.Vector3", "global::System.Numerics.Vector4", "global::System.Half", "global::System.Int128",
         "global::System.UInt128", "global::System.DateOnly", "global::System.TimeOnly", "global::System.Text.Rune",
-        "global::System.Runtime.InteropServices.GCHandle",
+        "global::System.Runtime.InteropServices.GCHandle", "global::System.Index", "global::System.Range",
     };
 
     /// <summary>Classifies the allocating write and span read of a closed root payload.</summary>

@@ -47,8 +47,10 @@ internal sealed class FormatterModel : IEquatable<FormatterModel>
     internal readonly bool PublishPayload;
     /// <summary>The analyzed payload when this compilation owns its formatter.</summary>
     internal readonly TypeModel? Payload;
-    /// <summary>The enum's primitive owner identity, or null.</summary>
+    /// <summary>The enum's primitive owner identity or the specialized owner's input contract.</summary>
     internal readonly string? Underlying;
+    /// <summary>Whether a source collection subclass uses checked binary element reads.</summary>
+    internal readonly bool CheckedCollectionSubclass;
     /// <summary>Whether an element null marker must overwrite an existing ordinary object.</summary>
     internal readonly bool OrdinaryObject;
     /// <summary>The array rank, or zero for a named type.</summary>
@@ -75,8 +77,10 @@ internal sealed class FormatterModel : IEquatable<FormatterModel>
     /// <param name = "nullableStorage">The verified block models of the nullable element.</param>
     /// <param name = "nullableEncoding">The binary nullable collection element encoding.</param>
     /// <param name = "unmanagedNullablePayload">The compiler's unmanaged proof for the underlying nullable type.</param>
-    internal FormatterModel(string type, string definition, FormatterModel[]? arguments = null, bool raw = false, bool rawCollection = false, FormatterStorageModel? layout = null, TypeModel? payload = null, string? underlying = null, bool ordinaryObject = false, int rank = 0, bool formattedJson = false, bool reuseArraySlots = false, string[]? capabilities = null, bool publishPayload = false, FormatterStorageModel? nullableStorage = null, int nullableEncoding = 0, bool unmanagedNullablePayload = false)
+    /// <param name="checkedCollectionSubclass">Whether a source collection subclass checks binary elements before publishing them.</param>
+    internal FormatterModel(string type, string definition, FormatterModel[]? arguments = null, bool raw = false, bool rawCollection = false, FormatterStorageModel? layout = null, TypeModel? payload = null, string? underlying = null, bool ordinaryObject = false, int rank = 0, bool formattedJson = false, bool reuseArraySlots = false, string[]? capabilities = null, bool publishPayload = false, FormatterStorageModel? nullableStorage = null, int nullableEncoding = 0, bool unmanagedNullablePayload = false, bool checkedCollectionSubclass = false)
     {
+        CheckedCollectionSubclass = checkedCollectionSubclass;
         PublishPayload = publishPayload;
         Capabilities = capabilities ?? Array.Empty<string>();
         Type = type;
@@ -103,12 +107,12 @@ internal sealed class FormatterModel : IEquatable<FormatterModel>
     /// <summary>Attaches the immutable runtime API facts captured by analysis.</summary>
     /// <param name = "capabilities">The capabilities used by this operation.</param>
     /// <returns>The normalized result of the operation.</returns>
-    internal FormatterModel WithCapabilities(string[] capabilities) => capabilities.Length == 0 ? this : new FormatterModel(Type, Definition, Arguments, Raw, RawCollection, Layout, Payload, Underlying, OrdinaryObject, Rank, FormattedJson, ReuseArraySlots, capabilities, PublishPayload, NullableStorage, NullableEncoding, UnmanagedNullablePayload);
+    internal FormatterModel WithCapabilities(string[] capabilities) => capabilities.Length == 0 ? this : new FormatterModel(Type, Definition, Arguments, Raw, RawCollection, Layout, Payload, Underlying, OrdinaryObject, Rank, FormattedJson, ReuseArraySlots, capabilities, PublishPayload, NullableStorage, NullableEncoding, UnmanagedNullablePayload, CheckedCollectionSubclass);
     /// <inheritdoc/>
     /// <summary>Processes the current formatter contract.</summary>
     /// <param name = "other">The other used by this operation.</param>
     /// <returns>Whether the requested contract or capability is available.</returns>
-    public bool Equals(FormatterModel? other) => ReferenceEquals(this, other) || other != null && Type == other.Type && Definition == other.Definition && Raw == other.Raw && RawCollection == other.RawCollection && OrdinaryObject == other.OrdinaryObject && ReuseArraySlots == other.ReuseArraySlots && Rank == other.Rank && Underlying == other.Underlying && FormattedJson == other.FormattedJson && PublishPayload == other.PublishPayload && Equals(Layout, other.Layout) && Equals(NullableStorage, other.NullableStorage) && NullableEncoding == other.NullableEncoding && UnmanagedNullablePayload == other.UnmanagedNullablePayload && Equals(Payload, other.Payload) && Arguments.SequenceEqual(other.Arguments) && Capabilities.SequenceEqual(other.Capabilities);
+    public bool Equals(FormatterModel? other) => ReferenceEquals(this, other) || other != null && Type == other.Type && Definition == other.Definition && Raw == other.Raw && RawCollection == other.RawCollection && OrdinaryObject == other.OrdinaryObject && ReuseArraySlots == other.ReuseArraySlots && Rank == other.Rank && Underlying == other.Underlying && FormattedJson == other.FormattedJson && PublishPayload == other.PublishPayload && Equals(Layout, other.Layout) && Equals(NullableStorage, other.NullableStorage) && NullableEncoding == other.NullableEncoding && UnmanagedNullablePayload == other.UnmanagedNullablePayload && CheckedCollectionSubclass == other.CheckedCollectionSubclass && Equals(Payload, other.Payload) && Arguments.SequenceEqual(other.Arguments) && Capabilities.SequenceEqual(other.Capabilities);
     /// <inheritdoc/>
     /// <summary>Processes the current formatter contract.</summary>
     /// <param name = "obj">The obj used by this operation.</param>

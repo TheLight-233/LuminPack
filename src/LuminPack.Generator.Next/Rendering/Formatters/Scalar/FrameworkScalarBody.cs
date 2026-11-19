@@ -22,6 +22,8 @@ internal static class FrameworkScalarBody
         "global::System.UInt128",
         "global::System.DateOnly",
         "global::System.TimeOnly",
+        "global::System.Index",
+        "global::System.Range",
         "global::System.Text.Rune",
         "global::System.Numerics.Complex",
         "global::System.Numerics.Plane",
@@ -183,6 +185,17 @@ internal static class FrameworkScalarBody
             case "global::System.TimeSpan":
                 sb.AppendLine("            writer.WriteTimeSpan(value);");
                 break;
+            case "global::System.Index":
+                sb.AppendLine("            writer.WriteInt(value.IsFromEnd ? ~value.Value : value.Value);");
+                break;
+            case "global::System.Range":
+                sb.AppendLine("            var start = value.Start;");
+                sb.AppendLine("            var end = value.End;");
+                sb.AppendLine("            writer.WriteArrayStart();");
+                sb.AppendLine("            writer.WriteInt(start.IsFromEnd ? ~start.Value : start.Value);");
+                sb.AppendLine("            writer.WriteInt(end.IsFromEnd ? ~end.Value : end.Value);");
+                sb.AppendLine("            writer.WriteArrayEnd();");
+                break;
             // The referenced Core asset, not the consumer's framework symbols, selects these overloads.
             case "global::System.DateOnly":
             case "global::System.TimeOnly":
@@ -293,6 +306,18 @@ internal static class FrameworkScalarBody
                 break;
             case "global::System.Text.Rune":
                 sb.AppendLine("            value = new global::System.Text.Rune(reader.ReadInt());");
+                break;
+            case "global::System.Index":
+                sb.AppendLine("            int index = reader.ReadInt();");
+                sb.AppendLine("            value = new global::System.Index(index < 0 ? ~index : index, index < 0);");
+                break;
+            case "global::System.Range":
+                sb.AppendLine("            reader.TryConsumeArrayStart();");
+                sb.AppendLine("            int start = reader.ReadInt();");
+                sb.AppendLine("            int end = reader.ReadInt();");
+                sb.AppendLine("            reader.ConsumeArrayEnd();");
+                sb.AppendLine("            value = new global::System.Range(new global::System.Index(start < 0 ? ~start : start, start < 0),");
+                sb.AppendLine("                new global::System.Index(end < 0 ? ~end : end, end < 0));");
                 break;
             case "global::System.Numerics.Complex":
                 sb.AppendLine("            reader.TryConsumeObjectStart();");

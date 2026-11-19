@@ -306,7 +306,14 @@ namespace LuminPack.Core
         /// <remarks>The record is the ordinary contiguous array record: a four-byte count, minus one for null, then one byte per element.</remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ReadCanonicalBooleans(ref bool[]? value)
+        public bool ReadCanonicalBooleans(ref bool[]? value) => ReadCanonicalBooleans(ref value, int.MaxValue);
+
+        /// <summary>Reads a Boolean array with a collection limit and validates its elements during the copy.</summary>
+        /// <param name="value">The reusable destination; an array of another length is replaced.</param>
+        /// <param name="maximum">The compiled collection limit.</param>
+        /// <returns>Whether every element stored zero or one.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal bool ReadCanonicalBooleans(ref bool[]? value, int maximum)
         {
             int count = Read<int>();
             if (count <= 0)
@@ -320,11 +327,44 @@ namespace LuminPack.Core
                 return true;
             }
             EnsureReadable(count);
+            global::LuminPack.Security.LuminPackInputPolicy.CheckCollectionLength(count, maximum);
             if (value is null || value.Length != count)
                 value = LuminPackMarshal.AllocateUninitializedArray<bool>(count);
             bool canonical = global::LuminPack.Security.LuminPackInputPolicy.CopyBooleans(ref Current,
                 ref Unsafe.As<bool, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), count);
-            Advance(count);
+            AdvanceValidated(count);
+            return canonical;
+        }
+
+        /// <summary>Reads a Boolean list with a collection limit and validates its elements during the copy.</summary>
+        /// <param name="value">The reusable destination list.</param>
+        /// <param name="maximum">The compiled collection limit.</param>
+        /// <returns>Whether every element stored zero or one.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal bool ReadCanonicalBooleans(ref System.Collections.Generic.List<bool>? value, int maximum)
+        {
+            int count = global::LuminPack.Security.LuminPackInputPolicy.ReadLength(ref this, sizeof(bool), maximum);
+            if (count < 0)
+            {
+                value = null;
+                return true;
+            }
+            bool reuse = value is not null;
+            value ??= new System.Collections.Generic.List<bool>(count);
+            Span<byte> destination = MemoryMarshal.AsBytes(LuminPackMarshal.GetListSpan(value, count));
+            if (count == 0)
+                return true;
+
+            ref byte current = ref Current;
+            ref byte target = ref MemoryMarshal.GetReference(destination);
+            ReadOnlySpan<byte> source = MemoryMarshal.CreateReadOnlySpan(ref current, count);
+            if (reuse && source.Overlaps(destination))
+            {
+                source.CopyTo(destination);
+                current = ref target;
+            }
+            bool canonical = global::LuminPack.Security.LuminPackInputPolicy.CopyBooleans(ref current, ref target, count);
+            AdvanceValidated(count);
             return canonical;
         }
 

@@ -361,6 +361,9 @@ internal sealed class RecordModel : TypeModel
     /// <summary>The list base's element spelling, which is the record itself, or null.</summary>
     internal readonly string? SequenceElement;
 
+    /// <summary>The list formatter appended to the ordinary member record, or null.</summary>
+    internal readonly FormatterModel? CollectionBase;
+
     /// <summary>Captures a record.</summary>
     /// <param name="identity">The identity supplied to <c>RecordModel</c>.</param>
     /// <param name="accessibility">The accessibility supplied to <c>RecordModel</c>.</param>
@@ -391,18 +394,21 @@ internal sealed class RecordModel : TypeModel
     /// <param name="stringPairs">Whether ordinary reads can group direct string fields.</param>
     /// <param name="rentByRef">Whether the rental returns storage by reference.</param>
     /// <param name="referenceConstruction">Creates a shell to register before decoding its members.</param>
+    /// <param name="collectionBase">The appended list record.</param>
     internal RecordModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
         bool versioned, bool fixedUnionCase, bool derived, bool proven, bool recordWidth, bool freshResult, string? mirror,
         string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, VersionSchemaModel? version,
         ConstructorModel? constructor = null, CallbackModel? callbacks = null, string? rent = null, StorageMirrorModel[]? mirrors = null,
         string? rejection = null, bool recursive = false, bool implicitPayload = false,
-        string? sequenceBase = null, string? sequenceElement = null, bool scalarHeader = false, bool stringPairs = false, bool rentByRef = false, string? referenceConstruction = null)
+        string? sequenceBase = null, string? sequenceElement = null, bool scalarHeader = false, bool stringPairs = false, bool rentByRef = false,
+        string? referenceConstruction = null, FormatterModel? collectionBase = null)
         : base(identity, accessibility, PayloadKind.Record, members, policy, constraints)
     {
         StringPairs = stringPairs;
         Implicit = implicitPayload;
         SequenceBase = sequenceBase;
         SequenceElement = sequenceElement;
+        CollectionBase = collectionBase;
         ScalarHeader = scalarHeader;
         Recursive = recursive;
         Rejection = rejection;
@@ -432,7 +438,7 @@ internal sealed class RecordModel : TypeModel
         Proven == record.Proven && RecordWidth == record.RecordWidth && FreshResult == record.FreshResult &&
         Mirror == record.Mirror && Rent == record.Rent && RentByRef == record.RentByRef && ReferenceConstruction == record.ReferenceConstruction && Rejection == record.Rejection && Recursive == record.Recursive && Implicit == record.Implicit &&
         SequenceBase == record.SequenceBase && SequenceElement == record.SequenceElement && ScalarHeader == record.ScalarHeader &&
-        Equals(Constructor, record.Constructor) &&
+        Equals(CollectionBase, record.CollectionBase) && Equals(Constructor, record.Constructor) &&
         Equals(Callbacks, record.Callbacks) &&
         MirrorLayout == record.MirrorLayout && Equals(Version, record.Version) &&
         (ReferenceEquals(MirrorFields, record.MirrorFields) || MirrorFields != null && record.MirrorFields != null &&

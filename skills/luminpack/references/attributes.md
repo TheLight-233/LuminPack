@@ -49,6 +49,7 @@ At each phase, static callbacks run before instance callbacks, and each group ru
 | --- | --- | --- |
 | `StringEncoding` | `LuminPackStringEncoding.UTF16` | Per member in binary; JSON uses the root type's. |
 | `StringRecording` | `LuminPackStringRecording.Length` | `Token` merges `null` into `""`. |
+| `FramedGroupings` | false | Next assembly option. Each present binary grouping in a record or lookup gains a `00` presence byte before its key. Match the setting on write and read. |
 | `MaxJsonDepth` | 1024 | Whole JSON document. |
 | `ValidateJsonSyntax` | false | Whole JSON document. |
 | `StandardFormat` | `"G"` | Constant for Custom/formatted kernels. |
@@ -57,6 +58,7 @@ At each phase, static callbacks run before instance callbacks, and each group ru
 | `TrackReferences` | false | Concrete class declaration only. The option applies to the annotated class without inheritance or a corresponding operation profile option. |
 | `StructLayout` | `LuminPackStructLayout.Tagged` | Assembly or struct. `Packed`: no padding, same bytes on 32/64-bit. `Native`: full native storage, identical layouts required. |
 | `UntrustedData` + `Max*` limits | on, limits unbounded | Root type or assembly; checked reads on the ordinary wire format. `false` restores trusted reads; declare limits for hostile input. |
+| `RequireCompleteBinaryInput` | false | Assembly only. Rejects trailing bytes after value-returning binary document reads, including explicit profiles and registered reads. Ref and advancing reads consume a prefix. |
 
 These Union switches do not inherit from assemblies, containing types or base types, cannot be selected through operation profiles, and do not pin string profiles. A legacy standalone marker takes precedence over an explicit false option. Only assert `SingleImplementation` when no other assembly can add an implementation.
 

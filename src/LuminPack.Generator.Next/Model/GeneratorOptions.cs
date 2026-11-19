@@ -72,6 +72,15 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <summary>Whether the referenced Core exposes the two-field binary string reader.</summary>
     internal readonly bool BinaryStringPairReader;
 
+    /// <summary>Whether the referenced Core can restrict culture names before resolving them.</summary>
+    internal readonly bool CheckCultureInfo;
+
+    /// <summary>Whether Next writes an explicit presence marker before every binary grouping key.</summary>
+    internal readonly bool FramedGroupings;
+
+    /// <summary>Whether binary document reads returning a value require complete input consumption.</summary>
+    internal readonly bool RequireCompleteBinaryInput;
+
     /// <summary>Whether the referenced Core can prepare a reused hash set for a direct refill.</summary>
     internal readonly bool HashSetRefill;
 
@@ -127,6 +136,9 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <param name="concurrentDictionaryRefill">Whether the referenced Core exposes the in-place concurrent dictionary refill.</param>
     /// <param name="concurrentStackSeed">Whether the referenced Core exposes the concurrent stack read seeding.</param>
     /// <param name="binaryStringPairReader">Whether the referenced Core exposes the two-field binary string reader.</param>
+    /// <param name="framedGroupings">Whether the assembly opts in to explicit grouping presence markers.</param>
+    /// <param name="checkCultureInfo">Whether the referenced Core can restrict culture names before resolving them.</param>
+    /// <param name="requireCompleteBinaryInput">Whether the assembly requires complete binary document input.</param>
     internal GeneratorOptions(bool net8, int csharpVersion, bool @unsafe, bool unity, RegisterMode registerMode, int availableAliases,
         string assemblyName, bool interceptors, bool ilRewrite = false, bool pointerCursor = false, string[]? ambiguousNames = null,
         int formatterInterfaces = 0, bool knownFormatters = false, bool quotedScalarReader = false, bool spanCursor = false,
@@ -134,8 +146,12 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
         bool linkedListAppender = false, bool concurrentDictionaryBuilder = false,
         bool queueRefill = false, bool stackRefill = false, bool readOnlyCollectionRefill = false,
         bool readOnlyDictionaryRefill = false, bool concurrentDictionaryRefill = false,
-        bool concurrentStackSeed = false, bool binaryStringPairReader = false)
+        bool concurrentStackSeed = false, bool binaryStringPairReader = false, bool framedGroupings = false, bool checkCultureInfo = false,
+        bool requireCompleteBinaryInput = false)
     {
+        RequireCompleteBinaryInput = requireCompleteBinaryInput;
+        CheckCultureInfo = checkCultureInfo;
+        FramedGroupings = framedGroupings;
         BinaryStringPairReader = binaryStringPairReader;
         ConcurrentStackSeed = concurrentStackSeed;
         ConcurrentDictionaryRefill = concurrentDictionaryRefill;
@@ -172,7 +188,9 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
         Interceptors == other.Interceptors && IlRewrite == other.IlRewrite && PointerCursor == other.PointerCursor && SpanCursor == other.SpanCursor && FormatterInterfaces == other.FormatterInterfaces &&
         KnownFormatters == other.KnownFormatters && QuotedScalarReader == other.QuotedScalarReader &&
         GeneratedJsonPropertyWriter == other.GeneratedJsonPropertyWriter && GeneratedJsonInt32Reader == other.GeneratedJsonInt32Reader &&
-        BinaryStringPairReader == other.BinaryStringPairReader && HashSetRefill == other.HashSetRefill && LinkedListAppender == other.LinkedListAppender &&
+        FramedGroupings == other.FramedGroupings && BinaryStringPairReader == other.BinaryStringPairReader && CheckCultureInfo == other.CheckCultureInfo &&
+        RequireCompleteBinaryInput == other.RequireCompleteBinaryInput &&
+        HashSetRefill == other.HashSetRefill && LinkedListAppender == other.LinkedListAppender &&
         ConcurrentDictionaryBuilder == other.ConcurrentDictionaryBuilder && QueueRefill == other.QueueRefill &&
         StackRefill == other.StackRefill && ReadOnlyCollectionRefill == other.ReadOnlyCollectionRefill &&
         ReadOnlyDictionaryRefill == other.ReadOnlyDictionaryRefill &&

@@ -115,6 +115,7 @@ Besides `[LuminPackable]` types, these are built in, for binary and JSON:
 | Time and identity | `Guid`, `DateTime`, `DateTimeOffset`, `TimeSpan`, `TimeZoneInfo` |
 | Numerics | `BigInteger`, `Complex`, `Vector2`, `Vector3`, `Vector4`, `Quaternion`, `Plane`, `Matrix3x2`, `Matrix4x4` |
 | Text and system | `string`, `StringBuilder`, `Uri`, `Version`, `Type`, `BitArray`, `CultureInfo` |
+| Indexing | `Index`, `Range` |
 | Wrappers | `Nullable<T>`, `Lazy<T>`, `KeyValuePair<K,V>`, `Tuple<...>` and `ValueTuple<...>` (1 to 7 items) |
 | Memory | `T[]`, multidimensional arrays, `Memory<T>`, `ReadOnlyMemory<T>`, `ArraySegment<T>`, `ReadOnlySequence<T>` |
 | Collections | `List<T>`, `LinkedList<T>`, `Queue<T>`, `Stack<T>`, `HashSet<T>`, `SortedSet<T>`, `PriorityQueue<T,P>`, `Dictionary<K,V>`, `SortedDictionary<K,V>`, `SortedList<K,V>`, `ReadOnlyDictionary<K,V>` |
@@ -124,3 +125,13 @@ Besides `[LuminPackable]` types, these are built in, for binary and JSON:
 | Interfaces | `IEnumerable<T>`, `ICollection<T>`, `IReadOnlyCollection<T>`, `IList<T>`, `IReadOnlyList<T>`, `ISet<T>`, `IReadOnlySet<T>`, `IDictionary<K,V>`, `IReadOnlyDictionary<K,V>`, `ILookup<K,V>`, `IGrouping<K,V>` and the `IImmutable*` interfaces |
 
 Engine and UI value types (Unity, MonoGame, WPF, Avalonia, MAUI, SkiaSharp, System.Drawing, ASP.NET Core) are provided by the optional platform packages listed in the [README](../README.md#-platform-packages).
+
+In JSON, `Index` uses a signed integer. An index from the start uses its value and an index from the end uses the bitwise complement of its value, so `^0` is `-1`. A `Range` uses a two-element array of these indexes in start and end order.
+
+### List subclasses
+
+Apply `[LuminPackOption(IncludeCollectionBase = true)]` to an ordinary `[LuminPackable]` class with a closed `List<T>` base to serialize its elements alongside its declared members. This option is for `GeneratorType.Object` without reference tracking. Reads refill the existing derived instance when one is available.
+
+Binary writes append the base list record after the declared members. Use the same option at both binary endpoints. JSON writes the elements in the `$items` property.
+
+A closed `List<T>` or `SortedDictionary<TKey, TValue>` subclass defined in your source can use the framework collection format automatically if it has an accessible parameterless constructor and adds no instance storage. An explicitly registered formatter takes precedence.

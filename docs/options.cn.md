@@ -29,6 +29,7 @@ public partial class Message
 | --- | --- | --- |
 | `StringEncoding` | `UTF16` | 二进制字符串编码，可按成员设置。对 JSON 而言是整份文档的编码，由根类型决定。 |
 | `StringRecording` | `Length` | 固定宽度长度头、可选的 `VarInt` 长度头，或 `Token`（以终止符结束；`null` 和 `""` 读回来都是 `""`）。 |
+| `FramedGroupings` | `false` | Next 程序集选项，为二进制 `IGrouping<TKey, TElement>` 提供明确的分组帧，也适用于 `ILookup<TKey, TElement>` 内的分组。 |
 | `MaxJsonDepth` | `1024` | JSON 嵌套深度上限；小于等于 0 表示不限制。 |
 | `ValidateJsonSyntax` | `false` | 严格 JSON 语法校验。处理外部来源的 JSON 时请开启。 |
 | `StandardFormat` | `"G"` | 传给显式格式化与 `Custom` 核心方法的常量，不会改变内置数值、日期格式。 |
@@ -38,10 +39,21 @@ public partial class Message
 | `ReuseRectangularArraySlots` | `true` | 在 .NET 8 及更高版本上，Next 复用二进制二维数组中已有的对象。在普通对象的元素类上设为 `false` 可改为替换数组。参见[对象矩阵复用](reuse.cn.md#二进制对象矩阵复用)。 |
 | `StructLayout` | `Tagged` | 非托管结构体的存储方式，见下文。只能用于程序集和结构体。 |
 | `UntrustedData` 及各项限额 | 开启，限额不设上限 | 面向不可信输入的带检查读取；面对恶意输入时请声明限额，见[安全](security.cn.md)。 |
+| `RequireCompleteBinaryInput` | `false` | 仅限程序集。返回值的二进制文档读取会拒绝尾随字节。 |
 
 二进制数据可以按成员混用不同编码，但写入方和读取方必须使用相同的声明。JSON 的编码、深度和语法校验总是作用于整份文档。
 
 JSON 属性名使用针对各编码生成的[名称查找](json-name-lookup.cn.md)，哈希不会代替完整名称比较。
+
+## 完整二进制输入
+
+使用 `[assembly: LuminPackOption(RequireCompleteBinaryInput = true)]` 后，每次返回值的 `Deserialize<T>` 或 `DeserializeAsync<T>` 调用都必须消费一条完整的二进制记录。该选项适用于 span、序列、可复用缓冲区和流，也适用于显式指定操作配置的调用。解码成功后若仍有尾随字节，将抛出 `InvalidDataException`。`ref` 重载仍返回单条记录消费的字节数，推进式读取仍将游标停在该记录之后。
+
+## 二进制分组帧
+
+通过 `[assembly: LuminPackOption(FramedGroupings = true)]` 区分 null 分组与键编码首字节为 `FF` 的非 null 分组。这样的键包括默认长度配置下的 null 字符串，以及值为 `255` 的原始 byte 键。每个非 null 分组先写 `00`，然后写入键和元素序列。null 分组占一个字节 `FF`。
+
+生成读写端的程序集应采用同一设置，包括分组嵌套在记录或 Lookup 内的情况。未启用该选项时写入的既有二进制数据采用默认的从键开始的布局。键的编码仍由字符串配置决定，例如 `Token` 对 null 与空字符串使用同一表示。JSON 可直接保留 null 键分组。
 
 ## Union 类型契约开关
 

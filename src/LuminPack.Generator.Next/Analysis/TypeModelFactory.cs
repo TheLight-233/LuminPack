@@ -421,7 +421,11 @@ internal static partial class TypeModelFactory
                     bool versioned = generatorType is "VersionTolerant" or "CircleReference";
                     // A class whose serialized content is only a supported List<T> base publishes that list's body. Modeling it
                     // as an empty record would write the object marker alone and silently drop every element on read.
-                    INamedTypeSymbol? sequenceBase = members.Length == 0 && !versioned ? SequenceBase(symbol) : null;
+                    bool includeCollectionBase = OptionSwitch(symbol, "IncludeCollectionBase") && CanIncludeCollectionBase(symbol);
+                    INamedTypeSymbol? sequenceBase = !includeCollectionBase && members.Length == 0 && !versioned ? SequenceBase(symbol) : null;
+                    FormatterModel? collectionBase = includeCollectionBase ? Formatter(CollectionBaseType(symbol)!, depth + 1, path) : null;
+                    if (includeCollectionBase && collectionBase == null)
+                        issues.Add("the inherited list's element formatter is not modeled");
                     // A selected constructor, a pool rent and the serialization callbacks shape the record roots the same way
                     // the legacy model computes them; a rent supplies the instance instead of the constructor.
                     ConstructorModel? constructor = SelectedConstructorModel(symbol, members, issues);
@@ -454,7 +458,7 @@ internal static partial class TypeModelFactory
                         members.Any(member => member is TextMember) && members.All(member => member is ScalarMember or TextMember);
                     return new RecordModel(identity, accessibility, members, policy, constraints, versioned,
                         fixedUnionCase: !versioned && members.All(member => member is ScalarMember) && IsFixedUnionCase(symbol),
-                        derived, proven, !policy.TrackReferences && RecordWidthSupported(symbol),
+                        derived, proven, !includeCollectionBase && !policy.TrackReferences && RecordWidthSupported(symbol),
                         // A pooled read rents its instance, so it never assigns a fresh result directly.
                         rent == null && CanDeserializeDirectlyIntoFreshResult(symbol, members),
                         mirror, mirrorFields, mirrorOffsets, mirrorLayout, version,
@@ -464,7 +468,7 @@ internal static partial class TypeModelFactory
                         // its own elements, so it keeps the guard as well.
                         recursive: sequenceBase != null || IsRecursive(symbol), implicitPayload: attribute == null,
                         sequenceBase: sequenceBase?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                        sequenceElement: sequenceBase?.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        sequenceElement: sequenceBase?.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), collectionBase: collectionBase,
                         scalarHeader: symbol.BaseType?.SpecialType == SpecialType.System_Object && symbol.AllInterfaces.IsEmpty && HasScalarHeader,
                         stringPairs: Options.BinaryStringPairReader && !versioned && constructor == null &&
                             callbacks == null && rent == null && mirror == null && policy.Bound == null &&
@@ -543,6 +547,27 @@ internal static partial class TypeModelFactory
             return FormatterRegistry.FindSequence(definition.ContainingNamespace.ToDisplayString() + "." + definition.Name) is
                 { Kind: CollectionKind.List } ? baseType : null;
         }
+
+        /// <summary>Finds the framework list whose existing collection record can follow the declared members.</summary>
+        /// <param name="symbol">The concrete record declaration.</param>
+        /// <param name="includeSortedDictionary">Whether an inherited sorted dictionary is also eligible.</param>
+        /// <returns>The list base, or null when no supported base exists.</returns>
+        private INamedTypeSymbol? CollectionBaseType(INamedTypeSymbol symbol, bool includeSortedDictionary = false)
+        {
+            for (INamedTypeSymbol? type = symbol.BaseType; type != null; type = type.BaseType)
+                if (type.Arity == 1 && IsFrameworkCollection(type, "System.Collections.Generic.List`1") ||
+                    includeSortedDictionary && type.Arity == 2 && IsFrameworkCollection(type, "System.Collections.Generic.SortedDictionary`2"))
+                    return type;
+            return null;
+        }
+
+        /// <summary>Checks the declaration boundary of the appended collection record.</summary>
+        /// <param name="symbol">The declaration that owns the option.</param>
+        /// <returns>Whether the ordinary record and its closed list base can be written together.</returns>
+        private bool CanIncludeCollectionBase(INamedTypeSymbol symbol) =>
+            symbol is { TypeKind: TypeKind.Class, IsAbstract: false } && IsPackable(symbol) &&
+            GenerationMode(symbol) == "Object" && !TracksReferences(symbol) &&
+            CollectionBaseType(symbol) is { } list && !ContainsTypeParameter(list);
 
         /// <summary>Decides whether a declared member has serialized instance storage and how it is reached.</summary>
         /// <param name="member">The declared member.</param>
@@ -1271,7 +1296,7 @@ internal static partial class TypeModelFactory
                 TypeModel? caseModel = analyzed.Model;
                 bool caseReadGeneric = caseModel == null || NeedsReadProfile(caseModel);
                 // Pooled cases own their read entry because that entry also owns the rental's storage mirror.
-                bool expandable = caseModel is RecordModel { Versioned: false, Policy.TrackReferences: false, Rent: null } && analyzed.IsComplete &&
+                bool expandable = caseModel is RecordModel { Versioned: false, Policy.TrackReferences: false, Rent: null, CollectionBase: null } && analyzed.IsComplete &&
                     caseModel.Members.Length != 0 && !caseModel.Members.Any(member => member.Mirrored) &&
                     caseModel.Members.All(member => member is ScalarMember) && !SelectedConstructor(caseType);
                 // A complete local record whose fixed body this pipeline does not expand inline reads through its own Union
@@ -1402,7 +1427,7 @@ internal static partial class TypeModelFactory
         /// <returns>Whether the case read is generic.</returns>
         private static bool NeedsReadProfile(TypeModel model) => model switch
         {
-            RecordModel record => record.Versioned || ProfilePayload(record) ||
+            RecordModel record => record.Versioned || record.CollectionBase != null || ProfilePayload(record) ||
                 record.Members.Any(member => member is not (ScalarMember or PayloadMember { Shape: PayloadShape.Inline })) ||
                 InlineArray(record) || InlineList(record),
             _ => true,
@@ -4241,6 +4266,7 @@ internal static partial class TypeModelFactory
     private static PayloadShape ShapeOf(TypeModel nested) => nested switch
     {
         RecordModel { Policy.TrackReferences: true } => PayloadShape.ReferenceTracked,
+        RecordModel { CollectionBase: not null } => PayloadShape.MemberEntry,
         RecordModel { Versioned: false } => PayloadShape.Inline,
         _ => PayloadShape.MemberEntry,
     };

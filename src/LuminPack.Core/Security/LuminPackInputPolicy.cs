@@ -21,7 +21,7 @@ namespace LuminPack.Security;
 /// reader's <see cref="LuminPackReader.InputDepth"/> counter.
 /// </remarks>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public static class LuminPackInputPolicy
+public static partial class LuminPackInputPolicy
 {
     /// <summary>Rejects oversized input before decoding, transcoding or staging.</summary>
     /// <param name="bytes">The encoded byte count.</param>
@@ -132,9 +132,18 @@ public static class LuminPackInputPolicy
     public static int ReadLength(ref LuminPackReader reader, int minimumElementSize, int maximum)
     {
         int count = reader.ReadLength(minimumElementSize);
+        CheckCollectionLength(count, maximum);
+        return count;
+    }
+
+    /// <summary>Rejects a collection count over the compiled limit before preparing storage.</summary>
+    /// <param name="count">The decoded collection count.</param>
+    /// <param name="maximum">The compiled collection limit.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void CheckCollectionLength(int count, int maximum)
+    {
         if (count > maximum)
             Fail("collection length");
-        return count;
     }
 
     /// <summary>Checks an array decoded by a runtime read kernel against the frozen collection limit.</summary>
@@ -446,6 +455,28 @@ public static class LuminPackInputPolicy
     public static void ReadBooleans(ref LuminPackReader reader, ref bool[]? value)
     {
         if (!reader.ReadCanonicalBooleans(ref value))
+            InvalidBoolean();
+    }
+
+    /// <summary>Reads a Boolean array with a frozen limit and validates its storage during the copy.</summary>
+    /// <param name="reader">The checked reader.</param>
+    /// <param name="value">The reusable destination.</param>
+    /// <param name="maximum">The compiled collection limit.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void ReadBooleans(ref LuminPackReader reader, ref bool[]? value, int maximum)
+    {
+        if (!reader.ReadCanonicalBooleans(ref value, maximum))
+            InvalidBoolean();
+    }
+
+    /// <summary>Reads a Boolean list with a frozen limit and validates its storage during the copy.</summary>
+    /// <param name="reader">The checked reader.</param>
+    /// <param name="value">The reusable destination.</param>
+    /// <param name="maximum">The compiled collection limit.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void ReadBooleans(ref LuminPackReader reader, ref System.Collections.Generic.List<bool>? value, int maximum = int.MaxValue)
+    {
+        if (!reader.ReadCanonicalBooleans(ref value, maximum))
             InvalidBoolean();
     }
 

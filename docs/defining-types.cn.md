@@ -115,6 +115,7 @@ public sealed partial class SmallRecord
 | 时间与标识 | `Guid`、`DateTime`、`DateTimeOffset`、`TimeSpan`、`TimeZoneInfo` |
 | 数学 | `BigInteger`、`Complex`、`Vector2`、`Vector3`、`Vector4`、`Quaternion`、`Plane`、`Matrix3x2`、`Matrix4x4` |
 | 文本与系统 | `string`、`StringBuilder`、`Uri`、`Version`、`Type`、`BitArray`、`CultureInfo` |
+| 索引 | `Index`、`Range` |
 | 包装类型 | `Nullable<T>`、`Lazy<T>`、`KeyValuePair<K,V>`、`Tuple<...>` 和 `ValueTuple<...>`（1 到 7 项） |
 | 内存 | `T[]`、多维数组、`Memory<T>`、`ReadOnlyMemory<T>`、`ArraySegment<T>`、`ReadOnlySequence<T>` |
 | 集合 | `List<T>`、`LinkedList<T>`、`Queue<T>`、`Stack<T>`、`HashSet<T>`、`SortedSet<T>`、`PriorityQueue<T,P>`、`Dictionary<K,V>`、`SortedDictionary<K,V>`、`SortedList<K,V>`、`ReadOnlyDictionary<K,V>` |
@@ -124,3 +125,13 @@ public sealed partial class SmallRecord
 | 接口 | `IEnumerable<T>`、`ICollection<T>`、`IReadOnlyCollection<T>`、`IList<T>`、`IReadOnlyList<T>`、`ISet<T>`、`IReadOnlySet<T>`、`IDictionary<K,V>`、`IReadOnlyDictionary<K,V>`、`ILookup<K,V>`、`IGrouping<K,V>` 以及 `IImmutable*` 接口 |
 
 引擎和 UI 的值类型（Unity、MonoGame、WPF、Avalonia、MAUI、SkiaSharp、System.Drawing、ASP.NET Core）由 [README](README.cn.md#-平台扩展包) 中列出的可选平台包提供。
+
+JSON 中的 `Index` 使用有符号整数。从起点计算的索引直接使用其数值，从末尾计算的索引使用其数值的按位取反，因此 `^0` 表示为 `-1`。`Range` 使用包含两个索引的数组，顺序为起点、终点。
+
+### List 派生类
+
+在基类为闭合 `List<T>` 的普通 `[LuminPackable]` 类上标记 `[LuminPackOption(IncludeCollectionBase = true)]`，即可同时序列化继承的元素与声明的成员。此选项适用于未启用引用追踪的 `GeneratorType.Object` 类。反序列化时可填充已有的派生类实例。
+
+二进制写入在声明成员之后追加基类列表记录。二进制读写两端应使用相同的选项。JSON 将列表元素写入 `$items` 属性。
+
+当前程序集源码中闭合的 `List<T>` 或 `SortedDictionary<TKey, TValue>` 派生类，如果具有可访问的无参构造函数且没有新增实例存储，可以自动使用框架集合格式。显式注册的格式化器优先。

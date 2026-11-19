@@ -25,12 +25,13 @@ internal static partial class NextPipeline
     /// <param name="plan">The operations retained by each owner and declaration.</param>
     /// <param name="options">The consuming assembly settings.</param>
     /// <param name="policy">The consuming assembly policy.</param>
+    /// <param name="checkedFrameworkReads">The framework owners with a checked binary root.</param>
     private static void AddFormatterRegistration(List<GeneratedSource> sources, ImmutableArray<ModeledPayload> payloads,
         ImmutableArray<SerializerCallModel> calls, SharedFormatterSet formatters, HashSet<string> shared, OperationPlan plan,
-        GeneratorOptions options, WirePolicy policy)
+        GeneratorOptions options, WirePolicy policy, HashSet<string>? checkedFrameworkReads)
     {
         var custom = new List<string>();
-        var generated = new SortedDictionary<string, (string Type, string BinarySuffix, string JsonSuffix, string Arguments, GeneratedOperations Operations)>(StringComparer.Ordinal);
+        var generated = new SortedDictionary<string, (string Type, string BinarySuffix, string JsonSuffix, string Arguments, GeneratedOperations Operations, bool CheckedFrameworkRead)>(StringComparer.Ordinal);
         var entries = new Dictionary<string, GeneratedOperations>(StringComparer.Ordinal);
         foreach (GeneratedSource source in sources)
             foreach (Match match in NamedStateEntry.Matches(source.Text))
@@ -105,7 +106,19 @@ internal static partial class NextPipeline
 
         sources.Add(new GeneratedSource("LuminPackGen.CustomFormatterRegistry.g.cs",
             CustomRegistrationSource.Render(custom, generated.Values, ProfileNames.Type(policy.Strings), ProfileNames.Type(policy.JsonInput),
-                options.AssemblyName, options.KnownFormatters, openUnionTags), GenerationKind.Formatter));
+                options.AssemblyName, options.KnownFormatters, openUnionTags, CheckedKnownFrameworkReads()), GenerationKind.Formatter));
+
+        IEnumerable<(string Type, string Readable)> CheckedKnownFrameworkReads()
+        {
+            if (!options.KnownFormatters || checkedFrameworkReads == null)
+                yield break;
+            foreach (string type in new[] { "bool", "string", "System.DateOnly", "System.TimeOnly" })
+            {
+                string readable = ReadableTypeName.Of(type);
+                if (checkedFrameworkReads.Contains(readable))
+                    yield return (type.IndexOf('.') < 0 ? type : "global::" + type, readable);
+            }
+        }
 
         void AddPayload(TypeModel model, string type, GeneratedOperations? selected = null, string arguments = "")
         {
@@ -132,16 +145,17 @@ internal static partial class NextPipeline
                 !entries.TryGetValue(suffix, out GeneratedOperations emitted))
                 return;
             string spelling = key.IndexOf('.') >= 0 && !type.StartsWith("global::", StringComparison.Ordinal) ? "global::" + type : type;
-            Add(spelling, suffix, "", plan.Owners.For(key) & emitted);
+            Add(spelling, suffix, "", plan.Owners.For(key) & emitted, checkedFrameworkRead: checkedFrameworkReads?.Contains(suffix.Substring(1)) == true);
         }
 
-        void Add(string type, string suffix, string arguments, GeneratedOperations operations, string? jsonSuffix = null)
+        void Add(string type, string suffix, string arguments, GeneratedOperations operations, string? jsonSuffix = null,
+            bool checkedFrameworkRead = false)
         {
             if (operations == GeneratedOperations.None)
                 return;
             string key = GeneratedNames.CanonicalKey(type);
             if (!generated.ContainsKey(key))
-                generated.Add(key, (type, suffix, jsonSuffix ?? suffix, arguments, operations));
+                generated.Add(key, (type, suffix, jsonSuffix ?? suffix, arguments, operations, checkedFrameworkRead));
         }
     }
 
@@ -154,6 +168,8 @@ internal static partial class NextPipeline
         if (type is "string" or "sbyte" or "byte" or "short" or "ushort" or "int" or "uint" or "long" or "ulong" or
             "float" or "double" or "decimal" or "bool" or "char" or "nint" or "nuint")
             return true;
+        if (type is "System.Index" or "System.Range")
+            return false;
         if (portable && type is ("System.Half" or "System.Int128" or "System.UInt128" or "System.DateOnly" or "System.TimeOnly" or "System.Text.Rune"))
             return false;
         return FrameworkScalarBody.Contains("global::" + type);

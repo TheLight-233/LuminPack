@@ -44,6 +44,9 @@
   <ItemGroup Condition="'$(LuminPackTestArea)' != 'Hooks'">
     <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" />
   </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackGenerator)' == 'Next' And ('$(LuminPackTestArea)' == 'All' Or '$(LuminPackTestArea)' == 'Safety')">
+    <ProjectReference Include="..\LuminPack.Tests.InputLimits\LuminPack.Tests.InputLimits.csproj" Aliases="NinoLimits" />
+  </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' == 'Hooks'">
     <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" SetTargetFramework="TargetFramework=netstandard2.1" />
   </ItemGroup>
@@ -66,6 +69,7 @@
     <Compile Include="BinaryStringHotPathTest.StringList.cs" />
     <Compile Include="SmallDenseDictionaryWriteTest.cs" />
     <Compile Include="TestSuites.cs;AuditSafetyRegressionTest.cs;UntrustedInputTest.cs;ReaderBoundaryValidationTest.cs;ReaderFixedBoundsPolicyTest.cs;ReaderPreaccessBoundsTest.cs;RawScalarSpanSafetyTest.cs;TruncatedFixedHeaderTest.cs;CompressionSafetyPerfTest.cs;PrimitivesSerializationTest.cs" />
+    <Compile Include="Nino*RegressionTest.cs" Condition="'$(LuminPackGenerator)' == 'Next'" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' == 'Simd'">
     <Compile Include="BigIntegerPrecisionTest.cs;JsonCapacityScanTest.cs;JsonIntegerUtf16WriteTest.cs;JsonDeepLookaheadTest.cs;JsonXjbFormatterTest.cs" />

@@ -25,11 +25,13 @@ internal static class CustomRegistrationSource
     /// <param name="assemblyName">The consuming assembly name used by the Custom registry.</param>
     /// <param name="openUnionTags">The open Union definitions and the numeric tags reserved by their generated cases.</param>
     /// <param name="known">Whether the referenced Core supplies the built-in registration table.</param>
+    /// <param name="checkedKnown">The built-in types whose local read delegate carries the assembly's input policy.</param>
     /// <returns>The generated registry source.</returns>
     internal static string Render(IReadOnlyList<string> custom,
-        IEnumerable<(string Type, string BinarySuffix, string JsonSuffix, string Arguments, GeneratedOperations Operations)> generated,
+        IEnumerable<(string Type, string BinarySuffix, string JsonSuffix, string Arguments, GeneratedOperations Operations, bool CheckedFrameworkRead)> generated,
         string profile, string jsonReadProfile, string assemblyName, bool known,
-        IReadOnlyList<(string Definition, string Tags)>? openUnionTags = null)
+        IReadOnlyList<(string Definition, string Tags)>? openUnionTags = null,
+        IEnumerable<(string Type, string Readable)>? checkedKnown = null)
     {
         string assembly = Sanitize(assemblyName);
         string? registryNamespace = assembly == "Unknown" ? null : "LuminPackRegisters." + assembly;
@@ -102,7 +104,8 @@ internal static class CustomRegistrationSource
         {
             file.Append("            global::LuminPack.LuminPackSerializer.RegisterGenerated<").Append(entry.Type).Append(">(table,\n");
             AppendOperation("Serialize", entry.BinarySuffix, GeneratedOperations.BinaryWrite, "TOptions", ",");
-            AppendOperation("Deserialize", entry.BinarySuffix, GeneratedOperations.BinaryRead, "TOptions", ",");
+            AppendOperation(entry.CheckedFrameworkRead ? InputRedirect.FrameworkHelper + ".Read" : "Deserialize",
+                entry.BinarySuffix, GeneratedOperations.BinaryRead, "TOptions", ",");
             AppendOperation("SerializeJson", entry.JsonSuffix, GeneratedOperations.JsonWrite, "TOptions", ",");
             AppendOperation("DeserializeJson", entry.JsonSuffix, GeneratedOperations.JsonRead, "TJsonReadOptions", ");");
 
@@ -117,7 +120,35 @@ internal static class CustomRegistrationSource
                 file.Append(end).Append('\n');
             }
         }
+        bool emitKnownReadRegistration = false;
+        if (checkedKnown != null)
+            foreach (var (type, readable) in checkedKnown)
+            {
+                if (!emitKnownReadRegistration)
+                {
+                    file.Append("            var known = global::LuminPack.Code.LuminPackKnownFormatters.Register<TJsonReadOptions>();\n");
+                    emitKnownReadRegistration = true;
+                }
+                file.Append("            RegisterKnownFrameworkRead<").Append(type).Append(">(table, known, ")
+                    .Append(InputRedirect.FrameworkHelper).Append(".Read_").Append(readable).Append("<TOptions>);\n");
+            }
         file.Append("            return table;\n        }\n");
+        if (emitKnownReadRegistration)
+            file.Append("""
+
+                        private static void RegisterKnownFrameworkRead<T>(
+                            global::System.Collections.Generic.Dictionary<nint, global::LuminPack.Code.LuminPackFormatter> table,
+                            global::LuminPack.Code.LuminPackFormatterTable known,
+                            global::LuminPack.Code.LuminPackReadDelegate<T> read)
+                        {
+                            var key = global::LuminPack.Code.LuminPackMarshal.GetMethodTable(typeof(T));
+                            if (known.TryGetValue(key, out var formatter))
+                            {
+                                formatter.ReadValue = read;
+                                table.TryAdd(key, formatter);
+                            }
+                        }
+                """).Append('\n');
         file.Append("\n        internal static void EnsureFormatterRegistration() { }\n");
         file.Append("""
 

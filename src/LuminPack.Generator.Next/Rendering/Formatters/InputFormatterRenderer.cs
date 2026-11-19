@@ -14,6 +14,8 @@ internal static class InputFormatterRenderer
     /// <returns>The read-only owner source, or null when this owner uses its published read body.</returns>
     internal static string? Render(SharedFormatterSet set, string target, InputRedirect redirect)
     {
+        if (set.Options.CheckCultureInfo && Matches(FormatterRegistry.CultureInfo, target))
+            return CultureInfoOwnerFile.Render(set, GeneratedOperations.BinaryRead, checkInput: true);
         // General contracts take precedence over family specializations in the original publisher. Preserve that choice.
         foreach (FormatterModel owner in set.GeneralOwners ?? Array.Empty<FormatterModel>())
             if (owner.Definition != FormatterDefinitions.PayloadReference && Matches(owner.Type, target))

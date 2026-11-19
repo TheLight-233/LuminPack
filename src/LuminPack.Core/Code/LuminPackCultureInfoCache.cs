@@ -11,9 +11,13 @@ namespace LuminPack.Code;
 public static class LuminPackCultureInfoCache
 {
     [ThreadStatic] private static string? _name;
+    [ThreadStatic] private static bool _nameChecked;
     [ThreadStatic] private static CultureInfo? _culture;
     [ThreadStatic] private static WeakReference<Dictionary<string, CultureInfo>>? _owner;
     private static readonly bool Available = Probe();
+
+    private readonly struct TrustedName;
+    private readonly struct CheckedName;
 
     /// <summary>Gets a bounded name candidate for the existing checked string reader.</summary>
     public static string? Name => _name;
@@ -21,21 +25,44 @@ public static class LuminPackCultureInfoCache
     /// <summary>Resolves a decoded name through the framework or its verified canonical cache entry.</summary>
     /// <param name="name">The decoded culture name.</param>
     /// <returns>The current read-only framework instance.</returns>
-    public static CultureInfo ResolveCulture(string name)
+    public static CultureInfo ResolveCulture(string name) => Resolve<TrustedName>(name);
+
+    /// <summary>Resolves a name after confirming it is allowed for untrusted input.</summary>
+    /// <param name="name">The decoded culture name.</param>
+    /// <returns>The current read-only framework instance.</returns>
+    internal static CultureInfo ResolveCheckedCulture(string name) => Resolve<CheckedName>(name);
+
+    /// <summary>Resolves the name using the specialized validation and cache path.</summary>
+    /// <typeparam name="TNamePolicy">Whether the name must belong to the finite platform set.</typeparam>
+    /// <param name="name">The decoded culture name.</param>
+    /// <returns>The current read-only framework instance.</returns>
+    private static CultureInfo Resolve<TNamePolicy>(string name) where TNamePolicy : struct
     {
+        bool checkName = typeof(TNamePolicy) == typeof(CheckedName);
         if (!Available)
-            return CultureInfo.GetCultureInfo(name);
+            return CultureInfo.GetCultureInfo(checkName ? LuminPackCultureInfoInput.AllowedName(name) : name);
+
         var table = Volatile.Read(ref NameCache(null));
         bool repeated = string.Equals(name, _name, StringComparison.Ordinal);
-        if (repeated && _culture is { } cached && table is not null &&
+        if (repeated && (!checkName || _nameChecked) && _culture is { } cached && table is not null &&
             _owner!.TryGetTarget(out var owner) && ReferenceEquals(table, owner))
             return cached;
 
+        if (checkName && !(repeated && _nameChecked))
+        {
+            name = LuminPackCultureInfoInput.AllowedName(name);
+            if (repeated)
+            {
+                repeated = string.Equals(name, _name, StringComparison.Ordinal);
+                _nameChecked = repeated;
+            }
+        }
         var resolved = CultureInfo.GetCultureInfo(name);
         _culture = null;
         if (!repeated)
         {
             _name = name.Length <= 85 && name == resolved.Name ? resolved.Name : null;
+            _nameChecked = checkName;
             return resolved;
         }
         if (table is null || !ReferenceEquals(table, Volatile.Read(ref NameCache(null))))
