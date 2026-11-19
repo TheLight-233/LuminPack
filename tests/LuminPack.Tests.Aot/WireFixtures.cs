@@ -280,6 +280,7 @@ internal static partial class WireFixtures
         VerifyReferenceJson(directory);
         VerifyVersionFixtures(directory);
         VerifyRecursivePackedFixture(directory);
+        VerifyTaggedAutomaticFixtures(directory);
 #endif
         VerifyWrittenBytes(directory);
         Check(Get<int>(directory, "int") == -123456789, "int");
