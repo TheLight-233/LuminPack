@@ -561,6 +561,12 @@ internal static class FormatterCapabilities
              definition != "System.Collections.Concurrent.ConcurrentDictionary" && named.TypeArguments[1].SpecialType == SpecialType.System_Int32) &&
             FormatterConcurrentTraits.HasBinaryTextPairCursor(compilation))
             result.Add("BinaryStringPairCursor");
+        if (definition == "System.Collections.Concurrent.ConcurrentDictionary" && modern && !unity &&
+            named.TypeArguments[1].SpecialType == SpecialType.System_String &&
+            named.TypeArguments[0].SpecialType is SpecialType.System_Int32 or SpecialType.System_UInt32 or
+                SpecialType.System_Int64 or SpecialType.System_UInt64 &&
+            FormatterConcurrentTraits.HasBinaryTextPairCursor(compilation))
+            result.Add("BinaryStringPairCursor");
         if (definition.StartsWith("System.Collections.Concurrent.Concurrent", StringComparison.Ordinal) && FormatterConcurrentTraits.Available(compilation, named.Name, named.Arity))
             result.Add("ConcurrentTraversal");
         if (definition == "System.Collections.Frozen.FrozenSet")

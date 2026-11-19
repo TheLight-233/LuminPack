@@ -44,6 +44,15 @@ internal static partial class SerializerIssueRegression
             }
             [LuminPackable] public sealed class ScalarPrefix { public short Id; public List<TraversalParent> Items; }
             [LuminPackable] public sealed class FieldRunPrefix { public int A; public int B; public List<TraversalParent> Items; }
+            public readonly struct ConcurrentUserProfile : ILuminPackOptions
+            {
+                public static int EncodingReads;
+                public LuminPackStringEncoding StringEncoding { get { EncodingReads++; return LuminPackStringEncoding.UTF16; } }
+                public LuminPackStringRecording StringRecording => LuminPackStringRecording.Length;
+                public System.Buffers.StandardFormat StandardFormat => new('G');
+                public bool ValidateJsonSyntax => true;
+                public int MaxJsonDepth => 32;
+            }
             public sealed class DerivedHashSet : HashSet<int> { }
             [LuminPackable] public sealed class TraversalParent
             {
@@ -87,6 +96,10 @@ internal static partial class SerializerIssueRegression
 
                     CheckConcurrentPairs<LuminPackUtf16LengthOptions>();
                     CheckConcurrentPairs<LuminPackUtf8LengthOptions>();
+                    CheckConcurrentIntegerKeys<LuminPackUtf16LengthOptions>();
+                    CheckConcurrentIntegerKeys<LuminPackUtf8LengthOptions>();
+                    CheckConcurrentIntegerKeys<ConcurrentUserProfile>();
+                    _ = LuminPackSerializer.Serialize(new ConcurrentDictionary<bool, string> { [false] = "bool" });
                     CheckJsonHashTraversal();
                     CheckDenseDictionary();
                 }
@@ -167,6 +180,37 @@ internal static partial class SerializerIssueRegression
                             throw new Exception("HashSet JSON differs from framework enumeration.");
                     }
                 }
+                private static void CheckConcurrentIntegerKeys<TProfile>() where TProfile : struct, ILuminPackOptions
+                {
+                    var source = new ConcurrentDictionary<int, string>();
+                    for (int index = 0; index < 48; index++)
+                        source[index - 24] = (index % 4) switch
+                        {
+                            0 => null,
+                            1 => "",
+                            2 => new string('a', 3100),
+                            _ => new string('\u96ea', 1700),
+                        };
+                    using var expected = new LuminBufferWriter(true);
+                    var writer = new LuminPackWriter(expected);
+                    int header = writer.BeginCollection();
+                    foreach (var pair in source)
+                    {
+                        writer.CheckBuffer();
+                        writer.EnsureAdditionalCapacity(sizeof(int));
+                        writer.Write(pair.Key);
+                        writer.CheckBuffer();
+                        writer.Write<TProfile>(pair.Value);
+                    }
+                    writer.EndCollection(header, source.Count);
+                    using var actual = new LuminBufferWriter(true);
+                    ConcurrentUserProfile.EncodingReads = 0;
+                    LuminPackSerializer.Serialize<ConcurrentDictionary<int, string>, TProfile>(source, actual);
+                    if (!actual.GetSpan().SequenceEqual(writer.GetSpan()))
+                        throw new Exception("Concurrent integer keys changed the paired record across writer growth.");
+                    if (typeof(TProfile) == typeof(ConcurrentUserProfile) && ConcurrentUserProfile.EncodingReads == 0)
+                        throw new Exception("A user profile with the same encoding bypassed its formatter.");
+                }
             }
             """;
         Execute(references, source, "TraversalBoundaries", Inspect);
@@ -228,6 +272,18 @@ internal static partial class SerializerIssueRegression
                 if ((boundary != null) != expected.Item2 || boundary != null &&
                     !boundary.AttributeLists.ToString().Contains("NoInlining", StringComparison.Ordinal))
                     throw new InvalidOperationException("Unexpected dense value boundary for " + expected.Item1);
+            }
+
+            foreach (var expected in new[] { ("ConcurrentDictionaryOfIntAndStringFormatter", true),
+                ("ConcurrentDictionaryOfBoolAndStringFormatter", false) })
+            {
+                string body = owners.Where(owner => owner.Identifier.ValueText == expected.Item1).SelectMany(owner => owner.Members)
+                    .OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == "Write" && method.Body != null).ToString();
+                if (body.Contains("WriteReservedUtf16Record(ref text", StringComparison.Ordinal) != expected.Item2 ||
+                    expected.Item2 && (!body.Contains("CommitRecords(ref cursor)", StringComparison.Ordinal) ||
+                        !body.Contains("EnumerateConcurrentDictionary", StringComparison.Ordinal) ||
+                        !body.Contains("WritePairSlow", StringComparison.Ordinal)))
+                    throw new InvalidOperationException("Unexpected concurrent integer/string pair boundary in " + expected.Item1);
             }
 
             CheckJsonTier("HashSetOfIntFormatter", "ReadJson", fullOptimization: false);

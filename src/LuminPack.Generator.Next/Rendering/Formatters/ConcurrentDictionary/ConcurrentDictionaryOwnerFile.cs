@@ -17,7 +17,7 @@ internal static class ConcurrentDictionaryOwnerFile
     internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations) =>
         PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec);
 
-    /// <summary>Writes fixed UTF-16 keys and eligible values in a proven output window.</summary>
+    /// <summary>Writes pairs with fixed UTF-16 text and eligible scalars in a proven output window.</summary>
     /// <param name="c">The generated dictionary write context.</param>
     private static void Write(PairedDictionaryContext c)
     {
@@ -60,7 +60,10 @@ internal static class ConcurrentDictionaryOwnerFile
         if (pairCursor)
         {
             // Publish the captured window before the original pair operation can grow the writer.
-            ParallelDictionaryWrite.WriteStringKeyPairIfFits(w, c.Memory);
+            if (c.Key == "string")
+                ParallelDictionaryWrite.WriteStringKeyPairIfFits(w, c.Memory);
+            else
+                WriteIntegerKeyPairIfFits();
             w.Line("operationState.CommitRecords(ref cursor);");
             w.Line("WritePairSlow(ref operationState, key, in itemValue);");
             w.Line("cursor = ref operationState.Cursor;");
@@ -86,7 +89,7 @@ internal static class ConcurrentDictionaryOwnerFile
         w.Line("operationState.CheckBuffer();");
         w.Blank();
         w.Line(w.MethodImpl("NoInlining"));
-        w.Line("static void WritePairSlow(scoped ref " + writer + " operationState, string key, scoped in " + c.Value + " itemValue)");
+        w.Line("static void WritePairSlow(scoped ref " + writer + " operationState, " + c.Key + " key, scoped in " + c.Value + " itemValue)");
         w.Open();
         c.WriteMember(c.Key, "key");
         c.WriteMember(c.Value, "itemValue");
@@ -97,6 +100,20 @@ internal static class ConcurrentDictionaryOwnerFile
         w.Open();
         c.CountedWrite();
         w.Close();
+
+        void WriteIntegerKeyPairIfFits()
+        {
+            string keyWidth = c.Memory + ".SizeOf<" + c.Key + ">()";
+            w.Line("if ((long)room - " + keyWidth + " >= sizeof(int) + (long)(itemValue?.Length ?? 0) * sizeof(char))");
+            w.Open();
+            w.Line("int keyBytes = " + writer + ".Write(ref cursor, in key);");
+            w.Line("ref byte text = ref " + c.Memory + ".Add(ref cursor, (nint)(uint)keyBytes);");
+            w.Line("int pairBytes = keyBytes + " + writer + ".WriteReservedUtf16Record(ref text, itemValue);");
+            w.Line("cursor = ref " + c.Memory + ".Add(ref cursor, (nint)(uint)pairBytes);");
+            w.Line("room -= pairBytes;");
+            w.Line("continue;");
+            w.Close();
+        }
     }
 
     /// <summary>Stages fresh pairs and refills reused targets in wire order.</summary>
