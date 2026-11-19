@@ -273,25 +273,28 @@ internal static class RectangularArrayOwnerFile
                 w.Close();
                 w.Blank();
             }
-            w.Line("value = " + array + ";");
-            First(w, item);
+            w.Line("var replacement = " + array + ";");
+            First(w, item, "replacement");
             if (layout != null)
-            {
                 FormatterStorageEmitter.Payload(w, layout, "first", "length", false);
-                return;
-            }
-            w.Line("if (length == 0) return;");
-            if (arrayContract?.Supports("ReadFramedNullableInt32s") == true && !raw)
+            else
             {
-                w.Line("reader.ReadFramedNullableInt32s(" + Marshal + ".CreateSpan(ref first, length));");
-                return;
+                w.Line("if (length != 0)");
+                w.Open();
+                if (arrayContract?.Supports("ReadFramedNullableInt32s") == true)
+                    w.Line("reader.ReadFramedNullableInt32s(" + Marshal + ".CreateSpan(ref first, length));");
+                else
+                {
+                    w.Line("int index = 0;");
+                    w.Line("do");
+                    w.Open();
+                    w.Line(owner + ".Read<" + Profile + ">(ref reader, ref " + Unsafe + ".Add(ref first, (nint)(uint)index));");
+                    w.Close();
+                    w.Line("while (++index < length);");
+                }
+                w.Close();
             }
-            w.Line("int index = 0;");
-            w.Line("do");
-            w.Open();
-            w.Line(owner + ".Read<" + Profile + ">(ref reader, ref " + Unsafe + ".Add(ref first, (nint)(uint)index));");
-            w.Close();
-            w.Line("while (++index < length);");
+            w.Line("value = replacement;");
         }
 
         void NullableReadSupport(CodeWriter w)

@@ -11,6 +11,7 @@ namespace LuminPack.Utility;
 public struct LuminPackStreamInput : IDisposable
 {
     private const int InitialCapacity = 4096;
+    private const int MaximumInitialCapacityHint = 128 * 1024;
     private byte[]? _array;
     private int _length;
 
@@ -35,13 +36,20 @@ public struct LuminPackStreamInput : IDisposable
             LuminPackExceptionHelper.ThrowArgumentNullException(nameof(stream));
         long ceiling = (long)maximum + 1;
         long capacity = InitialCapacity;
-        // A seekable stream reports what remains, so the first rental usually holds the whole payload.
+        long capacityHint = 0;
         if (stream.CanSeek)
         {
             capacity = Math.Max(1, stream.Length - stream.Position);
             // Keep room for the existing EOF read when the payload exactly fills a pool bucket.
             if (capacity < MaxArrayLength)
                 capacity++;
+            // Other implementations can report a length unrelated to what their ReadAsync supplies.
+            Type streamType = stream.GetType();
+            if (streamType != typeof(MemoryStream) && streamType != typeof(FileStream))
+            {
+                capacityHint = capacity;
+                capacity = Math.Min(capacity, MaximumInitialCapacityHint);
+            }
         }
         byte[] array = ArrayPool<byte>.Shared.Rent((int)Math.Min(Math.Min(capacity, ceiling), MaxArrayLength));
         int length = 0;
@@ -53,7 +61,9 @@ public struct LuminPackStreamInput : IDisposable
                 {
                     if (length >= MaxArrayLength)
                         global::LuminPack.Security.LuminPackInputPolicy.CheckInput((long)length + 1, MaxArrayLength);
-                    byte[] grown = ArrayPool<byte>.Shared.Rent((int)Math.Min(Math.Min((long)length * 2, ceiling), MaxArrayLength));
+                    // Past the first rental, size near a plausible hint to avoid repeated copies of a growing payload.
+                    long nextCapacity = Math.Max((long)length * 2, Math.Min(capacityHint, (long)length * 4 + 1));
+                    byte[] grown = ArrayPool<byte>.Shared.Rent((int)Math.Min(Math.Min(nextCapacity, ceiling), MaxArrayLength));
                     Buffer.BlockCopy(array, 0, grown, 0, length);
                     ArrayPool<byte>.Shared.Return(array);
                     array = grown;
