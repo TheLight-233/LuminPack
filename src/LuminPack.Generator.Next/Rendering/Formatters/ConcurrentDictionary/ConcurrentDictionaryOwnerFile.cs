@@ -39,12 +39,6 @@ internal static class ConcurrentDictionaryOwnerFile
 
         const string writer = "global::LuminPack.Core.LuminPackWriter";
         string width = c.Memory + ".SizeOf<" + c.Value + ">()";
-        w.Line("if (!" + ParallelDictionaryWrite.FixedUtf16LengthProfile + ")");
-        w.Open();
-        w.Line("WriteCounted(ref operationState, value);");
-        w.Line("goto operationComplete_RootWrite;");
-        w.Close();
-        w.Blank();
         w.Line("int countPosition = operationState.BeginCollection();");
         w.Line("int count = 0;");
         if (pairCursor)
@@ -72,10 +66,10 @@ internal static class ConcurrentDictionaryOwnerFile
         else
         {
             // Widen before subtracting so a cursor past the checked limit cannot wrap into a valid room count.
-            w.Line("if ((long)operationState.RecordRoom() - " + width + " >= " + writer + ".Utf16RecordBound(key))");
+            w.Line("if ((long)operationState.RecordRoom() - " + width + " >= operationState.WindowRecordBound<TLuminProfile>(key))");
             w.Open();
             w.Line("ref byte cursor = ref operationState.Cursor;");
-            w.Line("int written = " + writer + ".WriteReservedUtf16Record(ref cursor, key);");
+            w.Line("int written = operationState.WriteReservedRecordWidth<TLuminProfile>(ref cursor, key);");
             w.Line(writer + ".Write(ref " + c.Memory + ".Add(ref cursor, unchecked((nint)(uint)written)), in itemValue);");
             w.Line("operationState.CompleteRun(written + " + width + ");");
             w.Close();
@@ -94,21 +88,15 @@ internal static class ConcurrentDictionaryOwnerFile
         c.WriteMember(c.Key, "key");
         c.WriteMember(c.Value, "itemValue");
         w.Close();
-        w.Blank();
-        w.Line(w.MethodImpl("AggressiveInlining"));
-        w.Line("static void WriteCounted(scoped ref " + writer + " operationState, " + c.Dictionary + " value)");
-        w.Open();
-        c.CountedWrite();
-        w.Close();
 
         void WriteIntegerKeyPairIfFits()
         {
             string keyWidth = c.Memory + ".SizeOf<" + c.Key + ">()";
-            w.Line("if ((long)room - " + keyWidth + " >= sizeof(int) + (long)(itemValue?.Length ?? 0) * sizeof(char))");
+            w.Line("if ((long)room - " + keyWidth + " >= operationState.WindowRecordBound<TLuminProfile>(itemValue))");
             w.Open();
             w.Line("int keyBytes = " + writer + ".Write(ref cursor, in key);");
             w.Line("ref byte text = ref " + c.Memory + ".Add(ref cursor, (nint)(uint)keyBytes);");
-            w.Line("int pairBytes = keyBytes + " + writer + ".WriteReservedUtf16Record(ref text, itemValue);");
+            w.Line("int pairBytes = keyBytes + operationState.WriteReservedRecordWidth<TLuminProfile>(ref text, itemValue);");
             w.Line("cursor = ref " + c.Memory + ".Add(ref cursor, (nint)(uint)pairBytes);");
             w.Line("room -= pairBytes;");
             w.Line("continue;");
@@ -234,7 +222,7 @@ internal static class ConcurrentDictionaryOwnerFile
     private static void ReadKeyRefill(PairedDictionaryContext c)
     {
         var w = c.W;
-        w.Line("if (length > 64 && " + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
+        w.Line("if (length > 64 && default(TLuminProfile).SupportsUtf16Runs() &&");
         w.Line("    TryRefillByKey(ref operationState, value, length))");
         w.Indented(() => w.Line("goto operationComplete_RootRead;"));
         w.Blank();

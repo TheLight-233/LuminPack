@@ -35,14 +35,11 @@ internal static partial class SortedListOwnerFile
     private static void PrepareOrderedJson(PairedDictionaryContext c)
     {
         var w = c.W;
-        const string options = "global::LuminPack.Option.";
         w.Line("bool appendOrdered = false;");
         w.Line("if (value is null)");
         w.Open();
         w.Line("value = new " + c.Dictionary + "();");
-        w.Line("appendOrdered = (typeof(TLuminProfile) == typeof(" + options + "LuminPackUtf16LengthOptions) ||");
-        w.Line("    typeof(TLuminProfile) == typeof(" + options + "LuminPackUtf8LengthOptions) ||");
-        w.Line("    typeof(TLuminProfile) == typeof(" + options + "LuminPackDefaultOptions)) &&");
+        w.Line("appendOrdered = global::LuminPack.Core.LuminPackJsonReader.CanStageCollection<TLuminProfile>() &&");
         w.Line("    global::LuminPack.Code.LuminPackCollectionAccess.CanAppendSortedListOrdered(value);");
         w.Close();
         w.Line("else");

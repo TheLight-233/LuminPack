@@ -101,12 +101,12 @@ internal static class FormatterConcurrentTraits
     {
         var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
         return writer != null &&
-            HasBinaryWriterOperation(writer, "RecordRoom", false, SpecialType.System_Int32) &&
-            HasBinaryWriterOperation(writer, "Utf16RecordBound", true, SpecialType.System_Int32,
+            HasBinaryWriterOperation(writer, "RecordRoom", false, 0, SpecialType.System_Int32) &&
+            HasBinaryWriterOperation(writer, "WindowRecordBound", false, 1, SpecialType.System_Int64,
                 (SpecialType.System_String, RefKind.None)) &&
-            HasBinaryWriterOperation(writer, "WriteReservedUtf16Record", true, SpecialType.System_Int32,
+            HasBinaryWriterOperation(writer, "WriteReservedRecordWidth", false, 1, SpecialType.System_Int32,
                 (SpecialType.System_Byte, RefKind.Ref), (SpecialType.System_String, RefKind.None)) &&
-            HasBinaryWriterOperation(writer, "CompleteRun", false, SpecialType.System_Void,
+            HasBinaryWriterOperation(writer, "CompleteRun", false, 0, SpecialType.System_Void,
                 (SpecialType.System_Int32, RefKind.None));
     }
 
@@ -117,9 +117,9 @@ internal static class FormatterConcurrentTraits
     {
         var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
         return writer != null && HasBinaryTextPairWriter(compilation) &&
-            HasBinaryWriterOperation(writer, "RecordRoom", false, SpecialType.System_Int32,
+            HasBinaryWriterOperation(writer, "RecordRoom", false, 0, SpecialType.System_Int32,
                 (SpecialType.System_Byte, RefKind.Ref)) &&
-            HasBinaryWriterOperation(writer, "CommitRecords", false, SpecialType.System_Void,
+            HasBinaryWriterOperation(writer, "CommitRecords", false, 0, SpecialType.System_Void,
                 (SpecialType.System_Byte, RefKind.Ref));
     }
 
@@ -151,8 +151,8 @@ internal static class FormatterConcurrentTraits
     {
         var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
         return writer != null &&
-            HasBinaryWriterOperation(writer, "RecordRoom", false, SpecialType.System_Int32) &&
-            HasBinaryWriterOperation(writer, "CompleteRun", false, SpecialType.System_Void, (SpecialType.System_Int32, RefKind.None));
+            HasBinaryWriterOperation(writer, "RecordRoom", false, 0, SpecialType.System_Int32) &&
+            HasBinaryWriterOperation(writer, "CompleteRun", false, 0, SpecialType.System_Void, (SpecialType.System_Int32, RefKind.None));
     }
 
     /// <summary>Checks the runtime's optional bounded writer for a dense dictionary of raw pairs.</summary>
@@ -279,15 +279,16 @@ internal static class FormatterConcurrentTraits
     /// <param name="owner">The binary writer type.</param>
     /// <param name="name">The operation name.</param>
     /// <param name="isStatic">Whether the operation is static.</param>
+    /// <param name="arity">The number of required type arguments.</param>
     /// <param name="result">The operation's return type.</param>
     /// <param name="parameters">The required types and passing conventions.</param>
     /// <returns>Whether the operation can be called by generated code.</returns>
-    private static bool HasBinaryWriterOperation(INamedTypeSymbol owner, string name, bool isStatic, SpecialType result,
+    private static bool HasBinaryWriterOperation(INamedTypeSymbol owner, string name, bool isStatic, int arity, SpecialType result,
         params (SpecialType Type, RefKind Passing)[] parameters)
     {
         foreach (IMethodSymbol method in owner.GetMembers(name).OfType<IMethodSymbol>())
         {
-            if (method.DeclaredAccessibility != Accessibility.Public || method.IsStatic != isStatic || method.Arity != 0 ||
+            if (method.DeclaredAccessibility != Accessibility.Public || method.IsStatic != isStatic || method.Arity != arity ||
                 method.ReturnType.SpecialType != result || method.ReturnsByRef || method.ReturnsByRefReadonly ||
                 method.Parameters.Length != parameters.Length)
                 continue;

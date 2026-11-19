@@ -710,6 +710,31 @@ namespace LuminPack.Core
         public ref byte WriteReservedRecordString<TOptions>(ref byte cursor, string? value)
             where TOptions : struct, ILuminPackOptions => ref default(TOptions).WriteRecord(ref this, ref cursor, value);
 
+        /// <summary>Returns a bound for a speculative write into the current window.</summary>
+        /// <typeparam name="TOptions">The selected binary string profile.</typeparam>
+        /// <param name="value">The nullable string.</param>
+        /// <returns>The codec bound, or a value greater than any window when the worst case could overflow.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly long WindowRecordBound<TOptions>(string? value) where TOptions : struct, ILuminPackOptions =>
+            value is { Length: > (int.MaxValue - 10) / 3 } ? (long)int.MaxValue + 1 : RecordBound<TOptions>(value);
+
+        /// <summary>Writes a reserved record inside an unpublished batch and returns its actual width.</summary>
+        /// <typeparam name="TOptions">The selected binary string profile.</typeparam>
+        /// <param name="cursor">The local cursor followed by the complete proven bound.</param>
+        /// <param name="value">The nullable string.</param>
+        /// <returns>The number of bytes written for this record.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int WriteReservedRecordWidth<TOptions>(ref byte cursor, string? value) where TOptions : struct, ILuminPackOptions
+        {
+            ref byte published = ref Current;
+            ref byte end = ref WriteReservedRecordString<TOptions>(ref cursor, value);
+            // On failure the codec owns the published prefix. On success the batch owns its final commit.
+            CommitRecords(ref published);
+            return (int)Unsafe.ByteOffset(ref cursor, ref end);
+        }
+
         /// <summary>Writes a default-profile string record into room a reservation of its bound proved.</summary>
         /// <param name = "cursor">The caller's current position, followed by at least the record's bound.</param>
         /// <param name = "value">The string, including null or empty.</param>

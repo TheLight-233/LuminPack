@@ -25,7 +25,7 @@ internal static class StackPayloadOwnerFile
         if (c.Supports("GetBottomFirstStackItems") && c.ReservableListElement() is { } element)
         {
             var w = c.W;
-            w.Line("if (operationState.Owner is not null && " + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
+            w.Line("if (operationState.Owner is not null && default(TLuminProfile).SupportsUtf16Runs() &&");
             w.Line("    global::LuminPack.Code.LuminPackCollectionAccess.TryGetBottomFirstStackItems(value, out var items))");
             w.Open();
             w.Line("int header = operationState.BeginCollection();");

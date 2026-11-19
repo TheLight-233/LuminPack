@@ -31,10 +31,7 @@ internal static class QueueOwnerFile
         w.Indented(() => w.Line("value = new " + c.Sequence + "(" + capacity + ");"));
         if (c.Text && c.QueueRefill)
         {
-            const string profile = "global::LuminPack.Option.";
-            w.Line("else if ((typeof(TLuminProfile) == typeof(" + profile + "LuminPackUtf16LengthOptions) ||");
-            w.Line("    typeof(TLuminProfile) == typeof(" + profile + "LuminPackUtf8LengthOptions) ||");
-            w.Line("    typeof(TLuminProfile) == typeof(" + profile + "LuminPackDefaultOptions)) && value.Count != 0)");
+            w.Line("else if (global::LuminPack.Core.LuminPackJsonReader.CanStageCollection<TLuminProfile>() && value.Count != 0)");
             w.Open();
             const string access = "global::LuminPack.Code.LuminPackCollectionAccess.";
             w.Line("var slots = " + access + "PrepareQueueRefill(value, value.Count);");

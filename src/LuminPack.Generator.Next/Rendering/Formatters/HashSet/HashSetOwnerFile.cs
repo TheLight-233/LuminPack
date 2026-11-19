@@ -28,11 +28,8 @@ internal static class HashSetOwnerFile
         w.Line("if (value is null)");
         if (c.Supports("HashSetJsonCapacity"))
         {
-            const string options = "global::LuminPack.Option.";
             w.Open();
-            w.Line("int capacity = typeof(TLuminProfile) == typeof(" + options + "LuminPackUtf16LengthOptions) ||");
-            w.Line("    typeof(TLuminProfile) == typeof(" + options + "LuminPackUtf8LengthOptions) ||");
-            w.Line("    typeof(TLuminProfile) == typeof(" + options + "LuminPackDefaultOptions)");
+            w.Line("int capacity = global::LuminPack.Core.LuminPackJsonReader.CanStageCollection<TLuminProfile>()");
             w.Line("    ? reader.GetArrayCapacityHint<TLuminProfile>(128) : 0;");
             w.Line("value = new " + c.Sequence + "((uint)capacity <= 4096u ? capacity : 0);");
             w.Close();
@@ -71,7 +68,7 @@ internal static class HashSetOwnerFile
             bool entryStorage = c.Forwarded && c.Supports("HashSetTraversal");
             if (stringStorage)
             {
-                c.W.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile +
+                c.W.Line("if (" + "default(TLuminProfile).SupportsUtf16Runs()" +
                     " && global::LuminPack.Code.LuminPackMarshal.TryWriteStringSet<TLuminProfile>(ref operationState, value))");
                 c.W.Indented(() => c.W.Line("goto operationComplete_RootWrite;"));
             }

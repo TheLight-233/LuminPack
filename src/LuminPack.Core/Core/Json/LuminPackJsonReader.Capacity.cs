@@ -14,6 +14,17 @@ namespace LuminPack.Core
 {
     public ref partial struct LuminPackJsonReader
     {
+        /// <summary>Identifies the built-in JSON profiles whose collection lookahead has no observable option getters.</summary>
+        /// <typeparam name="TOptions">The document profile.</typeparam>
+        /// <param name="includeTokens">Whether the existing traversal also accepts the built-in token profiles.</param>
+        /// <returns>Whether the traversal may use its lookahead or staging optimization.</returns>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool CanStageCollection<TOptions>(bool includeTokens = false) where TOptions : struct, ILuminPackOptions =>
+            typeof(TOptions) == typeof(LuminPackDefaultOptions) || typeof(TOptions) == typeof(LuminPackUtf16LengthOptions) ||
+            typeof(TOptions) == typeof(LuminPackUtf8LengthOptions) || (includeTokens &&
+            (typeof(TOptions) == typeof(LuminPackUtf16TokenOptions) || typeof(TOptions) == typeof(LuminPackUtf8TokenOptions)));
+
         /// <summary>Gets a structural sizing hint without advancing or validating the current JSON array.</summary>
         /// <returns>The hinted count, or minus one when sizing is unavailable.</returns>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]

@@ -177,11 +177,8 @@ internal static class ImmutableInterfaceOwnerFile
         if (guardedCulture)
         {
             // A custom profile or culture can run user code while the builder compares successive strings.
-            const string options = "global::LuminPack.Option.";
             const string culture = "global::System.Globalization.CultureInfo";
-            w.Line("if ((typeof(TLuminProfile) == typeof(" + options + "LuminPackDefaultOptions) ||");
-            w.Line("     typeof(TLuminProfile) == typeof(" + options + "LuminPackUtf16LengthOptions) ||");
-            w.Line("     typeof(TLuminProfile) == typeof(" + options + "LuminPackUtf8LengthOptions)) &&");
+            w.Line("if (global::LuminPack.Core.LuminPackJsonReader.CanStageCollection<TLuminProfile>() &&");
             w.Line("    " + culture + ".CurrentCulture.GetType() == typeof(" + culture + "))");
             w.Open();
         }

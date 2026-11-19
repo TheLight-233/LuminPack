@@ -312,8 +312,7 @@ internal sealed partial class PairedDictionaryContext
         bool outlineKey = allowMixedPairs && Key == "string" && Value == "string";
         W.Line("int countPosition = operationState.BeginCollection();");
         W.Line("int count = 0;");
-        if (mixed)
-            W.Line("bool utf16Length = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + " && value.GetType() == typeof(" + Dictionary + ");");
+
         if (unwrapRawDictionary)
         {
             W.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.GetReadOnlyDictionaryStorage(value) is { } rawBacking)");
@@ -329,13 +328,11 @@ internal sealed partial class PairedDictionaryContext
         }
         else if (useTypedBacking)
         {
-            string profileGuard = unwrapMixedDictionary && existingStringBacking ? "utf16Length && " : "";
+            string typeGuard = unwrapMixedDictionary && existingStringBacking ? "value.GetType() == typeof(" + Dictionary + ") && " : "";
             string accessor = unwrapTypedDictionary ? "GetReadOnlyDictionaryStorage" : "GetReadOnlyStringDictionaryStorage";
             string match = existingStringBacking ? " is { Count: > 0 } stored)" : " is { } stored)";
-            W.Line("if (" + profileGuard + "global::LuminPack.Code.LuminPackCollectionAccess." + accessor + "(value)" + match);
+            W.Line("if (" + typeGuard + "global::LuminPack.Code.LuminPackCollectionAccess." + accessor + "(value)" + match);
             W.Open();
-            if (unwrapReferenceDictionary)
-                W.Line("bool writeUtf16Pairs = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ";");
             Entries("stored", combineText: unwrapReferenceDictionary || unwrapMixedDictionary);
             W.Close();
             W.Line("else");
@@ -390,10 +387,10 @@ internal sealed partial class PairedDictionaryContext
             }
             if (combineText && Value != "string")
             {
-                W.Line("if (writeUtf16Pairs && (long)operationState.RecordRoom() >= sizeof(int) + sizeof(char) * (long)(key?.Length ?? 0))");
+                W.Line("if (operationState.RecordRoom() >= operationState.WindowRecordBound<TLuminProfile>(key))");
                 W.Open();
                 W.Line("ref byte record = ref operationState.Cursor;");
-                W.Line("operationState.CompleteRun(global::LuminPack.Core.LuminPackWriter.WriteReservedUtf16Record(ref record, key));");
+                W.Line("operationState.CompleteRun(operationState.WriteReservedRecordWidth<TLuminProfile>(ref record, key));");
                 W.Close();
                 W.Line("else");
                 W.Open();
@@ -406,15 +403,13 @@ internal sealed partial class PairedDictionaryContext
             }
             if (combineText)
             {
-                const string writer = "global::LuminPack.Core.LuminPackWriter";
-                W.Line("if (writeUtf16Pairs)");
                 W.Open();
                 W.Line("string trailing = item." + ValueMember + ";");
-                W.Line("if ((long)operationState.RecordRoom() >= 2 * sizeof(int) + sizeof(char) * ((long)(key?.Length ?? 0) + (trailing?.Length ?? 0)))");
+                W.Line("if ((long)operationState.RecordRoom() >= operationState.WindowRecordBound<TLuminProfile>(key) + operationState.WindowRecordBound<TLuminProfile>(trailing))");
                 W.Open();
                 W.Line("ref byte record = ref operationState.Cursor;");
-                W.Line("int keyBytes = " + writer + ".WriteReservedUtf16Record(ref record, key);");
-                W.Line("int valueBytes = " + writer + ".WriteReservedUtf16Record(ref " + Memory +
+                W.Line("int keyBytes = operationState.WriteReservedRecordWidth<TLuminProfile>(ref record, key);");
+                W.Line("int valueBytes = operationState.WriteReservedRecordWidth<TLuminProfile>(ref " + Memory +
                     ".Add(ref record, (nint)(uint)keyBytes), trailing);");
                 W.Line("operationState.CompleteRun(keyBytes + valueBytes);");
                 W.Line("continue;");
@@ -559,8 +554,6 @@ internal sealed partial class PairedDictionaryContext
         bool mixed = ParallelDictionaryWrite.SupportsMixed(this);
         bool stringPairs = UsesRawOrStringEntries && Key == "string" && Value == "string" && Supports("BinaryStringPairPrefix");
         bool boundedKey = Key == "string" && OrdinaryObjectValue && Supports("SortedTreeBinaryBoundedKey");
-        if (mixed || stringPairs || boundedKey)
-            W.Line("bool utf16Length = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ";");
         W.Line("int index = 0;");
         W.Line("do");
         W.Open();
@@ -569,12 +562,9 @@ internal sealed partial class PairedDictionaryContext
             ParallelDictionaryWrite.WriteMixedIfFits(this, "pair.Key", "pair.Value", byRef: false);
         if (stringPairs)
         {
-            W.Line("if (utf16Length)");
-            W.Open();
             W.Line("index += operationState.WriteStringPairPrefix<TLuminProfile>(" + marshal + ".CreateSpan(ref pair, count - index));");
             W.Line("if (index == count) break;");
             W.Line("pair = ref " + Memory + ".Add(ref firstPair, (nint)(uint)index);");
-            W.Close();
         }
         W.Line(Key + " key = pair.Key;");
         if (boundedKey)

@@ -380,7 +380,7 @@ internal sealed partial class EnumerableOwnerContext
         W.Open();
         if (Text && Supports("WriteCheckedStringSpan"))
         {
-            W.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + ")");
+            W.Line("if (default(TLuminProfile).SupportsUtf16Runs())");
             W.Open();
             W.Line("operationState.EnsureAdditionalCapacity(4);");
             W.Line("operationState.WriteCollectionHeader(count);");
@@ -545,7 +545,7 @@ internal sealed partial class EnumerableOwnerContext
             bool checkedRun = concurrent && Supports("WriteCheckedStringSpan");
             if (checkedRun)
             {
-                W.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + ")");
+                W.Line("if (default(TLuminProfile).SupportsUtf16Runs())");
                 W.Open();
                 W.Line("var items = new global::System.Span<string>(snapshot, 0, count);");
                 W.Line("global::System.MemoryExtensions.Reverse(items);");

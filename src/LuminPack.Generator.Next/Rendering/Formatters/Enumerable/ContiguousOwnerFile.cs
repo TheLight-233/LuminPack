@@ -596,12 +596,7 @@ internal static class ContiguousOwnerFile
                 // Exact mutable arrays need the count before reusing element slots. Only the trusted built-in
                 // profiles can decode a fresh result before validating the rest of the array.
                 bool seedStrings = shape == ContiguousShape.ImmutableArray && element.Type == "string";
-                w.Line("if (" + (seedStrings ? "value.IsDefault && (" : "") +
-                    "typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf16LengthOptions) ||");
-                w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf8LengthOptions) ||");
-                w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf16TokenOptions) ||");
-                w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf8TokenOptions) ||");
-                w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackDefaultOptions))" + (seedStrings ? ")" : ""));
+                w.Line("if (" + (seedStrings ? "value.IsDefault && " : "") + "global::LuminPack.Core.LuminPackJsonReader.CanStageCollection<TLuminProfile>(includeTokens: true))");
                 w.Open();
                 if (shape == ContiguousShape.Array)
                 {

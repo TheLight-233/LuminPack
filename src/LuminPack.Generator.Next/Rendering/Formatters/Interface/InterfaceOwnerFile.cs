@@ -89,7 +89,7 @@ internal static class InterfaceOwnerFile
         else if (reservedElement != null)
         {
             string list = c.Memory + ".As<" + type + ">(value)";
-            w.Line("if (operationState.Owner is not null && " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ")");
+            w.Line("if (operationState.Owner is not null && default(TLuminProfile).SupportsUtf16Runs())");
             w.Open();
             c.WriteReservedList(list, reservedElement);
             w.Close();
@@ -99,7 +99,7 @@ internal static class InterfaceOwnerFile
         else if (setInterface && c.Text && c.Supports("StringSetWriter"))
         {
             string set = c.Memory + ".As<" + type + ">(value)";
-            w.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile +
+            w.Line("if (" + "default(TLuminProfile).SupportsUtf16Runs()" +
                 " && global::LuminPack.Code.LuminPackMarshal.TryWriteStringSet<TLuminProfile>(ref operationState, " + set + "))");
             w.Indented(() => w.Line("goto operationComplete_RootWrite;"));
             w.Line("WriteKnown(ref operationState, " + set + ");");
@@ -152,7 +152,7 @@ internal static class InterfaceOwnerFile
             {
                 if (!c.Supports(family + "InterfaceTraversal"))
                     continue;
-                string profile = c.Text ? ParallelDictionaryWrite.FixedUtf16LengthProfile + " && " : string.Empty;
+                string profile = c.Text ? "default(TLuminProfile).SupportsUtf16Runs()" + " && " : string.Empty;
                 w.Line("else if (" + profile + "value is " + immutable + family + "<" + scalar + "> " + family + "Items)");
                 w.Indented(() => w.Line("Write" + family + "(ref operationState, " + family + "Items);"));
             }
@@ -297,7 +297,7 @@ internal static class InterfaceOwnerFile
             if (!c.Text || !c.Supports("WriteSetInterfaceStrings" + family))
                 return;
 
-            w.Line("if (items.Count >= " + (isFrozen ? "1" : "16") + " && " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ")");
+            w.Line("if (items.Count >= " + (isFrozen ? "1" : "16") + " && default(TLuminProfile).SupportsUtf16Runs())");
             w.Open();
             w.Line("int capturedHeader = operationState.BeginCollection();");
             if (isFrozen)

@@ -77,8 +77,7 @@ internal static class PriorityQueueOwnerFile
         string text = c.Key == "string" ? "element" : "priority";
         w.Line("int position = operationState.BeginCollection();");
         w.Line("int count = 0;");
-        w.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
-        w.Line("    value.GetType() == typeof(" + c.Dictionary + ") &&");
+        w.Line("if (value.GetType() == typeof(" + c.Dictionary + ") &&");
         w.Line("    " + access + ".TryGetPriorityQueueTraversal(value, out var nodes, out int version))");
         w.Open();
         w.Line("count = nodes.Length;");
@@ -90,18 +89,18 @@ internal static class PriorityQueueOwnerFile
         w.Open();
         w.Line(access + ".CheckPriorityQueueTraversalVersion(value, version);");
         w.Line("var (element, priority) = " + c.Memory + ".Add(ref first, (nint)(uint)index);");
-        w.Line("if ((long)operationState.RecordRoom() - " + rawWidth + " >= " + writer + ".Utf16RecordBound(" + text + "))");
+        w.Line("if ((long)operationState.RecordRoom() - " + rawWidth + " >= operationState.WindowRecordBound<TLuminProfile>(" + text + "))");
         w.Open();
         w.Line("ref byte record = ref operationState.Cursor;");
         if (c.Key == "string")
         {
-            w.Line("int written = " + writer + ".WriteReservedUtf16Record(ref record, element);");
+            w.Line("int written = operationState.WriteReservedRecordWidth<TLuminProfile>(ref record, element);");
             w.Line(writer + ".Write(ref " + c.Memory + ".Add(ref record, (nint)(uint)written), in priority);");
         }
         else
         {
             w.Line(writer + ".Write(ref record, in element);");
-            w.Line("int written = " + writer + ".WriteReservedUtf16Record(ref " + c.Memory + ".Add(ref record, " + rawWidth + "), priority);");
+            w.Line("int written = operationState.WriteReservedRecordWidth<TLuminProfile>(ref " + c.Memory + ".Add(ref record, " + rawWidth + "), priority);");
         }
         w.Line("operationState.CompleteRun(written + " + rawWidth + ");");
         w.Close();
@@ -140,7 +139,6 @@ internal static class PriorityQueueOwnerFile
         w.Line("static bool TryRefill(scoped ref global::LuminPack.Core.LuminPackReader operationState, " + c.Dictionary + " queue, int length)");
         w.Open();
         w.Line("if (!(length > 0 && queue.Count == length && queue.GetType() == typeof(" + c.Dictionary + ") &&");
-        w.Line("    " + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
         w.Line("    global::System.Object.ReferenceEquals(queue.Comparer, global::System.Collections.Generic.Comparer<" + c.Value + ">.Default) &&");
         w.Line("    " + access + ".TryGetPriorityQueueTraversal(queue, out var nodes, out _) && nodes.Length == length))");
         w.Indented(() => w.Line("return false;"));

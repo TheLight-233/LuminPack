@@ -205,9 +205,8 @@ internal static class DictionaryOwnerFile
                         w.Line("ref var entryRef = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(dictionaryView._entries!);");
                         if (stringPairCursor)
                         {
-                            w.Line("bool bounded = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ";");
                             w.Line("ref byte cursor = ref operationState.Cursor;");
-                            w.Line("int room = bounded ? operationState.RecordRoom(ref cursor) : 0;");
+                            w.Line("int room = operationState.RecordRoom(ref cursor);");
                         }
                         w.Line("int index = 0;");
                         w.Line("do");
@@ -225,7 +224,7 @@ internal static class DictionaryOwnerFile
                         w.Close();
                         w.Line("while (++index < count);");
                         if (stringPairCursor)
-                            w.Line("if (bounded) operationState.CommitRecords(ref cursor);");
+                            w.Line("operationState.CommitRecords(ref cursor);");
                     }
                     w.Line("if (dictionaryView._version != version || dictionaryView._count != count || dictionaryView._freeCount != 0)");
                     w.Indented(() => w.Line(exception + ".ThrowCollectionModifiedDuringSerialization();"));
@@ -302,19 +301,13 @@ internal static class DictionaryOwnerFile
 
         void EmitDenseStringPair()
         {
-            w.Line("if (bounded)");
-            w.Open();
             w.Line("string key = entry.Key;");
             w.Line(value + " itemValue = entry.Value;");
             ParallelDictionaryWrite.WriteStringKeyPairIfFits(w, memory, rawValue ? rawWidth : null);
             w.Line("operationState.CommitRecords(ref cursor);");
-            w.Close();
             w.Line("WriteTextPairSlow<TLuminProfile>(ref operationState, in entry.Key, in entry.Value);");
-            w.Line("if (bounded)");
-            w.Open();
             w.Line("cursor = ref operationState.Cursor;");
             w.Line("room = operationState.RecordRoom(ref cursor);");
-            w.Close();
         }
 
         void EmitTextPair()
@@ -326,18 +319,17 @@ internal static class DictionaryOwnerFile
             w.Line(generic + options);
             w.Open();
             w.Line("string text;");
-            w.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
-            w.Line("    (long)operationState.RecordRoom() - " + rawWidth + " >= " + runtimeWriter + ".Utf16RecordBound(text = " + text + "))");
+            w.Line("if ((long)operationState.RecordRoom() - " + rawWidth + " >= operationState.WindowRecordBound<TLuminProfile>(text = " + text + "))");
             w.Open();
             w.Line("ref byte cursor = ref operationState.Cursor;");
             if (rawKey)
             {
                 w.Line(runtimeWriter + ".Write(ref cursor, in " + scalar + ");");
-                w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref " + memory + ".Add(ref cursor, " + rawWidth + "), text);");
+                w.Line("int written = operationState.WriteReservedRecordWidth<TLuminProfile>(ref " + memory + ".Add(ref cursor, " + rawWidth + "), text);");
             }
             else
             {
-                w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref cursor, text);");
+                w.Line("int written = operationState.WriteReservedRecordWidth<TLuminProfile>(ref cursor, text);");
                 w.Line(runtimeWriter + ".Write(ref " + memory + ".Add(ref cursor, (nint)(uint)written), in " + scalar + ");");
             }
             w.Line("operationState.CompleteRun(written + " + rawWidth + ");");

@@ -7,13 +7,6 @@ internal static class ParallelDictionaryWrite
 {
     private const string Writer = "global::LuminPack.Core.LuminPackWriter";
 
-    /// <summary>Tests the built-in profiles for which the writer can skip reading option properties.</summary>
-    internal const string FixedUtf16LengthProfile =
-        "(typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf16LengthOptions) || " +
-        "typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackDefaultOptions) || " +
-        "typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackFixedOptions<global::LuminPack.Option.LuminPackUtf16LengthOptions>) || " +
-        "typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackFixedOptions<global::LuminPack.Option.LuminPackDefaultOptions>))";
-
     /// <summary>Checks whether both members can use the fixed mixed-record writer.</summary>
     /// <param name="c">The dictionary writer's contracts.</param>
     /// <returns>Whether a string and a native value can share a bounded record.</returns>
@@ -26,13 +19,13 @@ internal static class ParallelDictionaryWrite
     /// <param name="rawWidth">The raw value width, or null for a string value.</param>
     internal static void WriteStringKeyPairIfFits(CodeWriter w, string memory, string? rawWidth = null)
     {
-        string valueBound = rawWidth ?? Writer + ".Utf16RecordBound(itemValue)";
-        w.Line("if ((long)room >= (long)" + Writer + ".Utf16RecordBound(key) + " + valueBound + ")");
+        string valueBound = rawWidth ?? "operationState.WindowRecordBound<TLuminProfile>(itemValue)";
+        w.Line("if ((long)room >= (long)operationState.WindowRecordBound<TLuminProfile>(key) + " + valueBound + ")");
         w.Open();
-        w.Line("int keyBytes = " + Writer + ".WriteReservedUtf16Record(ref cursor, key);");
+        w.Line("int keyBytes = operationState.WriteReservedRecordWidth<TLuminProfile>(ref cursor, key);");
         w.Line("ref byte valueStart = ref " + memory + ".Add(ref cursor, (nint)(uint)keyBytes);");
         w.Line(rawWidth is null
-            ? "int valueBytes = " + Writer + ".WriteReservedUtf16Record(ref valueStart, itemValue);"
+            ? "int valueBytes = operationState.WriteReservedRecordWidth<TLuminProfile>(ref valueStart, itemValue);"
             : "int valueBytes = " + Writer + ".Write(ref valueStart, in itemValue);");
         w.Line("int width = keyBytes + valueBytes;");
         w.Line("cursor = ref " + memory + ".Add(ref cursor, (nint)(uint)width);");
@@ -52,21 +45,20 @@ internal static class ParallelDictionaryWrite
         bool textKey = c.Key == "string";
         string rawWidth = c.Memory + ".SizeOf<" + (textKey ? c.Value : c.Key) + ">()";
         string native = (byRef ? "in " : "") + (textKey ? value : key);
-        w.Line("if (utf16Length)");
         w.Open();
         w.Line("string text = " + (textKey ? key : value) + ";");
-        w.Line("if ((long)operationState.RecordRoom() - " + rawWidth + " >= sizeof(int) + (long)(text?.Length ?? 0) * sizeof(char))");
+        w.Line("if ((long)operationState.RecordRoom() - " + rawWidth + " >= operationState.WindowRecordBound<TLuminProfile>(text))");
         w.Open();
         w.Line("ref byte record = ref operationState.Cursor;");
         if (textKey)
         {
-            w.Line("int written = " + Writer + ".WriteReservedUtf16Record(ref record, text);");
+            w.Line("int written = operationState.WriteReservedRecordWidth<TLuminProfile>(ref record, text);");
             w.Line(Writer + ".Write(ref " + c.Memory + ".Add(ref record, (nint)(uint)written), " + native + ");");
         }
         else
         {
             w.Line(Writer + ".Write(ref record, " + native + ");");
-            w.Line("int written = " + Writer + ".WriteReservedUtf16Record(ref " + c.Memory + ".Add(ref record, " + rawWidth + "), text);");
+            w.Line("int written = operationState.WriteReservedRecordWidth<TLuminProfile>(ref " + c.Memory + ".Add(ref record, " + rawWidth + "), text);");
         }
         w.Line("operationState.CompleteRun(written + " + rawWidth + ");");
         w.Line("continue;");
@@ -79,10 +71,10 @@ internal static class ParallelDictionaryWrite
     internal static void WriteBoundedKey(PairedDictionaryContext c)
     {
         var w = c.W;
-        w.Line("if (utf16Length && operationState.RecordRoom() >= " + Writer + ".Utf16RecordBound(key))");
+        w.Line("if (operationState.RecordRoom() >= operationState.WindowRecordBound<TLuminProfile>(key))");
         w.Open();
         w.Line("ref byte record = ref operationState.Cursor;");
-        w.Line("operationState.CompleteRun(" + Writer + ".WriteReservedUtf16Record(ref record, key));");
+        w.Line("operationState.CompleteRun(operationState.WriteReservedRecordWidth<TLuminProfile>(ref record, key));");
         w.Close();
         w.Line("else");
         w.Indented(() => w.Line("WriteKeySlow(ref operationState, key);"));
@@ -113,8 +105,6 @@ internal static class ParallelDictionaryWrite
         bool mixed = allowMixed && SupportsMixed(c);
         bool boundedKey = allowBoundedKey && c.Key == "string" && c.OrdinaryObjectValue &&
             c.Supports("SortedListBinaryBoundedKey");
-        if (mixed || boundedKey)
-            w.Line("bool utf16Length = " + FixedUtf16LengthProfile + ";");
         w.Line("int index = 0;");
         w.Line("do");
         w.Open();
