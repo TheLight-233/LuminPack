@@ -54,7 +54,7 @@ Manually dispatching `ci.yml` with `run_benchmarks` enabled times both the Bench
 
 `benchmark-matrix.yml` validates round trips on relevant pushes and pull requests. Manual runs of that workflow, or `ci.yml` with `run_benchmarks`, time every format and scenario in FullOpts with Server GC on one runner. Each scenario runs in three processes with nine rounds per process. FullOpts disables tiered compilation and dynamic PGO.
 
-Before final sample calibration, the matrix interleaves shuffled warmup batches across libraries for the same operation. Each library and operation accumulates at least 15 ms of active time and 256 calls. The report flags cases whose first and last three sample medians within a process differ by at least 20%, and retains all samples.
+Before final sample calibration, the matrix interleaves shuffled warmup batches across libraries for the same operation. Each library and operation accumulates at least 256 calls and 15 ms of active time in FullOpts or 300 ms in TieredPGO. TieredPGO also waits for 50 ms without observed process-wide JIT activity, subject to a two-second warmup limit once the call and active-time minimums are met. The report flags cases whose first and last three sample medians within a process differ by at least 20%, and retains all samples.
 
 The `benchmark-matrix` artifact includes the raw JSONL with warmup observations, the machine information, `stability.csv` and `REPORT.md`. Compare library ratios within the same run.
 
