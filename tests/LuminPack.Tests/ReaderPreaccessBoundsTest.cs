@@ -10,6 +10,44 @@ namespace LuminPackUnitTest;
 /// <summary>Checks that advancing fixed reads reject short windows before accessing or changing storage.</summary>
 public sealed class ReaderPreaccessBoundsTest
 {
+#if NET8_0_OR_GREATER
+    /// <summary>Checks both endpoints of every short logical input inside a larger allocation.</summary>
+    [Fact]
+    public void CursorRangesStayInsideTheLogicalSlice()
+    {
+        if (IntPtr.Size != 8)
+            return;
+        byte[] storage = new byte[32];
+        for (int length = 0; length <= 8; length++)
+        for (int offset = -1; offset <= length + 1; offset++)
+        for (int width = 0; width <= 9; width++)
+        {
+            Span<byte> window = storage.AsSpan(4, length);
+            var reader = new LuminPackReader(ref window);
+            reader.Cursor = ref storage[4 + offset];
+            bool valid = offset >= 0 && offset + width <= length;
+            Exception? failure = null;
+            try { reader.EnsureReadable(width); }
+            catch (Exception error) { failure = error; }
+            Assert.Equal(valid, failure == null);
+            Assert.Equal(offset, reader.Position);
+
+            if (width is not (1 or 4 or 8))
+                continue;
+            failure = null;
+            try
+            {
+                if (width == 1) reader.Read<byte>();
+                else if (width == 4) reader.ReadLength();
+                else reader.Read<long>();
+            }
+            catch (Exception error) { failure = error; }
+            Assert.Equal(valid, failure == null);
+            Assert.Equal(valid ? offset + width : offset, reader.Position);
+        }
+    }
+#endif
+
     /// <summary>Out-of-range end positions use wide diagnostics without changing the cursor or exception family.</summary>
     [Fact]
     public void ReadableRangeDiagnosticsDoNotOverflow()

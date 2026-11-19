@@ -168,6 +168,15 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int ValidateCurrentCollectionPayload(ref byte input, int byteCount)
         {
+#if NET8_0_OR_GREATER
+            if (IntPtr.Size == 8)
+            {
+                long room = (long)Unsafe.ByteOffset(ref input, ref _end);
+                if (!ContainsEndRange(room, byteCount, _buffer.Length))
+                    ThrowPayloadOutOfRange((int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref input), byteCount);
+                return (int)room - byteCount;
+            }
+#endif
             nint index = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref input);
             int last = _buffer.Length - byteCount;
             if (last < 0 || unchecked((nuint)index) > (nuint)last)
@@ -309,6 +318,15 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private readonly int EnsureReadableByte(scoped ref byte source)
         {
+#if NET8_0_OR_GREATER
+            if (IntPtr.Size == 8)
+            {
+                long room = (long)Unsafe.ByteOffset(ref source, ref _end);
+                if (!ContainsEndRange(room, 1, _buffer.Length))
+                    LuminPackExceptionHelper.ThrowSpanOutOfRange((long)(int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref source) + 1);
+                return _buffer.Length - (int)room;
+            }
+#endif
             nint offset = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref source);
             if (unchecked((nuint)offset) >= (uint)_buffer.Length)
                 LuminPackExceptionHelper.ThrowSpanOutOfRange((long)unchecked((int)offset) + 1);
@@ -395,7 +413,11 @@ namespace LuminPack.Core
             long remaining = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
 #endif
             // A cursor before the buffer has more than its full length remaining.
+#if NET8_0_OR_GREATER
+            if (IntPtr.Size == 8 ? !ContainsEndRange(remaining, size, _buffer.Length) : remaining < size || remaining > _buffer.Length)
+#else
             if (remaining < size || remaining > _buffer.Length)
+#endif
                 LuminPackExceptionHelper.ThrowSpanOutOfRange((long)Position + size);
         }
 

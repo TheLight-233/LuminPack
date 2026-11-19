@@ -168,6 +168,24 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static LuminPackReaderOptionalState CreateReferenceState() => new LuminPackReaderOptionalState();
 
+#if NET8_0_OR_GREATER
+        /// <summary>Tests whether a complete range can start at this distance from the cached input end.</summary>
+        /// <param name = "remaining">The signed distance from the supplied cursor to the input end.</param>
+        /// <param name = "count">The requested byte count.</param>
+        /// <param name = "length">The complete retained input length.</param>
+        /// <returns>Whether both endpoints are inside the input window.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool ContainsEndRange(long remaining, int count, int length)
+        {
+            if (count == 1)
+                return unchecked((ulong)(remaining - 1)) < (uint)length;
+            // Each valid start leaves between zero and length - count bytes after the range.
+            // A window shorter than count has zero possible starts, including for a negative request.
+            long starts = Math.Max(0L, (long)length + 1 - (uint)count);
+            return unchecked((ulong)(remaining - (uint)count)) < (ulong)starts;
+        }
+#endif
+
         /// <summary>Validates in every build that the requested bytes remain in the input buffer from the cursor.</summary>
         /// <param name = "count">The number of bytes required by the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -179,7 +197,11 @@ namespace LuminPack.Core
 #else
             long room = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
 #endif
+#if NET8_0_OR_GREATER
+            if (IntPtr.Size == 8 ? !ContainsEndRange(room, count, _buffer.Length) : room < (long)(uint)count || count < 0)
+#else
             if (room < (long)(uint)count || count < 0)
+#endif
 #if NET8_0_OR_GREATER
                 LuminPackExceptionHelper.ThrowReaderSpanOutOfRange(Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref Cursor), count);
 #else

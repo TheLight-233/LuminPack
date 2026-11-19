@@ -212,7 +212,16 @@ namespace LuminPack.Core
         /// <summary>Ensures that the buffer can accommodate the requested write.</summary>
         /// <param name = "count">The number of entries involved in the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void EnsureAdditionalCapacity(int count) => EnsureCapacity(Position, count);
+        public void EnsureAdditionalCapacity(int count)
+        {
+#if NET8_0_OR_GREATER
+            if (IntPtr.Size == 8 && (long)RecordDistance() >= (long)(uint)count &&
+                !Unsafe.IsAddressLessThan(ref Cursor, ref MemoryMarshal.GetReference(_buffer)))
+                return;
+#endif
+            // The threshold can precede the physical end. Reaching it alone must not trigger owner growth.
+            EnsureCapacity(Position, count);
+        }
 
         /// <summary>Ensures that the buffer can accommodate the requested write.</summary>
         /// <param name = "index">The position at which the operation starts.</param>
