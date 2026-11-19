@@ -8,7 +8,7 @@ The release workflow builds and validates a candidate for review. In the upstrea
 
 Consumers install one `LuminPack` NuGet package. It contains the Core runtime in `lib/`, the Next generator and CodeFixes in `analyzers/dotnet/cs/`, and the IL postprocessor with Mono.Cecil in `tools/`. The `buildTransitive/` assets enable compiler interception and IL rewriting. Core's portable symbols also ship as a separate `.snupkg` for the NuGet symbol server. Platform adapters, Unity and Burst use their source distributions.
 
-`eng/Versions.props` configures the development target `2.0.0`, the optional previously published Core baseline and the version eligible for NuGet publishing. `LuminPackNuGetPublishVersion` is set to `2.0.0-rc.1`. An empty value leaves the workflow in candidate validation mode.
+`eng/Versions.props` configures the development target `2.0.0`, the optional previously published Core baseline and the version eligible for NuGet publishing. `LuminPackNuGetPublishVersion` is set to `2.0.0-rc.2`. An empty value leaves the workflow in candidate validation mode.
 
 - Use `major.minor.patch` and optional SemVer prerelease identifiers. A candidate's numeric version must match the version file. Numeric prerelease identifiers cannot have leading zeroes.
 - Raise the major version for incompatible public API or wire-contract changes. A major bump never substitutes for approval of a mechanism change.
@@ -20,7 +20,7 @@ Consumers install one `LuminPack` NuGet package. It contains the Core runtime in
 Install PowerShell 7 and the repository's SDKs, including the .NET 11 SDK, then run from the repository root.
 
 ```powershell
-pwsh -File .github/scripts/release.ps1 -Version 2.0.0-rc.1 -ApiBaseRef 'HEAD^'
+pwsh -File .github/scripts/release.ps1 -Version 2.0.0-rc.2 -ApiBaseRef 'HEAD^'
 ```
 
 This builds the package and symbols, runs Core PackageValidation, verifies the package layout and SourceLink, and compares the public APIs with the requested Git commit. The single-package consumers restore from an isolated local feed. They check binary/JSON values, reuse, truncated-input rejection, compiler interception, IL rewriting and registered fallback. The full trimmed/AOT contracts run in the runtime compatibility workflow.
@@ -67,7 +67,7 @@ Change history is generated into build artifacts rather than maintained in READM
 
 1. In GitHub, create the `nuget` environment and set its variable `NUGET_USER` to the NuGet.org account name that owns `LuminPack` (`TheLight233`). The environment can restrict deployment to release tags and require a reviewer.
 2. In the NuGet.org account, add a [Trusted Publishing policy](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) for repository owner `TheLight-233`, repository `LuminPack`, workflow file `release.yml`, and environment `nuget`. Scope it to pushing new versions of the existing package `LuminPack`.
-3. Review the candidate API diff, the change record and the platform checks for the selected commit. Push the authorized `v2.0.0-rc.1` tag pointing at that commit, which must include the workflow. The tag's version must equal `LuminPackNuGetPublishVersion`.
+3. Review the candidate API diff, the change record and the platform checks for the selected commit. Push the authorized `v2.0.0-rc.2` tag pointing at that commit, which must include the workflow. The tag's version must equal `LuminPackNuGetPublishVersion`.
 4. The publish job checks the candidate manifest and hashes, obtains a short-lived NuGet key via OIDC, and uploads the validated package and symbols. If publication is interrupted, rerun the failed job on the same run to reuse the same artifact. Use a new version for a different build.
 
 PR builds, manual validation and all other version tags produce candidate artifacts. The workflow leaves Git tags and GitHub Releases to the maintainer.
