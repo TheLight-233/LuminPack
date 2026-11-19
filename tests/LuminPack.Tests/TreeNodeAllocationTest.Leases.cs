@@ -247,9 +247,9 @@ public sealed partial class TreeNodeAllocationTest
         LuminTreeStorage.CopyTo(sorted, items.AsSpan());
         LuminTreeStorage.CopyTo(immutableSorted, items.AsSpan());
         LuminTreeStorage.CopyTo(hash, items.AsSpan());
-        long[] expected = ArrayPool<long>.Shared.Rent(16);
+        long[] expected = LuminStaging<long>.Rent(items.Length);
         expected[0] = long.MinValue;
-        ArrayPool<long>.Shared.Return(expected);
+        LuminStaging<long>.Return(expected, items.Length);
         long[]? actual = null;
         try
         {
@@ -263,16 +263,15 @@ public sealed partial class TreeNodeAllocationTest
                 else LuminTreeStorage.WriteRaw(ref writer, hash);
             }
             catch (Exception error) { failure = error; }
-            actual = ArrayPool<long>.Shared.Rent(16);
+            actual = LuminStaging<long>.Rent(items.Length);
             Assert.NotNull(failure);
             Assert.Same(expected, actual);
             bool portable = typeof(LuminPackWriter).Assembly.GetCustomAttribute<TargetFrameworkAttribute>()!.FrameworkName.StartsWith(".NETStandard", StringComparison.Ordinal);
-            if (portable || !Environment.Is64BitProcess) Assert.NotEqual(long.MinValue, expected[0]);
+            if (portable || !Environment.Is64BitProcess) Assert.Contains(actual[0], items);
         }
         finally
         {
-            if (actual is not null) ArrayPool<long>.Shared.Return(actual);
-            if (!ReferenceEquals(expected, actual)) ArrayPool<long>.Shared.Return(expected);
+            if (actual is not null) LuminStaging<long>.Return(actual, items.Length);
         }
     }
 
