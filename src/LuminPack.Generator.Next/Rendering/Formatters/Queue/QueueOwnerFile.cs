@@ -21,15 +21,68 @@ internal static class QueueOwnerFile
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec, nonEmptyRawHeaderBytes: 4 * sizeof(int));
 
-    /// <summary>Sizes a fresh queue from the structural hint and clears a reused queue before its element loop.</summary>
+    /// <summary>Sizes a fresh queue or prepares a reused queue for its streaming element loop.</summary>
     /// <param name="c">The queue owner's JSON read context.</param>
     private static void PrepareJson(EnumerableOwnerContext c)
     {
+        var w = c.W;
         string capacity = c.Supports("QueueJsonCapacity") ? "reader.GetArrayCapacityHint<TLuminProfile>(10)" : "";
-        c.W.Line("if (value is null)");
-        c.W.Indented(() => c.W.Line("value = new " + c.Sequence + "(" + capacity + ");"));
-        c.W.Line("else");
-        c.W.Indented(() => c.W.Line("value.Clear();"));
+        w.Line("if (value is null)");
+        w.Indented(() => w.Line("value = new " + c.Sequence + "(" + capacity + ");"));
+        if (c.Text && c.QueueRefill)
+        {
+            const string profile = "global::LuminPack.Option.";
+            w.Line("else if ((typeof(TLuminProfile) == typeof(" + profile + "LuminPackUtf16LengthOptions) ||");
+            w.Line("    typeof(TLuminProfile) == typeof(" + profile + "LuminPackUtf8LengthOptions) ||");
+            w.Line("    typeof(TLuminProfile) == typeof(" + profile + "LuminPackDefaultOptions)) && value.Count != 0)");
+            w.Open();
+            const string access = "global::LuminPack.Code.LuminPackCollectionAccess.";
+            w.Line("var slots = " + access + "PrepareQueueRefill(value, value.Count);");
+            w.Line("if (slots.IsEmpty)");
+            w.Indented(() => w.Line("value.Clear();"));
+            w.Line("else if (ReadQueueSlots(ref reader, value, slots))");
+            w.Indented(() => w.Line("return;"));
+            w.Close();
+        }
+        w.Line("else");
+        w.Indented(() => w.Line("value.Clear();"));
+        if (c.Text && c.QueueRefill)
+            EmitJsonSlotReader(c);
+    }
+
+    /// <summary>Reads the borrowed string window and publishes its successful prefix before the ordinary overflow loop.</summary>
+    /// <param name="c">The queue owner's JSON read context.</param>
+    private static void EmitJsonSlotReader(EnumerableOwnerContext c)
+    {
+        var w = c.W;
+        string reader = w.A("LuminPackJsonReader");
+        string serializer = w.A("LuminPackSerializer");
+        const string access = "global::LuminPack.Code.LuminPackCollectionAccess.";
+        w.Blank();
+        w.Line(w.MethodImpl("NoInlining"));
+        w.Line("static bool ReadQueueSlots(scoped ref " + reader + " reader, " + c.Sequence + " value, scoped global::System.Span<string> slots)");
+        w.Open();
+        w.Line("int filled = 0;");
+        w.Line("try");
+        w.Open();
+        w.Line("while (filled < slots.Length)");
+        w.Open();
+        w.Line("if (!reader.Read<TLuminProfile>() || reader.CurrentTokenType == " + reader + ".JsonTokenType.ArrayEnd)");
+        w.Indented(() => w.Line("return true;"));
+        w.Line("if (reader.CurrentTokenType == " + reader + ".JsonTokenType.ObjectEnd)");
+        w.Indented(() => w.Line("continue;"));
+        w.Line(serializer + ".LuminRoots_String.RootReadJson<TLuminProfile>(ref reader, ref slots[filled]);");
+        w.Line("reader.CompleteValue();");
+        w.Line("filled++;");
+        w.Close();
+        w.Line("return false;");
+        w.Close();
+        w.Line("finally");
+        w.Open();
+        w.Line("slots.Slice(filled).Clear();");
+        w.Line(access + "CompleteQueueRefill(value, filled);");
+        w.Close();
+        w.Close();
     }
 
     /// <summary>Handles write for <c>QueueOwnerFile</c>.</summary>
