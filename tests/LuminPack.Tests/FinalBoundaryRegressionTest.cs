@@ -6,6 +6,7 @@ using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using LuminPack;
 using LuminPack.Option;
@@ -70,16 +71,26 @@ public class FinalBoundaryRegressionTest
         public TSecond Second = default!;
     }
 
-    /// <summary>Checks segmented sequences retain scalar Nullable and padded pair formats.</summary>
+    /// <summary>Checks segmented sequences retain native nullable storage and the scalar padded pair format.</summary>
     [Fact]
-    public void SegmentedSequencesRetainScalarElementContracts()
+    public void SegmentedSequencesRetainElementContracts()
     {
-        var first = new Segment<int?>(new int?[] { 255, null });
-        var last = first.Append(new int?[] { 7 });
+        int?[] values = { 255, null, 7 };
+        var first = new Segment<int?>(values[..2]);
+        var last = first.Append(values[2..]);
         var source = new ReadOnlySequence<int?>(first, 0, last, last.Memory.Length);
         var bytes = LuminPackSerializer.Serialize(source);
-        Assert.Equal(15, bytes.Length);
-        Assert.Equal(source.ToArray(), global::LuminPackUnitTest.ConcreteReads.Read<ReadOnlySequence<int?>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReadOnlySequence<int?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).ToArray());
+        int expectedSize = sizeof(int) + values.Length * Unsafe.SizeOf<int?>();
+        int?[] array = null!;
+        Assert.Equal(expectedSize, LuminPackSerializer.Deserialize(bytes, ref array));
+        Assert.Equal(values, array);
+        foreach (var payload in new[] { bytes, LuminPackSerializer.Serialize(values), LuminPackSerializer.Serialize(new ReadOnlySequence<int?>(values)) })
+        {
+            Assert.Equal(expectedSize, payload.Length);
+            var sequence = default(ReadOnlySequence<int?>);
+            Assert.Equal(expectedSize, LuminPackSerializer.Deserialize(payload, ref sequence));
+            Assert.Equal(values, sequence.ToArray());
+        }
         var pairs = new ReadOnlySequence<KeyValuePair<byte, long>>(new[] { KeyValuePair.Create((byte)17, long.MaxValue) });
         bytes = LuminPackSerializer.Serialize(pairs);
         Assert.Equal(13, bytes.Length);

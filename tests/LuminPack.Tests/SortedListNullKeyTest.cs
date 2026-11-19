@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Option;
@@ -21,10 +22,10 @@ public sealed class SortedListNullKeyTest
     [Fact]
     public void NullableValueKeysRejectAbsentValues()
     {
-        byte[] absent = LuminPackSerializer.Serialize<int?, LuminPackUtf16LengthOptions>((int?)null);
-        byte[] present = LuminPackSerializer.Serialize<int?, LuminPackUtf16LengthOptions>((int?)137);
-        byte[] value = LuminPackSerializer.Serialize<string, LuminPackUtf16LengthOptions>("value");
-        byte[] bytes = BitConverter.GetBytes(2).Concat(absent).Concat(value).Concat(present).Concat(value).ToArray();
+        var source = new SortedList<int?, string> { [-1] = "first", [137] = "second" };
+        byte[] bytes = LuminPackSerializer.Serialize<SortedList<int?, string>, LuminPackUtf16LengthOptions>(source);
+        // Replace the first key's native nullable storage with the default value after the count.
+        bytes.AsSpan(sizeof(int), Unsafe.SizeOf<int?>()).Clear();
         SortedList<int?, string>? target = null;
         var failure = Assert.Throws<ArgumentNullException>(() => LuminPackSerializer.Deserialize<SortedList<int?, string>, LuminPackUtf16LengthOptions>(bytes, ref target));
         Assert.Equal("key", failure.ParamName);
