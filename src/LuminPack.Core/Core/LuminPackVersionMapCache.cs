@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using LuminPack.Code;
 
 namespace LuminPack.Core;
@@ -99,7 +100,8 @@ public sealed class LuminPackVersionMapCache
         keys.Clear();
         for (int index = 0; index < count; index++)
         {
-            ulong descriptor = BinaryPrimitives.ReadUInt64LittleEndian(descriptors.Slice(index * sizeof(ulong)));
+            ulong descriptor = LuminPackReader.Read<ulong>(
+                ref MemoryMarshal.GetReference(descriptors.Slice(index * sizeof(ulong), sizeof(ulong))));
             uint nameKey = (uint)descriptor;
             byte width = (byte)(descriptor >> 56);
             if (width is > 250 and < 254)
