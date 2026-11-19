@@ -970,6 +970,8 @@ internal static class EnumerableOwnerTemplate
             // The built-in integer formatter starts by replacing the destination from the canonical scalar reader.
             string? integerRead = GenericFormatterReuse.Real(scalar) is "int" or "long"
                 ? "reader.Read<" + scalar + ", TLuminProfile>()" : null;
+            bool linkedListReuse = fact.Family.Kind == CollectionKind.Linked &&
+                LinkedListOwnerFile.CanReuseJsonNodes(context);
             // The streaming interface list loop has already selected an element token. An ordinary generated record's
             // state entry only selects a token if needed, calls its read root and completes the value.
             string? itemRoot = null;
@@ -1208,6 +1210,8 @@ internal static class EnumerableOwnerTemplate
                         w.Close();
                         w.Blank();
                     }
+                    if (linkedListReuse)
+                        LinkedListOwnerFile.SelectJsonReuse(context);
                     if (spec.JsonBefore != null)
                         spec.JsonBefore(context);
                     else
@@ -1235,6 +1239,8 @@ internal static class EnumerableOwnerTemplate
                     spec.JsonAfter?.Invoke(context);
                     w.Close();
                     w.Blank();
+                    if (linkedListReuse)
+                        LinkedListOwnerFile.ReadExistingJson(context, jsonReader, options, ReadJsonItems);
                     if (observableBacking)
                     {
                         w.Line(w.MethodImpl("NoInlining"));

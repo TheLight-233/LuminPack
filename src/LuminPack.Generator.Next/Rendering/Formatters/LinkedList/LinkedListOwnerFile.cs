@@ -1,3 +1,4 @@
+using System;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
@@ -188,6 +189,84 @@ internal static class LinkedListOwnerFile
         c.ReadElement("addedItem", fresh: true);
         w.Line("value.AddLast(addedItem);");
         w.Close();
+        RemoveUnusedNodes(w);
+    }
+
+    /// <summary>Checks whether the element parser is built in and cannot observe the destination while refilling.</summary>
+    /// <param name="c">The linked-list formatter context.</param>
+    /// <returns>Whether JSON can refill existing nodes.</returns>
+    internal static bool CanReuseJsonNodes(EnumerableOwnerContext c)
+    {
+        string element = GenericFormatterReuse.Real(c.Scalar);
+        return c.Text || !c.Forwarded && c.Payload == null &&
+            (GenericIdentity.IsRaw(element) || element is "nint" or "nuint");
+    }
+
+    /// <summary>Uses node refill only when neither the collection nor its JSON profile can invoke user code.</summary>
+    /// <param name="c">The linked-list formatter context.</param>
+    internal static void SelectJsonReuse(EnumerableOwnerContext c)
+    {
+        const string options = "global::LuminPack.Option.";
+        const string match = "typeof(TLuminProfile) == typeof(" + options;
+        const string strict = options + "LuminPackGeneralFormat, " + options + "LuminPackDefaultDepth, " + options + "LuminPackStrictJson>";
+        var w = c.W;
+        w.Line("if (value?.First is { } reuseNode && value.GetType() == typeof(" + c.Sequence + ") &&");
+        w.Line("    (" + match + "LuminPackUtf16LengthOptions) || " + match + "LuminPackUtf8LengthOptions) ||");
+        w.Line("     " + match + "LuminPackDefaultOptions) || " + match + "LuminPackUtf16TokenOptions) ||");
+        w.Line("     " + match + "LuminPackUtf8TokenOptions) || " + match + "LuminPackUtf16VarIntOptions) ||");
+        w.Line("     " + match + "LuminPackUtf8VarIntOptions) ||");
+        w.Line("     " + match + "LuminPackOptions<" + options + "LuminPackUtf16LengthOptions, " + strict + ") ||");
+        w.Line("     " + match + "LuminPackOptions<" + options + "LuminPackUtf8LengthOptions, " + strict + ")))");
+        w.Open();
+        w.Line("ReadExistingJson<TLuminProfile>(ref reader, value, reuseNode);");
+        w.Line("return;");
+        w.Close();
+        w.Blank();
+    }
+
+    /// <summary>Emits JSON node refill around the family's streaming scalar or text element parser.</summary>
+    /// <param name="c">The linked-list formatter context.</param>
+    /// <param name="reader">The generated reader type name.</param>
+    /// <param name="options">The generated profile constraint type name.</param>
+    /// <param name="readItems">The ordinary loop, with a callback after each completed value.</param>
+    internal static void ReadExistingJson(EnumerableOwnerContext c, string reader, string options, Action<Action, bool> readItems)
+    {
+        var w = c.W;
+        w.Line(w.MethodImpl("NoInlining"));
+        w.Line("private static void ReadExistingJson<TLuminProfile>(scoped ref " + reader + " reader, " + c.Sequence + " value,");
+        w.Line("    global::System.Collections.Generic.LinkedListNode<" + c.Scalar + "> reuseNode)");
+        w.Line("    where TLuminProfile : struct, " + options);
+        w.Open();
+        // The ordinary JSON reader clears even when the final size matches. Reattach the first node
+        // to invalidate preexisting framework enumerators without losing that node.
+        w.Line("value.Remove(reuseNode);");
+        w.Line("value.AddFirst(reuseNode);");
+        w.Line("try");
+        w.Open();
+        readItems(() =>
+        {
+            w.Line("if (reuseNode is null)");
+            w.Indented(() => w.Line("value.AddLast(item);"));
+            w.Line("else");
+            w.Open();
+            w.Line("reuseNode.Value = item;");
+            w.Line("reuseNode = reuseNode.Next!;");
+            w.Close();
+        }, false);
+        w.Close();
+        w.Line("finally");
+        w.Open();
+        // On failure, keep exactly the completed prefix, as the ordinary JSON reader does.
+        RemoveUnusedNodes(w);
+        w.Close();
+        w.Close();
+        w.Blank();
+    }
+
+    /// <summary>Emits detaching each node after the last value read.</summary>
+    /// <param name="w">The writer in the linked-list read body.</param>
+    private static void RemoveUnusedNodes(CodeWriter w)
+    {
         w.Line("while (reuseNode is not null)");
         w.Open();
         w.Line("var nextNode = reuseNode.Next;");

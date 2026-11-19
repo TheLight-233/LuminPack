@@ -69,6 +69,11 @@ try
         SerializerJsonEnumerableWriteRegression.RunDictionaryReads(references);
         return 0;
     }
+    if (args is ["--verify-json-linked-list-reads"])
+    {
+        SerializerJsonLinkedListReadRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-json-dictionary-boundaries"])
     {
         SerializerJsonEnumerableWriteRegression.RunDictionaryBoundaries(references);
@@ -503,6 +508,7 @@ try
     SerializerJsonSequenceCapacityRegression.Run(references);
     SerializerJsonReuseRegression.Run(references);
     SerializerJsonScalarLoopRegression.Run(references);
+    SerializerJsonLinkedListReadRegression.Run(references);
     SerializerJsonEnumerableWriteRegression.Run(references);
     SerializerJsonEnumerableWriteRegression.RunDictionaryEntries(references);
     SerializerJsonEnumerableWriteRegression.RunDictionaryBoundaries(references);
