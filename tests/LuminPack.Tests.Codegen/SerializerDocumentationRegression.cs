@@ -1,3 +1,5 @@
+extern alias ModelBasedAnalyzer;
+
 using System.Text.RegularExpressions;
 using System.Reflection;
 using System.Xml.Linq;
@@ -5,6 +7,7 @@ using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 /// <summary>Checks that overload documentation describes the same members and layouts as generated formatters.</summary>
 internal static class SerializerDocumentationRegression
@@ -18,6 +21,7 @@ internal static class SerializerDocumentationRegression
         foreach (var mode in new[] { DocumentationMode.None, DocumentationMode.Parse, DocumentationMode.Diagnose })
         {
             VerifyDocumentationMode(references, mode);
+            VerifyVersionDocumentation(references, mode);
         }
         VerifyNavigationEdits(references);
     }
@@ -187,12 +191,6 @@ internal static class SerializerDocumentationRegression
                 [FieldOffset(16)] public double Value;
             }
 
-            [LuminPackable(GeneratorType.VersionTolerant)]
-            public class DocumentationVersioned
-            {
-                [LuminPackOrder(3)] public int VersionedValue;
-            }
-
             [LuminPackable(GeneratorType.CircleReference)]
             public class DocumentationReference
             {
@@ -234,7 +232,7 @@ internal static class SerializerDocumentationRegression
             preprocessorSymbols: ["NET5_0_OR_GREATER", "NET6_0_OR_GREATER", "NET7_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
         string selections = "#pragma warning disable CS1591\nusing System; using System.IO; using System.Buffers; using System.Collections.Generic; using LuminPack; using LuminPack.Utility; public static class DocumentationCalls {" +
             string.Join("\n", new[] { "DocumentationModel", "DocumentationBox<int>", "DocumentationRaw", "DocumentationEmpty", "DocumentationGuarded",
-                "DocumentationVersioned", "DocumentationReference", "KeyValuePair<int,string>", "List<string>", "Dictionary<string,int>", "int[]" }.Select(type => $$"""
+                "DocumentationReference", "KeyValuePair<int,string>", "List<string>", "Dictionary<string,int>", "int[]" }.Select(type => $$"""
                 public static void Select({{type}} value, LuminBufferWriter buffer, IBufferWriter<byte> output, Stream stream,
                     ReadOnlySpan<byte> bytes, ReadOnlySpan<char> chars, ReadOnlySequence<byte> sequence, string json)
                 {
@@ -252,7 +250,7 @@ internal static class SerializerDocumentationRegression
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: options);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
-        var errors = output.GetDiagnostics().Concat(diagnostics).Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error || diagnostic.Id is "CS0419" or "CS1570" or "CS1572" or "CS1573" or "CS1574" or "CS1584" or "CS1587" or "CS1658").ToArray();
+        var errors = output.GetDiagnostics().Concat(diagnostics).Where(IsDocumentationError).ToArray();
         Require(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(error => error.ToString())));
         using var assembly = new MemoryStream();
         using var xml = new MemoryStream();
@@ -391,7 +389,6 @@ internal static class SerializerDocumentationRegression
             "Compact unmanaged remarks lost the value/reference or managed-storage classification.");
         var jsonMembers = raw.Descendants("list").Last().Elements("item").Select(item => item.Element("term")!.Value).ToArray();
         Require(jsonMembers.SequenceEqual(new[] { "Key", "Value" }), "JSON member selection must remain distinct from unmanaged storage copying.");
-        Require(serializer.Contains("Generation mode: <c>VersionTolerant</c>", StringComparison.Ordinal), "Missing version-tolerant mode documentation.");
         Require(serializer.Contains("Generation mode: <c>CircleReference</c>", StringComparison.Ordinal), "Missing circular-reference mode documentation.");
         Require(methods.Where(method => method.TypeParameterList?.Parameters.Any(parameter => parameter.Identifier.ValueText == "T") == true && method.Identifier.ValueText.StartsWith("Serialize", StringComparison.Ordinal))
             .All(method => ReadDocumentation(method).Descendants("typeparamref").Any()), "Generic overloads must describe their formatter-selected type contract.");
@@ -404,6 +401,97 @@ internal static class SerializerDocumentationRegression
 
         File.WriteAllText(Path.Combine(Path.GetTempPath(), "LuminPack.SerializerDocumentationRegression.g.cs"), serializer);
     }
+
+    /// <summary>Checks the shipped generator's public XML boundary for a version-tolerant reference graph.</summary>
+    /// <param name="references">The platform and runtime references used by the compilation.</param>
+    /// <param name="documentationMode">The consumer's documentation processing mode.</param>
+    private static void VerifyVersionDocumentation(MetadataReference[] references, DocumentationMode documentationMode)
+    {
+        const string source = """
+            #nullable enable
+            #pragma warning disable CS1591
+            using System;
+            using LuminPack;
+            using LuminPack.Attribute;
+
+            [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]
+            public sealed class DocumentationVersioned
+            {
+                [LuminPackOldName("Number")] public int VersionedValue;
+                public DocumentationVersioned? Next;
+            }
+
+            public static class VersionDocumentationEntry
+            {
+                public static byte[] Write(DocumentationVersioned value) => LuminPackSerializer.Serialize(value);
+                public static void Read(ReadOnlySpan<byte> input, ref DocumentationVersioned value) =>
+                    LuminPackSerializer.Deserialize(input, ref value);
+                public static string WriteJson(DocumentationVersioned value) => LuminPackSerializer.SerializeJson(value);
+                public static void ReadJson(string input, ref DocumentationVersioned value) =>
+                    LuminPackSerializer.DeserializeJson(input, ref value);
+            }
+            """;
+        var options = new CSharpParseOptions(LanguageVersion.Preview, documentationMode,
+            preprocessorSymbols: ["NET5_0_OR_GREATER", "NET6_0_OR_GREATER", "NET7_0_OR_GREATER", "NET8_0_OR_GREATER",
+                "NET9_0_OR_GREATER", "NET10_0_OR_GREATER", "NET11_0_OR_GREATER"]);
+        var input = CSharpCompilation.Create("VersionDocumentation", [CSharpSyntaxTree.ParseText(source, options, "VersionDocumentation.cs")],
+            references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true,
+                specificDiagnosticOptions: new Dictionary<string, ReportDiagnostic> { ["CS1591"] = ReportDiagnostic.Error }));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: options);
+        driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
+        var errors = output.GetDiagnostics().Concat(diagnostics).Where(IsDocumentationError).ToArray();
+        Require(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(error => error.ToString())));
+
+        using var assembly = new MemoryStream();
+        using var xml = new MemoryStream();
+        var emitted = output.Emit(assembly, xmlDocumentationStream: xml);
+        Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(IsDocumentationError)));
+        if (documentationMode != DocumentationMode.None)
+        {
+            xml.Position = 0;
+            var entries = XDocument.Load(xml).Descendants("member").Select(member => (string)member.Attribute("name")!).ToArray();
+            Require(entries.Any(name => name.StartsWith("M:LuminPack.LuminPackSerializer.Serialize", StringComparison.Ordinal)) &&
+                entries.Any(name => name.StartsWith("M:LuminPack.LuminPackSerializer.Deserialize", StringComparison.Ordinal)) &&
+                entries.All(name => name == "T:LuminPack.LuminPackSerializer" ||
+                    name.StartsWith("M:LuminPack.LuminPackSerializer.", StringComparison.Ordinal) &&
+                    !name.Contains(".LuminRoots_", StringComparison.Ordinal)),
+                "The version-tolerant graph must export public facade documentation without implementation entries.");
+        }
+
+        var methods = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+            .SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, options.WithDocumentationMode(DocumentationMode.Parse))
+                .GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
+        var recordCalls = methods.SelectMany(method => method.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            .Select(call => (call.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.ValueText).ToHashSet();
+        Require(recordCalls.Contains("WriteVersionRecord") && recordCalls.Contains("ReadVersionRecord"),
+            "The version-tolerant fixture did not exercise generated descriptor framing.");
+        foreach (var method in methods)
+        {
+            if (!method.Modifiers.Any(SyntaxKind.PublicKeyword) || !IsUserApi(method))
+            {
+                Require(!method.GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)),
+                    "Version-tolerant formatter implementation must omit XML documentation: " + method.Identifier);
+                continue;
+            }
+
+            XElement doc = ReadDocumentation(method);
+            Require(doc.Elements("summary").Count() == 1 && !string.IsNullOrWhiteSpace(doc.Element("summary")!.Value),
+                "The public facade must document each operation: " + method.Identifier);
+            foreach (var parameter in method.ParameterList.Parameters)
+                Require(doc.Elements("param").Count(element => (string?)element.Attribute("name") == parameter.Identifier.ValueText) == 1,
+                    "The public facade must document each parameter exactly once: " + parameter);
+            if (method.TypeParameterList is { } types)
+                foreach (var parameter in types.Parameters)
+                    Require(doc.Elements("typeparam").Count(element => (string?)element.Attribute("name") == parameter.Identifier.ValueText) == 1,
+                        "The public facade must document each type parameter exactly once: " + parameter);
+        }
+    }
+
+    /// <summary>Identifies compilation errors and compiler warnings about invalid XML documentation.</summary>
+    /// <param name="diagnostic">The reported consumer or generated-source diagnostic.</param>
+    /// <returns>Whether this diagnostic violates the generated output contract.</returns>
+    private static bool IsDocumentationError(Diagnostic diagnostic) => diagnostic.Severity == DiagnosticSeverity.Error ||
+        diagnostic.Id is "CS0419" or "CS1570" or "CS1572" or "CS1573" or "CS1574" or "CS1584" or "CS1587" or "CS1658";
 
     /// <summary>Requires concrete built-in overloads to link to actual roots and omit links when an operation has none.</summary>
     /// <param name="sources">The completed formatter and facade contributions.</param>

@@ -55,6 +55,7 @@ if (args.Contains("--verify-incremental", StringComparer.Ordinal))
 {
     CompilerResolverRegression.Run();
     IncrementalGenerationChecks.Run(references);
+    VersionContractIncrementalChecks.Run(references);
     Console.WriteLine("Passed incremental generation and dependency invalidation checks.");
     return;
 }

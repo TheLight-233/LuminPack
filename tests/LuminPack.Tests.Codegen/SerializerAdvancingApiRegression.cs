@@ -1,8 +1,11 @@
+extern alias ModelBasedAnalyzer;
+
 using System.Reflection;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using NextGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 /// <summary>Checks first-build fluent roots and exact overload selection without unrelated formatter roots.</summary>
 internal static class SerializerAdvancingApiRegression
@@ -114,7 +117,8 @@ internal static class SerializerAdvancingApiRegression
             [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Light)]
             [LuminPackable] public sealed class Ordinary { public int Id; [LuminPackInclude] internal string Text; }
             [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Versioned { public int Id; [LuminPackInclude] internal string Text; }
-            [LuminPackable(GeneratorType.CircleReference)] public sealed class Tracked { [LuminPackOrder(0)] public int Id; [LuminPackOrder(1), LuminPackInclude] internal string Text; }
+            [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]
+            public sealed class Tracked { public int Id; [LuminPackInclude] internal string Text; }
             [LuminPackable] public sealed class Hidden { [LuminPackInclude] private int Id; public int GetId() => Id; }
             public static class Entry
             {
@@ -153,15 +157,15 @@ internal static class SerializerAdvancingApiRegression
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET10_0_OR_GREATER"]);
         var input = TestCompilation.Create("DirectFields", [CSharpSyntaxTree.ParseText(source, parse)], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
-        GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new NextGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out _);
         var methods = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
             .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
         foreach (string type in new[] { "Ordinary", "Versioned", "Tracked" })
         {
             var bodies = methods.Where(method => method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().TrimEnd('?') == "global::" + type));
-            if (bodies.Any(method => method.ToString().Contains("LuminPackMarshal.As<global::" + type, StringComparison.Ordinal)))
-                throw new InvalidOperationException(type + " retained a storage alias for accessible fields.");
+            if (!bodies.Any() || bodies.Any(method => method.ToString().Contains("LuminPackMarshal.As<global::" + type, StringComparison.Ordinal)))
+                throw new InvalidOperationException(type + " did not publish its accessible fields directly.");
         }
         if (!methods.Any(method => method.ToString().Contains("LuminPackMarshal.As<global::Hidden", StringComparison.Ordinal)))
             throw new InvalidOperationException("Private included storage lost its Local access mechanism.");

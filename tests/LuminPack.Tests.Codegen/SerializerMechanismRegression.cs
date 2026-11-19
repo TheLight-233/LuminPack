@@ -53,23 +53,6 @@ internal static class SerializerMechanismRegression
             [LuminPackable, LuminPackUnion(9, typeof(GenericCase<string>)), LuminPackUnion(7, typeof(GenericCase<int>))]
             public abstract partial class GenericRoot<T> { }
             [LuminPackable] public partial class GenericCase<T> : GenericRoot<T> { public T Item; public List<T> Items; }
-            [LuminPackable(GeneratorType.VersionTolerant)] public class VersionFull
-            {
-                [LuminPackOrder(0)] public int First;
-                [LuminPackOrder(1)] public string Middle;
-                [LuminPackOrder(2)] public int Last;
-            }
-            [LuminPackable(GeneratorType.VersionTolerant)] public class VersionGap
-            {
-                [LuminPackOrder(0)] public int First;
-                [LuminPackOrder(2)] public int Last;
-            }
-            [LuminPackable(GeneratorType.CircleReference)] public class Node
-            {
-                [LuminPackOrder(0)] public string Name;
-                [LuminPackOrder(1)] public Node Next;
-                [LuminPackOrder(2)] public Node Alias;
-            }
             [LuminPackable, StructLayout(LayoutKind.Explicit, Size = 16)] public struct RawValue
             {
                 [FieldOffset(0)] public byte Tag;
@@ -108,21 +91,6 @@ internal static class SerializerMechanismRegression
                     GenericRoot<string> text = new GenericCase<string> { Item = "open", Items = new() { "case", null, "" } }; Add(text, results);
                     if (LuminPackSerializer.Serialize(integer)[0] != 7 || LuminPackSerializer.Serialize(text)[0] != 9)
                         throw new Exception("Closed generic tags changed.");
-                    var full = new VersionFull { First = 53, Middle = "skip middle", Last = 59 };
-                    var gap = global::LuminPackUnitTest.ConcreteReads.Read<VersionGap>(LuminPackSerializer.Serialize(full), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref VersionGap concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
-                    if (gap.First != 53 || gap.Last != 59) throw new Exception("Version field-length skipping changed.");
-                    var added = global::LuminPackUnitTest.ConcreteReads.Read<VersionFull>(LuminPackSerializer.Serialize(gap), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref VersionFull concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
-                    if (added.Middle != null || added.Last != 59) throw new Exception("Version absent-slot defaults changed.");
-                    Add(full, results, recordBinary: false); Add(gap, results, recordBinary: false);
-                    var node = new Node { Name = "root" };
-                    node.Next = new Node { Name = "child", Next = node }; node.Alias = node.Next;
-                    var cycle = global::LuminPackUnitTest.ConcreteReads.Read<Node>(LuminPackSerializer.Serialize(node), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Node concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
-                    if (!ReferenceEquals(cycle.Next.Next, cycle) || !ReferenceEquals(cycle.Next, cycle.Alias))
-                        throw new Exception("Binary cycle or shared-reference identity changed.");
-                    var jsonCycle = global::LuminPackUnitTest.ConcreteReads.ReadJson<Node>(LuminPackSerializer.SerializeJson(node), static (string concreteReadInput, ref Node concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
-                    if (!ReferenceEquals(jsonCycle.Next.Next, jsonCycle) || !ReferenceEquals(jsonCycle.Next, jsonCycle.Alias))
-                        throw new Exception("JSON cycle or shared-reference identity changed.");
-                    Add(node, results);
                     var values = new ValueGraph { Raw = new RawValue { Tag = 61, Number = 67 }, Managed = new ManagedValue { Number = 71, Text = "managed" },
                         Constrained = new ConstrainedValue<int> { Tag = 7, Item = 103 },
                         Optional = new ManagedValue { Number = 73, Text = "nullable" }, Enum = WideEnum.High, Missing = null, Present = 79,
@@ -166,7 +134,7 @@ internal static class SerializerMechanismRegression
             """;
         string addTemplate = source.Substring(source.IndexOf("private static void Add<T>", StringComparison.Ordinal));
         addTemplate = addTemplate.Substring(0, addTemplate.IndexOf("\n}", StringComparison.Ordinal));
-        source = source.Replace(addTemplate, string.Join("\n", new[] { "Storage", "Root", "GenericRoot<int>", "GenericRoot<string>", "VersionFull", "VersionGap", "Node", "ValueGraph", "RawValue", "ManagedValue", "WideEnum", "Queue<int>", "Stack<int>", "ConstrainedValue<int>" }
+        source = source.Replace(addTemplate, string.Join("\n", new[] { "Storage", "Root", "GenericRoot<int>", "GenericRoot<string>", "ValueGraph", "RawValue", "ManagedValue", "WideEnum", "Queue<int>", "Stack<int>", "ConstrainedValue<int>" }
             .Select(type => addTemplate.Replace("Add<T>(T value", "Add(" + type + " value", StringComparison.Ordinal)
                 .Replace("BINARY_PROFILE_RECORD", binaryRecord.Replace("__PAYLOAD__", type, StringComparison.Ordinal), StringComparison.Ordinal)
                 .Replace("JSON_PROFILE_LOOP", profileLoop.Replace("__PAYLOAD__", type, StringComparison.Ordinal), StringComparison.Ordinal))), StringComparison.Ordinal);
