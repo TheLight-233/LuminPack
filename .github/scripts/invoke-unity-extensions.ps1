@@ -2,7 +2,7 @@ param(
     [string]$Project = '.tmp/unity-extensions-native',
     [string]$Artifacts = '.tmp/unity-extensions-results',
     [switch]$PrepareHosted,
-    [ValidateSet('Legacy', 'Next')][string]$LuminPackGenerator = 'Legacy'
+    [ValidateSet('Legacy', 'Next')][string]$LuminPackGenerator = 'Next'
 )
 $ErrorActionPreference = 'Stop'
 if (-not $PrepareHosted -and (-not $env:UNITY_EDITOR_PATH -or -not (Test-Path -LiteralPath $env:UNITY_EDITOR_PATH))) {

@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <DefineConstants>$(DefineConstants);LUMINPACK_IL_REWRITE</DefineConstants>
+    <LuminPackGenerator Condition="'$(LuminPackGenerator)' == ''">Next</LuminPackGenerator>
     <LuminPackGeneratorPath Condition="'$(LuminPackGeneratorPath)' == '' and '$(LuminPackGenerator)' == 'Next'">$(MSBuildThisFileDirectory)../../../LuminPack.Generator.Next/bin/Release/netstandard2.0/LuminPack.SourceGenerator.dll</LuminPackGeneratorPath>
     <LuminPackGeneratorPath Condition="'$(LuminPackGeneratorPath)' == ''">$(MSBuildThisFileDirectory)../../../LuminPack.Generator/bin/Release/netstandard2.0/LuminPack.Generator.dll</LuminPackGeneratorPath>
   </PropertyGroup>

@@ -66,7 +66,7 @@ jobs:
           cp src/LuminPack.Core/bin/Release/netstandard2.1/LuminPack.Core.dll tests/Unity/Assets/Plugins/
           cp src/LuminPack.Core/bin/Release/netstandard2.1/System.Collections.Immutable.dll tests/Unity/Assets/Plugins/
           cp src/LuminPack.Core/bin/Release/netstandard2.1/System.Runtime.CompilerServices.Unsafe.dll tests/Unity/Assets/Plugins/
-          cp src/LuminPack.Generator/bin/Release/netstandard2.0/LuminPack.Generator.dll tests/Unity/Assets/Plugins/
+          cp src/LuminPack.Generator.Next/bin/Release/netstandard2.0/LuminPack.SourceGenerator.dll tests/Unity/Assets/Plugins/
           python .github/scripts/stage_unity_il.py tests/Unity
       - name: Run Unity Mono editor tests
         uses: game-ci/unity-test-runner@32e57712352b500e17974b245a6dce9e11a73213 # v4.4.0
@@ -173,7 +173,7 @@ jobs:
           cp src/LuminPack.Core/bin/Release/netstandard2.1/LuminPack.Core.dll tests/Unity/Assets/Plugins/
           cp src/LuminPack.Core/bin/Release/netstandard2.1/System.Collections.Immutable.dll tests/Unity/Assets/Plugins/
           cp src/LuminPack.Core/bin/Release/netstandard2.1/System.Runtime.CompilerServices.Unsafe.dll tests/Unity/Assets/Plugins/
-          cp src/LuminPack.Generator/bin/Release/netstandard2.0/LuminPack.Generator.dll tests/Unity/Assets/Plugins/
+          cp src/LuminPack.Generator.Next/bin/Release/netstandard2.0/LuminPack.SourceGenerator.dll tests/Unity/Assets/Plugins/
           python .github/scripts/stage_unity_il.py tests/Unity
       - name: Build the WebGL Player
         uses: game-ci/unity-builder@v4
