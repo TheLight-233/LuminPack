@@ -7,7 +7,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class ConcurrentDictionaryOwnerFile
 {
     private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(Write, Read,
-        "value.TryAdd(key, itemValue);", outlineJson: true);
+        "value.TryAdd(key, itemValue);", outlineJson: true, boundedJsonSnapshot: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>

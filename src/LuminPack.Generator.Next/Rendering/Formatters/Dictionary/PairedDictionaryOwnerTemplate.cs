@@ -662,6 +662,9 @@ internal sealed class PairedDictionarySpec
     /// <summary>Whether the JSON traversal captures both entry members before output.</summary>
     internal bool CapturesJsonPairs { get; }
 
+    /// <summary>Whether JSON key seeding bounds concurrent traversal by the initial count.</summary>
+    internal bool BoundedJsonSnapshot { get; }
+
     /// <summary>The expression that enumerates the entries of <c>value</c>.</summary>
     internal string Source { get; }
 
@@ -683,9 +686,11 @@ internal sealed class PairedDictionarySpec
     /// <param name="valueMember">The member exposing each value.</param>
     /// <param name="outlineJson">Whether to keep the JSON roots out of their callers.</param>
     /// <param name="capturesJsonPairs">Whether all JSON traversals capture an entry before output.</param>
+    /// <param name="boundedJsonSnapshot">Whether JSON key seeding bounds concurrent traversal by the initial count.</param>
     internal PairedDictionarySpec(Action<PairedDictionaryContext> writeBody, Action<PairedDictionaryContext> readBody, string jsonAdd,
         Action<PairedDictionaryContext>? jsonBefore = null, Action<PairedDictionaryContext>? jsonAfter = null, bool readsHeader = false,
-        string source = "value", string keyMember = "Key", string valueMember = "Value", bool outlineJson = false, bool capturesJsonPairs = false)
+        string source = "value", string keyMember = "Key", string valueMember = "Value", bool outlineJson = false, bool capturesJsonPairs = false,
+        bool boundedJsonSnapshot = false)
     {
         Source = source;
         KeyMember = keyMember;
@@ -698,6 +703,7 @@ internal sealed class PairedDictionarySpec
         ReadsHeader = readsHeader;
         OutlineJson = outlineJson;
         CapturesJsonPairs = capturesJsonPairs;
+        BoundedJsonSnapshot = boundedJsonSnapshot;
     }
 }
 
@@ -1140,7 +1146,9 @@ internal static class PairedDictionaryOwnerTemplate
                     if (fact.Family.JsonReuseStore != null)
                         DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, fact.Family.JsonReuseStore, jsonReader,
                             context.Supports("SortedListTraversal") ? dictionary : null,
-                            context.Supports("ConcurrentTraversal") ? (dictionary, context.Source) : null, stringProperties: propertyKeys,
+                            context.Supports("ConcurrentTraversal") ? (dictionary, context.Source) : null,
+                            boundedSnapshot: spec.BoundedJsonSnapshot,
+                            stringProperties: propertyKeys,
                             stagedConcurrent: context.Supports("StagedStringPublication"));
                     else if (dictionary.StartsWith("global::System.Collections.Generic.IDictionary<", StringComparison.Ordinal) ||
                         dictionary.StartsWith("global::System.Collections.Generic.IReadOnlyDictionary<", StringComparison.Ordinal))

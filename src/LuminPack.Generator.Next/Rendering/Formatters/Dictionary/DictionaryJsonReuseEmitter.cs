@@ -14,10 +14,12 @@ internal static class DictionaryJsonReuseEmitter
     /// <param name = "jsonReader">The json reader used by this operation.</param>
     /// <param name="sortedList">The exact sorted-list type when the runtime can traverse its validated storage.</param>
     /// <param name="exactSnapshot">The exact runtime type and its existing value traversal, if available.</param>
+    /// <param name="boundedSnapshot">Whether enumeration can observe later inserts or removals.</param>
     /// <param name="stringProperties">Whether this family accepts the object form for string keys.</param>
     /// <param name="stagedConcurrent">Whether the runtime can publish this concrete string-keyed concurrent dictionary.</param>
     internal static void Emit(CodeWriter w, string key, string value, string keyOwner, string valueOwner, string store, string jsonReader,
-        string? sortedList = null, (string Type, string Source)? exactSnapshot = null, bool stringProperties = false, bool stagedConcurrent = false)
+        string? sortedList = null, (string Type, string Source)? exactSnapshot = null,
+        bool boundedSnapshot = false, bool stringProperties = false, bool stagedConcurrent = false)
     {
         string pair = "global::System.Collections.Generic.KeyValuePair<" + key + ", " + value + ">";
         string pool = "global::System.Buffers.ArrayPool<" + pair + ">.Shared";
@@ -78,17 +80,41 @@ internal static class DictionaryJsonReuseEmitter
                 w.Open();
             }
             w.Line("int oldIndex = 0;");
+            if (boundedSnapshot)
+            {
+                w.Line("if (oldCount != 0)");
+                w.Open();
+            }
             if (exactSnapshot is { } snapshot)
             {
                 w.Line("if (value.GetType() == typeof(" + snapshot.Type + "))");
-                w.Indented(() => w.Line("foreach (var entry in " + snapshot.Source + ") entries[oldIndex++] = entry;"));
+                w.Indented(() => CopyOldEntries(snapshot.Source));
                 w.Line("else");
-                w.Indented(() => w.Line("foreach (var entry in value) entries[oldIndex++] = entry;"));
+                w.Indented(() => CopyOldEntries("value"));
             }
             else
-                w.Line("foreach (var entry in value) entries[oldIndex++] = entry;");
+                CopyOldEntries("value");
+            if (boundedSnapshot)
+            {
+                w.Close();
+                w.Line("oldCount = oldIndex;");
+            }
             if (sortedList != null)
                 w.Close();
+
+            void CopyOldEntries(string source)
+            {
+                if (!boundedSnapshot)
+                {
+                    w.Line("foreach (var entry in " + source + ") entries[oldIndex++] = entry;");
+                    return;
+                }
+                w.Line("foreach (var entry in " + source + ")");
+                w.Open();
+                w.Line("entries[oldIndex++] = entry;");
+                w.Line("if (oldIndex == oldCount) break;");
+                w.Close();
+            }
         }
 
         if (stringProperties)
