@@ -46,6 +46,24 @@ internal static class FormatterRuntimeTraits
                 SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, method.TypeParameters[0]));
     }
 
+    /// <summary>Checks the listener-aware probe for bulk refill storage.</summary>
+    /// <param name="compilation">The referenced runtime and framework metadata.</param>
+    /// <returns>Whether the exact list probe is available.</returns>
+    internal static bool HasUnobservedObservableList(Compilation compilation)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var collection = compilation.GetTypeByMetadataName("System.Collections.ObjectModel.ObservableCollection`1");
+        var list = compilation.GetTypeByMetadataName("System.Collections.Generic.List`1");
+        return access is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } && collection is not null && list is not null &&
+            access.GetMembers("GetUnobservedObservableList").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasReferenceTypeConstraint &&
+                !method.TypeParameters[0].HasConstructorConstraint && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, collection.Construct(method.TypeParameters[0])) &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, list.Construct(method.TypeParameters[0])));
+    }
+
     /// <summary>Checks the existing exact sequence storage API used to size fresh observable results.</summary>
     /// <param name="compilation">The referenced runtime and framework metadata.</param>
     /// <returns>Whether the public storage operation is available.</returns>
@@ -513,5 +531,18 @@ internal static class FormatterRuntimeTraits
         var bits = compilation.GetTypeByMetadataName("System.Collections.BitArray");
         var span = compilation.GetTypeByMetadataName("System.Span`1");
         return access is not null && bits is not null && span is not null && access.GetMembers("TryCreateBitArrayPayload").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 0 && method.DeclaredAccessibility == Accessibility.Public && !method.ReturnsByRef && !method.ReturnsByRefReadonly && method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 3 && method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type.SpecialType == SpecialType.System_Int32 && method.Parameters[1].RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, bits) && method.Parameters[2].RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(method.Parameters[2].Type, span.Construct(compilation.GetSpecialType(SpecialType.System_Byte))));
+    }
+
+    /// <summary>Checks whether the runtime exposes its bit-array refill version operation.</summary>
+    /// <param name="compilation">The consuming compilation and runtime references.</param>
+    /// <returns>Whether the version operation is available.</returns>
+    internal static bool CanMarkBitArrayRefilled(Compilation compilation)
+    {
+        var bits = compilation.GetTypeByMetadataName("System.Collections.BitArray");
+        return bits is not null && compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess")?
+            .GetMembers("MarkBitArrayRefilled").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, Arity: 0, DeclaredAccessibility: Accessibility.Public, ReturnsVoid: true } &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, bits)) == true;
     }
 }

@@ -140,6 +140,8 @@ internal static class FormatterBuiltinCapabilities
                 result.Add("CanWriteBitArrayPayload");
             if (FormatterRuntimeTraits.CanCreateBitArrayPayload(compilation))
                 result.Add("CanCreateBitArrayPayload");
+            if (FormatterRuntimeTraits.CanMarkBitArrayRefilled(compilation))
+                result.Add("CanMarkBitArrayRefilled");
         }
     }
 

@@ -65,7 +65,8 @@ internal static class BitArrayOwnerFile
         w.Line("int bytes = unchecked(words * sizeof(int));");
         w.Line("reader.EnsureCollectionPayload(reader.Position, bytes);");
         w.Line("#if NET8_0_OR_GREATER");
-        w.Line("if (value is null || value.Length != length) value = new global::System.Collections.BitArray(length, false);");
+        w.Line("bool reused = value is not null && value.Length == length;");
+        w.Line("if (!reused) value = new global::System.Collections.BitArray(length, false);");
         w.Line("ref var view = ref global::LuminPack.Code.LuminPackMarshal.As<global::System.Collections.BitArray, global::LuminPack.Code.BitArrayView>(ref value);");
         w.Line("#if NET10_0_OR_GREATER");
         w.Line("var payload = new global::System.Span<byte>(view.m_array, 0, bytes);");
@@ -84,6 +85,10 @@ internal static class BitArrayOwnerFile
         w.Line("ref int first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(payload);");
         w.Line("if (bytes != 0) reader.Read(ref global::System.Runtime.CompilerServices.Unsafe.As<int, byte>(ref first), bytes);");
         w.Line("#endif");
+        w.Line("if (reused && bytes != 0)");
+        w.Indented(() => w.Line(context.Supports("CanMarkBitArrayRefilled")
+            ? "global::LuminPack.Code.LuminPackCollectionAccess.MarkBitArrayRefilled(value!);"
+            : "value![0] = value[0];"));
         w.Line("#else");
         if (context.Supports("CanCreateBitArrayPayload"))
         {

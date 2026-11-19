@@ -1862,12 +1862,12 @@ public static partial class LuminPackMarshal
     }
 
 #if NET8_0_OR_GREATER
-    /// <summary>Reads a complete fixed-width payload into a fresh default-comparer set and builds its buckets.</summary>
+    /// <summary>Reads a complete fixed-width payload into a cleared default-comparer set and builds its buckets.</summary>
     /// <typeparam name="T">The fixed primitive or enum whose default hash has no callbacks.</typeparam>
     /// <param name="reader">The binary state positioned at the start of the payload.</param>
-    /// <param name="set">The fresh default-comparer set allocated for this count.</param>
+    /// <param name="set">The cleared default-comparer set with enough entry slots.</param>
     /// <param name="count">The declared count of fixed-width elements.</param>
-    /// <remarks>As in the staged entry rebuild, each wire slot is preserved in order and duplicates are not removed.</remarks>
+    /// <remarks>The first occurrence of each value is retained in wire order.</remarks>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static void ReadRawHashSet<T>(scoped ref LuminPackReader reader, HashSet<T> set, int count) where T : unmanaged =>
         ReadReferenceFreeHashSet(ref reader, set, count);
@@ -1906,8 +1906,12 @@ public static partial class LuminPackMarshal
         reader.EnsureReadable(reader.Position, bytes);
         ref byte source = ref reader.PeekInput(0, out _);
         reader.Advance(bytes);
-        ref var entry = ref GetArrayReference(entries);
+        ref var firstEntry = ref GetArrayReference(entries);
+        ref var entry = ref firstEntry;
         ref int firstBucket = ref GetArrayReference(buckets);
+        // On modern runtimes these framework hashes carry all 32 bits of the value.
+        bool hashDefinesEquality = typeof(T) == typeof(int) || typeof(T) == typeof(uint);
+        int uniqueCount = 0;
         int index = 0;
         do
         {
@@ -1915,21 +1919,24 @@ public static partial class LuminPackMarshal
             T item = LuminPackReader.Read<T>(ref source);
             uint hashCode = unchecked((uint)item!.GetHashCode());
             ref int bucket = ref Unsafe.Add(ref firstBucket, (nint)(nuint)GetBucketIndex(hashCode, bucketCount, multiplier));
-            entry.Value = item;
-            entry.HashCode = hashCode;
-            entry.Next = bucket - 1;
-            bucket = ++index;
-            entry = ref Unsafe.Add(ref entry, 1);
+            int previous = bucket - 1;
+            if (previous < 0 || !ContainsHashSetEntry(ref firstEntry, previous, hashCode, item, null, hashDefinesEquality))
+            {
+                entry.Value = item;
+                entry.HashCode = hashCode;
+                entry.Next = previous;
+                bucket = ++uniqueCount;
+                entry = ref Unsafe.Add(ref entry, 1);
+            }
             source = ref Unsafe.Add(ref source, (nint)(uint)width);
-        } while (index < count);
-        view._count = count;
+        } while (++index < count);
+        view._count = uniqueCount;
     }
 #endif
 
     /// <summary>
     /// Rebuilds HashSet buckets and count after deserialization writes directly to entries.
-    /// Bypasses HashSet.Add hashing, duplicate-value checks, and capacity growth.
-    /// The payload must contain unique values under the destination comparer; this helper does not deduplicate.
+    /// Reuses the reserved entry array, keeping the first occurrence of each value in wire order.
     /// </summary>
     /// <param name="view">The view used by this operation.</param>
     /// <param name="count">The number of entries involved in the operation.</param>
@@ -1939,111 +1946,76 @@ public static partial class LuminPackMarshal
         HashSetView<T?> view,
         int count)
     {
-        ref var entriesRef = ref GetArrayReference(view._entries);
-        ref var bucketsRef = ref GetArrayReference(view._buckets);
+        var entries = view._entries;
+        ref var entriesRef = ref GetArrayReference(entries);
+        var buckets = view._buckets;
+        ref var bucketsRef = ref GetArrayReference(buckets);
 
-        uint bucketCount = (uint)view._buckets.Length;
+        uint bucketCount = (uint)buckets.Length;
 
         ulong fastModMultiplier =
             Unsafe.SizeOf<IntPtr>() == 8
                 ? GetFastModMultiplier(bucketCount)
                 : 0;
 
-        /*
-         * Match Dictionary behavior:
-         * With unmanaged keys and the default comparer, use constrained T.GetHashCode().
-         *
-         * Avoid IEqualityComparer<T>.GetHashCode
-         * interface calls for each element.
-         */
-        if (typeof(T).IsValueType && view._comparer is null)
+        var comparer = view._comparer;
+        int uniqueCount = 0;
+        try
         {
-            for (int i = 0; i < count; i++)
+            for (int index = 0; index < count; index++)
             {
-                ref var entry =
-                    ref Unsafe.Add(
-                        ref entriesRef,
-                        (nint)(uint)i);
-
-                uint hashCode =
-                    unchecked(
-                        (uint)entry.Value!.GetHashCode());
-
+                T? item = Unsafe.Add(ref entriesRef, (nint)(uint)index).Value;
+                uint hashCode = typeof(T).IsValueType && comparer is null
+                    ? unchecked((uint)item!.GetHashCode())
+                    : item is null ? 0 : unchecked((uint)(comparer ?? EqualityComparer<T?>.Default).GetHashCode(item));
 #if NETSTANDARD2_1
                 hashCode &= 0x7FFFFFFF;
 #endif
+                ref int bucket = ref Unsafe.Add(ref bucketsRef, (nint)(nuint)GetBucketIndex(hashCode, bucketCount, fastModMultiplier));
+                int previous = bucket - 1;
+                if (previous >= 0 && ContainsHashSetEntry(ref entriesRef, previous, hashCode, item, comparer))
+                    continue;
 
+                ref var entry = ref Unsafe.Add(ref entriesRef, (nint)(uint)uniqueCount);
+                if (uniqueCount != index)
+                    entry.Value = item;
                 entry.HashCode = hashCode;
-
-                uint bucketIndex =
-                    GetBucketIndex(
-                        hashCode,
-                        bucketCount,
-                        fastModMultiplier);
-
-                ref int bucket =
-                    ref Unsafe.Add(
-                        ref bucketsRef,
-                        (nint)bucketIndex);
-
-                entry.Next = bucket - 1;
-                bucket = i + 1;
+                entry.Next = previous;
+                bucket = ++uniqueCount;
             }
-
-            view._count = count;
-
-#if NETSTANDARD2_1
-            view._lastIndex = count;
-#endif
-
-            return;
         }
-
-        var comparer =
-            view._comparer ??
-            EqualityComparer<T?>.Default;
-
-        for (int i = 0; i < count; i++)
+        finally
         {
-            ref var entry =
-                ref Unsafe.Add(
-                    ref entriesRef,
-                    (nint)(uint)i);
-
+            if (uniqueCount != count && RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+                Array.Clear(entries, uniqueCount, count - uniqueCount);
+            view._count = uniqueCount;
 #if NETSTANDARD2_1
-            uint hashCode =
-                entry.Value is null ? 0u : unchecked(
-                    (uint)(
-                        comparer.GetHashCode(entry.Value!) &
-                        0x7FFFFFFF));
-#else
-            uint hashCode =
-                entry.Value is null ? 0u : unchecked(
-                    (uint)comparer.GetHashCode(entry.Value!));
+            view._lastIndex = uniqueCount;
 #endif
-
-            entry.HashCode = hashCode;
-
-            uint bucketIndex =
-                GetBucketIndex(
-                    hashCode,
-                    bucketCount,
-                    fastModMultiplier);
-
-            ref int bucket =
-                ref Unsafe.Add(
-                    ref bucketsRef,
-                    (nint)bucketIndex);
-
-            entry.Next = bucket - 1;
-            bucket = i + 1;
         }
+    }
 
-        view._count = count;
-
-#if NETSTANDARD2_1
-        view._lastIndex = count;
-#endif
+    /// <summary>Checks the entries linked to a nonempty bucket without recomputing any hashes.</summary>
+    /// <typeparam name="T">The set element type.</typeparam>
+    /// <param name="first">The first entry in the cleared and refilled set.</param>
+    /// <param name="index">The zero-based index of the latest entry in the bucket.</param>
+    /// <param name="hashCode">The candidate's computed hash code.</param>
+    /// <param name="item">The candidate element.</param>
+    /// <param name="comparer">The set's comparer when stored explicitly.</param>
+    /// <param name="hashDefinesEquality">Whether the framework hash preserves every bit that participates in equality.</param>
+    /// <returns>Whether the bucket already contains an equal element.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool ContainsHashSetEntry<T>(ref HashSetView<T>.Entry first, int index, uint hashCode, T item,
+        IEqualityComparer<T>? comparer, bool hashDefinesEquality = false)
+    {
+        do
+        {
+            ref var entry = ref Unsafe.Add(ref first, (nint)(uint)index);
+            if (entry.HashCode == hashCode && (hashDefinesEquality || (comparer ?? EqualityComparer<T>.Default).Equals(entry.Value, item)))
+                return true;
+            index = entry.Next;
+        } while (index >= 0);
+        return false;
     }
 
     /// <summary>Presents the storage fields of a <see cref="Dictionary{TKey, TValue}"/> at their probed offsets.</summary>

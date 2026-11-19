@@ -131,6 +131,7 @@ internal static class LuminCollectionLayouts
     public static readonly int BitArrayArray = s_bitArray[0];
     /// <summary>Gets the offset of the bit length of <see cref="BitArray"/>.</summary>
     public static readonly int BitArrayLength = s_bitArray[1];
+    internal static readonly int BitArrayVersion = s_bitArray[2];
 
     // ObjectModel wrappers and ReadOnlyCollectionBuilder<T>
     private static readonly int[] s_collection = Family(typeof(Collection<int>), typeof(Collection<object>), CompiledSingle(), "items");

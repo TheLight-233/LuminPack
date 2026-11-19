@@ -3,8 +3,8 @@ using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared owner of one closed <c>ObservableCollection&lt;T&gt;</c> of raw scalars.</summary>
-/// <remarks>The write is the shared wrapper write. The read creates or clears the collection and fills its backing list storage
-/// in place.</remarks>
+/// <remarks>The write is the shared wrapper write. The read can fill a fresh or unobserved backing list in place. An observed
+/// or derived destination is populated through the public insertion operation.</remarks>
 internal static class ObservableCollectionOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(WrapperTraversal.WriteRoot, Read, "value.Add(item);",
@@ -29,9 +29,15 @@ internal static class ObservableCollectionOwnerFile
     {
         var w = c.W;
         string t = c.Scalar;
+        w.Line("if (value is null)");
+        w.Indented(() => w.Line("value = new " + c.Sequence + "();"));
+        w.Line("else");
+        w.Open();
+        if (c.Supports("UnobservedObservableList"))
+            ReadObserved(c);
         if (c.NullableBlock != null)
         {
-            w.Line("if (value is not null && length != 0)");
+            w.Line("if (length != 0)");
             w.Open();
             // Clear can invoke user code. Transfer the validated input into the lease before that callback boundary.
             c.PooledRead(() =>
@@ -44,10 +50,8 @@ internal static class ObservableCollectionOwnerFile
             w.Line("goto operationComplete_RootRead;");
             w.Close();
         }
-        w.Line("if (value is null)");
-        w.Indented(() => w.Line("value = new " + c.Sequence + "();"));
-        w.Line("else");
-        w.Indented(() => w.Line("value.Clear();"));
+        w.Line("value.Clear();");
+        w.Close();
         w.Blank();
         w.Line("if (length == 0)");
         w.Indented(() => w.Line("goto operationComplete_RootRead;"));
@@ -55,5 +59,34 @@ internal static class ObservableCollectionOwnerFile
         w.Line("var view = global::LuminPack.Code.LuminPackMarshal.As<" + c.Sequence + ", global::LuminPack.Code.ObservableCollectionView<" + t + ">>(ref value);");
         w.Line("var span = global::LuminPack.Code.LuminPackMarshal.GetListSpan(view.items!, length);");
         WrapperTraversal.ReadSpan(c, "span");
+    }
+
+    /// <summary>Reads into an observed or derived destination using the framework's notification and reentrancy rules.</summary>
+    /// <param name="c">The binary owner context.</param>
+    private static void ReadObserved(EnumerableOwnerContext c)
+    {
+        var w = c.W;
+        w.Line("if (length != 0 && global::LuminPack.Code.LuminPackCollectionAccess.GetUnobservedObservableList(value) is null)");
+        w.Open();
+        if (c.ContiguousLayout || c.NativeNullableElement)
+        {
+            c.PooledRead(() =>
+            {
+                w.Line("value.Clear();");
+                w.Line("foreach (var item in items) value.Add(item);");
+            });
+        }
+        else
+        {
+            w.Line("value.Clear();");
+            w.Line("for (int remaining = length; remaining != 0; remaining--)");
+            w.Open();
+            w.Line(c.Scalar + " item = default!;");
+            c.ReadElement("item", fresh: true);
+            w.Line("value.Add(item);");
+            w.Close();
+        }
+        w.Line("goto operationComplete_RootRead;");
+        w.Close();
     }
 }

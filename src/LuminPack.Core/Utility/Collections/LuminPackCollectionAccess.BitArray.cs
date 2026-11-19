@@ -10,6 +10,21 @@ namespace LuminPack.Code;
 public static partial class LuminPackCollectionAccess
 {
 #if NET8_0_OR_GREATER
+    /// <summary>Invalidates existing enumerators after successfully refilling a nonempty bit array.</summary>
+    /// <param name="value">The reused bit array whose payload was changed.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void MarkBitArrayRefilled(BitArray value)
+    {
+        if (LuminCollectionLayouts.BitArrayVersion >= 0)
+        {
+            ref int version = ref LuminFieldLayout.Field<int>(value, LuminCollectionLayouts.BitArrayVersion);
+            version = unchecked(version + 1);
+        }
+        else
+            value[0] = value[0];
+    }
+
     /// <summary>Writes a modern bit array into a completely reserved binary record.</summary>
     /// <param name="destination">The start of the count header followed by the full word-rounded payload.</param>
     /// <param name="value">The captured bit array, including null.</param>

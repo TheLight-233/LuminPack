@@ -91,19 +91,30 @@ public static partial class LuminPackCollectionAccess
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void AppendObservable<T>(ObservableCollection<T> collection, T item)
     {
-        if (collection.GetType() == typeof(ObservableCollection<T>) && ObservableListeners.Available &&
-            LuminCollectionLayouts.ObservableCollectionItems >= 0 &&
-            LuminFieldLayout.Field<object?>(collection, ObservableListeners.CollectionChanged) is null &&
-            LuminFieldLayout.Field<object?>(collection, ObservableListeners.PropertyChanged) is null)
+        if (GetUnobservedObservableList(collection) is { } items)
         {
-            var items = LuminFieldLayout.Field<IList<T>>(collection, LuminCollectionLayouts.ObservableCollectionItems);
-            if (items.GetType() == typeof(List<T>))
-            {
-                Unsafe.As<List<T>>(items).Add(item);
-                return;
-            }
+            items.Add(item);
+            return;
         }
         AppendObservablePublic(collection, item);
+    }
+
+    /// <summary>Gets exact list storage only when public insertions have no observable callbacks.</summary>
+    /// <typeparam name="T">The collection element type.</typeparam>
+    /// <param name="collection">The existing observable result.</param>
+    /// <returns>The unobserved list, or null when the collection needs public insertion.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static List<T>? GetUnobservedObservableList<T>(ObservableCollection<T> collection)
+    {
+        if (collection.GetType() != typeof(ObservableCollection<T>) || !ObservableListeners.Available ||
+            LuminCollectionLayouts.ObservableCollectionItems < 0 ||
+            LuminFieldLayout.Field<object?>(collection, ObservableListeners.CollectionChanged) is not null ||
+            LuminFieldLayout.Field<object?>(collection, ObservableListeners.PropertyChanged) is not null)
+            return null;
+
+        var items = LuminFieldLayout.Field<IList<T>>(collection, LuminCollectionLayouts.ObservableCollectionItems);
+        return items.GetType() == typeof(List<T>) ? Unsafe.As<List<T>>(items) : null;
     }
 
     /// <summary>Appends through the public operation when listeners or custom storage may be present.</summary>

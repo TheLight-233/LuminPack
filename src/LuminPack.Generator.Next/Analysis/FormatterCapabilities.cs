@@ -108,6 +108,8 @@ internal static class FormatterCapabilities
             if (FormatterRuntimeTraits.HasObservableAppend(compilation))
                 result.Add("AppendObservable");
         }
+        if (definition == "System.Collections.ObjectModel.ObservableCollection" && FormatterRuntimeTraits.HasUnobservedObservableList(compilation))
+            result.Add("UnobservedObservableList");
         if (definition == "System.Collections.ObjectModel.ReadOnlyDictionary" && modern && !unity &&
             named.TypeArguments[0].SpecialType == SpecialType.System_String &&
             named.TypeArguments[1].SpecialType is SpecialType.System_Int32 or SpecialType.System_String &&

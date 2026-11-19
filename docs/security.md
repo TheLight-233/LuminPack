@@ -66,7 +66,7 @@ Compressed raw collections require the frame's declared decoded byte width to eq
 
 The default JSON profile has `ValidateJsonSyntax = false` and depth 1024. An explicit hostile-input declaration selects the strict grammar; otherwise select `ValidateJsonSyntax = true` and an appropriate depth for external JSON. Strict grammar still requires application resource and schema limits.
 
-Approved collection fast paths assume producer invariants. Raw set bucket reconstruction does not promise duplicate rejection; adversarial hash collisions and application comparers can be expensive. Raw scalar bits are not domain validation for every framework type. Check uniqueness and domain invariants before using decoded data for correctness or authorization.
+Raw hash-set bucket reconstruction keeps the first occurrence of each value under the set's comparer. Adversarial collisions and application comparers can increase read time. Raw scalar storage still leaves application-specific value constraints to the caller.
 
 Constructors, callbacks, pooling/reuse handlers and custom formatters can execute application code during reading. Failed reads can preserve completed fields according to existing publication rules. Deserialization is neither transactional nor an execution sandbox. Validate a boundary object before publishing it into application state.
 
