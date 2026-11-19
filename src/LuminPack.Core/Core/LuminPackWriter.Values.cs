@@ -187,11 +187,26 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteObjectReferenceId(uint referenceId)
         {
-            int width = referenceId <= VarIntCodes.MaxSingleValue ? 2 : referenceId <= ushort.MaxValue ? 4 : 6;
+            if (referenceId <= VarIntCodes.MaxSingleValue)
+            {
+                EnsureAdditionalCapacity(2);
+                LuminPackWriter.Write(ref Current, (ushort)(LuminPackCode.ReferenceId | (referenceId << 8)));
+                AdvanceProven(2);
+                return;
+            }
+            WriteExtendedObjectReferenceId(referenceId);
+        }
+
+        /// <summary>Writes the reference marker followed by an extended variable-length identifier.</summary>
+        /// <param name="referenceId">A registered identifier above the single-byte range.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteExtendedObjectReferenceId(uint referenceId)
+        {
+            int width = referenceId <= ushort.MaxValue ? 4 : 6;
             EnsureAdditionalCapacity(width);
             ref byte destination = ref Current;
             destination = LuminPackCode.ReferenceId;
-            StoreVarInt(ref Unsafe.Add(ref destination, 1), referenceId);
+            StoreExtendedVarInt(ref Unsafe.Add(ref destination, 1), referenceId);
             AdvanceProven(width);
         }
 

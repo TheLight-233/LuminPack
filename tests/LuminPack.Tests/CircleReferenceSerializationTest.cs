@@ -1,5 +1,6 @@
 using LuminPack;
 using LuminPack.Attribute;
+using LuminPack.Core;
 using LuminPack.Option;
 using Xunit;
 
@@ -8,6 +9,43 @@ namespace LuminPackUnitTest;
 /// <summary>Provides circle reference serialization test functionality.</summary>
 public class CircleReferenceSerializationTest
 {
+    /// <summary>Checks exact reference-header bytes and rejects short buffers before publishing a prefix.</summary>
+    /// <param name="referenceId">The registered identifier.</param>
+    /// <param name="hex">The marker and encoded identifier.</param>
+    [Theory]
+    [InlineData(0u, "FA00")]
+    [InlineData(1u, "FA01")]
+    [InlineData(127u, "FA7F")]
+    [InlineData(128u, "FA858000")]
+    [InlineData(65535u, "FA85FFFF")]
+    [InlineData(65536u, "FA8300000100")]
+    [InlineData(uint.MaxValue, "FA83FFFFFFFF")]
+    public void BinaryReferenceHeaderUsesOneCompleteReservation(uint referenceId, string hex)
+    {
+        byte[] expected = Convert.FromHexString(hex);
+        Span<byte> storage = stackalloc byte[expected.Length];
+        var writer = new LuminPackWriter(ref storage);
+        writer.WriteObjectReferenceId(referenceId);
+        Assert.Equal(expected.Length, writer.Position);
+        Assert.Equal(expected, storage.ToArray());
+
+        Span<byte> shortStorage = stackalloc byte[expected.Length - 1];
+        shortStorage.Fill(0xAA);
+        var shortWriter = new LuminPackWriter(ref shortStorage);
+        Exception? failure = null;
+        try
+        {
+            shortWriter.WriteObjectReferenceId(referenceId);
+        }
+        catch (Exception error)
+        {
+            failure = error;
+        }
+        Assert.Equal($"Span out of range with {expected.Length}.", failure?.Message);
+        Assert.Equal(0, shortWriter.Position);
+        Assert.All(shortStorage.ToArray(), value => Assert.Equal((byte)0xAA, value));
+    }
+
     /// <summary>Verifies generated reference metadata and Unicode heads through both document encodings.</summary>
     [Fact]
     public void GeneratedJsonHeadsKeepReferenceIdentity()
