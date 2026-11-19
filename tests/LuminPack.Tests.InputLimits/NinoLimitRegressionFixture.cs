@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using LuminPack;
 using LuminPack.Attribute;
+using LuminPack.Option;
 
 [assembly: LuminPackOption(UntrustedData = true, MaxCollectionLength = 3, MaxStringLength = 4, MaxInputBytes = 256,
     FramedGroupings = true, RequireCompleteBinaryInput = true)]
@@ -116,7 +117,14 @@ public static class NinoLimitRegressionFixture
     /// <typeparam name="T">The registered payload type.</typeparam>
     /// <param name="source">The encoded record.</param>
     /// <returns>The decoded payload.</returns>
-    private static T ReadRegistered<T>(ReadOnlySpan<byte> source) => LuminPackSerializer.Deserialize<T>(source);
+    private static T ReadRegistered<T>(ReadOnlySpan<byte> source) => LuminPackSerializer.Deserialize<T,
+        LuminPackOptions<LuminPackUtf16LengthOptions, LuminPackGeneralFormat, RegisteredReadDepth, LuminPackTrustedJson>>(source);
+
+    // Registry profiles share entries by constants. Give the fixture its own table without changing its binary format.
+    private readonly struct RegisteredReadDepth : ILuminPackDepthOptions
+    {
+        public int Value => 31418;
+    }
 
     /// <summary>Reads an array owned by a type that explicitly uses trusted input.</summary>
     /// <param name="value">The array to write.</param>
