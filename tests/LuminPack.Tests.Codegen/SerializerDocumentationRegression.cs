@@ -451,11 +451,13 @@ internal static class SerializerDocumentationRegression
             xml.Position = 0;
             var entries = XDocument.Load(xml).Descendants("member").Select(member => (string)member.Attribute("name")!).ToArray();
             Require(entries.Any(name => name.StartsWith("M:LuminPack.LuminPackSerializer.Serialize", StringComparison.Ordinal)) &&
-                entries.Any(name => name.StartsWith("M:LuminPack.LuminPackSerializer.Deserialize", StringComparison.Ordinal)) &&
-                entries.All(name => name == "T:LuminPack.LuminPackSerializer" ||
-                    name.StartsWith("M:LuminPack.LuminPackSerializer.", StringComparison.Ordinal) &&
-                    !name.Contains(".LuminRoots_", StringComparison.Ordinal)),
-                "The version-tolerant graph must export public facade documentation without implementation entries.");
+                entries.Any(name => name.StartsWith("M:LuminPack.LuminPackSerializer.Deserialize", StringComparison.Ordinal)),
+                "The version-tolerant graph must export serialization and deserialization facade documentation.");
+            var implementationEntries = entries.Where(name => name != "T:LuminPack.LuminPackSerializer" &&
+                (!name.StartsWith("M:LuminPack.LuminPackSerializer.", StringComparison.Ordinal) ||
+                    name.Contains(".LuminRoots_", StringComparison.Ordinal))).ToArray();
+            Require(implementationEntries.Length == 0,
+                "The version-tolerant graph exported implementation documentation: " + string.Join(", ", implementationEntries));
         }
 
         var methods = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)

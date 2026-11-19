@@ -405,7 +405,7 @@ internal static class InputReadRenderer
         foreach (string line in usings)
             file.Append(line).Append('\n');
         file.Append("\nnamespace LuminPack\n{\n    public static partial class LuminPackSerializer\n    {\n");
-        file.Append("        /// <summary>Checked copies of the nested reads under one bounded untrusted root, with its limits frozen.</summary>\n");
+        file.Append("        // Checked reads using the limits frozen for their input scope.\n");
         file.Append("        internal static partial class ").Append(redirect.Helpers).Append("\n        {\n");
         file.Append(string.Join("\n", methods));
         file.Append("        }\n    }\n}\n");
