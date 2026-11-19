@@ -328,9 +328,9 @@ namespace LuminPack.Core
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET8_0_OR_GREATER
-            get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(Buffer), ref Cursor);
+            readonly get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(Buffer), ref Cursor);
 #else
-            get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(Buffer), ref Current);
+            readonly get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(Buffer), ref Current);
 #endif
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
