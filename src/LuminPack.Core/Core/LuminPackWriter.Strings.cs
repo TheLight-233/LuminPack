@@ -259,7 +259,7 @@ namespace LuminPack.Core
         /// <param name = "value">The string, including null or empty.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(string? value)
-            where TOptions : struct, ILuminPackOptions => Write<TOptions>(value, capacityReserved: false);
+            where TOptions : struct, ILuminPackOptions => default(TOptions).Write(ref this, value);
 
         /// <summary>Writes a complete default-profile string within a generator-proven capacity region.</summary>
         /// <param name = "value">The string, including null or empty.</param>
@@ -278,46 +278,85 @@ namespace LuminPack.Core
             where TOptions : struct, ILuminPackOptions
         {
             if (capacityReserved)
-            {
                 WriteReservedRecord<TOptions>(value);
+            else
+                default(TOptions).Write(ref this, value);
+        }
+
+        /// <summary>Writes one Utf16Length string record and publishes its cursor.</summary>
+        /// <param name="value">The nullable string to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteUtf16LengthString(string? value)
+        {
+            // Room for the raw UTF-16 form; Latin-1 text then takes one byte per character. A string holds at
+            // most 0x3FFFFFDF characters, so the payload and its header always fit in int.
+            int recordLength = sizeof(int) + (value is null ? 0 : value.Length * sizeof(char));
+            if (FitsRecord(recordLength))
+            {
+                // The record check proved the raw bound, which covers every written form.
+                AdvanceProven(WriteUtf16Record(ref Current, value));
                 return;
             }
 
-            bool utf16Length = false;
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16)
-            {
-                var recording = default(TOptions).StringRecording;
-                if (recording == LuminPackStringRecording.VarInt)
-                {
-                    WriteVarIntString<TOptions>(value, false);
-                    return;
-                }
-                utf16Length = recording == LuminPackStringRecording.Length;
-            }
-            if (utf16Length)
-            {
-                // Room for the raw UTF-16 form; Latin-1 text then takes one byte per character. A string holds at
-                // most 0x3FFFFFDF characters, so the payload and its header always fit in int.
-                int recordLength = sizeof(int) + (value is null ? 0 : value.Length * sizeof(char));
-                if (FitsRecord(recordLength))
-                {
-                    // The record check proved the raw bound, which covers every written form.
-                    AdvanceProven(WriteUtf16Record(ref Current, value));
-                    return;
-                }
+            GrownStorage storage = WriteUtf16RecordInShortWindow(Owner, _buffer, Position, _bufferCheckLimit, value, recordLength, out Exception? failure);
+            ApplyStringRecord(storage, failure);
+            return;
+        }
 
-                GrownStorage storage = WriteUtf16RecordInShortWindow(Owner, _buffer, Position, _bufferCheckLimit, value, recordLength, out Exception? failure);
-                ApplyStringRecord(storage, failure);
-                return;
-            }
-
-            int length = WriteEncodedString<TOptions>(value, out bool completeRecord);
-            if (!completeRecord)
-                length += StringRecordLength<TOptions>();
+        /// <summary>Writes one Utf8Length string record and publishes its cursor.</summary>
+        /// <param name="value">The nullable string to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteUtf8LengthString(string? value)
+        {
+            int length = WriteUtf8WithLength(Position, value) + 8;
             if (value is null)
                 Advance(length);
             else
                 AdvanceSafe(length);
+        }
+
+        /// <summary>Writes one Utf8Token string record and publishes its cursor.</summary>
+        /// <param name="value">The nullable string to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteUtf8TokenString(string? value)
+        {
+            int length = WriteUtf8WithToken<LuminPackUtf8TokenOptions>(Position, value) + 1;
+            if (value is null)
+                Advance(length);
+            else
+                AdvanceSafe(length);
+        }
+
+        /// <summary>Writes one Utf16Token string record and publishes its cursor.</summary>
+        /// <param name="value">The nullable string to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteUtf16TokenString(string? value)
+        {
+            int length = WriteUtf16WithToken<LuminPackUtf16TokenOptions>(Position, value) + 2;
+            if (value is null)
+                Advance(length);
+            else
+                AdvanceSafe(length);
+        }
+
+        /// <summary>Writes one Utf8VarInt string record and publishes its cursor.</summary>
+        /// <param name="value">The nullable string to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteUtf8VarIntString(string? value)
+        {
+            int length = WriteVarIntStringBytes<LuminPackUtf8VarIntOptions>(value, false);
+            if (value is null)
+                Advance(length);
+            else
+                AdvanceSafe(length);
+        }
+
+        /// <summary>Writes one Utf16VarInt string record and publishes its cursor.</summary>
+        /// <param name="value">The nullable string to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteUtf16VarIntString(string? value)
+        {
+            WriteVarIntString<LuminPackUtf16VarIntOptions>(value, false);
         }
 
         /// <summary>Writes consecutive string records using the default compiled profile.</summary>
@@ -623,17 +662,7 @@ namespace LuminPack.Core
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly int RecordBound<TOptions>(string? value)
-            where TOptions : struct, ILuminPackOptions
-        {
-            int length = value is null ? 0 : value.Length;
-            bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
-            var recording = default(TOptions).StringRecording;
-            if (recording == LuminPackStringRecording.VarInt)
-                return utf8 ? checked(length * 3 + 10) : checked(length * sizeof(char) + 5);
-            if (recording == LuminPackStringRecording.Token)
-                return utf8 ? checked(length * 3 + 1) : length * sizeof(char) + sizeof(char);
-            return utf8 ? checked(length * 3 + sizeof(int) * 2) : length * sizeof(char) + sizeof(int);
-        }
+            where TOptions : struct, ILuminPackOptions => default(TOptions).RecordBound(value);
 
         /// <summary>Returns the raw upper bound of a default-profile string record.</summary>
         /// <param name = "value">The string, including null or empty.</param>
@@ -650,14 +679,7 @@ namespace LuminPack.Core
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ref byte WriteReservedRecordString<TOptions>(ref byte cursor, string? value)
-            where TOptions : struct, ILuminPackOptions
-        {
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && default(TOptions).StringRecording == LuminPackStringRecording.Length)
-                return ref Unsafe.Add(ref cursor, (nint)(uint)WriteReservedUtf16Record(ref cursor, value));
-            CommitRecords(ref cursor);
-            WriteReservedRecord<TOptions>(value);
-            return ref Current;
-        }
+            where TOptions : struct, ILuminPackOptions => ref default(TOptions).WriteRecord(ref this, ref cursor, value);
 
         /// <summary>Writes a default-profile string record into room a reservation of its bound proved.</summary>
         /// <param name = "cursor">The caller's current position, followed by at least the record's bound.</param>
@@ -1497,6 +1519,76 @@ namespace LuminPack.Core
                     LuminPackWriter.Write(ref Unsafe.Add(ref current, sizeof(int)), value is null ? LuminPackCode.NullCollection : value.Length);
                 Advance(bytes + header);
             }
+        }
+
+        /// <summary>Writes a reserved Utf8Length record at the published cursor.</summary>
+        /// <param name="value">The nullable string to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteReservedUtf8LengthString(string? value)
+        {
+            int bytes = 0;
+            ref byte current = ref Current;
+            if (!string.IsNullOrEmpty(value))
+            {
+                Span<byte> destination = _buffer.Slice(Position + 8);
+                var status = StringSerializer.Serialize<LuminPackUtf8LengthOptions>(value.AsSpan(), destination, out _, out bytes, replaceInvalidSequences: false);
+                if (status != OperationStatus.Done)
+                    LuminPackExceptionHelper.ThrowFailedEncoding(status);
+            }
+            LuminPackWriter.Write(ref current, value is null ? LuminPackCode.NullCollection : bytes);
+            LuminPackWriter.Write(ref Unsafe.Add(ref current, sizeof(int)), value is null ? LuminPackCode.NullCollection : value.Length);
+            Advance(bytes + 8);
+        }
+
+        /// <summary>Writes a reserved Utf8Token record at the published cursor.</summary>
+        /// <param name="value">The nullable string to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteReservedUtf8TokenString(string? value)
+        {
+            int bytes = 0;
+            ref byte current = ref Current;
+            if (!string.IsNullOrEmpty(value))
+            {
+                Span<byte> destination = _buffer.Slice(Position);
+                var status = StringSerializer.Serialize<LuminPackUtf8LengthOptions>(value.AsSpan(), destination, out _, out bytes, replaceInvalidSequences: false);
+                if (status != OperationStatus.Done)
+                    LuminPackExceptionHelper.ThrowFailedEncoding(status);
+            }
+            Unsafe.Add(ref current, (nint)(uint)bytes) = 0;
+            Advance(bytes + 1);
+        }
+
+        /// <summary>Writes a reserved Utf16Token record at the published cursor.</summary>
+        /// <param name="value">The nullable string to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteReservedUtf16TokenString(string? value)
+        {
+            int bytes = 0;
+            ref byte current = ref Current;
+            if (!string.IsNullOrEmpty(value))
+            {
+                bytes = checked(value.Length * sizeof(char));
+                StringSerializer.SerializeUtf16(ref current, ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), (uint)bytes);
+            }
+            Unsafe.Add(ref current, (nint)(uint)bytes) = 0;
+            Unsafe.Add(ref current, (nint)(uint)(bytes + 1)) = 0;
+            Advance(bytes + 2);
+        }
+
+        /// <summary>Writes a reserved Utf8VarInt record at the published cursor.</summary>
+        /// <param name="value">The nullable string to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteReservedUtf8VarIntString(string? value)
+        {
+            WriteVarIntString<LuminPackUtf8VarIntOptions>(value, true);
+        }
+
+        /// <summary>Writes a reserved Utf16VarInt record at the published cursor.</summary>
+        /// <param name="value">The nullable string to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteReservedUtf16VarIntString(string? value)
+        {
+            WriteVarIntString<LuminPackUtf16VarIntOptions>(value, true);
         }
 
         /// <summary>Selects the non-default encoding kernel using a stateless profile.</summary>

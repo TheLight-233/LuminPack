@@ -696,7 +696,7 @@ public static partial class StringSerializer
     /// <returns>The conversion status, including partial-buffer and streaming results.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static OperationStatus Serialize<TOptions>(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
-        where TOptions : struct, ILuminPackOptions => default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 ? SerializeAsUtf16(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock) : SerializeAsUtf8(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+        where TOptions : struct, ILuminPackOptions => default(TOptions).Encode(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
     /// <summary>Deserializes the supplied input using the selected format and options.</summary>
     /// <param name = "source">The input data to process.</param>
     /// <param name = "destination">The destination receiving the result.</param>
@@ -1121,7 +1121,7 @@ public static partial class StringSerializer
     /// <param name = "replaceInvalidSequences">The replace invalid sequences used by this operation.</param>
     /// <param name = "isFinalBlock">The is final block used by this operation.</param>
     /// <returns>The result of the operation.</returns>
-    private static OperationStatus SerializeAsUtf16(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
+    internal static OperationStatus SerializeAsUtf16(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
     {
         int count = Math.Min(source.Length, destination.Length / sizeof(char));
         int bytes = count * sizeof(char);

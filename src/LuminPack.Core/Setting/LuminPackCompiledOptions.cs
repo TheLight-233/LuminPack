@@ -1,4 +1,5 @@
 using System.Buffers;
+using LuminPack.Core;
 using System.Runtime.CompilerServices;
 
 namespace LuminPack.Option;
@@ -9,16 +10,72 @@ namespace LuminPack.Option;
 public readonly struct LuminPackDeclaredOptions : ILuminPackOptions
 {
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int RecordBound(string? value) =>
+        default(LuminPackUtf16LengthStrings).RecordBound(value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref byte WriteRecord(scoped ref LuminPackWriter writer, ref byte cursor, string? value) =>
+        ref default(LuminPackUtf16LengthStrings).WriteRecord(ref writer, ref cursor, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Write(scoped ref LuminPackWriter writer, string? value) =>
+        default(LuminPackUtf16LengthStrings).Write(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public string? Read(scoped ref LuminPackReader reader, string? current) =>
+        default(LuminPackUtf16LengthStrings).Read(ref reader, current);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
+        default(LuminPackUtf16LengthStrings).ReadPair(ref reader, ref first, ref second);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadSlots(scoped ref LuminPackReader reader, scoped Span<string?> slots) =>
+        default(LuminPackUtf16LengthStrings).ReadSlots(ref reader, slots);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public OperationStatus Encode(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+        default(LuminPackUtf16LengthStrings).Encode(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+
+    /// <inheritdoc/>
+    public LuminPackStringEncoding Encoding
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf16LengthStrings).Encoding;
+    }
+
+    /// <inheritdoc/>
+    public LuminPackStringRecording Recording
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf16LengthStrings).Recording;
+    }
+
+    /// <inheritdoc/>
+    public byte BinaryProfile
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf16LengthStrings).BinaryProfile;
+    }
+
+    /// <inheritdoc/>
     public LuminPackStringEncoding StringEncoding
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringEncoding.UTF16;
+        get => default(LuminPackUtf16LengthStrings).Encoding;
     }
     /// <inheritdoc/>
     public LuminPackStringRecording StringRecording
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringRecording.Length;
+        get => default(LuminPackUtf16LengthStrings).Recording;
     }
     /// <inheritdoc/>
     public StandardFormat StandardFormat
@@ -44,16 +101,72 @@ public readonly struct LuminPackDeclaredOptions : ILuminPackOptions
 public readonly struct LuminPackUtf8LengthOptions : ILuminPackOptions
 {
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int RecordBound(string? value) =>
+        default(LuminPackUtf8LengthStrings).RecordBound(value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref byte WriteRecord(scoped ref LuminPackWriter writer, ref byte cursor, string? value) =>
+        ref default(LuminPackUtf8LengthStrings).WriteRecord(ref writer, ref cursor, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Write(scoped ref LuminPackWriter writer, string? value) =>
+        default(LuminPackUtf8LengthStrings).Write(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public string? Read(scoped ref LuminPackReader reader, string? current) =>
+        default(LuminPackUtf8LengthStrings).Read(ref reader, current);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
+        default(LuminPackUtf8LengthStrings).ReadPair(ref reader, ref first, ref second);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadSlots(scoped ref LuminPackReader reader, scoped Span<string?> slots) =>
+        default(LuminPackUtf8LengthStrings).ReadSlots(ref reader, slots);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public OperationStatus Encode(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+        default(LuminPackUtf8LengthStrings).Encode(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+
+    /// <inheritdoc/>
+    public LuminPackStringEncoding Encoding
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf8LengthStrings).Encoding;
+    }
+
+    /// <inheritdoc/>
+    public LuminPackStringRecording Recording
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf8LengthStrings).Recording;
+    }
+
+    /// <inheritdoc/>
+    public byte BinaryProfile
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf8LengthStrings).BinaryProfile;
+    }
+
+    /// <inheritdoc/>
     public LuminPackStringEncoding StringEncoding
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringEncoding.UTF8;
+        get => default(LuminPackUtf8LengthStrings).Encoding;
     }
     /// <inheritdoc/>
     public LuminPackStringRecording StringRecording
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringRecording.Length;
+        get => default(LuminPackUtf8LengthStrings).Recording;
     }
     /// <inheritdoc/>
     public StandardFormat StandardFormat
@@ -79,16 +192,72 @@ public readonly struct LuminPackUtf8LengthOptions : ILuminPackOptions
 public readonly struct LuminPackUtf8TokenOptions : ILuminPackOptions
 {
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int RecordBound(string? value) =>
+        default(LuminPackUtf8TokenStrings).RecordBound(value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref byte WriteRecord(scoped ref LuminPackWriter writer, ref byte cursor, string? value) =>
+        ref default(LuminPackUtf8TokenStrings).WriteRecord(ref writer, ref cursor, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Write(scoped ref LuminPackWriter writer, string? value) =>
+        default(LuminPackUtf8TokenStrings).Write(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public string? Read(scoped ref LuminPackReader reader, string? current) =>
+        default(LuminPackUtf8TokenStrings).Read(ref reader, current);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
+        default(LuminPackUtf8TokenStrings).ReadPair(ref reader, ref first, ref second);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadSlots(scoped ref LuminPackReader reader, scoped Span<string?> slots) =>
+        default(LuminPackUtf8TokenStrings).ReadSlots(ref reader, slots);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public OperationStatus Encode(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+        default(LuminPackUtf8TokenStrings).Encode(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+
+    /// <inheritdoc/>
+    public LuminPackStringEncoding Encoding
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf8TokenStrings).Encoding;
+    }
+
+    /// <inheritdoc/>
+    public LuminPackStringRecording Recording
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf8TokenStrings).Recording;
+    }
+
+    /// <inheritdoc/>
+    public byte BinaryProfile
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf8TokenStrings).BinaryProfile;
+    }
+
+    /// <inheritdoc/>
     public LuminPackStringEncoding StringEncoding
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringEncoding.UTF8;
+        get => default(LuminPackUtf8TokenStrings).Encoding;
     }
     /// <inheritdoc/>
     public LuminPackStringRecording StringRecording
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringRecording.Token;
+        get => default(LuminPackUtf8TokenStrings).Recording;
     }
     /// <inheritdoc/>
     public StandardFormat StandardFormat
@@ -114,16 +283,72 @@ public readonly struct LuminPackUtf8TokenOptions : ILuminPackOptions
 public readonly struct LuminPackUtf16LengthOptions : ILuminPackOptions
 {
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int RecordBound(string? value) =>
+        default(LuminPackUtf16LengthStrings).RecordBound(value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref byte WriteRecord(scoped ref LuminPackWriter writer, ref byte cursor, string? value) =>
+        ref default(LuminPackUtf16LengthStrings).WriteRecord(ref writer, ref cursor, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Write(scoped ref LuminPackWriter writer, string? value) =>
+        default(LuminPackUtf16LengthStrings).Write(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public string? Read(scoped ref LuminPackReader reader, string? current) =>
+        default(LuminPackUtf16LengthStrings).Read(ref reader, current);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
+        default(LuminPackUtf16LengthStrings).ReadPair(ref reader, ref first, ref second);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadSlots(scoped ref LuminPackReader reader, scoped Span<string?> slots) =>
+        default(LuminPackUtf16LengthStrings).ReadSlots(ref reader, slots);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public OperationStatus Encode(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+        default(LuminPackUtf16LengthStrings).Encode(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+
+    /// <inheritdoc/>
+    public LuminPackStringEncoding Encoding
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf16LengthStrings).Encoding;
+    }
+
+    /// <inheritdoc/>
+    public LuminPackStringRecording Recording
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf16LengthStrings).Recording;
+    }
+
+    /// <inheritdoc/>
+    public byte BinaryProfile
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf16LengthStrings).BinaryProfile;
+    }
+
+    /// <inheritdoc/>
     public LuminPackStringEncoding StringEncoding
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringEncoding.UTF16;
+        get => default(LuminPackUtf16LengthStrings).Encoding;
     }
     /// <inheritdoc/>
     public LuminPackStringRecording StringRecording
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringRecording.Length;
+        get => default(LuminPackUtf16LengthStrings).Recording;
     }
     /// <inheritdoc/>
     public StandardFormat StandardFormat
@@ -149,16 +374,72 @@ public readonly struct LuminPackUtf16LengthOptions : ILuminPackOptions
 public readonly struct LuminPackUtf16TokenOptions : ILuminPackOptions
 {
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int RecordBound(string? value) =>
+        default(LuminPackUtf16TokenStrings).RecordBound(value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref byte WriteRecord(scoped ref LuminPackWriter writer, ref byte cursor, string? value) =>
+        ref default(LuminPackUtf16TokenStrings).WriteRecord(ref writer, ref cursor, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Write(scoped ref LuminPackWriter writer, string? value) =>
+        default(LuminPackUtf16TokenStrings).Write(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public string? Read(scoped ref LuminPackReader reader, string? current) =>
+        default(LuminPackUtf16TokenStrings).Read(ref reader, current);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
+        default(LuminPackUtf16TokenStrings).ReadPair(ref reader, ref first, ref second);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadSlots(scoped ref LuminPackReader reader, scoped Span<string?> slots) =>
+        default(LuminPackUtf16TokenStrings).ReadSlots(ref reader, slots);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public OperationStatus Encode(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+        default(LuminPackUtf16TokenStrings).Encode(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+
+    /// <inheritdoc/>
+    public LuminPackStringEncoding Encoding
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf16TokenStrings).Encoding;
+    }
+
+    /// <inheritdoc/>
+    public LuminPackStringRecording Recording
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf16TokenStrings).Recording;
+    }
+
+    /// <inheritdoc/>
+    public byte BinaryProfile
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf16TokenStrings).BinaryProfile;
+    }
+
+    /// <inheritdoc/>
     public LuminPackStringEncoding StringEncoding
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringEncoding.UTF16;
+        get => default(LuminPackUtf16TokenStrings).Encoding;
     }
     /// <inheritdoc/>
     public LuminPackStringRecording StringRecording
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringRecording.Token;
+        get => default(LuminPackUtf16TokenStrings).Recording;
     }
     /// <inheritdoc/>
     public StandardFormat StandardFormat
@@ -184,16 +465,72 @@ public readonly struct LuminPackUtf16TokenOptions : ILuminPackOptions
 public readonly struct LuminPackUtf8VarIntOptions : ILuminPackOptions
 {
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int RecordBound(string? value) =>
+        default(LuminPackUtf8VarIntStrings).RecordBound(value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref byte WriteRecord(scoped ref LuminPackWriter writer, ref byte cursor, string? value) =>
+        ref default(LuminPackUtf8VarIntStrings).WriteRecord(ref writer, ref cursor, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Write(scoped ref LuminPackWriter writer, string? value) =>
+        default(LuminPackUtf8VarIntStrings).Write(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public string? Read(scoped ref LuminPackReader reader, string? current) =>
+        default(LuminPackUtf8VarIntStrings).Read(ref reader, current);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
+        default(LuminPackUtf8VarIntStrings).ReadPair(ref reader, ref first, ref second);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadSlots(scoped ref LuminPackReader reader, scoped Span<string?> slots) =>
+        default(LuminPackUtf8VarIntStrings).ReadSlots(ref reader, slots);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public OperationStatus Encode(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+        default(LuminPackUtf8VarIntStrings).Encode(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+
+    /// <inheritdoc/>
+    public LuminPackStringEncoding Encoding
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf8VarIntStrings).Encoding;
+    }
+
+    /// <inheritdoc/>
+    public LuminPackStringRecording Recording
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf8VarIntStrings).Recording;
+    }
+
+    /// <inheritdoc/>
+    public byte BinaryProfile
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf8VarIntStrings).BinaryProfile;
+    }
+
+    /// <inheritdoc/>
     public LuminPackStringEncoding StringEncoding
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringEncoding.UTF8;
+        get => default(LuminPackUtf8VarIntStrings).Encoding;
     }
     /// <inheritdoc/>
     public LuminPackStringRecording StringRecording
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringRecording.VarInt;
+        get => default(LuminPackUtf8VarIntStrings).Recording;
     }
     /// <inheritdoc/>
     public StandardFormat StandardFormat
@@ -219,16 +556,72 @@ public readonly struct LuminPackUtf8VarIntOptions : ILuminPackOptions
 public readonly struct LuminPackUtf16VarIntOptions : ILuminPackOptions
 {
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int RecordBound(string? value) =>
+        default(LuminPackUtf16VarIntStrings).RecordBound(value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref byte WriteRecord(scoped ref LuminPackWriter writer, ref byte cursor, string? value) =>
+        ref default(LuminPackUtf16VarIntStrings).WriteRecord(ref writer, ref cursor, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Write(scoped ref LuminPackWriter writer, string? value) =>
+        default(LuminPackUtf16VarIntStrings).Write(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public string? Read(scoped ref LuminPackReader reader, string? current) =>
+        default(LuminPackUtf16VarIntStrings).Read(ref reader, current);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
+        default(LuminPackUtf16VarIntStrings).ReadPair(ref reader, ref first, ref second);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadSlots(scoped ref LuminPackReader reader, scoped Span<string?> slots) =>
+        default(LuminPackUtf16VarIntStrings).ReadSlots(ref reader, slots);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public OperationStatus Encode(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+        default(LuminPackUtf16VarIntStrings).Encode(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+
+    /// <inheritdoc/>
+    public LuminPackStringEncoding Encoding
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf16VarIntStrings).Encoding;
+    }
+
+    /// <inheritdoc/>
+    public LuminPackStringRecording Recording
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf16VarIntStrings).Recording;
+    }
+
+    /// <inheritdoc/>
+    public byte BinaryProfile
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(LuminPackUtf16VarIntStrings).BinaryProfile;
+    }
+
+    /// <inheritdoc/>
     public LuminPackStringEncoding StringEncoding
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringEncoding.UTF16;
+        get => default(LuminPackUtf16VarIntStrings).Encoding;
     }
     /// <inheritdoc/>
     public LuminPackStringRecording StringRecording
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => LuminPackStringRecording.VarInt;
+        get => default(LuminPackUtf16VarIntStrings).Recording;
     }
     /// <inheritdoc/>
     public StandardFormat StandardFormat
@@ -333,22 +726,78 @@ public readonly struct LuminPackStrictJson : ILuminPackValidationOptions
 /// <typeparam name="TDepth">The complete JSON document depth bound.</typeparam>
 /// <typeparam name="TValidation">The complete JSON document grammar policy.</typeparam>
 public readonly struct LuminPackOptions<TStrings, TFormat, TDepth, TValidation> : ILuminPackOptions
-    where TStrings : struct, ILuminPackOptions
+    where TStrings : struct, ILuminPackStringCodec
     where TFormat : struct, ILuminPackFormatOptions
     where TDepth : struct, ILuminPackDepthOptions
     where TValidation : struct, ILuminPackValidationOptions
 {
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int RecordBound(string? value) =>
+        default(TStrings).RecordBound(value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref byte WriteRecord(scoped ref LuminPackWriter writer, ref byte cursor, string? value) =>
+        ref default(TStrings).WriteRecord(ref writer, ref cursor, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Write(scoped ref LuminPackWriter writer, string? value) =>
+        default(TStrings).Write(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public string? Read(scoped ref LuminPackReader reader, string? current) =>
+        default(TStrings).Read(ref reader, current);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
+        default(TStrings).ReadPair(ref reader, ref first, ref second);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ReadSlots(scoped ref LuminPackReader reader, scoped Span<string?> slots) =>
+        default(TStrings).ReadSlots(ref reader, slots);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public OperationStatus Encode(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+        default(TStrings).Encode(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+
+    /// <inheritdoc/>
+    public LuminPackStringEncoding Encoding
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(TStrings).Encoding;
+    }
+
+    /// <inheritdoc/>
+    public LuminPackStringRecording Recording
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(TStrings).Recording;
+    }
+
+    /// <inheritdoc/>
+    public byte BinaryProfile
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(TStrings).BinaryProfile;
+    }
+
+    /// <inheritdoc/>
     public LuminPackStringEncoding StringEncoding
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => default(TStrings).StringEncoding;
+        get => default(TStrings).Encoding;
     }
     /// <inheritdoc/>
     public LuminPackStringRecording StringRecording
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => default(TStrings).StringRecording;
+        get => default(TStrings).Recording;
     }
     /// <inheritdoc/>
     public StandardFormat StandardFormat

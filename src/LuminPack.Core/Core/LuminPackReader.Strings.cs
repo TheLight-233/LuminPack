@@ -499,12 +499,16 @@ namespace LuminPack.Core
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void ReadStringPair<TOptions>(scoped ref string? first, scoped ref string? second)
-            where TOptions : struct, ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions => default(TOptions).ReadPair(ref this, ref first, ref second);
+
+        /// <summary>Reads a pair of UTF-16 length records in their original publication order.</summary>
+        /// <param name="first">The first destination and its retained string.</param>
+        /// <param name="second">The second destination, read after publishing the first.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void ReadUtf16LengthPair(scoped ref string? first, scoped ref string? second)
         {
 #if NET8_0_OR_GREATER
-            if ((typeof(TOptions) == typeof(LuminPackUtf16LengthOptions) ||
-                 typeof(TOptions) == typeof(LuminPackDefaultOptions)) &&
-                Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8)
+            if (Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8)
             {
                 const int pairCapacity = 2 * (sizeof(int) + 16);
                 nint available = Unsafe.ByteOffset(ref Cursor, ref _end);
@@ -520,13 +524,13 @@ namespace LuminPack.Core
                             ReadProvenShortString(secondHeader, ref second);
                             return;
                         }
-                        ReadStringPairTail<TOptions>(ref second);
+                        ReadStringPairTail<LuminPackUtf16LengthOptions>(ref second);
                         return;
                     }
                 }
             }
 #endif
-            ReadStringPairFallback<TOptions>(ref first, ref second);
+            ReadStringPairFallback<LuminPackUtf16LengthOptions>(ref first, ref second);
         }
 
         /// <summary>Reads each field through its individual decoder when the pair has no checked short-string window.</summary>
@@ -576,12 +580,15 @@ namespace LuminPack.Core
         /// <param name="strings">The destination slots after their collection framing has been validated.</param>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
-        public void ReadStrings<TOptions>(Span<string?> strings) where TOptions : struct, ILuminPackOptions
+        public void ReadStrings<TOptions>(Span<string?> strings) where TOptions : struct, ILuminPackOptions => default(TOptions).ReadSlots(ref this, strings);
+
+        /// <summary>Consumes checked short Latin-1 slots before the remaining UTF-16 length records.</summary>
+        /// <param name="strings">The destination slots, in wire order.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void ReadUtf16LengthSlots(scoped Span<string?> strings)
         {
 #if NET8_0_OR_GREATER
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 &&
-                default(TOptions).StringRecording == LuminPackStringRecording.Length &&
-                Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 &&
+            if (Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 &&
                 !strings.IsEmpty)
             {
                 nint available = Unsafe.ByteOffset(ref Cursor, ref _end);
@@ -593,6 +600,15 @@ namespace LuminPack.Core
                 }
             }
 #endif
+            ReadStringSlots<LuminPackUtf16LengthOptions>(strings);
+        }
+
+        /// <summary>Publishes each decoded record into its existing slot.</summary>
+        /// <param name="strings">The destination slots, in wire order.</param>
+        /// <typeparam name="TOptions">The compiled string profile.</typeparam>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void ReadStringSlots<TOptions>(scoped Span<string?> strings) where TOptions : struct, ILuminPackOptions
+        {
             ref string? first = ref MemoryMarshal.GetReference(strings);
             for (int i = 0; i < strings.Length; i++)
             {
@@ -618,7 +634,7 @@ namespace LuminPack.Core
         /// <param name="remaining">The validated number of bytes from the current position.</param>
         /// <returns>The number of complete string records read.</returns>
         [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
-        private int ReadShortLatin1Prefix(Span<string?> slots, int header, uint remaining)
+        private int ReadShortLatin1Prefix(scoped Span<string?> slots, int header, uint remaining)
         {
             int i = 0;
             ref string? first = ref MemoryMarshal.GetReference(slots);
@@ -660,50 +676,51 @@ namespace LuminPack.Core
         /// <returns>The parsed string, retaining equal storage.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining | LuminPackJit.Optimized)]
         public string? Read<TOptions>(string? current)
-            where TOptions : struct, ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions => default(TOptions).Read(ref this, current);
+
+        /// <summary>Reads one Utf16Length string record with the existing reuse and validation boundaries.</summary>
+        /// <param name="current">The immutable string available for reuse.</param>
+        /// <returns>The decoded string, retaining an equal existing instance.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal string? ReadUtf16LengthString(string? current)
         {
-            bool utf16Length = false;
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16)
-            {
-                var recording = default(TOptions).StringRecording;
-                if (recording == LuminPackStringRecording.VarInt)
-                    return ReadVarIntString<TOptions>(current);
-                utf16Length = recording == LuminPackStringRecording.Length;
-            }
-            if (utf16Length)
-            {
 #if NET8_0_OR_GREATER
-                // Complete nonempty records validate before comparison or allocation. Equal candidates retain
-                // their immutable storage; null, empty and malformed records keep the shared reader's failures.
-                nint available = Unsafe.ByteOffset(ref Cursor, ref _end);
-                if (unchecked((nuint)(available - sizeof(int))) <= int.MaxValue - sizeof(int))
+            // Complete nonempty records validate before comparison or allocation. Equal candidates retain
+            // their immutable storage; null, empty and malformed records keep the shared reader's failures.
+            nint available = Unsafe.ByteOffset(ref Cursor, ref _end);
+            if (unchecked((nuint)(available - sizeof(int))) <= int.MaxValue - sizeof(int))
+            {
+                int header = LuminPackReader.Read<int>(ref Current);
+                if (header > 1)
                 {
-                    int header = LuminPackReader.Read<int>(ref Current);
-                    if (header > 1)
+                    ref byte text = ref Unsafe.Add(ref Current, sizeof(int));
+                    if ((header & 1) == 0)
                     {
-                        ref byte text = ref Unsafe.Add(ref Current, sizeof(int));
-                        if ((header & 1) == 0)
-                        {
-                            AdvanceInStringWindow(unchecked(sizeof(int) + header), (uint)available);
-                            return StringSerializer.ReadUtf16Payload(ref text, header, current);
-                        }
-
-                        int length = header >> 1;
-                        AdvanceInStringWindow(sizeof(int) + length, (uint)available);
-                        return StringSerializer.ReadLatin1Payload(ref text, length, current);
+                        AdvanceInStringWindow(unchecked(sizeof(int) + header), (uint)available);
+                        return StringSerializer.ReadUtf16Payload(ref text, header, current);
                     }
-                }
-#endif
-                string? value = StringSerializer.ReadUtf16Record(ref Current, RemainingWindowBytes, current, out int bytes);
-                Advance(bytes);
-                return value;
-            }
 
+                    int length = header >> 1;
+                    AdvanceInStringWindow(sizeof(int) + length, (uint)available);
+                    return StringSerializer.ReadLatin1Payload(ref text, length, current);
+                }
+            }
+#endif
+            string? value = StringSerializer.ReadUtf16Record(ref Current, RemainingWindowBytes, current, out int bytes);
+            Advance(bytes);
+            return value;
+        }
+
+        /// <summary>Reads one Utf8Length string record with the existing reuse and validation boundaries.</summary>
+        /// <param name="current">The immutable string available for reuse.</param>
+        /// <returns>The decoded string, retaining an equal existing instance.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal string? ReadUtf8LengthString(string? current)
+        {
 #if NET8_0_OR_GREATER
             // Fresh short ASCII length records widen inline, saving the shared decoder's call per string; every other
             // record, including non-ASCII payloads with an equal count, keeps the validating decoder.
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && default(TOptions).StringRecording == LuminPackStringRecording.Length &&
-                current is null && Vector128.IsHardwareAccelerated)
+            if (current is null && Vector128.IsHardwareAccelerated)
             {
                 nint available = Unsafe.ByteOffset(ref Cursor, ref _end);
                 if (unchecked((nuint)(available - sizeof(int) * 2)) <= int.MaxValue - sizeof(int) * 2)
@@ -725,9 +742,60 @@ namespace LuminPack.Core
             int start = Position;
             int index = start;
             // The decoders are static, so a fresh or retried read never takes this state's address.
-            string? result = ReadStringAndAdvance<TOptions>(_buffer, ref index, current);
+            string? result = ReadStringAndAdvance<LuminPackUtf8LengthOptions>(_buffer, ref index, current);
             Advance(index - start);
             return result;
+        }
+
+        /// <summary>Reads one Utf8Token string record with the existing reuse and validation boundaries.</summary>
+        /// <param name="current">The immutable string available for reuse.</param>
+        /// <returns>The decoded string, retaining an equal existing instance.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal string? ReadUtf8TokenString(string? current)
+        {
+            int start = Position;
+            int index = start;
+            // The decoders are static, so a fresh or retried read never takes this state's address.
+            string? result = ReadStringAndAdvance<LuminPackUtf8TokenOptions>(_buffer, ref index, current);
+            Advance(index - start);
+            return result;
+        }
+
+        /// <summary>Reads one Utf16Token string record with the existing reuse and validation boundaries.</summary>
+        /// <param name="current">The immutable string available for reuse.</param>
+        /// <returns>The decoded string, retaining an equal existing instance.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal string? ReadUtf16TokenString(string? current)
+        {
+            int start = Position;
+            int index = start;
+            // The decoders are static, so a fresh or retried read never takes this state's address.
+            string? result = ReadStringAndAdvance<LuminPackUtf16TokenOptions>(_buffer, ref index, current);
+            Advance(index - start);
+            return result;
+        }
+
+        /// <summary>Reads one Utf8VarInt string record with the existing reuse and validation boundaries.</summary>
+        /// <param name="current">The immutable string available for reuse.</param>
+        /// <returns>The decoded string, retaining an equal existing instance.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal string? ReadUtf8VarIntString(string? current)
+        {
+            int start = Position;
+            int index = start;
+            // The decoders are static, so a fresh or retried read never takes this state's address.
+            string? result = ReadStringAndAdvance<LuminPackUtf8VarIntOptions>(_buffer, ref index, current);
+            Advance(index - start);
+            return result;
+        }
+
+        /// <summary>Reads one Utf16VarInt string record with the existing reuse and validation boundaries.</summary>
+        /// <param name="current">The immutable string available for reuse.</param>
+        /// <returns>The decoded string, retaining an equal existing instance.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal string? ReadUtf16VarIntString(string? current)
+        {
+            return ReadVarIntString<LuminPackUtf16VarIntOptions>(current);
         }
 
 #if NET8_0_OR_GREATER
