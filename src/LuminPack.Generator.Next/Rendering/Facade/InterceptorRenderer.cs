@@ -516,7 +516,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                 (shape.Width?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "Unsafe.SizeOf<" + shape.Element + ">()") + " : 1;\n",
             EntryKind.FixedWidthRecord => "                int directLength = " + shape.Width!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + ";\n",
             EntryKind.RawSequence => "                int directLength = checked(sizeof(int) + checked((int)value.Length) * Unsafe.SizeOf<" + shape.Element + ">());\n",
-            EntryKind.FixedRecord or EntryKind.DirectRecord or EntryKind.RootString or EntryKind.RootUri or EntryKind.RootCulture
+            EntryKind.FixedRecord or EntryKind.FixedVersionedRecord or EntryKind.DirectRecord or EntryKind.RootString or EntryKind.RootUri or EntryKind.RootCulture
                 when measured => MeasureRecord,
             EntryKind.CompoundDirect when measured => MeasureRecord,
             _ => null,
@@ -528,6 +528,8 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                     "                [MethodImpl(MethodImplOptions.NoInlining)]\n" +
                     "                static byte[] WriteNonNull(in %TYPE% value)\n                {\n" + Indent(PooledWrite) + "                }\n"
                 : PooledWrite;
+        if (shape.Kind == EntryKind.FixedVersionedRecord)
+            return size + DirectVersionedWrite;
         bool exact = shape.Kind is EntryKind.FixedEnum or EntryKind.NullableDirect or EntryKind.FixedRecord or EntryKind.FixedWidthRecord;
         if (shape.Kind == EntryKind.CompoundDirect)
             return size + "                var directBuffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(directLength);\n" +
@@ -1097,6 +1099,22 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                         var directValue = value;
                         %MEASURE%(ref directEvaluator, ref directValue);
                         int directLength = directEvaluator.Value;
+        """ + "\n";
+
+    private const string DirectVersionedWrite = """
+                        var directBuffer = new byte[directLength];
+                        var directSpan = directBuffer.AsSpan();
+                        var state = LuminPackWriterOptionalState.Lease(ref _threadStaticWriterOptionalState);
+                        try
+                        {
+                            var writer = new LuminPackWriter(ref directSpan, state);
+                            %WRITE%
+                            return directBuffer;
+                        }
+                        finally
+                        {
+                            state.Release();
+                        }
         """ + "\n";
 
     private const string DirectWrite = """

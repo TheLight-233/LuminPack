@@ -230,7 +230,7 @@ internal static partial class BinaryEmitter
             w.Close();
             w.Blank();
             if (model.Version != null)
-                w.Line("evaluator.Add(" + VersionPrefixLength(model) + " + " + members.Sum(member => member.Size).ToString(CultureInfo.InvariantCulture) + ");");
+                w.Line("evaluator.Add(" + VersionHeaderLength(model) + " + " + members.Sum(member => member.Size).ToString(CultureInfo.InvariantCulture) + ");");
             else
             {
                 w.Line("int totalLength = 1;");
@@ -374,7 +374,7 @@ internal static partial class BinaryEmitter
         if (model.Version != null)
         {
             w.Blank();
-            VersionSchemaClass(model, w);
+            VersionSchemaClass(model, w, reads);
         }
         w.Close();
         w.Close();
@@ -388,7 +388,8 @@ internal static partial class BinaryEmitter
             w.Open();
             w.Line(reader + " isolated = default;");
             w.Line("state.CopyTo(ref isolated);");
-            w.Line(Serializer() + "." + container + "." + Invoke("RootRead", profile) + "(ref isolated, ref value);");
+            EmitIsolatedVersionOperation(w, Serializer() + "." + container + "." + Invoke("RootRead", profile) +
+                "(ref isolated, ref value);", model.Version != null, read: true);
             w.Line("isolated.CopyTo(ref state);");
             w.Close();
         }
@@ -402,7 +403,8 @@ internal static partial class BinaryEmitter
             w.Open();
             w.Line(writer + " isolated = default;");
             w.Line("state.CopyTo(ref isolated);");
-            w.Line(Serializer() + "." + container + "." + Invoke("RootWrite", profile) + "(ref isolated, value);");
+            EmitIsolatedVersionOperation(w, Serializer() + "." + container + "." + Invoke("RootWrite", profile) +
+                "(ref isolated, value);", model.Version != null, read: false);
             w.Line("isolated.CopyTo(ref state);");
             w.Close();
         }

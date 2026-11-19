@@ -88,31 +88,31 @@ internal abstract class TypeModel : IEquatable<TypeModel>
         => ReferenceEquals(left, right) || left.Length == right.Length && System.Linq.Enumerable.SequenceEqual(left, right);
 }
 
-/// <summary>The version-tolerant schema facts an emitted record depends on, reduced to strings and bytes.</summary>
+/// <summary>The descriptor and compatibility facts a version-tolerant record publishes.</summary>
 internal sealed class VersionSchemaModel : IEquatable<VersionSchemaModel>
 {
-    /// <summary>The qualified schema class, such as <c>global::LuminPack.Generated.LuminPackExtensions_App.Version_global_N_Model</c>.</summary>
+    /// <summary>The qualified schema class.</summary>
     internal readonly string Schema;
 
-    /// <summary>The constant member metadata.</summary>
-    internal readonly byte[] Metadata;
+    /// <summary>The schema class's unqualified name.</summary>
+    internal string Name => Schema.Substring(Schema.LastIndexOf(".Version_", StringComparison.Ordinal) + 1);
 
-    /// <summary>The constant revision-2 prefix with a zero profile byte.</summary>
-    internal readonly byte[] Prefix;
+    /// <summary>The descriptor words in wire order, with an empty type hash for runtime contracts.</summary>
+    internal readonly ulong[] Descriptors;
 
-    /// <summary>The field table entries, one <c>new LuminPackVersionField(...)</c> per member.</summary>
+    /// <summary>Whether each descriptor needs the closed generic type's contract.</summary>
+    internal readonly bool[] RuntimeContracts;
+
+    /// <summary>The name keys accepted by each slot, starting with its oldest identity.</summary>
+    internal readonly uint[][] NameKeys;
+
+    /// <summary>The revision-1 field table entries, also used for open type contracts.</summary>
     internal readonly string[] FieldEntries;
 
-    /// <summary>The declared types of the read temporaries, per member.</summary>
+    /// <summary>The declared types of the staged members.</summary>
     internal readonly string[] TempTypes;
 
-    /// <summary>The analyzed type names of the members.</summary>
-    internal readonly string[] TypeNames;
-
-    /// <summary>The fully qualified member types.</summary>
-    internal readonly string[] QualifiedTypes;
-
-    /// <summary>The root-private layout mirror every version-tolerant record declares.</summary>
+    /// <summary>The root-private layout mirror.</summary>
     internal readonly string Layout;
 
     /// <summary>The mirror's field declarations in storage order.</summary>
@@ -121,50 +121,50 @@ internal sealed class VersionSchemaModel : IEquatable<VersionSchemaModel>
     /// <summary>The former names of each member, which JSON reads accept.</summary>
     internal readonly string[][] OldNames;
 
-    /// <summary>Whether metadata or a raw width depends on a closed generic construction or its runtime layout.</summary>
-    internal readonly bool Dynamic;
+    /// <summary>Whether each fixed-width field uses a padded nullable payload.</summary>
+    internal readonly bool[] FixedNullable;
 
-    /// <summary>The revision-2 widths, with zero for a runtime-sized raw value.</summary>
-    internal readonly int[] Widths;
+    /// <summary>Whether the descriptor table depends on a closed generic construction.</summary>
+    internal bool Dynamic => Array.IndexOf(RuntimeContracts, true) >= 0;
 
-    /// <summary>Captures a version schema.</summary>
-    /// <param name="schema">The schema supplied to <c>VersionSchemaModel</c>.</param>
-    /// <param name="metadata">The metadata supplied to <c>VersionSchemaModel</c>.</param>
-    /// <param name="prefix">The prefix to use for the generated name.</param>
-    /// <param name="fieldEntries">The field entries supplied to <c>VersionSchemaModel</c>.</param>
-    /// <param name="tempTypes">The temp types supplied to <c>VersionSchemaModel</c>.</param>
-    /// <param name="typeNames">The type names supplied to <c>VersionSchemaModel</c>.</param>
-    /// <param name="qualifiedTypes">The qualified types supplied to <c>VersionSchemaModel</c>.</param>
-    /// <param name="layout">The layout supplied to <c>VersionSchemaModel</c>.</param>
-    /// <param name="layoutFields">The layout fields supplied to <c>VersionSchemaModel</c>.</param>
-    /// <param name="oldNames">The old names supplied to <c>VersionSchemaModel</c>.</param>
-    /// <param name="dynamic">Whether to enable dynamic for this operation.</param>
-    /// <param name="widths">The widths supplied to <c>VersionSchemaModel</c>.</param>
-    internal VersionSchemaModel(string schema, byte[] metadata, byte[] prefix, string[] fieldEntries, string[] tempTypes,
-        string[] typeNames, string[] qualifiedTypes, string layout, string[] layoutFields, string[][] oldNames,
-        bool dynamic = false, int[]? widths = null)
+    /// <summary>Gets the size code of a member's descriptor.</summary>
+    /// <param name="slot">The zero-based member index.</param>
+    /// <returns>The one-byte wire size code.</returns>
+    internal byte Width(int slot) => (byte)(Descriptors[slot] >> 56);
+
+    /// <summary>Captures the analysis facts used by the binary and JSON emitters.</summary>
+    /// <param name="schema">The qualified generated class name.</param>
+    /// <param name="descriptors">The member descriptor words.</param>
+    /// <param name="runtimeContracts">The members that compute a type hash for each closed construction.</param>
+    /// <param name="nameKeys">The accepted keys per slot.</param>
+    /// <param name="fieldEntries">The legacy schema entries.</param>
+    /// <param name="tempTypes">The staged field types.</param>
+    /// <param name="layout">The storage mirror name.</param>
+    /// <param name="layoutFields">The storage mirror field declarations.</param>
+    /// <param name="oldNames">The former member names.</param>
+    /// <param name="fixedNullable">The members with a fixed-width nullable representation.</param>
+    internal VersionSchemaModel(string schema, ulong[] descriptors, bool[] runtimeContracts, uint[][] nameKeys,
+        string[] fieldEntries, string[] tempTypes, string layout, string[] layoutFields, string[][] oldNames, bool[] fixedNullable)
     {
-        Dynamic = dynamic;
-        Widths = widths ?? Array.Empty<int>();
-        OldNames = oldNames;
         Schema = schema;
-        Metadata = metadata;
-        Prefix = prefix;
+        Descriptors = descriptors;
+        RuntimeContracts = runtimeContracts;
+        NameKeys = nameKeys;
         FieldEntries = fieldEntries;
         TempTypes = tempTypes;
-        TypeNames = typeNames;
-        QualifiedTypes = qualifiedTypes;
         Layout = layout;
         LayoutFields = layoutFields;
+        OldNames = oldNames;
+        FixedNullable = fixedNullable;
     }
 
     /// <inheritdoc/>
     public bool Equals(VersionSchemaModel? other) => ReferenceEquals(this, other) || other != null && Schema == other.Schema &&
-        Layout == other.Layout && Dynamic == other.Dynamic && Widths.SequenceEqual(other.Widths) && Metadata.SequenceEqual(other.Metadata) && Prefix.SequenceEqual(other.Prefix) &&
-        FieldEntries.SequenceEqual(other.FieldEntries) && TempTypes.SequenceEqual(other.TempTypes) &&
-        TypeNames.SequenceEqual(other.TypeNames) && QualifiedTypes.SequenceEqual(other.QualifiedTypes) &&
-        LayoutFields.SequenceEqual(other.LayoutFields) && OldNames.Length == other.OldNames.Length &&
-        OldNames.Zip(other.OldNames, (left, right) => left.SequenceEqual(right)).All(same => same);
+        Layout == other.Layout && Descriptors.SequenceEqual(other.Descriptors) && RuntimeContracts.SequenceEqual(other.RuntimeContracts) &&
+        FixedNullable.SequenceEqual(other.FixedNullable) && FieldEntries.SequenceEqual(other.FieldEntries) &&
+        TempTypes.SequenceEqual(other.TempTypes) && LayoutFields.SequenceEqual(other.LayoutFields) &&
+        NameKeys.Length == other.NameKeys.Length && NameKeys.Zip(other.NameKeys, (left, right) => left.SequenceEqual(right)).All(same => same) &&
+        OldNames.Length == other.OldNames.Length && OldNames.Zip(other.OldNames, (left, right) => left.SequenceEqual(right)).All(same => same);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as VersionSchemaModel);

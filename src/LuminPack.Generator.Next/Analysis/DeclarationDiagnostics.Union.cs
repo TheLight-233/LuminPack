@@ -247,10 +247,16 @@ internal static partial class TypeModelFactory
         /// <summary>Hashes the canonical case name as UTF-8 with FNV-1a.</summary>
         /// <param name="type">The declared case, before binding the root's type parameters.</param>
         /// <returns>The persisted 32-bit case discriminator.</returns>
-        private static uint UnionNameHash(INamedTypeSymbol type)
+        private static uint UnionNameHash(INamedTypeSymbol type) => WireNameHash(CanonicalUnionName(type), System.Text.Encoding.UTF8);
+
+        /// <summary>Hashes the UTF-8 bytes of a wire name or contract with FNV-1a-32.</summary>
+        /// <param name="name">The wire identity.</param>
+        /// <param name="encoding">The selected UTF-8 encoder.</param>
+        /// <returns>The 32-bit hash.</returns>
+        private static uint WireNameHash(string name, System.Text.Encoding encoding)
         {
             uint hash = 2166136261u;
-            foreach (byte value in System.Text.Encoding.UTF8.GetBytes(CanonicalUnionName(type)))
+            foreach (byte value in encoding.GetBytes(name))
                 hash = unchecked((hash ^ value) * 16777619u);
             return hash;
         }

@@ -8,429 +8,280 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 internal static partial class BinaryEmitter
 {
-    /// <summary>Builds a version-tolerant record write: the null object marker, one reservation covering the schema prefix, the raw
-    /// members and the length-prefixed strings, the prefix store, and the members stored like an ordinary reserved record, each
-    /// string behind its four-byte payload length.</summary>
-    /// <param name="model">The render model.</param>
-    /// <param name="w">The writer.</param>
-    /// <returns>The write statements.</returns>
-    private static List<string> VersionWriteBody(PayloadRenderModel model, CodeWriter w)
+    private const string VersionCore = "global::LuminPack.Core.";
+
+    /// <summary>Emits the scoped descriptor header and one operation per member.</summary>
+    /// <param name="model">The version-tolerant payload.</param>
+    /// <param name="w">The source writer.</param>
+    /// <param name="withNull">Whether this body owns the null marker.</param>
+    /// <returns>The generated write statements.</returns>
+    internal static List<string> VersionWriteBody(PayloadRenderModel model, CodeWriter w, bool withNull = true)
     {
-        var members = model.Members;
-        var schema = model.Version;
-        if (schema.Dynamic)
-            return ApplyBoundedWrite(model, VersionStreamWriteBody(model, w));
-        for (int index = 0; index < members.Length; index++)
-            if (members[index].Volatile)
-                return ApplyBoundedWrite(model, VersionStreamWriteBody(model, w));
-        var body = new List<string>
-        {
-            "var value = input;",
-        };
-        if (!model.IsStruct)
+        var body = new List<string> { "var value = input;" };
+        if (!model.IsStruct && withNull)
         {
             body.Add("if (value is null)");
             body.Add("{");
-            body.Add("writer.Cursor = " + w.A("LuminPackCode") + ".NullObject;");
-            body.Add("writer.Advance(1);");
+            body.Add("writer.EnsureAdditionalCapacity(1);");
+            body.Add("writer.WriteNullObjectHeader();");
             body.Add("return;");
             body.Add("}");
             body.Add("");
         }
-        if (model.Net8 && members.Any(VersionCapture))
+        var schema = model.Version;
+        string profile = VersionProfile(model, w);
+        body.Add("writer.WriteVersionRecord<" + profile + ">(" + schema.Schema + ".Schema, " +
+            schema.Schema + ".Descriptors, " + schema.Schema + ".Cache);");
+        for (int index = 0; index < model.Members.Length; index++)
         {
-            // The schema and strings may invoke custom profile getters before a later collection is observed.
-            AddStorageProfileBranches(model, w, body, (branch, reserveNativeSlots) =>
-                AppendVersionSlots(model, w, branch, reserveNativeSlots));
+            RenderMember member = model.Members[index];
+            body.Add("Write" + VersionMemberName(member) + "(ref writer, value." + member.Name + ");");
+        }
+        if (withNull)
+            ApplyBoundedWrite(model, body);
+
+        for (int index = 0; index < model.Members.Length; index++)
+        {
+            RenderMember member = model.Members[index];
+            byte width = schema.Width(index);
+            string writerType = w.A("LuminPackWriter");
+            body.Add("");
+            string signature = "static void Write" + VersionMemberName(member) + "(scoped ref " + writerType + " writer, " +
+                schema.TempTypes[index] + " field)";
+            body.Add(w.MethodImpl(width == 255 ? "NoInlining" : "AggressiveInlining"));
+            if (width == 254)
+            {
+                body.Add(signature + " => writer.WriteVersionString<" + profile + ">(field);");
+                continue;
+            }
+            if (width <= 250 && member.IsFixed)
+            {
+                body.Add(signature + " => writer.WriteVersionValue(in field);");
+                continue;
+            }
+            body.Add(signature);
+            body.Add("{");
+            if (width == 255)
+            {
+                body.Add("int length = writer.ReserveVersionLength();");
+                body.Add("int scope = writer.EnterVersionScope();");
+                body.Add("try");
+                body.Add("{");
+            }
+            AddMemberWrite(body, model, member, w, "field");
+            if (schema.FixedNullable[index])
+            {
+                body.Add("if (!field.HasValue)");
+                body.Add("	writer.PadVersionField(" + VersionNumber(width - 1) + ");");
+            }
+            if (width == 255)
+            {
+                body.Add("}");
+                body.Add("finally");
+                body.Add("{");
+                body.Add("writer.ExitVersionScope(scope);");
+                body.Add("}");
+                body.Add("writer.CompleteVersionLength(length);");
+            }
+            body.Add("}");
+        }
+        return body;
+    }
+
+    /// <summary>Selects the inline hint for a small fixed version-tolerant record.</summary>
+    /// <param name="model">The version-tolerant payload.</param>
+    /// <returns>Whether to request root inlining.</returns>
+    internal static bool VersionWriteInline(PayloadRenderModel model) =>
+        model.Members.Length <= 4 && model.Version.Descriptors.All(word => word >> 56 <= 250);
+
+    /// <summary>Stages versioned members before applying constructor, pooling or reuse semantics.</summary>
+    /// <param name="model">The version-tolerant payload.</param>
+    /// <param name="w">The source writer.</param>
+    /// <param name="withNull">Whether this body accepts the null marker.</param>
+    /// <returns>The generated read statements.</returns>
+    internal static List<string> VersionReadBody(PayloadRenderModel model, CodeWriter w, bool withNull = true)
+    {
+        var members = model.Members;
+        var schema = model.Version;
+        string profile = VersionProfile(model, w);
+        string qualifiedSchema = schema.Schema;
+        string fieldsType = qualifiedSchema + ".Fields";
+        var temps = Enumerable.Range(0, members.Length).Select(index => "fields.F" + VersionNumber(index)).ToArray();
+        var body = new List<string>
+        {
+            "var record = reader.ReadVersionRecord<" + profile + ">(" + qualifiedSchema + ".Schema, " +
+                qualifiedSchema + ".Descriptors, " + qualifiedSchema + ".Cache);",
+            "if (record.IsNull)",
+            "{",
+        };
+        if (withNull)
+        {
+            body.Add("value = default;");
+            body.Add("return;");
         }
         else
-            AppendVersionSlots(model, w, body, reserveNativeSlots: model.Net8);
-        return ApplyBoundedWrite(model, body);
-    }
-
-    /// <summary>Writes the schema and slots in consecutive reservations separated by unmeasured fields.</summary>
-    /// <param name="model">The complete versioned contract.</param>
-    /// <param name="w">The generated source writer.</param>
-    /// <param name="body">The receiving operation body.</param>
-    /// <param name="reserveNativeSlots">Whether newly measured native fields may share a reservation.</param>
-    private static void AppendVersionSlots(PayloadRenderModel model, CodeWriter w, List<string> body, bool reserveNativeSlots)
-    {
-        var members = model.Members;
-        var schema = model.Version;
-        body.Add("ref byte cursor = ref writer.Cursor;");
-        bool prefix = true;
-        int lengths = 0;
-        for (int index = 0; index <= members.Length;)
-        {
-            int end = index;
-            while (end < members.Length && VersionReservable(members[end], schema.Widths[end], reserveNativeSlots))
-                end++;
-            if (prefix || end > index)
-            {
-                AppendVersionReservation(model, w, body, index, end, prefix, reserveNativeSlots, ref lengths);
-                prefix = false;
-            }
-            if (end == members.Length)
-                break;
-            body.Add("writer.Cursor = ref cursor;");
-            AppendVersionVariable(body, model, members[end], w, "value." + members[end].Name);
-            body.Add("cursor = ref writer.Cursor;");
-            index = end + 1;
-        }
-        if (body[body.Count - 1].Length != 0 && members.Any(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.List))
-            body.Add("");
-        body.Add("writer.Cursor = ref cursor;");
-    }
-
-    /// <summary>Whether the complete slot can be written inside a fixed reservation.</summary>
-    /// <param name="member">The member being analyzed or emitted.</param>
-    /// <param name="width">The width of the storage or input range.</param>
-    /// <param name="reserveNativeSlots">Whether newly measured native fields may share a reservation.</param>
-    /// <returns>Whether the input satisfies the version reservable check.</returns>
-    private static bool VersionReservable(RenderMember member, int width, bool reserveNativeSlots) => width != 255 ||
-        member.Kind == RenderMemberKind.Text ||
-        member.Kind == RenderMemberKind.List && member.Nested == null && member.Scalar != "string" ||
-        reserveNativeSlots && (member.IsFixed || VersionCapture(member));
-
-    /// <summary>Whether the existing binary member is a raw vector or dictionary pair record.</summary>
-    /// <param name="member">The projected field operation.</param>
-    /// <returns>Whether the established runtime snapshot yields its exact payload width.</returns>
-    private static bool VersionCapture(RenderMember member) =>
-        member.Kind == RenderMemberKind.Array && !member.FormatterCall ||
-        member.Dictionary?.Pair == true || member.ReservableSpan;
-
-    /// <summary>Reserves one run of fixed or measured slots and optionally stores the schema prefix.</summary>
-    /// <param name="model">The normalized model for this contract.</param>
-    /// <param name="w">The generated source writer.</param>
-    /// <param name="body">The statements in the generated operation body.</param>
-    /// <param name="first">The first supplied to <c>AppendVersionReservation</c>.</param>
-    /// <param name="end">The end supplied to <c>AppendVersionReservation</c>.</param>
-    /// <param name="prefix">The prefix to use for the generated name.</param>
-    /// <param name="reserveNativeSlots">Whether newly measured native fields may share a reservation.</param>
-    /// <param name="lengths">The lengths supplied to <c>AppendVersionReservation</c>.</param>
-    private static void AppendVersionReservation(PayloadRenderModel model, CodeWriter w, List<string> body,
-        int first, int end, bool prefix, bool reserveNativeSlots, ref int lengths)
-    {
-        var members = model.Members;
-        var terms = new List<string>();
-        if (prefix)
-            terms.Add(VersionPrefixLength(model));
-        for (int index = first; index < end; index++)
-        {
-            RenderMember member = members[index];
-            if (model.Version.Widths[index] == 255 && member.IsFixed)
-            {
-                // The existing table marks this type as variable. Keep its four-byte length even when the operation knows it.
-                terms.Add("4");
-                terms.Add(member.Width);
-                continue;
-            }
-            if (member.Kind == RenderMemberKind.List || reserveNativeSlots && VersionCapture(member))
-            {
-                // The captured span or pair count fixes the complete field size before the record is reserved.
-                string snapshot = VersionSnapshot(model, index);
-                body.Add("var " + snapshot + " = " + w.A("LuminPackWriter") + ".Capture(value." + member.Name + ");");
-                body.Add("int " + snapshot + "Width = " + snapshot + ".Bound;");
-                terms.Add("4");
-                terms.Add(snapshot + "Width");
-                continue;
-            }
-            if (members[index].Kind != RenderMemberKind.Text)
-            {
-                terms.Add(members[index].Width);
-                continue;
-            }
-            body.Add("string " + VersionSnapshot(model, index) + " = value." + members[index].Name + ";");
-            terms.Add("4");
-            terms.Add("writer.RecordBound<" + WriteProfile(model, w, members[index]) + ">(" + VersionSnapshot(model, index) + ")");
-        }
-        body.Add("cursor = ref writer.ReserveRecord(ref cursor, checked(" + string.Join(" + ", terms) + "));");
-        if (prefix)
-            body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, unchecked((nint)(uint)(" + model.Version.Schema + ".StorePrefix<" + Profile + ">(ref writer, ref cursor))));");
-        for (int index = first; index < end; index++)
-        {
-            var member = members[index];
-            if (model.Version.Widths[index] == 255 && member.IsFixed)
-            {
-                body.Add(w.A("Unsafe") + ".WriteUnaligned(ref cursor, " + member.Width + ");");
-                body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, 4);");
-                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReserved<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
-                continue;
-            }
-            if (member.Kind == RenderMemberKind.List || reserveNativeSlots && VersionCapture(member))
-            {
-                string snapshot = VersionSnapshot(model, index);
-                body.Add(w.A("Unsafe") + ".WriteUnaligned(ref cursor, " + snapshot + "Width);");
-                body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, 4);");
-                string store = member.Dictionary?.Pair == true ? ".WriteReserved" : ".WriteReservedSpanRecord";
-                body.Add("cursor = ref " + w.A("LuminPackWriter") + store + "(ref cursor, " + snapshot + ");");
-                continue;
-            }
-            if (member.Kind == RenderMemberKind.Text)
-            {
-                // A string's actual byte count can be smaller than its reservation.
-                string length = lengths++ == 0 ? "length" : "length" + (lengths - 1).ToString(CultureInfo.InvariantCulture);
-                body.Add("// Field: " + member.Name);
-                body.Add("ref byte " + length + " = ref cursor;");
-                body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, 4);");
-                body.Add("cursor = ref writer.WriteReservedRecordString<" + WriteProfile(model, w, member) + ">(ref cursor, " + VersionSnapshot(model, index) + ");");
-                body.Add(w.A("Unsafe") + ".WriteUnaligned(ref " + length + ", (int)" + w.A("Unsafe") + ".ByteOffset(ref " + w.A("Unsafe") + ".Add(ref " + length + ", 4), ref cursor));");
-                continue;
-            }
-            int last = VersionRunEnd(model, index);
-            if (last == index)
-            {
-                if (member.Size >= 8 || member.Raw)
-                {
-                    body.Add("if (" + w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8)");
-                    body.Add("{");
-                    body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
-                    body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
-                    body.Add("}");
-                    body.Add("else");
-                    body.Add("{");
-                    body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReserved<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
-                    body.Add("}");
-                    body.Add("");
-                }
-                else
-                {
-                    body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
-                    body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
-                }
-                continue;
-            }
-            AddVersionFixedStores(body, w, members, index, last, Width(members, index, last));
-            body.Add("");
-            index = last;
-        }
-    }
-
-    /// <summary>Whether a version-tolerant write root keeps its inline hint: its template stays within the sixteen-call budget
-    /// only without a fixed group and with at most one string.</summary>
-    /// <param name="model">The render model.</param>
-    /// <returns>Whether the write root takes the aggressive inlining hint.</returns>
-    internal static bool VersionWriteInline(PayloadRenderModel model)
-    {
-        var members = model.Members;
-        int strings = 0;
-        for (int index = 0; index < members.Length; index++)
-            if (members[index].IsFixed && VersionRunEnd(model, index) > index ||
-                members[index].Kind == RenderMemberKind.Text && ++strings > 1)
-                return false;
-        return true;
-    }
-
-    /// <summary>Spells a string member's write snapshot, camel-cased like the other bound locals of these operations.</summary>
-    /// <param name="model">The record that owns the member.</param>
-    /// <param name="index">The member's index.</param>
-    /// <returns>The snapshot local name.</returns>
-    private static string VersionSnapshot(PayloadRenderModel model, int index)
-    {
-        string trimmed = model.Members[index].Name.TrimStart('_');
-        string stem = trimmed + "Snapshot";
-        string name = stem + index.ToString(CultureInfo.InvariantCulture);
-        string chosen = AsciiLetters(trimmed) && model.Members.All(member => member.Name != stem) ? stem : name;
-        return char.ToLowerInvariant(chosen[0]) + chosen.Substring(1);
-    }
-
-    /// <summary>Builds a version-tolerant record read: the same-schema record read like an ordinary record (raw runs as fixed
-    /// groups, lone raw members and length-framed strings one by one), the evolved record mapped by name in a separate non-inlined
-    /// function, and the construction or reuse of the instance.</summary>
-    /// <param name="model">The render model.</param>
-    /// <param name="w">The writer.</param>
-    /// <returns>The read statements.</returns>
-    private static List<string> VersionReadBody(PayloadRenderModel model, CodeWriter w)
-    {
-        var members = model.Members;
-        var schema = model.Version;
-        string count = members.Length.ToString(CultureInfo.InvariantCulture);
-        string text = "global::LuminPack." + GeneratedNames.Owner(model.Extension, "string");
-        string Policy() => w.A("LuminPackInputPolicy");
-        string Reader() => w.A("LuminPackReader");
-        var temps = members.Select(member => PayloadEmitter.LocalName(member.Name) + "Temp").ToArray();
-        // Frame-end locals are numbered across the root and its mapped read.
-        int ends = 0;
-        string End() => ends++ == 0 ? "end" : "end" + ends.ToString(CultureInfo.InvariantCulture);
-        var body = new List<string>();
-        for (int index = 0; index < members.Length; index++)
-            body.Add(schema.TempTypes[index] + " " + temps[index] + " = default !;");
-        body.Add("bool sameSchema = " + schema.Schema + ".TryReadPrefix<" + Profile + ">(ref reader);");
-        body.Add("int revision = 2;");
-        body.Add("int count = sameSchema ? " + count + " : reader.ReadVersionHeader<" + Profile + ">(out revision);");
-        body.Add("if (count < 0)");
-        body.Add("{");
-        body.Add("value = default;");
-        body.Add("return;");
+            body.Add(w.A("LuminPackExceptionHelper") + ".ThrowInvalidDataException(\"A tracked record body cannot be null.\");");
         body.Add("}");
         body.Add("");
-        bool allRaw = schema.Widths.All(width => width != 255);
-        if (!allRaw && !model.IsStruct)
+        body.Add(fieldsType + " fields = default;");
+        if (!model.IsStruct && members.Any(member => !member.IsFixed))
         {
-            // Variable members start from the reused instance's values.
             body.Add("if (value is not null)");
             body.Add("{");
+            if (members.Any(member => !member.IsFixed && member.Mirrored))
+                body.Add("ref var seed = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
             for (int index = 0; index < members.Length; index++)
                 if (!members[index].IsFixed)
-                    body.Add(temps[index] + " = value!." + members[index].Name + ";");
+                    body.Add(temps[index] + " = " + (members[index].Mirrored ? "seed." : "value!.") + members[index].Name + ";");
             body.Add("}");
-            body.Add("");
         }
-        body.Add("if (sameSchema)");
-        body.Add("{");
-        int cursors = 0;
-        // The publication layout separates an item from a preceding group or string, unless the item is a group itself.
-        bool separate = false;
-        for (int index = 0; index < members.Length; index++)
+
+        body.Add("if (record.Map is { } map)");
+        body.Add("	ReadMapped(ref reader, ref fields, map, legacy: false);");
+        body.Add("else if (record.IsLegacy)");
+        body.Add("	ReadMapped(ref reader, ref fields, reader.ReadLegacyVersionRecord<" + profile + ">(" +
+            qualifiedSchema + ".Legacy.Fields), legacy: true);");
+        if (members.Length != 0)
         {
-            var member = members[index];
-            int last = VersionRunEnd(model, index);
-            bool group = last > index;
-            if (separate && !group)
-                body.Add("");
-            separate = !member.IsFixed || group;
-            if (schema.Widths[index] == 255)
+            body.Add("else");
+            body.Add("{");
+            for (int index = 0; index < members.Length; index++)
             {
-                string length = "length" + index.ToString(CultureInfo.InvariantCulture), end = End();
-                body.Add("int " + length + " = reader.ReadVersionPayloadLength();");
-                if (model.Net8 && member.IsFixed)
-                {
-                    // ReadVersionPayloadLength validated the whole field before this direct native load.
-                    body.Add("if (" + length + " == " + member.Width + ")");
-                    body.Add("{");
-                    body.Add(temps[index] + " = " + (member.IsBoolean && !model.Trusted
-                        ? Policy() + ".ReadBoolean(ref reader.Cursor);"
-                        : Reader() + ".Read<" + member.Scalar + ">(ref reader.Cursor);"));
-                    body.Add("reader.Cursor = ref " + w.A("Unsafe") + ".Add(ref reader.Cursor, " + length + ");");
-                    body.Add("}");
-                    body.Add("else");
-                    body.Add("{");
-                }
-                body.Add("int " + end + " = reader.Position + " + length + ";");
-                AddMemberRead(body, model, member, w, "reader", temps[index]);
-                body.Add(Reader() + ".ValidateVersionFieldEnd(reader.Position, " + end + ");");
-                if (model.Net8 && member.IsFixed)
-                    body.Add("}");
-                continue;
+                body.Add("Read" + VersionMemberName(members[index]) + "(ref reader, ref fields" +
+                    (schema.Width(index) == 255 || schema.FixedNullable[index] ? ", legacy: false);" : ");"));
             }
-            if (last == index)
-            {
-                string size = "Unsafe.SizeOf<" + schema.TypeNames[index] + ">()";
-                if (schema.Widths[index] == 0)
-                {
-                    string length = "length" + index.ToString(CultureInfo.InvariantCulture);
-                    body.Add("int " + length + " = " + size + " < 255 ? " + size + " : reader.ReadVersionPayloadLength();");
-                    body.Add(Reader() + ".ValidateVersionFieldEnd(" + length + ", " + size + ");");
-                }
-                else
-                    body.Add(Reader() + ".ValidateVersionFieldEnd(" + size + ", " + size + ");");
-                body.Add("reader.EnsureReadable(" + size + ");");
-                body.Add("reader.Advance(" + (member.IsBoolean && !model.Trusted ? Policy() + ".ReadBoolean" : Reader() + ".Read") + "(ref reader.Cursor, out " + temps[index] + "));");
-                continue;
-            }
-            string width = Width(members, index, last);
-            string cursor = "cursor" + (cursors++ == 0 ? string.Empty : cursors.ToString(CultureInfo.InvariantCulture));
-            body.Add("ref byte " + cursor + " = ref reader.Cursor;");
-            body.Add("reader.EnsureReadable(" + width + ");");
-            body.Add("reader.Cursor = ref " + w.A("Unsafe") + ".Add(ref reader.Cursor, " + width + ");");
-            string offset = "0";
-            for (int item = index; item <= last; item++)
-            {
-                string at = At(w, cursor, offset, plain: true);
-                body.Add(temps[item] + " = " + (members[item].IsBoolean && !model.Trusted ? Policy() + ".ReadBoolean(ref " + at + ");"
-                    : Reader() + ".Read<" + members[item].Scalar + ">(ref " + at + ");"));
-                offset = Add(offset, members[item].Width);
-            }
-            index = last;
+            body.Add("}");
+        }
+        body.Add("");
+        AddVersionPublication(model, body, temps);
+        AppendMappedRead(model, w, body, fieldsType, profile, temps);
+        for (int index = 0; index < members.Length; index++)
+            AppendVersionFieldRead(model, w, body, fieldsType, index, temps[index]);
+        return body;
+    }
+
+    /// <summary>Emits the common mapped loop for descriptor and legacy records.</summary>
+    /// <param name="model">The reading payload.</param>
+    /// <param name="w">The source writer.</param>
+    /// <param name="body">The receiving root statements.</param>
+    /// <param name="fieldsType">The fully qualified staged state type.</param>
+    /// <param name="profile">The record's compiled profile.</param>
+    /// <param name="temps">The staged member expressions.</param>
+    private static void AppendMappedRead(PayloadRenderModel model, CodeWriter w, List<string> body, string fieldsType,
+        string profile, string[] temps)
+    {
+        var schema = model.Version;
+        string stringLimit = model.Limits?.String is int limit && limit != int.MaxValue ? ", " + VersionNumber(limit) : string.Empty;
+        body.Add("");
+        body.Add(w.MethodImpl("NoInlining"));
+        body.Add("static void ReadMapped(scoped ref " + w.A("LuminPackReader") + " reader, scoped ref " + fieldsType +
+            " fields, " + VersionCore + "LuminPackDescriptorMap map, bool legacy)");
+        body.Add("{");
+        body.Add("for (int index = 0; index < map.Count; index++)");
+        body.Add("{");
+        body.Add("int slot = map.GetSlot(index);");
+        body.Add("if (slot < 0)");
+        body.Add("{");
+        body.Add("if (legacy)");
+        body.Add("	reader.Advance(map.GetLegacyLength(index));");
+        body.Add("else");
+        body.Add("	reader.SkipVersionField<" + profile + ">(map.GetWidth(index)" + stringLimit + ");");
+        body.Add("continue;");
+        body.Add("}");
+        body.Add("var scope = legacy ? reader.EnterLegacyVersionField(map.GetLegacyLength(index)) : default;");
+        body.Add("try");
+        body.Add("{");
+        body.Add("switch (slot)");
+        body.Add("{");
+        for (int index = 0; index < model.Members.Length; index++)
+        {
+            bool framed = schema.Width(index) == 255 || schema.FixedNullable[index];
+            body.Add("case " + VersionNumber(index) + ":");
+            body.Add("	Read" + VersionMemberName(model.Members[index]) + "(ref reader, ref fields" +
+                (framed ? ", legacy);" : ");"));
+            body.Add("	break;");
         }
         body.Add("}");
-        // A raw record of at most seven members returns its values; any other, including an empty record, fills the caller's
-        // temporaries by reference or returns nothing.
-        bool returns = allRaw && members.Length is > 0 and <= 7;
-        string assignment = !returns ? string.Empty : members.Length == 1 ? temps[0] + " = " : "(" + string.Join(", ", temps) + ") = ";
-        body.Add("else");
-        body.Add("\t" + assignment + "ReadEvolvedFields(ref reader, count, revision" + (returns ? string.Empty : string.Concat(temps.Select(temp => ", ref " + temp))) + ");");
-        body.Add("// Keep the uncommon mapped read separate from the same-schema native body.");
-        body.Add(w.MethodImpl("NoInlining"));
-        string returnType = !returns ? "void" : members.Length == 1 ? schema.TypeNames[0] : "(" + string.Join(", ", schema.TypeNames) + ")";
-        body.Add("static " + returnType + " ReadEvolvedFields(ref " + Reader() + " reader2, int count2, int revision2" +
-            (returns ? string.Empty : string.Concat(Enumerable.Range(0, members.Length).Select(index => ", ref " + schema.QualifiedTypes[index] + " " + temps[index] + "2"))) + ")");
+        body.Add("if (legacy)");
+        body.Add("	reader.ValidateVersionFieldEnd(scope);");
+        body.Add("}");
+        body.Add("finally");
         body.Add("{");
-        if (returns)
-            for (int index = 0; index < members.Length; index++)
-                body.Add(schema.TypeNames[index] + " " + temps[index] + "2 = default;");
-        body.Add("global::System.Span<int> widths = stackalloc int[count2];");
-        body.Add("global::System.Span<int> slots = stackalloc int[count2];");
-        body.Add("global::System.Span<byte> present = stackalloc byte[" + count + "];");
-        string tableArguments = schema.Schema + ".Fields, revision2, slots, widths, present";
-        body.Add(model.Net8
-            ? "reader2.ReadCachedVersionTable(" + schema.Schema + ".Evolved.Cache, revision2, slots, widths, present);"
-            : "reader2.Position = " + Reader() + ".ReadVersionTable(reader2, " + tableArguments + ");");
-        bool limitsFields = schema.Widths.Any(width => width == 255);
-        if (limitsFields)
+        body.Add("if (legacy)");
+        body.Add("	reader.ExitVersionField(scope);");
+        body.Add("}");
+        body.Add("}");
+        for (int index = 0; index < model.Members.Length; index++)
         {
-            body.Add("int bufferLength = reader2.Buffer.Length;");
+            if (model.Members[index].IsFixed)
+                continue;
+            body.Add("if (!map.IsPresent(" + VersionNumber(index) + "))");
+            body.Add("	" + temps[index] + " = default!;");
+        }
+        body.Add("}");
+    }
+
+    /// <summary>Emits the staged member operation shared by positional and mapped reads.</summary>
+    /// <param name="model">The reading payload.</param>
+    /// <param name="w">The source writer.</param>
+    /// <param name="body">The receiving root statements.</param>
+    /// <param name="fieldsType">The fully qualified staged state type.</param>
+    /// <param name="index">The member's slot.</param>
+    /// <param name="target">The staged field expression.</param>
+    private static void AppendVersionFieldRead(PayloadRenderModel model, CodeWriter w, List<string> body, string fieldsType,
+        int index, string target)
+    {
+        var member = model.Members[index];
+        var schema = model.Version;
+        byte width = schema.Width(index);
+        bool framed = width == 255;
+        bool padded = schema.FixedNullable[index];
+        body.Add("");
+        body.Add(w.MethodImpl(framed ? "NoInlining" : "AggressiveInlining"));
+        string signature = "static void Read" + VersionMemberName(member) + "(scoped ref " + w.A("LuminPackReader") +
+            " reader, scoped ref " + fieldsType + " fields" + (framed || padded ? ", bool legacy" : "") + ")";
+        var read = new List<string>();
+        AddMemberRead(read, model, member, w, "reader", target);
+        if (!framed && !padded && read.Count == 1)
+        {
+            body.Add(signature + " => " + read[0]);
+            return;
+        }
+        body.Add(signature);
+        body.Add("{");
+        if (framed)
+        {
+            body.Add("var scope = legacy ? default : reader.EnterVersionField();");
             body.Add("try");
             body.Add("{");
         }
-        body.Add("for (int i = 0; i < count2; i++)");
-        body.Add("{");
-        body.Add("int length = widths[i] >= 0 ? widths[i] : reader2.ReadVersionPayloadLength();");
-        body.Add("switch (slots[i])");
-        body.Add("{");
-        for (int index = 0; index < members.Length; index++)
+        body.AddRange(read);
+        if (padded)
         {
-            body.Add("case " + index.ToString(CultureInfo.InvariantCulture) + ":");
-            body.Add("{");
-            if (schema.Widths[index] == 255)
-            {
-                // A variable field is read within a temporary input limit of its recorded payload length.
-                string end = End();
-                body.Add("int " + end + " = reader2.Position + length;");
-                body.Add("reader2.EnterVersionField(length);");
-                AddMemberRead(body, model, members[index], w, "reader2", temps[index] + "2");
-                body.Add("reader2.ExitVersionField(bufferLength);");
-                body.Add(Reader() + ".ValidateVersionFieldEnd(reader2.Position, " + end + ");");
-            }
-            else
-            {
-                string size = "Unsafe.SizeOf<" + schema.TypeNames[index] + ">()";
-                body.Add(Reader() + ".ValidateVersionFieldEnd(length, " + size + ");");
-                body.Add("reader2.EnsureReadable(" + size + ");");
-                body.Add("reader2.Advance(" + (members[index].IsBoolean && !model.Trusted ? Policy() + ".ReadBoolean" : Reader() + ".Read") + "(ref reader2.Cursor, out " + temps[index] + "2));");
-            }
-            body.Add("}");
-            body.Add("");
-            body.Add("\tbreak;");
+            body.Add("if (!legacy && !" + target + ".HasValue)");
+            body.Add("	reader.Advance(" + VersionNumber(width - 1) + ");");
         }
-        body.Add("default:");
-        body.Add("{");
-        body.Add("reader2.EnsureReadable(length);");
-        body.Add("reader2.Cursor = ref " + w.A("Unsafe") + ".Add(ref reader2.Cursor, unchecked((nint)(uint)((length))));");
-        body.Add("}");
-        body.Add("");
-        body.Add("\tbreak;");
-        body.Add("}");
-        body.Add("}");
-        if (limitsFields)
+        if (framed)
         {
+            body.Add("if (!legacy)");
+            body.Add("	reader.ValidateVersionFieldEnd(scope);");
             body.Add("}");
             body.Add("finally");
             body.Add("{");
-            body.Add("if (reader2.Buffer.Length != bufferLength)");
-            body.Add("\treader2.ExitVersionField(bufferLength);");
+            body.Add("if (!legacy)");
+            body.Add("	reader.ExitVersionField(scope);");
             body.Add("}");
         }
-        body.Add("");
-        for (int index = 0; index < members.Length; index++)
-        {
-            body.Add("if (present[" + index.ToString(CultureInfo.InvariantCulture) + "] == 0)");
-            body.Add("\t" + temps[index] + "2 = default !;");
-        }
-        if (returns)
-            body.Add("return " + (members.Length == 1 ? temps[0] + "2" : "(" + string.Join(", ", temps.Select(temp => temp + "2")) + ")") + ";");
         body.Add("}");
-        body.Add("");
+    }
+
+    /// <summary>Publishes the staged fields into the selected constructor, rented instance or reused instance.</summary>
+    /// <param name="model">The reading payload.</param>
+    /// <param name="body">The receiving statements.</param>
+    /// <param name="temps">The staged member expressions.</param>
+    private static void AddVersionPublication(PayloadRenderModel model, List<string> body, string[] temps)
+    {
+        var members = model.Members;
         bool mirroredMembers = model.Members.Any(member => member.Mirrored);
         var initializer = members.Where(member => !member.Mirrored &&
             (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
@@ -452,7 +303,7 @@ internal static partial class BinaryEmitter
                     if (members[index].Mirrored && (model.Rent != null || model.ConstructorMembers == null || !model.ConstructorMembers.Contains(members[index].Name)))
                         body.Add("local." + members[index].Name + " = " + temps[index] + "!;");
             }
-            return body;
+            return;
         }
         body.Add("var completedInstance = value;");
         body.Add("if (value is null)");
@@ -488,8 +339,8 @@ internal static partial class BinaryEmitter
         for (int index = 0; index < members.Length; index++)
             body.Add((members[index].Mirrored ? "reuseLocal." : "completedInstance!.") + members[index].Name + " = " + temps[index] + "!;");
         body.Add("}");
-        return body;
     }
+
 
     /// <summary>Spells the fresh construction of a version-tolerant value, with the object initializer only for visible members.</summary>
     /// <param name="model">The render model.</param>
@@ -519,247 +370,165 @@ internal static partial class BinaryEmitter
     internal static void EmitVersionStruct(PayloadRenderModel model, CodeWriter w, GeneratedOperations operations)
         => EmitStruct(model, w, operations);
 
-    /// <summary>Spells the complete prefix length as a literal when the schema is statically known.</summary>
-    /// <param name="model">The normalized versioned payload.</param>
-    /// <returns>The length expression used by the existing reservations and measurement.</returns>
-    private static string VersionPrefixLength(PayloadRenderModel model) => model.Version.Dynamic
-        ? model.Version.Schema + ".Prefix.Length"
-        : model.Version.Prefix.Length.ToString(CultureInfo.InvariantCulture);
 
-    /// <summary>Writes the schema class: the field table, the constant metadata and prefixes, the fingerprint, the short-record
-    /// state and the prefix match, write and store, with constant prefixes compared and stored as disjoint words.</summary>
-    /// <param name="model">The render model.</param>
-    /// <param name="w">The writer.</param>
-    private static void VersionSchemaClass(PayloadRenderModel model, CodeWriter w)
+    /// <summary>The maximum header length used by a measured versioned record.</summary>
+    /// <param name="model">The measured version-tolerant model.</param>
+    /// <returns>The complete descriptor header length.</returns>
+    private static string VersionHeaderLength(PayloadRenderModel model) => VersionNumber(11 + 8 * model.Members.Length);
+
+    /// <summary>Emits the descriptor table, slot lookup, staged read state and cold revision-1 schema.</summary>
+    /// <param name="model">The version-tolerant payload.</param>
+    /// <param name="w">The source writer.</param>
+    /// <param name="reads">Whether compatibility and staging are required.</param>
+    private static void VersionSchemaClass(PayloadRenderModel model, CodeWriter w, bool reads)
     {
         var schema = model.Version;
-        byte[] prefix = schema.Dynamic ? Array.Empty<byte>() : schema.Prefix;
-        string unsafeName = w.A("Unsafe"), writerName = w.A("LuminPackWriter"), readerName = w.A("LuminPackReader"), options = w.A("ILuminPackOptions");
-        string inline = w.MethodImpl("AggressiveInlining");
-        string length = prefix.Length.ToString(CultureInfo.InvariantCulture);
-        string profile = "(ulong)" + writerName + ".BinaryProfile<TOptions>() << 16";
-        // Keep eight or more full-prefix word operations out of the compact short-prefix entry.
-        bool outlineFullPrefix = prefix.Length >= 64;
-        bool shortens = schema.Dynamic || prefix.Length > 12;
         w.Line("internal static class " + schema.Name);
         if (model.TypeConstraintText.Length != 0)
             w.Indented(() => w.Line(model.TypeConstraintText));
         w.Open();
-        w.Line("internal static readonly global::LuminPack.Core.LuminPackVersionField[] Fields = new global::LuminPack.Core.LuminPackVersionField[]");
-        w.Open();
-        foreach (string entry in schema.FieldEntries)
-            w.Line(entry);
-        w.Close(";");
-        if (model.Net8)
-        {
-            w.Line("internal static class Evolved");
-            w.Open();
-            w.Line("internal static readonly global::LuminPack.Core.LuminPackVersionTableCache Cache = new global::LuminPack.Core.LuminPackVersionTableCache(Fields);");
-            w.Close();
-        }
         if (schema.Dynamic)
         {
-            w.Line("internal static readonly byte[] Metadata = global::LuminPack.Core.LuminPackVersionField.CreateMetadata(Fields);");
-            w.Line("internal static readonly byte[] DefaultPrefix = global::LuminPack.Core.LuminPackVersionField.CreateDefaultPrefix(Metadata, " + model.Members.Length.ToString(CultureInfo.InvariantCulture) + ");");
-            w.Line("internal static readonly byte[] Prefix = global::LuminPack.Core.LuminPackVersionField.CreatePrefix(Metadata, " + model.Members.Length.ToString(CultureInfo.InvariantCulture) +
-                ", new int[] { " + string.Join(", ", schema.Widths.Select((width, index) => width == 0 ? unsafeName + ".SizeOf<" + schema.QualifiedTypes[index] + ">()" :
-                    (width == 255 ? "-1" : width.ToString(CultureInfo.InvariantCulture)))) + " });");
-            w.Line("internal static readonly ulong Fingerprint = global::LuminPack.Core.LuminPackVersionField.Fingerprint(global::System.MemoryExtensions.AsSpan(Prefix, 4));");
-        }
-        else
-        {
-            ConstantBytes("Metadata", schema.Metadata);
-            ConstantBytes("DefaultPrefix", new byte[] { 251, 1, 0, (byte)model.Members.Length }.Concat(schema.Metadata).ToArray());
-            ConstantBytes("Prefix", prefix);
-            w.Line("internal const ulong Fingerprint = 0x" + schema.Fingerprint.ToString("X16", CultureInfo.InvariantCulture) + "UL;");
-        }
-        w.Blank();
-        w.Line("internal const byte Count = " + model.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
-        w.Line(schema.Dynamic ? "internal static bool Shortens => Prefix.Length > 12;" :
-            "internal const bool Shortens = " + (prefix.Length > 12 ? "true;" : "false;"));
-        w.Blank();
-        if (shortens)
-        {
-            w.Line("[global::System.ThreadStatic]");
-            w.Line("private static int t_written;");
+            w.Line("private static readonly byte[] DescriptorBytes = CreateDescriptors();");
+            w.Line("internal static global::System.ReadOnlySpan<byte> Descriptors => DescriptorBytes;");
+            w.Line("internal static readonly ulong Schema = " + VersionCore + "LuminPackVersionRecord.ComputeSchema(Descriptors);");
             w.Blank();
-        }
-        w.Line(inline);
-        w.Line("private static bool WrittenBefore(ref " + writerName + " writer)");
-        w.Open();
-        if (shortens)
-        {
-            if (schema.Dynamic)
+            w.Line("private static byte[] CreateDescriptors()");
+            w.Open();
+            w.Line("byte[] bytes = new byte[" + VersionNumber(schema.Descriptors.Length * 8) + "];");
+            for (int index = 0; index < schema.Descriptors.Length; index++)
             {
-                w.Line("if (!Shortens)");
-                w.Indented(() => w.Line("return false;"));
+                string descriptor = VersionDescriptor(schema.Descriptors[index]);
+                if (schema.RuntimeContracts[index])
+                    descriptor = "Legacy.Fields[" + VersionNumber(index) + "].Describe(" +
+                        VersionKey(schema.NameKeys[index][0]) + ", " + VersionNumber(schema.Width(index)) + ")";
+                w.Line("global::System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(global::System.MemoryExtensions.AsSpan(bytes, " +
+                    VersionNumber(index * 8) + "), " + descriptor + ");");
             }
-            w.Line("int operation = writer.GetSchemaOperation();");
-            w.Line("if (t_written == operation)");
-            w.Indented(() => w.Line("return true;"));
-            w.Line("t_written = operation;");
-        }
-        w.Line("return false;");
-        w.Close();
-        w.Blank();
-
-        // Same-schema prefix test: eight-byte words folded into one branch.
-        w.Line(inline);
-        w.Line("internal static bool TryReadPrefix<TOptions>(ref " + readerName + " reader)");
-        w.Indented(() => w.Line("where TOptions : struct, " + options));
-        w.Open();
-        if (shortens)
-        {
-            string shortCheck = schema.Dynamic ? "Shortens && " : string.Empty;
-            w.Line("if (" + shortCheck + "reader.TryReadVersionShort<TOptions>(Count, Fingerprint))");
-            w.Indented(() => w.Line("return true;"));
-        }
-        if (outlineFullPrefix)
-        {
-            w.Line("return TryReadFullPrefix<TOptions>(ref reader);");
+            w.Line("return bytes;");
             w.Close();
-            w.Blank();
-            w.Line(w.MethodImpl("NoInlining"));
-            w.Line("private static bool TryReadFullPrefix<TOptions>(ref " + readerName + " reader)");
-            w.Indented(() => w.Line("where TOptions : struct, " + options));
-            w.Open();
         }
-        if (prefix.Length < 8)
-            w.Line("return reader.TryReadVersionPrefix<TOptions>(Prefix);");
         else
         {
-            w.Line("if (" + unsafeName + ".SizeOf<nint>() != 8)");
-            w.Indented(() => w.Line("return reader.TryReadVersionPrefix<TOptions>(Prefix);"));
-            w.Line("ref byte input = ref reader.PeekInput(" + length + ", out bool available);");
-            w.Line("if (!available)");
-            w.Indented(() => w.Line("return false;"));
-            var offsets = new List<int>();
-            for (int offset = 0; offset + 8 <= prefix.Length; offset += 8)
-                offsets.Add(offset);
-            if (prefix.Length % 8 != 0)
-                offsets.Add(prefix.Length - 8);
-            var terms = offsets.Select(offset =>
+            ulong hash = unchecked((14695981039346656037UL ^ (uint)schema.Descriptors.Length) * 1099511628211UL);
+            var bytes = new byte[schema.Descriptors.Length * 8];
+            for (int index = 0; index < bytes.Length; index++)
             {
-                ulong word = 0;
-                for (int index = 7; index >= 0; index--)
-                    word = word << 8 | prefix[offset + index];
-                string load = offset == 0 ? unsafeName + ".ReadUnaligned<ulong>(ref input)"
-                    : unsafeName + ".ReadUnaligned<ulong>(ref " + unsafeName + ".Add(ref input, " + offset.ToString(CultureInfo.InvariantCulture) + "))";
-                string expected = "0x" + word.ToString("X16", CultureInfo.InvariantCulture) + "UL";
-                if (offset == 0)
-                    expected = "(" + expected + " | " + profile + ")";
-                return "(" + load + " ^ " + expected + ")";
-            });
-            w.Line("if ((" + string.Join(" | ", terms) + ") != 0)");
-            w.Indented(() => w.Line("return false;"));
-            w.Line("reader.EnsureReadable(" + length + ");");
-            w.Line("reader.Cursor = ref " + unsafeName + ".Add(ref reader.Cursor, " + length + ");");
-            w.Line("return true;");
-        }
-        w.Close();
-        w.Blank();
-
-        // Prefix write into a fresh reservation.
-        w.Line(inline);
-        w.Line("internal static void WritePrefix<TOptions>(ref " + writerName + " writer)");
-        w.Indented(() => w.Line("where TOptions : struct, " + options));
-        w.Open();
-        w.Line("if (WrittenBefore(ref writer))");
-        w.Open();
-        w.Line(writerName + ".StoreVersionShort<TOptions>(ref writer.ReservePrefix(12), Count, Fingerprint);");
-        w.Line("return;");
-        w.Close();
-        w.Blank();
-        if (prefix.Length < 8)
-        {
-            w.Line("writer.WriteVersionPrefix<TOptions>(Prefix);");
-            w.Close();
-            w.Blank();
-        }
-        else
-        {
-            w.Line("if (" + unsafeName + ".SizeOf<nint>() != 8)");
-            w.Open();
-            w.Line("writer.WriteVersionPrefix<TOptions>(Prefix);");
-            w.Line("return;");
-            w.Close();
-            w.Blank();
-            w.Line("ref byte target = ref writer.ReservePrefix(" + length + ");");
-            PrefixWords(w, prefix, unsafeName, profile);
-            w.Close();
-            w.Blank();
-        }
-
-        // Prefix store into reserved record room, returning the stored byte count.
-        w.Line(inline);
-        w.Line("internal static int StorePrefix<TOptions>(ref " + writerName + " writer, ref byte target)");
-        w.Indented(() => w.Line("where TOptions : struct, " + options));
-        w.Open();
-        w.Line("if (WrittenBefore(ref writer))");
-        w.Open();
-        w.Line(writerName + ".StoreVersionShort<TOptions>(ref target, Count, Fingerprint);");
-        w.Line("return 12;");
-        w.Close();
-        w.Blank();
-        if (outlineFullPrefix)
-        {
-            w.Line("return StoreFullPrefix<TOptions>(ref target);");
-            w.Close();
-            w.Blank();
-            w.Line(w.MethodImpl("NoInlining"));
-            w.Line("private static int StoreFullPrefix<TOptions>(ref byte target)");
-            w.Indented(() => w.Line("where TOptions : struct, " + options));
-            w.Open();
-        }
-        if (prefix.Length < 8)
-        {
-            w.Line(writerName + ".StoreVersionPrefix<TOptions>(ref target, Prefix);");
-            w.Line("return " + VersionPrefixLength(model) + ";");
-        }
-        else
-        {
-            w.Line("if (" + unsafeName + ".SizeOf<nint>() != 8)");
-            w.Open();
-            w.Line(writerName + ".StoreVersionPrefix<TOptions>(ref target, Prefix);");
-            w.Line("return " + VersionPrefixLength(model) + ";");
-            w.Close();
-            w.Blank();
-            PrefixWords(w, prefix, unsafeName, profile);
-            w.Line("return " + length + ";");
-        }
-        w.Close();
-        w.Close();
-
-        void ConstantBytes(string name, byte[] bytes)
-        {
-            string values = string.Join(", ", bytes);
+                byte value = (byte)(schema.Descriptors[index / 8] >> (index % 8 * 8));
+                bytes[index] = value;
+                hash = unchecked((hash ^ value) * 1099511628211UL);
+            }
+            w.Line("internal const ulong Schema = " + VersionDescriptor(hash) + ";");
+            string values = string.Join(", ", bytes.Select(value => value.ToString(CultureInfo.InvariantCulture)));
             w.Line(model.ConstantSpans
-                ? "internal static global::System.ReadOnlySpan<byte> " + name + " => [" + values + "];"
-                : "internal static readonly byte[] " + name + " = new byte[] { " + values + " };");
+                ? "internal static global::System.ReadOnlySpan<byte> Descriptors => [" + values + "];"
+                : "internal static readonly byte[] Descriptors = new byte[] { " + values + " };");
         }
+
+        w.Line("internal static readonly " + VersionCore + "LuminPackVersionMapCache Cache = new " +
+            VersionCore + "LuminPackVersionMapCache(SlotOf);");
+        w.Blank();
+        w.Line("private static int SlotOf(uint nameKey, out ulong descriptor)");
+        w.Open();
+        if (schema.Descriptors.Length != 0)
+        {
+            w.Line("switch (nameKey)");
+            w.Open();
+            for (int index = 0; index < schema.Descriptors.Length; index++)
+            {
+                foreach (uint key in schema.NameKeys[index])
+                    w.Line("case " + VersionKey(key) + ":");
+                ulong upper = schema.Descriptors[index] & 0xFFFFFFFF00000000UL;
+                string expected = schema.RuntimeContracts[index]
+                    ? "global::System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(Descriptors.Slice(" +
+                        VersionNumber(index * 8) + ")) & 0xFFFFFFFF00000000UL"
+                    : VersionDescriptor(upper);
+                w.Indented(() =>
+                {
+                    w.Line("descriptor = (" + expected + ") | nameKey;");
+                    w.Line("return " + VersionNumber(index) + ";");
+                });
+            }
+            w.Close();
+        }
+        w.Line("descriptor = 0;");
+        w.Line("return -1;");
+        w.Close();
+
+        if (reads)
+        {
+            w.Blank();
+            w.Line("internal struct Fields");
+            w.Open();
+            for (int index = 0; index < schema.TempTypes.Length; index++)
+                w.Line("internal " + schema.TempTypes[index] + " F" + VersionNumber(index) + ";");
+            w.Close();
+        }
+        if (reads || schema.Dynamic)
+        {
+            w.Blank();
+            w.Line("internal static class Legacy");
+            w.Open();
+            w.Line("internal static readonly " + VersionCore + "LuminPackVersionField[] Fields = new " + VersionCore + "LuminPackVersionField[]");
+            w.Open();
+            foreach (string entry in schema.FieldEntries)
+                w.Line(entry);
+            w.Close(";");
+            w.Close();
+        }
+        w.Close();
     }
 
-    /// <summary>Stores a constant prefix as disjoint eight-byte words and at most one value of each narrower width; the binary
-    /// profile is stamped into the third header byte at run time.</summary>
-    /// <param name="w">The writer.</param>
-    /// <param name="prefix">The constant prefix bytes.</param>
-    /// <param name="unsafeName">The resolved Unsafe spelling.</param>
-    /// <param name="profile">The profile expression stamped into the first word.</param>
-    private static void PrefixWords(CodeWriter w, byte[] prefix, string unsafeName, string profile)
+    /// <summary>Restores the advancing operation's shared registration if an isolated cursor fails.</summary>
+    /// <param name="w">The source writer.</param>
+    /// <param name="operation">The call into the isolated instance's binary root.</param>
+    /// <param name="versioned">Whether the root publishes version schemas.</param>
+    /// <param name="read">Whether the child state holds a reader's registrations.</param>
+    private static void EmitIsolatedVersionOperation(CodeWriter w, string operation, bool versioned, bool read)
     {
-        int offset = 0;
-        foreach (int width in new[] { 8, 4, 2, 1 })
-            while (offset + width <= prefix.Length && (width == 8 || prefix.Length - offset < 2 * width))
-            {
-                ulong word = 0;
-                for (int index = width - 1; index >= 0; index--)
-                    word = word << 8 | prefix[offset + index];
-                string type = width == 8 ? "ulong" : width == 4 ? "uint" : width == 2 ? "ushort" : "byte";
-                string hex = word.ToString("X", CultureInfo.InvariantCulture);
-                string value = offset == 0 ? "(" + type + ")(0x" + hex + "UL | " + profile + ")" : "(" + type + ")0x" + hex + (width == 8 ? "UL" : "U");
-                string location = offset == 0 ? "ref target" : "ref " + unsafeName + ".Add(ref target, " + offset.ToString(CultureInfo.InvariantCulture) + ")";
-                w.Line(unsafeName + ".WriteUnaligned(" + location + ", " + value + ");");
-                offset += width;
-            }
+        if (!versioned)
+        {
+            w.Line(operation);
+            return;
+        }
+        w.Line("int scope = isolated.EnterVersionScope();");
+        w.Line("bool completed = false;");
+        w.Line("try");
+        w.Open();
+        w.Line(operation);
+        w.Line("completed = true;");
+        w.Close();
+        w.Line("finally");
+        w.Open();
+        w.Line("if (!completed)");
+        w.Indented(() => w.Line(read ? "isolated.RollbackVersionScope(scope);" : "isolated.ExitVersionScope(scope);"));
+        w.Close();
     }
+
+    /// <summary>Spells the codec the record header and its inherited string members share.</summary>
+    /// <param name="model">The version-tolerant payload.</param>
+    /// <param name="w">The source writer.</param>
+    /// <returns>The codec type.</returns>
+    private static string VersionProfile(PayloadRenderModel model, CodeWriter w) =>
+        model.DeclaredProfile == null ? Profile : ScopedProfile(w, model.DeclaredProfile);
+
+    /// <summary>Spells the identifier suffix shared by a member's read and write helpers.</summary>
+    /// <param name="member">The named field or property.</param>
+    /// <returns>A helper name suffix.</returns>
+    private static string VersionMemberName(RenderMember member) => "Member" + member.Name.TrimStart('@');
+
+    /// <summary>Formats an integer literal independently of the build machine's culture.</summary>
+    /// <param name="value">The integer value.</param>
+    /// <returns>The C# integer literal.</returns>
+    private static string VersionNumber(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>Formats a name key with a fixed width for easy comparison against a descriptor.</summary>
+    /// <param name="key">The hash of a member name.</param>
+    /// <returns>The hexadecimal uint literal.</returns>
+    private static string VersionKey(uint key) => "0x" + key.ToString("X8", CultureInfo.InvariantCulture) + "U";
+
+    /// <summary>Formats a descriptor or schema word.</summary>
+    /// <param name="value">The descriptor or the schema hash.</param>
+    /// <returns>The hexadecimal ulong literal.</returns>
+    private static string VersionDescriptor(ulong value) => "0x" + value.ToString("X16", CultureInfo.InvariantCulture) + "UL";
 }

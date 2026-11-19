@@ -104,7 +104,7 @@ internal static class RenderModelFactory
             },
             constructorArguments: constructor?.Arguments!, constructorMembers: constructor?.Members!,
             memberWrite: memberWrite, net8: options.Net8,
-            utf8Literals: options.Net8 && options.CSharpVersion > 1000, version: Schema(record?.Version ?? structure?.Version),
+            utf8Literals: options.Net8 && options.CSharpVersion > 1000, version: record?.Version ?? structure?.Version,
             referencePayload: model.Members.Any(item => item is not ScalarMember),
             layoutAttribute: portable?.LayoutAttribute ?? record?.MirrorLayout ?? structure?.MirrorLayout,
             bounded: model.Policy.Bound, typeParameters: model.Identity.TypeParameters, typeConstraints: model.Constraints,
@@ -120,13 +120,6 @@ internal static class RenderModelFactory
             sequenceBase: record?.SequenceBase!, sequenceElement: record?.SequenceElement!, scalarHeader: record?.ScalarHeader ?? false,
             stringPairs: !json && record?.StringPairs == true);
     }
-
-    /// <summary>Projects the modeled schema onto the emitter's schema contract.</summary>
-    /// <param name="schema">The analyzed schema, or null for an ordinary record.</param>
-    /// <returns>The emitter schema, or null.</returns>
-    private static VersionSchema? Schema(VersionSchemaModel? schema) => schema == null ? null :
-        new VersionSchema(schema.Schema, schema.Metadata, schema.Prefix, schema.FieldEntries, schema.TempTypes, schema.TypeNames,
-            schema.QualifiedTypes, schema.Layout, schema.LayoutFields, schema.OldNames, schema.Dynamic, schema.Widths);
 
     /// <summary>Maps a Union root when its declared profile, slots, cases and framing are the ones the direct Union emitters
     /// reproduce.</summary>

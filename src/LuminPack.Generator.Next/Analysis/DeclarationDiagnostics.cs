@@ -199,7 +199,7 @@ internal static partial class TypeModelFactory
         private static void ValidateVersionNames(INamedTypeSymbol type, List<ISymbol> members, string mode,
             ref DeclarationDiagnosticBag diagnostics)
         {
-            HashSet<string>? names = mode == "VersionTolerant" ? new HashSet<string>(StringComparer.Ordinal) : null;
+            Dictionary<uint, string>? names = mode == "VersionTolerant" ? new Dictionary<uint, string>() : null;
             foreach (ISymbol member in members)
             {
                 bool hasAliases = HasAttribute(member, "LuminPack.Attribute.LuminPackOldNameAttribute");
@@ -224,19 +224,23 @@ internal static partial class TypeModelFactory
         /// <param name="name">The serialized identity.</param>
         /// <param name="names">The identities already encountered.</param>
         /// <param name="diagnostics">Receives invalid identities.</param>
-        private static void ValidateVersionName(INamedTypeSymbol type, string? name, HashSet<string> names,
+        private static void ValidateVersionName(INamedTypeSymbol type, string? name, Dictionary<uint, string> names,
             ref DeclarationDiagnosticBag diagnostics)
         {
             string? error = null;
             if (string.IsNullOrEmpty(name))
                 error = "Serialized member names must not be null or empty.";
-            else if (!names.Add(name!))
-                error = "Serialized member name '" + name + "' is ambiguous.";
             else
             {
                 try
                 {
-                    StrictMemberEncoding.GetByteCount(name!);
+                    uint key = WireNameHash(name!, StrictMemberEncoding);
+                    if (!names.TryGetValue(key, out string? previous))
+                        names.Add(key, name!);
+                    else if (string.Equals(previous, name, StringComparison.Ordinal))
+                        error = "Serialized member name '" + name + "' is ambiguous.";
+                    else
+                        error = "Serialized member names '" + previous + "' and '" + name + "' have the same binary name key.";
                 }
                 catch (EncoderFallbackException)
                 {

@@ -99,6 +99,9 @@ internal enum EntryKind
     /// <summary>A record of fixed-width primitive members, measured and written into an exact array.</summary>
     FixedRecord,
 
+    /// <summary>A descriptor record of fixed-width primitive members using an isolated writer state lease.</summary>
+    FixedVersionedRecord,
+
     /// <summary>An ordinary positional class with one marker and fixed-width fields.</summary>
     FixedObject,
 

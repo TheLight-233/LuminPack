@@ -104,12 +104,14 @@ internal static partial class BinaryEmitter
         }
         w.Blank();
         w.Suppressed = !writes;
-        var unionBody = WriteRecord(union: true);
+        var unionBody = model.Version == null ? WriteRecord(union: true) :
+            new List<string> { writeRoot + "(ref writer, in input);" };
         Method(w, unionBody, "RootWriteUnion", genericWrite, RootArguments(genericWrite), ConstraintLine(genericWrite),
             "(scoped ref " + writer + " writer, scoped in " + type + " input)", WriteHint(model, unionBody, union: true, inline));
         w.Blank();
         w.Suppressed = !reads;
-        Method(w, ReadBody(union: true), "RootReadUnion", genericRead, RootArguments(genericRead), ConstraintLine(genericRead),
+        Method(w, model.Version == null ? ReadBody(union: true) :
+            new List<string> { readRoot + "(ref reader, ref value);" }, "RootReadUnion", genericRead, RootArguments(genericRead), ConstraintLine(genericRead),
             "(scoped ref " + reader + " reader, scoped ref " + type + " value)", ReadHint(model, inline));
         w.Suppressed = false;
         w.Close();
@@ -202,10 +204,10 @@ internal static partial class BinaryEmitter
             Invoke("RootWrite", genericWrite ? "TOptions" : null) + "(ref state, in value);"));
         w.Suppressed = !reads;
         IsolatedRead(w, "internal static void Read" + Arguments() + "(this ref " + reader + " state, ref " + type + " value)", null,
-            container + "." + Invoke("RootRead", genericRead ? Standard() : null), inline, Serializer());
+            container + "." + Invoke("RootRead", genericRead ? Standard() : null), inline, Serializer(), model.Version != null);
         w.Blank();
         IsolatedRead(w, "internal static void Read" + Arguments("TOptions") + "(this ref " + reader + " state, ref " + type + " value)", OptionsConstraint(),
-            container + "." + Invoke("RootRead", genericRead ? "TOptions" : null), inline, Serializer());
+            container + "." + Invoke("RootRead", genericRead ? "TOptions" : null), inline, Serializer(), model.Version != null);
         w.Suppressed = false;
         w.Close();
         w.Close();
@@ -230,7 +232,7 @@ internal static partial class BinaryEmitter
         if (model.Version != null)
         {
             w.Blank();
-            VersionSchemaClass(model, w);
+            VersionSchemaClass(model, w, reads);
         }
         w.Close();
         w.Close();
@@ -500,7 +502,8 @@ internal static partial class BinaryEmitter
     /// <param name="root">The root supplied to <c>IsolatedRead</c>.</param>
     /// <param name="inline">The inline supplied to <c>IsolatedRead</c>.</param>
     /// <param name="serializer">The serializer supplied to <c>IsolatedRead</c>.</param>
-    private static void IsolatedRead(CodeWriter w, string signature, string constraint, string root, string inline, string serializer)
+    /// <param name="versioned">Whether the root publishes version schemas.</param>
+    private static void IsolatedRead(CodeWriter w, string signature, string constraint, string root, string inline, string serializer, bool versioned)
     {
         w.Line(inline);
         w.Line(signature);
@@ -509,7 +512,7 @@ internal static partial class BinaryEmitter
         w.Open();
         w.Line("LuminPackReader isolated = default;");
         w.Line("state.CopyTo(ref isolated);");
-        w.Line(serializer + "." + root + "(ref isolated, ref value);");
+        EmitIsolatedVersionOperation(w, serializer + "." + root + "(ref isolated, ref value);", versioned, read: true);
         w.Line("isolated.CopyTo(ref state);");
         w.Close();
     }

@@ -233,6 +233,8 @@ internal static partial class TypeModelFactory
                     if (definition is GenericIdentity.Tuple or GenericIdentity.ValueTuple or GenericIdentity.KeyValuePair or GenericIdentity.Lazy)
                         return new EntryShape(EntryKind.CompoundDirect);
                 }
+                if (fixedRecord && payload is (RecordModel { Versioned: true } or StructModel { Versioned: true }))
+                    return new EntryShape(EntryKind.FixedVersionedRecord);
                 return new EntryShape(fixedRecord ? EntryKind.FixedRecord : EntryKind.DirectRecord);
             }
             if (type is INamedTypeSymbol { TypeArguments.Length: 1 } sequence &&

@@ -418,7 +418,7 @@ internal static partial class TypeModelFactory
                     var declarations = Levels(symbol).SelectMany(OrderedStorageMembers).Where(member => TryStorage(member, out _))
                         .ToDictionary(member => member.Name, StringComparer.Ordinal);
                     int[] slots = members.Select(member => checked((int)(Order(declarations[member.Name]) ?? 0))).ToArray();
-                    int[] widths = members.Select(member => VersionWidth(VersionFieldType(StorageType(declarations[member.Name])) ?? 19,
+                    int[] widths = members.Select(member => LegacyReferenceWidth(VersionFieldType(StorageType(declarations[member.Name])) ?? 19,
                         StorageType(declarations[member.Name]))).ToArray();
                     ConstructorModel? construction = SelectedConstructorModel(symbol, members, issues);
                     CallbackModel? callbacks = SerializationCallbacks(symbol, identity.GlobalName);
@@ -3015,8 +3015,8 @@ internal static partial class TypeModelFactory
         /// <param name="derived">Whether the record's base type contributes storage.</param>
         /// <param name="issues">Receives the reason the schema is outside the modeled surface.</param>
         /// <returns>The schema model, or null when the record keeps the original pipeline.</returns>
-        /// <remarks>The schema retains the legacy classification and wire order. Open generic identities use the runtime's
-        /// existing closed-type metadata initialization; closed identities retain constant metadata.</remarks>
+        /// <remarks>The descriptor hashes retain the former contract rules. Open identities compute their type hash for
+        /// each closed construction through the same contract helper the revision-1 reader uses.</remarks>
         private VersionSchemaModel? TryVersionSchema(INamedTypeSymbol type, TypeIdentity identity, MemberModel[] members,
             WirePolicy policy, bool derived, List<string> issues)
         {
@@ -3026,10 +3026,12 @@ internal static partial class TypeModelFactory
             var storage = members.Select(member => declarations[member.Name]).ToArray();
             var locals = Levels(type).SelectMany(VersionLocals).ToList();
 
-            var names = new HashSet<string>(StringComparer.Ordinal);
+            var keys = new HashSet<uint>();
+            var nameKeys = new uint[members.Length][];
             var oldNames = new string[members.Length][];
             var fields = new (int Type, bool Compressed)[members.Length];
             var widths = new int[members.Length];
+            var fixedNullable = new bool[members.Length];
             var memberTypes = new ITypeSymbol[members.Length];
             for (int index = 0; index < members.Length; index++)
             {
@@ -3045,16 +3047,24 @@ internal static partial class TypeModelFactory
                     .Where(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOldNameAttribute")
                     .Select(attribute => attribute.ConstructorArguments.FirstOrDefault().Value as string)
                     .ToArray();
-                foreach (string? name in new string?[] { declared.Name }.Concat(aliases))
+                // The oldest name is the first key and remains the written identity.
+                var orderedKeys = new List<uint>(aliases.Length + 1);
+                foreach (string? name in aliases.Concat(new[] { declared.Name }))
                 {
-                    if (string.IsNullOrEmpty(name) || !names.Add(name!))
+                    if (string.IsNullOrEmpty(name))
                     {
                         issues.Add("version tolerant: member names");
                         return null;
                     }
                     try
                     {
-                        StrictMemberEncoding.GetByteCount(name!);
+                        uint key = WireNameHash(name!, StrictMemberEncoding);
+                        if (!keys.Add(key))
+                        {
+                            issues.Add("version tolerant: member name keys");
+                            return null;
+                        }
+                        orderedKeys.Add(key);
                     }
                     catch (EncoderFallbackException)
                     {
@@ -3071,29 +3081,45 @@ internal static partial class TypeModelFactory
                     issues.Add("version tolerant: members '" + declared.Name + "'");
                     return null;
                 }
+                nameKeys[index] = orderedKeys.ToArray();
                 oldNames[index] = aliases!;
                 fields[index] = (fieldType.Value, members[index].Compressed || ownFormatter && HasAttribute(declared, CompressAttribute));
-                widths[index] = ownFormatter ? 255 : VersionWidth(fieldType.Value, memberType);
+                if (ownFormatter || fields[index].Compressed)
+                    widths[index] = 255;
+                else if (memberType.SpecialType == SpecialType.System_String)
+                {
+                    WirePolicy memberPolicy = members[index].Policy;
+                    bool pinned = memberPolicy.Declared && (!policy.Declared ||
+                        memberPolicy.Strings.Encoding != policy.Strings.Encoding || memberPolicy.Strings.Recording != policy.Strings.Recording);
+                    widths[index] = pinned ? 255 : 254;
+                }
+                else
+                {
+                    var nullable = memberType as INamedTypeSymbol;
+                    bool optional = nullable?.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+                    int? width = VersionWidth(optional ? nullable!.TypeArguments[0] : memberType);
+                    if (width.HasValue && optional)
+                        width++;
+                    widths[index] = width is >= 0 and <= 250 ? width.Value : 255;
+                    fixedNullable[index] = optional && widths[index] != 255;
+                }
                 memberTypes[index] = memberType;
             }
 
-            bool dynamic = false;
-            var metadata = new List<byte>();
+            var descriptors = new ulong[members.Length];
+            var runtimeContracts = new bool[members.Length];
             var entries = new string[members.Length];
             var tempTypes = new string[members.Length];
-            var typeNames = new string[members.Length];
-            var qualifiedTypes = new string[members.Length];
             for (int index = 0; index < members.Length; index++)
             {
                 ITypeSymbol memberType = memberTypes[index];
                 string serialized = oldNames[index].Length == 0 ? members[index].Name : oldNames[index][0];
-                string? typeIdentity = VersionTypeIdentity(memberType);
-                dynamic |= typeIdentity == null;
                 var (fieldType, compressed) = fields[index];
                 string representation = VersionRepresentation(fieldType, members[index].Policy, compressed);
-                AppendVersionLength(metadata, serialized);
-                AppendVersionLength(metadata, representation + (VersionIsDirectPrimitive(fieldType, memberType) ? string.Empty : typeIdentity));
-                dynamic |= widths[index] == 0;
+                string? typeIdentity = VersionIsDirectPrimitive(fieldType, memberType) ? string.Empty : VersionTypeIdentity(memberType);
+                runtimeContracts[index] = typeIdentity == null;
+                uint hash = typeIdentity == null ? 0 : WireNameHash(representation + typeIdentity, Encoding.UTF8) & 0xFFFFFFu;
+                descriptors[index] = nameKeys[index][0] | (ulong)hash << 32 | (ulong)widths[index] << 56;
                 string[] aliasLiterals = new[] { members[index].Name }.Concat(oldNames[index]).Where(alias => alias != serialized)
                     .Select(VersionLiteral).ToArray();
                 entries[index] = "new global::LuminPack.Core.LuminPackVersionField(" + VersionLiteral(serialized) + ", new string[] " +
@@ -3106,21 +3132,15 @@ internal static partial class TypeModelFactory
                     return null;
                 }
                 tempTypes[index] = local.TypeName + (local.IsValue ? string.Empty : "?");
-                typeNames[index] = memberType is INamedTypeSymbol named ? named.ToDisplayString() : memberType.Name;
-                qualifiedTypes[index] = memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             }
-            var prefix = new List<byte> { 251, 2, 0, (byte)members.Length };
-            prefix.AddRange(metadata);
-            foreach (int width in widths)
-                prefix.Add((byte)width);
             string globalName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             string schema = "global::LuminPack.Generated." + GeneratedNames.Extension(Options.AssemblyName) + ".Version_" +
                 GeneratedNames.Sanitize(globalName) + (identity.TypeParameters.Length == 0 ? string.Empty :
                     "<" + string.Join(", ", identity.TypeParameters) + ">");
             var layoutFields = locals.Select(local => local.TypeName +
                 (IsUnmanagedKeyword(local.TypeName) || local.IsValue ? string.Empty : "?") + " " + Identifier(local.Name)).ToArray();
-            return new VersionSchemaModel(schema, metadata.ToArray(), prefix.ToArray(), entries, tempTypes, typeNames, qualifiedTypes,
-                VersionLayout(type), layoutFields, oldNames, dynamic, widths);
+            return new VersionSchemaModel(schema, descriptors, runtimeContracts, nameKeys, entries, tempTypes,
+                VersionLayout(type), layoutFields, oldNames, fixedNullable);
         }
 
         /// <summary>Builds the layout mirror a version-tolerant record declares for auto-property and included storage.</summary>
@@ -3299,25 +3319,37 @@ internal static partial class TypeModelFactory
             return new string((char)(fieldType | (compressed ? 32 : 0) | (encoding << 6) | ((int)policy.Strings.Recording << 7)), 1);
         }
 
-        /// <summary>The revision-2 payload width of a member: a constant, 255 for a length-prefixed payload, or zero when unknown.</summary>
-        /// <param name="fieldType">The legacy schema classification.</param>
-        /// <param name="type">The declared member type.</param>
-        /// <returns>The width byte value, or zero for a width known only at run time.</returns>
-        private static int VersionWidth(int fieldType, ITypeSymbol type)
+        /// <summary>Gets the width byte of the existing reference-tracked positional slot table.</summary>
+        /// <param name="fieldType">The slot's original field classification.</param>
+        /// <param name="type">The member type.</param>
+        /// <returns>The legacy slot width code.</returns>
+        private static int LegacyReferenceWidth(int fieldType, ITypeSymbol type) =>
+            fieldType is 12 or >= 15 ? 255 : PortableScalarSize(type);
+
+        /// <summary>Gets a width that the existing field operation guarantees on each supported target.</summary>
+        /// <param name="type">The declared field or nullable payload type.</param>
+        /// <returns>The wire width, or null when it can vary.</returns>
+        private int? VersionWidth(ITypeSymbol type)
         {
-            if (fieldType is 12 or >= 15)
-                return 255;
-            if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum, EnumUnderlyingType: { } underlying })
-                type = underlying;
-            return type.SpecialType switch
-            {
-                SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte => 1,
-                SpecialType.System_Char or SpecialType.System_Int16 or SpecialType.System_UInt16 => 2,
-                SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Single => 4,
-                SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Double => 8,
-                SpecialType.System_Decimal => 16,
-                _ => 0,
-            };
+            int scalarWidth = PortableScalarSize(type);
+            if (scalarWidth != 0)
+                return scalarWidth;
+            if (type is not INamedTypeSymbol { IsUnmanagedType: true } named || GenerationMode(named) != "Object" ||
+                ContainsTypeParameter(named) || IsRuntimeSizedVector(named))
+                return null;
+            if (type.SpecialType == SpecialType.System_DateTime || Builtin(type) == "global::System.TimeSpan")
+                return 8;
+            if (Builtin(type) == "global::System.Guid")
+                return 16;
+            if (Builtin(type) == "global::System.DateTimeOffset")
+                return null;
+            if (FormatterStorage(named) is { } layout)
+                return layout.WireSize;
+            var plan = AnalyzePortable(named, strict: true);
+            if (plan == null)
+                return null;
+            var models = BuildModels(plan);
+            return models.All(model => model.Size == models[0].Size) ? models[0].Size : null;
         }
 
         /// <summary>Normalizes a symbol using the runtime's assembly-independent primitive codes.</summary>
@@ -3381,22 +3413,6 @@ internal static partial class TypeModelFactory
             if (arguments.Any(argument => argument == null))
                 return null;
             return arguments.Length == 0 ? name : name + "<" + string.Join(";", arguments) + ";>";
-        }
-
-        /// <summary>Appends a UTF-8 metadata string with its unsigned base-128 length.</summary>
-        /// <param name="target">The table under construction.</param>
-        /// <param name="value">The exact metadata value.</param>
-        private static void AppendVersionLength(List<byte> target, string value)
-        {
-            byte[] bytes = Encoding.UTF8.GetBytes(value);
-            int length = bytes.Length;
-            while (length >= 128)
-            {
-                target.Add((byte)(length | 128));
-                length >>= 7;
-            }
-            target.Add((byte)length);
-            target.AddRange(bytes);
         }
 
         /// <summary>Formats a value as a C# literal, as the schema field table spells its constants.</summary>

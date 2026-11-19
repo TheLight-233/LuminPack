@@ -141,7 +141,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor MembersCountOver250 = Error(
         "LuminPack018",
         "Too many serialized members",
-        "Type '{0}' has {1} serialized members; the binary object format supports at most 249.");
+        "Type '{0}' has {1} serialized members; binary object records support at most 249.");
 
     /// <summary>Stores the type is ref struct.</summary>
     public static readonly DiagnosticDescriptor TypeIsRefStruct = Error(
@@ -162,7 +162,7 @@ internal static class DiagnosticDescriptors
         "[LuminPackOrder] is required",
         "Member '{0}' must be marked with [LuminPackOrder] in circular-reference types.");
 
-    /// <summary>Reports an invalid or ambiguous version-tolerant member identity.</summary>
+    /// <summary>Reports an invalid, ambiguous or colliding version-tolerant member identity.</summary>
     public static readonly DiagnosticDescriptor InvalidVersionMemberName = Error(
         "LuminPack062", "Invalid version-tolerant member name", "Type '{0}': {1}");
 

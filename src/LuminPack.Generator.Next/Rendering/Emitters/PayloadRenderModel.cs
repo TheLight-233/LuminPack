@@ -478,7 +478,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <summary>Whether an ordinary JSON read may emit the managed cursor integer run.</summary>
     internal readonly bool GeneratedInt32Runs;
     /// <summary>The version-tolerant schema, or null for an ordinary record.</summary>
-    internal readonly VersionSchema Version;
+    internal readonly VersionSchemaModel Version;
     /// <summary>Whether a declared instance member is not unmanaged storage, which gives the Union read its outlined entry.</summary>
     internal readonly bool ReferencePayload;
     /// <summary>The CLR layout attribute line of a declared layout replica, or null.</summary>
@@ -695,7 +695,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal PayloadRenderModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         RenderMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
-        VersionSchema version, bool referencePayload, string layoutAttribute, string rent = null, string[] writeBefore = null,
+        VersionSchemaModel version, bool referencePayload, string layoutAttribute, string rent = null, string[] writeBefore = null,
         string[] writeAfter = null, string[] readBefore = null, string[] readAfter = null, string[] declaredOrder = null, int? bounded = null,
         bool unionRoot = false, bool unionInterface = false, string unionSuffix = null, UnionRenderCase[] unionCases = null,
         bool unionCursor = false, bool unionReadGeneric = false, string[] unionChain = null, string unionNamespace = null, bool unionReferenced = false,
