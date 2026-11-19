@@ -220,6 +220,9 @@ internal static partial class TypeModelFactory
         }
 
         /// <summary>Protects identity properties from alias dispatch in reference-tracked JSON.</summary>
+        /// <param name="type">The reference-tracked declaration.</param>
+        /// <param name="members">The complete serialized member set.</param>
+        /// <param name="diagnostics">Receives former names reserved by the reference envelope.</param>
         private static void ValidateReferenceJsonNames(INamedTypeSymbol type, List<ISymbol> members,
             ref DeclarationDiagnosticBag diagnostics)
         {

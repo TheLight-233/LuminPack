@@ -57,6 +57,13 @@ public sealed class LuminPackReferenceModeCodeFixProvider : CodeFixProvider
         }
     }
 
+    /// <summary>Replaces the obsolete argument and enables tracking on the same type.</summary>
+    /// <param name="solution">The workspace before the migration.</param>
+    /// <param name="packable">The attribute that selects CircleReference mode.</param>
+    /// <param name="argument">The bound enum argument.</param>
+    /// <param name="option">Any existing option attribute, including one on another partial declaration.</param>
+    /// <param name="cancellationToken">The workspace cancellation token.</param>
+    /// <returns>The edited solution.</returns>
     private static async Task<Solution> MigrateAsync(Solution solution, AttributeSyntax packable, AttributeArgumentSyntax argument,
         AttributeSyntax? option, CancellationToken cancellationToken)
     {
@@ -79,6 +86,9 @@ public sealed class LuminPackReferenceModeCodeFixProvider : CodeFixProvider
             cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Enables tracking and keeps the other arguments in the same option attribute.</summary>
+    /// <param name="attribute">The existing or newly generated option attribute.</param>
+    /// <returns>The attribute with tracking set to true.</returns>
     private static AttributeSyntax Track(AttributeSyntax attribute)
     {
         var expression = SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression);

@@ -2731,6 +2731,9 @@ internal static partial class TypeModelFactory
         }
 
         /// <summary>Creates an instance for reference registration using the selected constructor with typed defaults.</summary>
+        /// <param name="type">The class declaration with reference tracking.</param>
+        /// <param name="name">The generated spelling of the class.</param>
+        /// <returns>The constructor and any required initializer assignments.</returns>
         private static string ReferenceConstruction(INamedTypeSymbol type, string name)
         {
             IMethodSymbol? constructor = SelectConstructor(type, out _);
@@ -2745,6 +2748,8 @@ internal static partial class TypeModelFactory
         }
 
         /// <summary>Recognizes required members without depending on a newer Roslyn symbol API.</summary>
+        /// <param name="member">The candidate field or property.</param>
+        /// <returns>Whether construction must set the member.</returns>
         private static bool IsRequiredMember(ISymbol member)
         {
             if (member is not (IFieldSymbol or IPropertySymbol))
@@ -3866,6 +3871,8 @@ internal static partial class TypeModelFactory
     }
 
     /// <summary>Resolves the reference contract directly from a concrete class declaration.</summary>
+    /// <param name="type">The declaration whose own option applies.</param>
+    /// <returns>Whether its generated records preserve object identity.</returns>
     private static bool TracksReferences(INamedTypeSymbol type) =>
         type is { TypeKind: TypeKind.Class, IsAbstract: false } &&
         (OptionSwitch(type, "TrackReferences") || GenerationMode(type) == "CircleReference");

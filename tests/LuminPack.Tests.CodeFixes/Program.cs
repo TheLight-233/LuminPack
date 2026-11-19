@@ -168,6 +168,7 @@ internal static class CodeFixChecks
     }
 
     /// <summary>Migrates the actual obsolete enum diagnostic, preserving a preexisting option across partial declarations.</summary>
+    /// <returns>The asynchronous verification.</returns>
     private static async Task VerifyReferenceModeAsync()
     {
         const string declaration = """

@@ -148,6 +148,8 @@ internal static partial class NextPipeline
     }
 
     /// <summary>Reports TrackReferences on any declaration other than a class.</summary>
+    /// <param name="context">The bound option attribute and its target.</param>
+    /// <returns>The invalid target diagnostic, or null for a valid declaration.</returns>
     private static DiagnosticInfo? InvalidReferenceScope(GeneratorAttributeSyntaxContext context)
     {
         if (context.TargetSymbol is INamedTypeSymbol { TypeKind: TypeKind.Class })

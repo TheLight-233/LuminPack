@@ -388,6 +388,9 @@ internal static class CircleJsonEmitter
     }
 
     /// <summary>Reads the payload of a list-derived object into its registered list instance.</summary>
+    /// <param name="model">The list-derived declaration with reference tracking.</param>
+    /// <param name="w">The source writer.</param>
+    /// <param name="body">The receiving property switch.</param>
     private static void AppendSequenceRead(PayloadRenderModel model, CodeWriter w, List<string> body)
     {
         string reader = w.A("LuminPackJsonReader"), element = "global::LuminPack." + model.Owner;
@@ -482,6 +485,8 @@ internal static class CircleJsonEmitter
     }
 
     /// <summary>Returns each current name and the read-only old names for a version-tolerant member.</summary>
+    /// <param name="model">The modeled members and their version aliases.</param>
+    /// <returns>The property names and their table identifiers and member slots.</returns>
     private static IEnumerable<(string Name, int Index, string Member)> MemberNames(PayloadRenderModel model)
     {
         int alias = 0;

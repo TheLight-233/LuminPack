@@ -284,7 +284,7 @@ internal static partial class BinaryEmitter
         // failure leaves the caller's state untouched.
         if (model.ElementList || model.HasDictionary)
         {
-            IsolatedWrite("internal static void Write" + Arguments() + "(this ref " + writer + " state, in " + type + "? value)", null,
+            IsolatedWrite("internal static void Write" + Arguments() + "(this ref " + writer + " state, in " + type + "? value)", TypeConstraint(),
                 genericWrite ? Standard() : null);
             w.Blank();
             IsolatedWrite("internal static void Write" + Arguments("TOptions") + "(this ref " + writer + " state, in " + type + "? value)", OptionsConstraint(),
@@ -313,7 +313,7 @@ internal static partial class BinaryEmitter
         if (model.Version != null || !model.IsStruct && model.ConstructorArguments != null)
         {
             // A version-tolerant record reads through an isolated copy of the reader state.
-            IsolatedRead("internal static void Read" + Arguments() + "(this ref " + reader + " state, ref " + type + "? value)", null,
+            IsolatedRead("internal static void Read" + Arguments() + "(this ref " + reader + " state, ref " + type + "? value)", TypeConstraint(),
                 genericRead ? Standard() : null);
             w.Blank();
             IsolatedRead("internal static void Read" + Arguments("TOptions") + "(this ref " + reader + " state, ref " + type + "? value)", OptionsConstraint(),
@@ -383,7 +383,7 @@ internal static partial class BinaryEmitter
         {
             w.Line(inline);
             w.Line(signature);
-            if (constraint != null)
+            if (constraint.Length != 0)
                 w.Indented(() => w.Line(constraint));
             w.Open();
             w.Line(reader + " isolated = default;");
@@ -398,7 +398,7 @@ internal static partial class BinaryEmitter
         {
             w.Line(inline);
             w.Line(signature);
-            if (constraint != null)
+            if (constraint.Length != 0)
                 w.Indented(() => w.Line(constraint));
             w.Open();
             w.Line(writer + " isolated = default;");
@@ -1072,9 +1072,23 @@ internal static partial class BinaryEmitter
     {
         string roots = w.A("LuminPackSerializer") + ".LuminRoots_" +
             ReadableTypeName.Of(GeneratedNames.PayloadKey(model.SequenceBase!));
+        if (model.TrackReferences)
+        {
+            // Keep the registered derived identity even if a list formatter replaces its destination storage.
+            return new List<string>
+            {
+                model.SequenceBase + "? list = value;",
+                roots + ".RootRead<" + Profile + ">(ref reader, ref list);",
+                "if (!object.ReferenceEquals(list, value))",
+                "{",
+                "value!.Clear();",
+                "value.AddRange(list!);",
+                "}",
+            };
+        }
         return new List<string>
         {
-            model.TrackReferences ? string.Empty : "value ??= new " + model.GlobalName + "();",
+            "value ??= new " + model.GlobalName + "();",
             roots + ".RootRead<" + Profile + ">(ref reader, ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName +
                 ", " + model.SequenceBase + ">(ref value));",
         };
@@ -1268,6 +1282,9 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Reads into the registered instance with the selected record's ordinary member operations.</summary>
+    /// <param name="model">The record policy and member operations.</param>
+    /// <param name="w">The source writer.</param>
+    /// <returns>The read statements for the record body.</returns>
     private static List<string> TrackedRecordReadBody(PayloadRenderModel model, CodeWriter w)
     {
         var body = model.Version != null ? VersionReadBody(model, w, withNull: false) :

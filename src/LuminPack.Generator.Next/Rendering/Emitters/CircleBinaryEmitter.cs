@@ -8,6 +8,10 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 internal static class CircleBinaryEmitter
 {
     /// <summary>Writes null and back references inline and forwards a first occurrence to its record body.</summary>
+    /// <param name="model">The tracked declaration.</param>
+    /// <param name="w">The source writer.</param>
+    /// <param name="record">The generated first-occurrence write entry.</param>
+    /// <returns>The generated reference write statements.</returns>
     internal static List<string> WriteHeader(PayloadRenderModel model, CodeWriter w, string record)
     {
         var body = new List<string> { "var value = input;" };
@@ -31,6 +35,9 @@ internal static class CircleBinaryEmitter
     }
 
     /// <summary>Writes the member-count marker and explicit identifier of a first occurrence.</summary>
+    /// <param name="model">The declaration that supplies the member-count marker.</param>
+    /// <param name="body">The receiving record body.</param>
+    /// <param name="room">The capacity needed before reserving the next record segment.</param>
     internal static void PrependNewHeader(PayloadRenderModel model, List<string> body, string room)
     {
         string count = model.Members.Length.ToString(CultureInfo.InvariantCulture);
@@ -43,6 +50,10 @@ internal static class CircleBinaryEmitter
     }
 
     /// <summary>Resolves a back reference through the checked inlined header from the reference writer and reader.</summary>
+    /// <param name="model">The expected tracked type.</param>
+    /// <param name="w">The source writer.</param>
+    /// <param name="record">The generated first-occurrence read entry.</param>
+    /// <returns>The generated reference read statements.</returns>
     internal static List<string> ReadHeader(PayloadRenderModel model, CodeWriter w, string record)
     {
         var body = new List<string>();
@@ -60,6 +71,10 @@ internal static class CircleBinaryEmitter
     }
 
     /// <summary>Registers an instance before reading members so that a cycle can resolve that instance.</summary>
+    /// <param name="model">The modeled read and construction policy.</param>
+    /// <param name="w">The source writer.</param>
+    /// <param name="body">The receiving first-occurrence read body.</param>
+    /// <param name="record">The generated record read entry.</param>
     internal static void ReadNewRecord(PayloadRenderModel model, CodeWriter w, List<string> body, string record)
     {
         string exceptions = w.A("LuminPackExceptionHelper");
@@ -104,5 +119,7 @@ internal static class CircleBinaryEmitter
     }
 
     /// <summary>Creates the reference shell using the declaration's pool or constructor.</summary>
+    /// <param name="model">The tracked class declaration.</param>
+    /// <returns>The rental or construction expression.</returns>
     internal static string NewInstance(PayloadRenderModel model) => model.Rent ?? model.ReferenceConstruction;
 }
