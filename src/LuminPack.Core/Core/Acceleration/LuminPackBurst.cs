@@ -15,7 +15,7 @@ namespace LuminPack.Core;
 public static unsafe partial class LuminPackBurst
 {
     /// <summary>The supported native kernel table ABI.</summary>
-    public const uint AbiVersion = 4;
+    public const uint AbiVersion = 5;
 
     /// <summary>A copied table of optional Cdecl kernels; a null field leaves that operation on its existing path.</summary>
     /// <remarks>Pointers receive pinned, complete caller-owned ranges and must never retain them or throw across the ABI.</remarks>
@@ -76,6 +76,9 @@ public static unsafe partial class LuminPackBurst
         /// <summary>Returns a structural JSON array length hint for complete UTF-16 code units after the opening bracket; minus one declines sizing.</summary>
         public delegate* unmanaged[Cdecl]<char*, int, uint, int> JsonArrayHintUtf16;
 
+        /// <summary>Copies and checks Boolean bytes, returning one for canonical, zero for invalid or minus one to decline before writing.</summary>
+        public delegate* unmanaged[Cdecl]<byte*, byte*, int, int> CopyBooleans;
+
     }
 
     private sealed class Registration
@@ -96,7 +99,7 @@ public static unsafe partial class LuminPackBurst
     /// <param name="kernels">The table with <see cref="KernelTable.Version"/> set to <see cref="AbiVersion"/>.</param>
     public static void Register(KernelTable kernels)
     {
-        if (kernels.Version != 2 && kernels.Version != 3 && kernels.Version != AbiVersion)
+        if (kernels.Version < 2 || kernels.Version > AbiVersion)
             LuminPackExceptionHelper.ThrowArgumentException("Unsupported LuminPackBurst kernel table ABI.", nameof(kernels));
         if (kernels.Version == 2)
         {
@@ -112,7 +115,39 @@ public static unsafe partial class LuminPackBurst
             kernels.JsonArrayHintUtf8 = null;
             kernels.JsonArrayHintUtf16 = null;
         }
+        if (kernels.Version < 5)
+            kernels.CopyBooleans = null;
         Volatile.Write(ref _registration, new Registration(kernels));
+    }
+
+    /// <summary>Copies and validates Boolean bytes through the optional native kernel.</summary>
+    /// <param name="source">The first byte of the validated input.</param>
+    /// <param name="destination">The first byte of the complete writable destination.</param>
+    /// <param name="length">The length of both ranges.</param>
+    /// <returns>One for canonical storage, zero for invalid storage, or minus one to use Core.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static int TryCopyBooleans(ref byte source, ref byte destination, int length)
+    {
+        var registration = Volatile.Read(ref _registration);
+        if (registration is null)
+            return -1;
+        var kernel = registration.Table.CopyBooleans;
+        return kernel == null ? -1 : InvokeCopyBooleans(kernel, ref source, ref destination, length);
+    }
+
+    /// <summary>Keeps the pinned native call frame off the managed Boolean copy path.</summary>
+    /// <param name="kernel">The native function from the captured table.</param>
+    /// <param name="source">The first byte of the validated input.</param>
+    /// <param name="destination">The first byte of the complete writable destination.</param>
+    /// <param name="length">The length of both ranges.</param>
+    /// <returns>The native kernel's result.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int InvokeCopyBooleans(delegate* unmanaged[Cdecl]<byte*, byte*, int, int> kernel,
+        ref byte source, ref byte destination, int length)
+    {
+        fixed (byte* input = &source)
+        fixed (byte* output = &destination)
+            return kernel(input, output, length);
     }
 
     /// <summary>Stops publishing native kernels to subsequent calls without unloading native code or draining active calls.</summary>

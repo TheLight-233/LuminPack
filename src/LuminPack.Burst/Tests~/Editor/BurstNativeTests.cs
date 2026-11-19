@@ -33,6 +33,8 @@ public unsafe class BurstNativeTests
         Assert.That(BurstBackend.TryRegister(), Is.True);
         try
         {
+            LuminPack.Burst.Tests.BooleanKernelContract.Verify(
+                BurstCompiler.CompileFunctionPointer<BurstBackend.BooleanFunction>(BurstKernels.CopyBooleans).Invoke, accelerated: true);
             LuminPack.Burst.Tests.PortableLayoutContract.Verify((probe.Invoke() & 6) != 0);
             KernelContract.Verify(
                 BurstCompiler.CompileFunctionPointer<BurstBackend.CopyFunction>(BurstKernels.Copy).Invoke,

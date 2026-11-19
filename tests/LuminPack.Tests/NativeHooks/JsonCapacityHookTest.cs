@@ -27,7 +27,7 @@ public sealed unsafe class JsonCapacityHookTest : IDisposable
     {
         byte[] bytes = (utf16 ? Encoding.Unicode : Encoding.UTF8).GetBytes("[" + string.Join(",", Enumerable.Repeat("1", 129)) + "]");
         byte[] original = (byte[])bytes.Clone();
-        foreach (uint version in new uint[] { 2, 3, LuminPackBurst.AbiVersion })
+        foreach (uint version in new uint[] { 2, 3, 4, LuminPackBurst.AbiVersion })
         {
             _result = 7; _calls = 0;
             var table = new LuminPackBurst.KernelTable { Version = version, JsonArrayHintUtf8 = &Probe8, JsonArrayHintUtf16 = &Probe16 };

@@ -490,6 +490,14 @@ public static partial class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static bool CopyBooleans(ref byte source, ref byte destination, int length)
     {
+#if NETSTANDARD2_1
+        if (length >= 128)
+        {
+            int status = LuminPackBurst.TryCopyBooleans(ref source, ref destination, length);
+            if ((uint)status <= 1)
+                return status != 0;
+        }
+#endif
 #if NET8_0_OR_GREATER
         if (Vector256.IsHardwareAccelerated && length >= 32)
         {

@@ -1272,7 +1272,7 @@ internal static unsafe bool Matches(ReadOnlySpan<byte> bytes, ReadOnlySpan<char>
     return byteOffset == bytes.Length;
 }
     }
-// Core source SHA256: Core/Json/LuminPackJsonReader.Capacity.cs 0A6E3C45FC5879960CEB6FF49D1B68F8CD73BA3AC278623CFA2F43E48CEE0E76
+// Core source SHA256: Core/Json/LuminPackJsonReader.Capacity.cs E9720AF7F2FC4A51741FBD1F0F0AE2B1DA5A8E72FE2DAB6AA2913A0BBCAD6434
 internal static unsafe class CoreJsonCapacity
 {
 /// <summary>Scans complete UTF-8 blocks with cross-block quote and escape state.</summary>

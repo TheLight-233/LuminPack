@@ -27,7 +27,7 @@ Run an IL2CPP player build on each target platform before release; a successful 
 | Package | Purpose |
 | --- | --- |
 | `LuminPack.Unity` | Codecs for Unity value types: vectors, `Quaternion`, `Color`, `Rect`, `Bounds`, `Matrix4x4`, `LayerMask`, `AnimationCurve`, `Gradient`, `RectOffset` and more. See [its README](../src/LuminPack.Unity/README.md). |
-| `LuminPack.Burst` | Burst 1.8 backend for the `netstandard2.1` native kernel table (copies, UTF-8/Latin-1 text, layout conversion, compression and ChaCha20). See [its README](../src/LuminPack.Burst/README.md) and the [hook ABI](burst-hooks.md). |
+| `LuminPack.Burst` | Burst 1.8 backend for the `netstandard2.1` native kernel table (copies, Boolean validation and transfer, UTF-8/Latin-1 text, layout conversion, compression and ChaCha20). See [its README](../src/LuminPack.Burst/README.md) and the [hook ABI](burst-hooks.md). |
 
 Core references neither package. Both register before scene load.
 

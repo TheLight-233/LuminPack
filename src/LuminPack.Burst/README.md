@@ -4,7 +4,7 @@
 
 **Burst-compiled SIMD kernels for LuminPack in Unity**
 
-![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![Burst 1.8](https://img.shields.io/badge/Burst-1.8-000000?style=flat-square&logo=unity&logoColor=white) ![ABI v3](https://img.shields.io/badge/kernel%20ABI-v3-F97316?style=flat-square) ![x64 | ARM64](https://img.shields.io/badge/arch-x64%20%7C%20ARM64-2EA043?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
+![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![Burst 1.8](https://img.shields.io/badge/Burst-1.8-000000?style=flat-square&logo=unity&logoColor=white) ![ABI v5](https://img.shields.io/badge/kernel%20ABI-v5-F97316?style=flat-square) ![x64 | ARM64](https://img.shields.io/badge/arch-x64%20%7C%20ARM64-2EA043?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
 
 **English** · [简体中文](../../docs/modules/LuminPack.Burst.cn.md)
 
@@ -16,7 +16,7 @@ Part of [LuminPack](../../README.md) · [Unity guide](../../docs/unity.md) · [B
 
 ---
 
-Optional Burst 1.8 backend for version 3 of the netstandard2.1 `LuminPack.Core.LuminPackBurst` ABI. It references Core, `Unity.Burst` and `UnityEngine.CoreModule`; Core and LuminPack.Unity do not reference it. Modern .NET builds keep using their own native SIMD.
+Optional Burst 1.8 backend for version 5 of the netstandard2.1 `LuminPack.Core.LuminPackBurst` ABI. It references Core, `Unity.Burst` and `UnityEngine.CoreModule`; Core and LuminPack.Unity do not reference it. Modern .NET builds keep using their own native SIMD.
 
 ## 🚀 Quick start
 
@@ -33,7 +33,7 @@ bool installed = BurstBackend.TryRegister();
 
 ## 🧮 Kernels
 
-The table fills all **sixteen** ABI slots:
+The backend publishes the ABI slots available on the current platform.
 
 | Area | Slots |
 | --- | --- |
@@ -42,6 +42,7 @@ The table fills all **sixteen** ABI slots:
 | Compact Latin1 | classification · narrowing · widening · equality |
 | Layout | prefix conversion · precomputed layout prefixes |
 | Cipher | ChaCha20 block generation |
+| Structural sizing and Booleans | UTF-8 and UTF-16 JSON capacity hints · fused Boolean byte copy and validation |
 
 ### Projected from Core, never forked
 

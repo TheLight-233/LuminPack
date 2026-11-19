@@ -515,6 +515,92 @@ internal static void XorKeystream(byte* dst, byte* src, byte* key, int length)
             Unsafe.Add(ref d, unchecked((nint)(uint)(i))) = (byte)(Unsafe.Add(ref s, unchecked((nint)(uint)(i))) ^ Unsafe.Add(ref k, unchecked((nint)(uint)(i))));
     }
 }
+// Core source SHA256: Security/LuminPackInputPolicy.cs 3B6389E86072260513E905BCB09B6AA36CD613F8965C0EFF15BBCDAECAAC4E08
+/// <summary>Copies Boolean storage and reports whether every byte is zero or one.</summary>
+/// <param name = "source">The first input byte, validated for <paramref name = "length"/> bytes.</param>
+/// <param name = "destination">The first destination byte, owning <paramref name = "length"/> bytes.</param>
+/// <param name = "length">The positive byte count.</param>
+/// <returns>Whether the copied storage is canonical.</returns>
+/// <remarks>Each load is stored and ORed into one accumulator, so the input is read once. The final load overlaps the previous
+/// one inside both ranges instead of running a scalar tail. Kept out of line so wide vector state never leaks into a caller.</remarks>
+[MethodImpl(MethodImplOptions.NoInlining)]
+internal static bool CopyBooleans(ref byte source, ref byte destination, int length)
+{
+    if (Vector256.IsHardwareAccelerated && length >= 32)
+    {
+        var any = Vector256<byte>.Zero;
+        nuint last = (nuint)(uint)(length - 32);
+        for (nuint index = 0; index < last; index += 32)
+        {
+            var block = Vector256.LoadUnsafe(ref source, index);
+            block.StoreUnsafe(ref destination, index);
+            any |= block;
+        }
+
+        var tail = Vector256.LoadUnsafe(ref source, last);
+        tail.StoreUnsafe(ref destination, last);
+        return ((any | tail) & Vector256.Create((byte)0xFE)) == Vector256<byte>.Zero;
+    }
+
+    if (Vector128.IsHardwareAccelerated && length >= 16)
+    {
+        var any = Vector128<byte>.Zero;
+        nuint last = (nuint)(uint)(length - 16);
+        for (nuint index = 0; index < last; index += 16)
+        {
+            var block = Vector128.LoadUnsafe(ref source, index);
+            block.StoreUnsafe(ref destination, index);
+            any |= block;
+        }
+
+        var tail = Vector128.LoadUnsafe(ref source, last);
+        tail.StoreUnsafe(ref destination, last);
+        return ((any | tail) & Vector128.Create((byte)0xFE)) == Vector128<byte>.Zero;
+    }
+
+    // 32-bit targets keep typed unaligned access within four bytes.
+    if (Unsafe.SizeOf<nint>() == 8 && length >= 8)
+    {
+        ulong any = 0;
+        int last = length - 8;
+        for (int index = 0; index < last; index += 8)
+        {
+            ulong block = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, (nint)(uint)index));
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(uint)index), block);
+            any |= block;
+        }
+
+        ulong final = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, (nint)(uint)last));
+        Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(uint)last), final);
+        return ((any | final) & 0xFEFEFEFEFEFEFEFEUL) == 0;
+    }
+
+    if (length >= 4)
+    {
+        uint any = 0;
+        int last = length - 4;
+        for (int index = 0; index < last; index += 4)
+        {
+            uint block = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)index));
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(uint)index), block);
+            any |= block;
+        }
+
+        uint final = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)last));
+        Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(uint)last), final);
+        return ((any | final) & 0xFEFEFEFEu) == 0;
+    }
+
+    int bits = 0;
+    for (int index = 0; index < length; index++)
+    {
+        byte value = Unsafe.Add(ref source, (nint)(uint)index);
+        Unsafe.Add(ref destination, (nint)(uint)index) = value;
+        bits |= value;
+    }
+
+    return (bits & 0xFE) == 0;
+}
     }
 }
 #endif

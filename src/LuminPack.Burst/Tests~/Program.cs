@@ -10,6 +10,7 @@ unsafe
         return;
     }
     LuminPack.Burst.Tests.JsonCapacityKernelContract.Verify(BurstKernels.JsonArrayHintUtf8, BurstKernels.JsonArrayHintUtf16);
+    LuminPack.Burst.Tests.BooleanKernelContract.Verify(BurstKernels.CopyBooleans, accelerated: false);
     KernelContract.Verify(BurstKernels.Copy, BurstKernels.CountMatch,
         BurstKernels.Xor, BurstKernels.CopyMatch);
     LuminPack.Burst.Tests.TextKernelContract.Verify(BurstKernels.Utf8Encode, BurstKernels.Utf8Decode,

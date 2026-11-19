@@ -27,7 +27,7 @@ LuminPack 通过 `netstandard2.1` 资产支持 Unity Mono 和 IL2CPP。请把 AP
 | 包 | 用途 |
 | --- | --- |
 | `LuminPack.Unity` | Unity 值类型的编解码：向量、`Quaternion`、`Color`、`Rect`、`Bounds`、`Matrix4x4`、`LayerMask`、`AnimationCurve`、`Gradient`、`RectOffset` 等。见[它的 README](../src/LuminPack.Unity/README.md)。 |
-| `LuminPack.Burst` | `netstandard2.1` 原生内核表的 Burst 1.8 后端（复制、UTF-8/Latin-1 文本、布局转换、压缩和 ChaCha20）。见[它的 README](../src/LuminPack.Burst/README.md) 和 [Hook ABI](burst-hooks.cn.md)。 |
+| `LuminPack.Burst` | `netstandard2.1` 原生内核表的 Burst 1.8 后端（复制、布尔字节复制与校验、UTF-8/Latin-1 文本、布局转换、压缩和 ChaCha20）。见[它的 README](../src/LuminPack.Burst/README.md) 和 [Hook ABI](burst-hooks.cn.md)。 |
 
 Core 不引用这两个包。它们都在场景加载前完成注册。
 

@@ -4,7 +4,7 @@
 
 **为 Unity 中的 LuminPack 提供 Burst 编译的 SIMD 内核**
 
-![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![Burst 1.8](https://img.shields.io/badge/Burst-1.8-000000?style=flat-square&logo=unity&logoColor=white) ![ABI v3](https://img.shields.io/badge/kernel%20ABI-v3-F97316?style=flat-square) ![x64 | ARM64](https://img.shields.io/badge/arch-x64%20%7C%20ARM64-2EA043?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
+![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![Burst 1.8](https://img.shields.io/badge/Burst-1.8-000000?style=flat-square&logo=unity&logoColor=white) ![ABI v5](https://img.shields.io/badge/kernel%20ABI-v5-F97316?style=flat-square) ![x64 | ARM64](https://img.shields.io/badge/arch-x64%20%7C%20ARM64-2EA043?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
 
 [English](../../src/LuminPack.Burst/README.md) · **简体中文**
 
@@ -16,7 +16,7 @@
 
 ---
 
-可选的 Burst 1.8 后端，实现 netstandard2.1 `LuminPack.Core.LuminPackBurst` ABI 的第 3 版。它引用 Core、`Unity.Burst` 和 `UnityEngine.CoreModule`；Core 与 LuminPack.Unity 都不引用它。现代 .NET 构建继续使用自己的原生 SIMD。
+可选的 Burst 1.8 后端，实现 netstandard2.1 `LuminPack.Core.LuminPackBurst` ABI 的第 5 版。它引用 Core、`Unity.Burst` 和 `UnityEngine.CoreModule`；Core 与 LuminPack.Unity 都不引用它。现代 .NET 构建继续使用自己的原生 SIMD。
 
 ## 🚀 快速开始
 
@@ -33,7 +33,7 @@ bool installed = BurstBackend.TryRegister();
 
 ## 🧮 内核
 
-该表会填满全部 **16** 个 ABI 槽位：
+后端发布当前平台支持的 ABI 槽位。
 
 | 领域 | 槽位 |
 | --- | --- |
@@ -42,6 +42,7 @@ bool installed = BurstBackend.TryRegister();
 | 紧凑 Latin1 | 分类 · 窄化 · 宽化 · 相等比较 |
 | 布局 | 前缀转换 · 预计算的布局前缀 |
 | 密码 | ChaCha20 块生成 |
+| 结构计数与 Boolean | UTF-8/UTF-16 JSON 容量提示 · Boolean 字节融合复制校验 |
 
 ### 从 Core 投影而来，绝不分叉
 

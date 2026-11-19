@@ -93,6 +93,9 @@ namespace LuminPack.Burst
                         return false;
                     if (!CompileJsonKernels(ref _table))
                         return false;
+                    var boolean = BurstCompiler.CompileFunctionPointer<BooleanFunction>(BooleanRoot);
+                    if (boolean.IsCreated)
+                        _table.CopyBooleans = (delegate* unmanaged[Cdecl]<byte*, byte*, int, int>)(void*)boolean.Value;
                     Capabilities = available;
                     _compiled = true;
                 }

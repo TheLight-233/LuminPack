@@ -138,4 +138,6 @@ For ordinary objects with `[LuminPackPoolRent]`, binary and JSON reads without `
 
 `LuminPackJsonReader.GetArrayLengthHint<TOptions>()` reads a structural count after `ArrayStart`, returning -1 when unavailable. `GetArrayCapacityHint<TOptions>(minimum)` and `GetEntryArrayCapacityHint<TOptions>()` return nonnegative capacity hints. They do not validate syntax or replace ordinary reads and bounds checks; preserve growth fallback. Entry hints require scalar/string/null pair members. Core and optional Burst share the scanner. Burst ABI 4 adds these optional slots while accepting older tables. See [native kernel contracts](../../docs/burst-hooks.md).
 
+The optional Burst ABI 5 Boolean kernel accelerates checked binary `bool[]` and `List<bool>` reads on `netstandard2.1` with at least 128 bytes of payload. Ordinary serializer calls use it automatically when the Unity Burst backend registers a supported kernel. Older tables and unavailable SIMD use the Core fallback.
+
 Fresh JSON sequence readers can use the sizing hint to avoid backing-array growth; fresh Capacity can differ and the extra scan can cost CPU. Reuse and callbacks retain their original order. Hash collections and arrays keep their existing construction. Deep CountArrayElements lookahead uses an exclusive native pool lease; ordinary deep reader state and cold pool misses can still allocate.

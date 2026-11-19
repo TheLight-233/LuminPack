@@ -16,6 +16,8 @@ public static unsafe class BurstNativeBatch
         {
             if (!BurstBackend.TryRegister())
                 LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Native Burst registration was unavailable.");
+            LuminPack.Burst.Tests.BooleanKernelContract.Verify(
+                BurstCompiler.CompileFunctionPointer<BurstBackend.BooleanFunction>(BurstKernels.CopyBooleans).Invoke, accelerated: true);
             KernelContract.Verify(
                 BurstCompiler.CompileFunctionPointer<BurstBackend.CopyFunction>(BurstKernels.Copy).Invoke,
                 BurstCompiler.CompileFunctionPointer<BurstBackend.CountMatchFunction>(BurstKernels.CountMatch).Invoke,

@@ -248,6 +248,7 @@
 
 - Core 不引用 `LuminPack.Unity` 和 `LuminPack.Burst`。
 - `LuminPackBurst` Hook 表只存在于 `netstandard2.1`，遵循 [Hook ABI](burst-hooks.cn.md)。空槽位保留 Core 的实现。Burst 代码从 Core 源码投影生成，绝不另外维护第二套算法。
+- **Burst Boolean 传输。** ABI 版本 5 可在 netstandard2.1 上分派已经校验且至少有 128 字节的 Boolean 负载。原生循环从现有融合复制与校验方法投影生成，保留目标字节、规范性检查结果、有界尾部和完全原位行为。旧版表、短输入和不可用的 SIMD 沿用托管回退。
 
 ## 3. 安全规则
 

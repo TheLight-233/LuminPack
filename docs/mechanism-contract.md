@@ -248,6 +248,7 @@ The history of individual approvals lives in Git. When this document, the code a
 
 - Core references neither `LuminPack.Unity` nor `LuminPack.Burst`.
 - The `LuminPackBurst` hook table exists only for `netstandard2.1` and follows the [hook ABI](burst-hooks.md). Null slots keep the Core implementation. Burst code is projected from Core sources, never maintained as a second algorithm.
+- **Burst Boolean transfer.** ABI version five can dispatch already validated Boolean payloads of at least 128 bytes on netstandard2.1. The native loop is projected from the existing fused copy and validation method. It preserves the copied bytes, canonicality result, bounded tail and exact-alias behavior. Older tables, short inputs and unavailable SIMD keep the managed fallback.
 
 ## 3. Safety rules
 
