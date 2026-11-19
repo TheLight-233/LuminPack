@@ -1109,12 +1109,11 @@ internal static partial class BinaryEmitter
                 "}",
             };
         }
-        return new List<string>
-        {
-            "value ??= new " + model.GlobalName + "();",
-            roots + ".RootRead<" + Profile + ">(ref reader, ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName +
-                ", " + model.SequenceBase + ">(ref value));",
-        };
+        var body = new List<string>();
+        AddReadInstance(body, model, bindLocal: false);
+        body.Add(roots + ".RootRead<" + Profile + ">(ref reader, ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName +
+            ", " + model.SequenceBase + ">(ref value));");
+        return body;
     }
 
     /// <summary>Closes a bounded write root: the null exit label, the completed-length assertion and the commit.</summary>
@@ -1142,6 +1141,32 @@ internal static partial class BinaryEmitter
     /// <param name="model">The normalized model for this contract.</param>
     /// <returns>The resulting text.</returns>
     private static string NewInstance(PayloadRenderModel model) => model.Rent ?? "new " + model.GlobalName + "()";
+
+    /// <summary>Binds ordinary object storage and calls the instance hooks on a newly selected receiver.</summary>
+    /// <param name="body">The statements preceding member reads.</param>
+    /// <param name="model">The modeled record and its construction contract.</param>
+    /// <param name="bindLocal">Whether the following reads use a separate instance local.</param>
+    private static void AddReadInstance(List<string> body, PayloadRenderModel model, bool bindLocal = true)
+    {
+        if (model.TrackReferences)
+        {
+            body.Add("var instance = value!;");
+            return;
+        }
+        string construction = bindLocal ? NewInstance(model) : "new " + model.GlobalName + "()";
+        if (!Array.Exists(model.ReadBefore, IsInstanceCallback))
+        {
+            body.Add((bindLocal ? "var instance = " : string.Empty) + "value ??= " + construction + ";");
+            return;
+        }
+        body.Add("if (value is null)");
+        body.Add("{");
+        body.Add("value = " + construction + ";");
+        AppendInstanceCallbacks(body, model.ReadBefore, "value");
+        body.Add("}");
+        if (bindLocal)
+            body.Add("var instance = value;");
+    }
 
     /// <summary>Spells a fixed profile wrapper around an imported string options type.</summary>
     /// <param name="w">The generated source writer.</param>
@@ -1244,14 +1269,40 @@ internal static partial class BinaryEmitter
         if (!model.HasCallbacks || model.Version == null && !model.IsStruct && model.ConstructorArguments != null)
             return body;
         var result = new List<string>(body.Count + model.ReadBefore.Length + model.ReadAfter.Length);
-        result.AddRange(model.ReadBefore);
+        if (!model.TrackReferences)
+            result.AddRange(model.ReadBefore);
         result.AddRange(body);
         // A version-tolerant read commits through the receiver it captured before the commit, which an aliased member may
         // replace in the destination; the original raised the after-read callbacks on that receiver.
-        bool captured = model.Version != null && body.Any(line => line.StartsWith("var completedInstance = value;", StringComparison.Ordinal));
+        bool captured = model.Version != null && body.Any(line => line.StartsWith("var completedInstance = ", StringComparison.Ordinal));
         foreach (string line in model.ReadAfter)
-            result.Add(captured && line.StartsWith("value?.", StringComparison.Ordinal) ? "completedInstance?." + line.Substring("value?.".Length) : line);
+            result.Add(captured ? CallbackReceiver(line, "completedInstance") : line);
         return result;
+    }
+
+    /// <summary>Recognizes an instance call on the concrete receiver or a cast to its declaring base.</summary>
+    /// <param name="callback">The modeled callback statement.</param>
+    /// <returns>Whether the callback requires an object or value receiver.</returns>
+    private static bool IsInstanceCallback(string callback) => callback.StartsWith("value", StringComparison.Ordinal) ||
+        callback.StartsWith("((", StringComparison.Ordinal);
+
+    /// <summary>Redirects the instance receiver without changing the callback's declaring type.</summary>
+    /// <param name="callback">The modeled callback statement.</param>
+    /// <param name="receiver">The local that owns the receiver.</param>
+    /// <returns>The statement bound to the selected receiver.</returns>
+    internal static string CallbackReceiver(string callback, string receiver) => callback.StartsWith("value", StringComparison.Ordinal)
+        ? receiver + callback.Substring("value".Length)
+        : callback.Replace(")value)?.", ")" + receiver + ")?.");
+
+    /// <summary>Calls only the modeled instance hooks, after a new receiver has been selected.</summary>
+    /// <param name="body">The statements receiving the calls.</param>
+    /// <param name="callbacks">The callbacks in phase order.</param>
+    /// <param name="receiver">The local that owns the receiver.</param>
+    private static void AppendInstanceCallbacks(List<string> body, string[] callbacks, string receiver)
+    {
+        foreach (string callback in callbacks)
+            if (IsInstanceCallback(callback))
+                body.Add(CallbackReceiver(callback, receiver));
     }
 
     /// <summary>Builds the statement lines that read a covered fixed case's Union payload.</summary>
@@ -1313,11 +1364,7 @@ internal static partial class BinaryEmitter
         var body = model.Version != null ? VersionReadBody(model, w, withNull: false) :
             Mirrored(model, w, ReadBody(model, w, union: false), writes: false, union: false);
         if (model.Version != null || model.ConstructorArguments == null)
-        {
             body = AddReadCallbacks(model, body);
-            if (model.ReadBefore.Length != 0)
-                body.RemoveRange(0, model.ReadBefore.Length);
-        }
         return InputChecks(model, w, body, read: true, enterDepth: false);
     }
 
@@ -2742,7 +2789,7 @@ internal static partial class BinaryEmitter
         for (int index = 0; index < members.Length; index++)
             AddConstructedReadExisting(body, model, w, members[index], index + 1 < members.Length);
         foreach (string call in model.ReadAfter)
-            body.Add(call.Replace("value?.", "value2?."));
+            body.Add(CallbackReceiver(call, "value2"));
         body.Add("}");
         if (model.TrackReferences)
             return body;
@@ -2894,7 +2941,7 @@ internal static partial class BinaryEmitter
         bool freshInstance = freshPayload && HasFreshPayloadRun(model);
         if (freshInstance)
             body.Add("bool freshInstance = value is null;");
-        body.Add(model.TrackReferences ? "var instance = value!;" : "var instance = value ??= " + NewInstance(model) + ";");
+        AddReadInstance(body, model);
         int cursors = 0, strings = 0;
         for (int index = 0; index < members.Length; index++)
         {
@@ -3042,7 +3089,7 @@ internal static partial class BinaryEmitter
                 members.Length.ToString(CultureInfo.InvariantCulture) + "))");
             body.Add("\treturn;");
         }
-        body.Add(model.TrackReferences ? "var instance = value!;" : "var instance = value ??= " + NewInstance(model) + ";");
+        AddReadInstance(body, model);
         int cursors = 0, strings = 0, ends = 0;
         AddStreamRead(body, model, "instance", 0, !union, w, new Dictionary<string, int>(StringComparer.Ordinal), ref cursors, ref strings, ref ends, pairFields);
         while (body.Count != 0 && body[body.Count - 1].Length == 0)

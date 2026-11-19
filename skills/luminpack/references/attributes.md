@@ -38,8 +38,10 @@ Delegate targets use the formatter signature of the member type, for example `st
 | --- | --- | --- |
 | `[LuminPackConstructor]` | constructor | Constructor used for fresh reads; parameter names must match serialized members. |
 | `[LuminPackPoolRent]` | static method | Supplies fresh instances instead of `new`. The application returns them to its pool. |
-| `[LuminPackOnSerializing]`, `[LuminPackOnSerialized]` | instance or static method | Before / after writing. |
-| `[LuminPackOnDeserializing]`, `[LuminPackOnDeserialized]` | instance or static method | Before / after reading. |
+| `[LuminPackOnSerializing]`, `[LuminPackOnSerialized]` | instance or static method | Before / after a binary write. |
+| `[LuminPackOnDeserializing]`, `[LuminPackOnDeserialized]` | instance or static method | Before / after a binary read. |
+
+At each phase, static callbacks run before instance callbacks, and each group runs from base to derived. For a new instance whose constructor needs decoded members, only static before-read callbacks can run before those members are read. Reference tracking runs callbacks on the first full record for each object.
 
 ## `[LuminPackOption]` properties
 

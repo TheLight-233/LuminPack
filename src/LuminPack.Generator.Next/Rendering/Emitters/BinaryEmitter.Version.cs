@@ -189,6 +189,18 @@ internal static partial class BinaryEmitter
             body.Add(w.A("LuminPackExceptionHelper") + ".ThrowInvalidDataException(\"A tracked record body cannot be null.\");");
         body.Add("}");
         body.Add("");
+        bool prepareReceiver = withNull && !model.IsStruct && model.ConstructorArguments == null && model.Rent == null &&
+            Array.Exists(model.ReadBefore, IsInstanceCallback);
+        if (prepareReceiver)
+        {
+            // The new receiver stays unpublished while the versioned reader stages the member values.
+            body.Add(model.GlobalName + "? freshReceiver = null;");
+            body.Add("if (value is null)");
+            body.Add("{");
+            body.Add("freshReceiver = " + model.ReferenceConstruction + ";");
+            AppendInstanceCallbacks(body, model.ReadBefore, "freshReceiver");
+            body.Add("}");
+        }
         body.Add(fieldsType + " fields = default;");
         if (members.Any(member => !member.IsFixed))
         {
@@ -227,7 +239,7 @@ internal static partial class BinaryEmitter
             body.Add("}");
         }
         body.Add("");
-        AddVersionPublication(model, body, temps, registered: !withNull);
+        AddVersionPublication(model, body, temps, registered: !withNull, prepareReceiver);
         AppendMappedRead(model, w, body, fieldsType, profile, temps);
         if (members.Length != 0)
             body.Add("");
@@ -387,7 +399,9 @@ internal static partial class BinaryEmitter
     /// <param name="body">The receiving statements.</param>
     /// <param name="temps">The staged member expressions.</param>
     /// <param name="registered">Whether the instance was already registered for reference tracking.</param>
-    private static void AddVersionPublication(PayloadRenderModel model, List<string> body, string[] temps, bool registered)
+    /// <param name="prepareReceiver">Whether the new receiver may already hold the before-read callbacks' state.</param>
+    private static void AddVersionPublication(PayloadRenderModel model, List<string> body, string[] temps, bool registered,
+        bool prepareReceiver)
     {
         var members = model.Members;
         bool mirroredMembers = model.Members.Any(member => member.Mirrored);
@@ -413,13 +427,13 @@ internal static partial class BinaryEmitter
             }
             return;
         }
-        body.Add("var completedInstance = value;");
+        body.Add(prepareReceiver ? "var completedInstance = freshReceiver ?? value;" : "var completedInstance = value;");
         if (registered)
         {
             PublishExisting();
             return;
         }
-        body.Add("if (value is null)");
+        body.Add(prepareReceiver ? "if (completedInstance is null)" : "if (value is null)");
         body.Add("{");
         if (model.Rent != null)
         {
@@ -448,6 +462,8 @@ internal static partial class BinaryEmitter
         body.Add("else");
         body.Add("{");
         PublishExisting();
+        if (prepareReceiver)
+            body.Add("if (freshReceiver is not null) value = completedInstance;");
         body.Add("}");
 
         void PublishExisting()

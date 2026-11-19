@@ -77,7 +77,7 @@ LuminPack never returns instances to your pool; your application owns the pool a
 
 ### Callbacks
 
-Instance or static methods marked with these attributes run around each operation:
+These attributes mark instance or static methods that run around binary reads and writes.
 
 ```csharp
 [LuminPackOnSerializing]   public void BeforeWrite() { }
@@ -85,6 +85,8 @@ Instance or static methods marked with these attributes run around each operatio
 [LuminPackOnDeserializing] public static void BeforeRead() { }
 [LuminPackOnDeserialized]  public void AfterRead() { }
 ```
+
+At each phase, static callbacks run first, then instance callbacks. Each group runs from the base type to the derived type. A virtual callback runs once, even when its override is also attributed. A before-read instance callback runs on a reused target or on a new class instance available before decoding its members. A fresh record constructed from decoded arguments receives the static before-read callbacks and the after-read callbacks. Reference-tracked objects run callbacks on their first full record.
 
 ## Size guarantees
 

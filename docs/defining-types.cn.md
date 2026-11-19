@@ -77,7 +77,7 @@ LuminPack 不会把实例还回你的池；池和归还策略由应用自己负�
 
 ### 回调
 
-标了下列特性的实例方法或静态方法会在每次读写前后执行：
+下列特性标记二进制读写前后执行的实例方法或静态方法。
 
 ```csharp
 [LuminPackOnSerializing]   public void BeforeWrite() { }
@@ -85,6 +85,8 @@ LuminPack 不会把实例还回你的池；池和归还策略由应用自己负�
 [LuminPackOnDeserializing] public static void BeforeRead() { }
 [LuminPackOnDeserialized]  public void AfterRead() { }
 ```
+
+每个阶段先调用静态回调，再调用实例回调。两组都按基类到派生类的顺序执行。基类虚方法及其重写带有同一回调特性时，每个阶段调用一次。读前实例回调在复用目标或解码成员前已经创建的类实例上执行。新记录需要用解码结果构造时，先执行静态读前回调，构造完成后执行读后回调。启用引用追踪的对象只在首次完整记录上执行回调。
 
 ## 大小担保
 

@@ -15,7 +15,6 @@ internal static class CircleBinaryEmitter
     internal static List<string> WriteHeader(PayloadRenderModel model, CodeWriter w, string record)
     {
         var body = new List<string> { "var value = input;" };
-        body.AddRange(model.WriteBefore);
         body.Add("if (value is null)");
         body.Add("{");
         body.Add("writer.EnsureAdditionalCapacity(1);");
@@ -30,6 +29,7 @@ internal static class CircleBinaryEmitter
         body.Add("writer.WriteObjectReferenceId((uint)~reference);");
         body.Add("return;");
         body.Add("}");
+        body.AddRange(model.WriteBefore);
         body.Add(record + "(ref writer, value, reference);");
         return body;
     }
@@ -57,7 +57,6 @@ internal static class CircleBinaryEmitter
     internal static List<string> ReadHeader(PayloadRenderModel model, CodeWriter w, string record)
     {
         var body = new List<string>();
-        body.AddRange(model.ReadBefore);
         body.Add("reader.EnsureReadable(1);");
         body.Add("if (reader.PeekInput(1, out _) == " + w.A("LuminPackCode") + ".ReferenceId)");
         body.Add("{");
@@ -123,6 +122,8 @@ internal static class CircleBinaryEmitter
             body.Add("instance = " + NewInstance(model) + ";");
         body.Add("reader.OptionState.AddObjectReference(id, instance);");
         body.Add("}");
+        foreach (string callback in model.ReadBefore)
+            body.Add(BinaryEmitter.CallbackReceiver(callback, "instance"));
         body.Add(record + "(ref reader, ref instance);");
         body.Add("value = instance;");
         if (enterDepth)

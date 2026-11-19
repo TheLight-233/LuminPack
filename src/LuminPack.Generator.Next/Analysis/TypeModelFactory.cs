@@ -472,7 +472,8 @@ internal static partial class TypeModelFactory
                             !symbol.AllInterfaces.Any(contract => IsPackable(contract.OriginalDefinition) ||
                                 HasAttribute(contract.OriginalDefinition, UnionAttribute)) &&
                             !symbol.GetMembers().OfType<IFieldSymbol>().Any(field => field.IsVolatile),
-                        rentByRef: rentByRef, referenceConstruction: policy.TrackReferences && rent == null
+                        rentByRef: rentByRef, referenceConstruction: rent == null && (policy.TrackReferences ||
+                            versioned && constructor == null && callbacks is { ReadBefore.Length: > 0 })
                             ? ReferenceConstruction(symbol, identity.GlobalName) : null);
                 }
             }
@@ -2844,8 +2845,8 @@ internal static partial class TypeModelFactory
             return new ConstructorModel(arguments, constructed, StorageOrder(type));
         }
 
-        /// <summary>Creates an instance for reference registration using the selected constructor with typed defaults.</summary>
-        /// <param name="type">The class declaration with reference tracking.</param>
+        /// <summary>Creates an instance before its payload is available, using the selected constructor with typed defaults.</summary>
+        /// <param name="type">The class declaration whose instance must exist before its members are read.</param>
         /// <param name="name">The generated spelling of the class.</param>
         /// <returns>The constructor and any required initializer assignments.</returns>
         private static string ReferenceConstruction(INamedTypeSymbol type, string name)
@@ -2935,44 +2936,61 @@ internal static partial class TypeModelFactory
         /// <summary>Models the serialization callbacks as the statements a record's write and read roots run.</summary>
         /// <param name="type">The declared payload.</param>
         /// <param name="globalName">The fully qualified payload spelling.</param>
-        /// <returns>The callback statements in declaration order, or null when the record declares none.</returns>
+        /// <returns>The callback statements in phase, receiver and inheritance order, or null when none apply.</returns>
         /// <remarks>An invalid callback declaration keeps the original pipeline's diagnostic and never runs; it does not
         /// change the record's rendering.</remarks>
-        private static CallbackModel? SerializationCallbacks(INamedTypeSymbol type, string globalName)
+        private CallbackModel? SerializationCallbacks(INamedTypeSymbol type, string globalName)
         {
-            var writeBefore = new List<string>();
-            var writeAfter = new List<string>();
-            var readBefore = new List<string>();
-            var readAfter = new List<string>();
-            foreach (IMethodSymbol method in type.GetMembers().OfType<IMethodSymbol>())
-                foreach (AttributeData attribute in method.GetAttributes())
+            var writeBefore = new List<(bool Static, string Call)>();
+            var writeAfter = new List<(bool Static, string Call)>();
+            var readBefore = new List<(bool Static, string Call)>();
+            var readAfter = new List<(bool Static, string Call)>();
+            foreach (INamedTypeSymbol level in Levels(type))
+            {
+                bool declared = SymbolEqualityComparer.Default.Equals(type, level);
+                string declaringName = declared ? globalName : level.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                foreach (IMethodSymbol method in level.GetMembers().OfType<IMethodSymbol>())
                 {
-                    string? name = attribute.AttributeClass?.Name;
-                    if (name is not (OnSerializingAttribute or OnSerializedAttribute or OnDeserializingAttribute or OnDeserializedAttribute))
+                    var attributes = method.GetAttributes();
+                    if (attributes.IsEmpty || !Accessible(method))
                         continue;
-                    if (!ValidCallback(type, method))
-                        continue;
-                    string call = method.IsStatic ? globalName + "." + Identifier(method.Name) + "();" :
-                        (type.IsValueType ? "value." : "value?.") + Identifier(method.Name) + "();";
-                    switch (name)
+                    string receiver = method.IsStatic ? declaringName + "." : type.IsValueType ? "value." :
+                        declared ? "value?." : "((" + declaringName + "?)value)?.";
+                    var callback = (method.IsStatic, receiver + Identifier(method.Name) + "();");
+                    foreach (AttributeData attribute in attributes)
                     {
-                        case OnSerializingAttribute:
-                            writeBefore.Add(call);
-                            break;
-                        case OnSerializedAttribute:
-                            writeAfter.Add(call);
-                            break;
-                        case OnDeserializingAttribute:
-                            readBefore.Add(call);
-                            break;
-                        default:
-                            readAfter.Add(call);
-                            break;
+                        string? name = attribute.AttributeClass?.Name;
+                        List<(bool Static, string Call)>? phase = name switch
+                        {
+                            OnSerializingAttribute => writeBefore,
+                            OnSerializedAttribute => writeAfter,
+                            OnDeserializingAttribute => readBefore,
+                            OnDeserializedAttribute => readAfter,
+                            _ => null,
+                        };
+                        if (phase != null && !HasEarlierVirtualCallback(method, name!))
+                            phase.Add(callback);
                     }
                 }
+            }
             if (writeBefore.Count == 0 && writeAfter.Count == 0 && readBefore.Count == 0 && readAfter.Count == 0)
                 return null;
-            return new CallbackModel(writeBefore.ToArray(), writeAfter.ToArray(), readBefore.ToArray(), readAfter.ToArray());
+            return new CallbackModel(Ordered(writeBefore), Ordered(writeAfter), Ordered(readBefore), Ordered(readAfter));
+
+            bool Accessible(IMethodSymbol method) => ValidCallback(type, method) &&
+                _compilation.IsSymbolAccessibleWithin(method, _compilation.Assembly);
+
+            bool HasEarlierVirtualCallback(IMethodSymbol method, string name)
+            {
+                // Calling an attributed base method already invokes the most-derived virtual override.
+                for (IMethodSymbol? ancestor = method.OverriddenMethod; ancestor != null; ancestor = ancestor.OverriddenMethod)
+                    if (Accessible(ancestor) && ancestor.GetAttributes().Any(attribute => attribute.AttributeClass?.Name == name))
+                        return true;
+                return false;
+            }
+
+            static string[] Ordered(List<(bool Static, string Call)> phase) =>
+                phase.OrderByDescending(callback => callback.Static).Select(callback => callback.Call).ToArray();
         }
 
         /// <summary>Whether a callback declaration can be spelled as a generated statement.</summary>
