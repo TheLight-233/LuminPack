@@ -62,10 +62,10 @@ internal static partial class SerializerImmutableListWriteRegression
             CheckSelection(driver, ordinary: true);
             Execute(output);
             var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(
-                text.Replace("[LuminPackable] public sealed class Plain", "[LuminPackable(GeneratorType.VersionTolerant)] public sealed class Plain", StringComparison.Ordinal), parse, "Entry.cs"));
+                text.Replace("[LuminPackable] public sealed class Plain", "[LuminPackable(GeneratorType.CircleReference)] public sealed class Plain", StringComparison.Ordinal), parse, "Entry.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out var editedOutput, out diagnostics);
             CheckSelection(driver, ordinary: false);
-            Require(Trees(driver).SequenceEqual(Trees(Create(parse).RunGenerators(edited))), "An ordinary-to-versioned edit retained immutable-list staging.");
+            Require(Trees(driver).SequenceEqual(Trees(Create(parse).RunGenerators(edited))), "Adding reference tracking retained an ordinary immutable-list writer.");
             Execute(editedOutput);
             driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out output, out diagnostics);
             CheckSelection(driver, ordinary: true);

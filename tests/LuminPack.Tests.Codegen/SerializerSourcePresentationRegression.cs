@@ -64,8 +64,6 @@ internal static class SerializerSourcePresentationRegression
             public sealed partial class PresentationLeaf { public int Code; public string Text = ""; }
             [LuminPackable, LuminPackBounded(128)]
             public partial class PresentationBounded { public int Id; public string Name = ""; }
-            [LuminPackable(GeneratorType.VersionTolerant)]
-            public partial class PresentationVersioned { [LuminPackOrder(0)] public int Id; }
             [LuminPackable(GeneratorType.CircleReference)]
             public partial class PresentationReference { [LuminPackOrder(0)] public PresentationReference? Next; }
             [LuminPackable, LuminPackOption(UntrustedData = true)]

@@ -28,8 +28,7 @@ internal static class SerializerUnionCursorRegression
         }
         [LuminPackable] public sealed partial class Property : Root { public int Number { get; set; } }
         [LuminPackable, LuminPackOption(UntrustedData = true)] public sealed partial class Guarded : Root { public int Number; public string Note = ""; }
-        [LuminPackable(GeneratorType.VersionTolerant)] public partial struct Versioned { [LuminPackOrder(1)] public int Number; }
-        [LuminPackable] public sealed partial class Specialized : Root { public Versioned Value; }
+        [LuminPackable] public sealed partial class Specialized : Root { public global::System.Collections.Generic.List<int> Values = new(); }
         [LuminPackable, LuminPackWideTag, LuminPackUnion(60000, typeof(WideCase))] public abstract partial class Wide { }
         [LuminPackable] public sealed partial class WideCase : Wide { public int Number; }
         [LuminPackable, LuminPackUnion(1, typeof(GenericCase<int>))] public abstract partial class GenericRoot<T> { }
@@ -97,7 +96,7 @@ internal static class SerializerUnionCursorRegression
                 "Fixed cursor kernels must retain caller-driven framing and architecture specialization.");
             Require(!methods.Any(method => method.Identifier.ValueText == "SerializeUnionAt" &&
                 method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') is "global::Private" or "global::Callback" or "global::Specialized" or "global::Property"),
-                "A private, callback, property or versioned payload entered the raw cursor body.");
+                "A private, callback, property or collection payload entered the raw cursor body.");
             var cursorSlots = methods.Where(method => method.Identifier.ValueText.StartsWith("LuminPackUnionSerializeCursor_", StringComparison.Ordinal)).ToArray();
             Require(cursorSlots.Any(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Root" } && method.Modifiers.Any(SyntaxKind.VirtualKeyword)) &&
                 cursorSlots.Any(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Fixed" } && method.Modifiers.Any(SyntaxKind.OverrideKeyword)),

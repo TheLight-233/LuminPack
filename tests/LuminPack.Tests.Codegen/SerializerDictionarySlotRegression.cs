@@ -11,10 +11,7 @@ internal static class SerializerDictionarySlotRegression
     internal static void Run(MetadataReference[] references)
     {
         foreach (string mode in new[] { "Full", "Minimal" })
-        {
             Verify(references, mode, "[LuminPackable] public sealed class Leaf { public int Number; public string Text = \"\"; }", true);
-            Verify(references, mode, "[LuminPackable(GeneratorType.VersionTolerant)] public sealed class Leaf { public int Number; public string Text = \"\"; }", true);
-        }
         Verify(references, "Minimal", "[LuminPackable] public sealed class Leaf { public static int Created; [LuminPackInclude] private int Number = ++Created; public int Read() => Number; }", true);
         Verify(references, "Minimal", "[LuminPackable] public sealed class Leaf { public int Number; [LuminPackOnDeserializing] public static void BeforeRead() {} }", false);
         Verify(references, "Minimal", "[LuminPackable] public sealed class Leaf { public int Number { get; set; } }", false);
@@ -22,7 +19,7 @@ internal static class SerializerDictionarySlotRegression
         Verify(references, "Minimal", "[LuminPackable(GeneratorType.CircleReference)] public sealed class Leaf { [LuminPackOrder(0)] public int Number; }", false);
         Verify(references, "Minimal", "[LuminPackable] public sealed class Leaf { public int Number; }", false, modern: false);
         Verify(references, "Minimal", "[LuminPackable] public sealed class Leaf { public int Number; }", false, unity: true);
-        Console.WriteLine("Passed dictionary leaf-slot guards, ordinary/named Full/Minimal entries, cold staging, and modern/Unity fallback shapes.");
+        Console.WriteLine("Passed dictionary leaf-slot guards, ordinary Full/Minimal entries, cold staging, and modern/Unity fallback shapes.");
     }
 
     /// <summary>Verifies one complete generated program, including its observable refill order.</summary>
@@ -80,7 +77,7 @@ internal static class SerializerDictionarySlotRegression
         var assembly = Assembly.Load(image.ToArray());
         int order = (int)assembly.GetType("DictionarySlotModels.Entry")!.GetMethod("Run")!.Invoke(null, null)!;
         Require(order == (slots ? 1 : 2), "Dictionary refill ordering does not match its selected mechanism.");
-        if (slots && mode == "Minimal" && !leaf.Contains("VersionTolerant", StringComparison.Ordinal))
+        if (slots && mode == "Minimal")
             VerifyEdits(driver, input, leafTree, parse);
     }
 

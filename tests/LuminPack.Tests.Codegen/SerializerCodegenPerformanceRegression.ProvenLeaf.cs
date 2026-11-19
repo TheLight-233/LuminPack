@@ -142,7 +142,6 @@ internal static partial class SerializerCodegenPerformanceRegression
             public string Value;
             [LuminPackOnSerializing] public void Before() { Value += "x"; }
         }
-        [LuminPackable(GeneratorType.VersionTolerant)] public sealed partial class Evolving { public string Value; }
         [LuminPackable] public sealed partial class Nested { public string Value; public Leaf Child; }
         [LuminPackable] public sealed partial class NullableField { public string Value; public int? Optional; }
         [LuminPackable] public partial class Unsealed { public string Value; }
@@ -248,7 +247,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                 // Excluded roots are actual reachable operations, not declarations absent from generation.
                 LuminPackSerializer.Serialize(new Properties[1]); LuminPackSerializer.Serialize(new VolatileField[1]);
                 LuminPackSerializer.Serialize(new PrivateField[1]); LuminPackSerializer.Serialize(new Callback[1]);
-                LuminPackSerializer.Serialize(new Evolving[1]); LuminPackSerializer.Serialize(new Nested[1]); LuminPackSerializer.Serialize(new Unsealed[1]);
+                LuminPackSerializer.Serialize(new Nested[1]); LuminPackSerializer.Serialize(new Unsealed[1]);
                 LuminPackSerializer.Serialize(new NullableField[1]);
                 return Cases + ":" + Convert.ToHexString(SHA256.HashData(Summary.ToArray()));
             }
