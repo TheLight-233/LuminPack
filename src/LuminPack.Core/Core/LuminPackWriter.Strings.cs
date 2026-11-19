@@ -141,25 +141,18 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public int StringRecordLength<TOptions>()
-            where TOptions : struct, ILuminPackOptions
-        {
-            // UTF-16 token mode uses a two-byte 0x0000 terminator because individual zero bytes are common within code units.
-            var recording = default(TOptions).StringRecording;
-            if (recording == LuminPackStringRecording.VarInt)
-                return default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? 10 : 5;
-            return (recording == LuminPackStringRecording.Token) ? ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2) : (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 8 : 4;
-        }
+            where TOptions : struct, ILuminPackOptions => default(TOptions).RecordBound(null);
 
         /// <summary>
         /// Writes the string terminator.
         /// </summary>
         /// <param name = "index"></param>
-        /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
+        /// <typeparam name = "TUnit">The terminator’s byte or UTF-16 code unit.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private void WriteStringRecordTokenHeader<TOptions>(int index)
-            where TOptions : struct, ILuminPackOptions
+        private void WriteStringRecordTokenHeader<TUnit>(int index)
+            where TUnit : unmanaged
         {
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((typeof(TUnit) == typeof(byte)))
             {
                 // UTF-8 token mode uses a single zero-byte terminator.
 #if NET8_0_OR_GREATER
@@ -188,7 +181,7 @@ namespace LuminPack.Core
             if (string.IsNullOrEmpty(value) || value.Length is 0)
             {
                 EnsureCapacity(index, 1);
-                WriteStringRecordTokenHeader<LuminPackUtf8TokenOptions>(index);
+                WriteStringRecordTokenHeader<byte>(index);
                 return 0;
             }
 
@@ -207,7 +200,7 @@ namespace LuminPack.Core
 
             EnsureCapacity(index, checked(bytesWritten + 1));
             var tokenIndex = index + bytesWritten;
-            WriteStringRecordTokenHeader<LuminPackUtf8TokenOptions>(tokenIndex);
+            WriteStringRecordTokenHeader<byte>(tokenIndex);
             return bytesWritten;
         }
 
@@ -223,7 +216,7 @@ namespace LuminPack.Core
             if (string.IsNullOrEmpty(value) || value.Length is 0)
             {
                 EnsureCapacity(index, 2);
-                WriteStringRecordTokenHeader<LuminPackUtf16TokenOptions>(index);
+                WriteStringRecordTokenHeader<char>(index);
                 return 0;
             }
 
@@ -231,7 +224,7 @@ namespace LuminPack.Core
             EnsureCapacity(index, checked(bytesWritten + 2));
             LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(index)), ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), (uint)bytesWritten);
             var tokenIndex = index + bytesWritten;
-            WriteStringRecordTokenHeader<LuminPackUtf16TokenOptions>(tokenIndex);
+            WriteStringRecordTokenHeader<char>(tokenIndex);
             return bytesWritten;
         }
 
@@ -344,7 +337,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void WriteUtf8VarIntString(string? value)
         {
-            int length = WriteVarIntStringBytes<LuminPackUtf8VarIntOptions>(value, false);
+            int length = WriteVarIntStringBytes<byte>(value, false);
             if (value is null)
                 Advance(length);
             else
@@ -356,7 +349,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void WriteUtf16VarIntString(string? value)
         {
-            WriteVarIntString<LuminPackUtf16VarIntOptions>(value, false);
+            WriteVarIntString<char>(value, false);
         }
 
         /// <summary>Writes consecutive string records using the default compiled profile.</summary>
@@ -374,9 +367,22 @@ namespace LuminPack.Core
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining | LuminPackJit.Optimized)]
         public void WriteStrings<TOptions>(scoped ReadOnlySpan<string?> values)
-            where TOptions : struct, ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions =>
+            default(TOptions).WriteSlots(ref this, values);
+
+        /// <summary>Writes every string of a span as consecutive records, exactly as one record write per element.</summary>
+        /// <typeparam name="TCodec">The physical string codec.</typeparam>
+        /// <param name = "values">The strings, each including null or empty.</param>
+        /// <remarks>UTF-16 length records are written in runs whose raw upper bounds fit the existing storage, with the
+        /// same per-record capacity proof as a single write; a record that does not fit takes the single-record path,
+        /// which grows the storage. Other profiles write each record through the single-record path.</remarks>
+        /// <typeparam name="TUnit">The encoded code unit.</typeparam>
+        /// <typeparam name="TFraming">The record framing.</typeparam>
+        [MethodImpl(MethodImplOptions.AggressiveInlining | LuminPackJit.Optimized)]
+        internal void WriteSlots<TCodec, TUnit, TFraming>(scoped ReadOnlySpan<string?> values)
+            where TCodec : struct, ILuminPackStringCodec where TUnit : unmanaged where TFraming : struct
         {
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && default(TOptions).StringRecording == LuminPackStringRecording.Length)
+            if (typeof(TUnit) == typeof(char) && typeof(TFraming) == typeof(LengthStringFraming))
             {
                 int index = 0;
                 while (true)
@@ -386,12 +392,12 @@ namespace LuminPack.Core
                     Advance(WriteUtf16Run(ref Current, position < limit ? limit - position : 0, values, ref index));
                     if (index >= values.Length)
                         return;
-                    Write<TOptions>(values[index++]);
+                    default(TCodec).Write(ref this, values[index++]);
                 }
             }
 
             foreach (string? value in values)
-                Write<TOptions>(value);
+                default(TCodec).Write(ref this, value);
         }
 
         /// <summary>Writes a contiguous segment of strings whose original traversal checks the buffer before every record.</summary>
@@ -399,9 +405,19 @@ namespace LuminPack.Core
         /// <param name="values">The values in segment order.</param>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
-        public void WriteCheckedStrings<TOptions>(scoped ReadOnlySpan<string?> values) where TOptions : struct, ILuminPackOptions
+        public void WriteCheckedStrings<TOptions>(scoped ReadOnlySpan<string?> values) where TOptions : struct, ILuminPackOptions =>
+            default(TOptions).WriteCheckedSlots(ref this, values);
+
+        /// <summary>Writes a contiguous segment of strings whose original traversal checks the buffer before every record.</summary>
+        /// <typeparam name="TCodec">The physical string codec.</typeparam>
+        /// <param name="values">The values in segment order.</param>
+        /// <typeparam name="TUnit">The encoded code unit.</typeparam>
+        /// <typeparam name="TFraming">The record framing.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining | LuminPackJit.Optimized)]
+        internal void WriteCheckedSlots<TCodec, TUnit, TFraming>(scoped ReadOnlySpan<string?> values)
+            where TCodec : struct, ILuminPackStringCodec where TUnit : unmanaged where TFraming : struct
         {
-            if (UsesUtf16LengthRecords<TOptions>())
+            if ((typeof(TUnit) == typeof(char) && typeof(TFraming) == typeof(LengthStringFraming)))
             {
                 int index = 0;
                 while (index < values.Length)
@@ -413,7 +429,7 @@ namespace LuminPack.Core
                         return;
                     string? value = values[index++];
                     CheckBuffer();
-                    Write<TOptions>(value);
+                    default(TCodec).Write(ref this, value);
                 }
                 return;
             }
@@ -421,7 +437,7 @@ namespace LuminPack.Core
             foreach (string? value in values)
             {
                 CheckBuffer();
-                Write<TOptions>(value);
+                default(TCodec).Write(ref this, value);
             }
         }
 
@@ -438,7 +454,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool UsesUtf16LengthRecords<TOptions>()
             where TOptions : struct, ILuminPackOptions
-            => default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && default(TOptions).StringRecording == LuminPackStringRecording.Length;
+            => default(TOptions).SupportsUtf16Runs();
 
         #region Records
 
@@ -563,19 +579,32 @@ namespace LuminPack.Core
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ref byte WriteRecordString<TOptions>(ref byte cursor, string? value)
-            where TOptions : struct, ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions =>
+            ref default(TOptions).WriteAtCursor(ref this, ref cursor, value);
+
+        /// <summary>Writes a string record of the selected profile at a caller-held cursor.</summary>
+        /// <typeparam name="TCodec">The physical string codec.</typeparam>
+        /// <param name = "cursor">The caller's current position in this writer's storage.</param>
+        /// <param name = "value">The string, including null or empty.</param>
+        /// <returns>The position after the record.</returns>
+        /// <remarks>A UTF-16 length record that fits its raw form is stored at the cursor, as the record check proves it. A record
+        /// that does not fit and every other profile publish the cursor and take this writer's own string operation.</remarks>
+        /// <typeparam name="TUnit">The encoded code unit.</typeparam>
+        /// <typeparam name="TFraming">The record framing.</typeparam>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal ref byte WriteAtCursor<TCodec, TUnit, TFraming>(ref byte cursor, string? value)
+            where TCodec : struct, ILuminPackStringCodec where TUnit : unmanaged where TFraming : struct
         {
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && default(TOptions).StringRecording == LuminPackStringRecording.Length)
+            if (typeof(TUnit) == typeof(char) && typeof(TFraming) == typeof(LengthStringFraming))
             {
                 int length = Utf16RecordBound(value);
                 if (RecordDistance(ref cursor) >= (nint)(uint)length)
                     return ref Unsafe.Add(ref cursor, (nint)(uint)WriteReservedUtf16Record(ref cursor, value));
-                if (typeof(TOptions) == typeof(LuminPackDefaultOptions) || typeof(TOptions) == typeof(LuminPackUtf16LengthOptions))
-                    return ref WriteUtf16RecordInShortWindow(ref this, ref cursor, value, length);
+                return ref WriteUtf16RecordInShortWindow(ref this, ref cursor, value, length);
             }
 
             CommitRecords(ref cursor);
-            Write<TOptions>(value);
+            default(TCodec).Write(ref this, value);
             return ref Current;
         }
 
@@ -1078,11 +1107,24 @@ namespace LuminPack.Core
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteStringPairs<TOptions>(scoped ReadOnlySpan<string?> keys, scoped ReadOnlySpan<string?> values)
-            where TOptions : struct, ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions =>
+            default(TOptions).WritePairs(ref this, keys, values);
+
+        /// <summary>Writes key and value strings as alternating records, exactly as a buffer check and two record writes per pair.</summary>
+        /// <typeparam name="TCodec">The physical string codec.</typeparam>
+        /// <param name = "keys">The keys.</param>
+        /// <param name = "values">The values, at least as many as the keys.</param>
+        /// <remarks>UTF-16 length pairs are written in runs whose raw upper bounds fit the existing storage, where the
+        /// buffer check cannot act; a pair that does not fit takes the per-pair path.</remarks>
+        /// <typeparam name="TUnit">The encoded code unit.</typeparam>
+        /// <typeparam name="TFraming">The record framing.</typeparam>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WritePairs<TCodec, TUnit, TFraming>(scoped ReadOnlySpan<string?> keys, scoped ReadOnlySpan<string?> values)
+            where TCodec : struct, ILuminPackStringCodec where TUnit : unmanaged where TFraming : struct
         {
             values = values.Slice(0, keys.Length);
             int index = 0;
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && default(TOptions).StringRecording == LuminPackStringRecording.Length)
+            if (typeof(TUnit) == typeof(char) && typeof(TFraming) == typeof(LengthStringFraming))
             {
                 while (true)
                 {
@@ -1092,16 +1134,16 @@ namespace LuminPack.Core
                     if (index >= keys.Length)
                         return;
                     CheckBuffer();
-                    Write<TOptions>(keys[index]);
-                    Write<TOptions>(values[index++]);
+                    default(TCodec).Write(ref this, keys[index]);
+                    default(TCodec).Write(ref this, values[index++]);
                 }
             }
 
             for (; index < keys.Length; index++)
             {
                 CheckBuffer();
-                Write<TOptions>(keys[index]);
-                Write<TOptions>(values[index]);
+                default(TCodec).Write(ref this, keys[index]);
+                default(TCodec).Write(ref this, values[index]);
             }
         }
 
@@ -1112,12 +1154,24 @@ namespace LuminPack.Core
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void WriteStringPairRuns<TOptions>(scoped ReadOnlySpan<string?> keys, scoped ReadOnlySpan<string?> values)
-            where TOptions : struct, ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions =>
+            default(TOptions).WritePairRuns(ref this, keys, values, ConstantStringProfile<TOptions>());
+
+        /// <summary>Writes parallel string slots in pair order with the original per-string capacity fallback.</summary>
+        /// <typeparam name="TCodec">The physical string codec.</typeparam>
+        /// <param name="keys">The key slots in enumeration order.</param>
+        /// <param name="values">The corresponding value slots.</param>
+        /// <typeparam name="TUnit">The encoded code unit.</typeparam>
+        /// <typeparam name="TFraming">The record framing.</typeparam>
+        /// <param name="allowRuns">Whether the original traversal may skip per-record callbacks.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal void WritePairRuns<TCodec, TUnit, TFraming>(scoped ReadOnlySpan<string?> keys, scoped ReadOnlySpan<string?> values, bool allowRuns)
+            where TCodec : struct, ILuminPackStringCodec where TUnit : unmanaged where TFraming : struct
         {
             values = values.Slice(0, keys.Length);
             int index = 0;
 #if NET8_0_OR_GREATER
-            if (ConstantStringProfile<TOptions>() && UsesUtf16LengthRecords<TOptions>())
+            if (allowRuns && (typeof(TUnit) == typeof(char) && typeof(TFraming) == typeof(LengthStringFraming)))
             {
                 while (index < keys.Length)
                 {
@@ -1125,16 +1179,16 @@ namespace LuminPack.Core
                     if (index >= keys.Length)
                         return;
 
-                    Write<TOptions>(keys[index]);
-                    Write<TOptions>(values[index++]);
+                    default(TCodec).Write(ref this, keys[index]);
+                    default(TCodec).Write(ref this, values[index++]);
                 }
                 return;
             }
 #endif
             for (; index < keys.Length; index++)
             {
-                Write<TOptions>(keys[index]);
-                Write<TOptions>(values[index]);
+                default(TCodec).Write(ref this, keys[index]);
+                default(TCodec).Write(ref this, values[index]);
             }
         }
 
@@ -1150,17 +1204,22 @@ namespace LuminPack.Core
         /// <returns>The number of complete records written, or zero for a profile with observable getters.</returns>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int WriteStringPrefix<TOptions>(scoped ReadOnlySpan<string?> values) where TOptions : struct, ILuminPackOptions
+        public int WriteStringPrefix<TOptions>(scoped ReadOnlySpan<string?> values) where TOptions : struct, ILuminPackOptions =>
+            ConstantStringProfile<TOptions>() ? default(TOptions).WriteSlotPrefix(ref this, values) : 0;
+
+        /// <summary>Writes the UTF-16 records that fit in the current window.</summary>
+        /// <param name="values">The source slots.</param>
+        /// <returns>The number of complete records or pairs.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal int WriteSlotPrefix(scoped ReadOnlySpan<string?> values)
         {
 #if NET8_0_OR_GREATER
-            if (ConstantStringProfile<TOptions>() && UsesUtf16LengthRecords<TOptions>())
-            {
-                int count = 0;
-                AdvanceProven(WriteUtf16Run(ref Current, PrefixRoom(), values, ref count));
-                return count;
-            }
-#endif
+            int count = 0;
+            AdvanceProven(WriteUtf16Run(ref Current, PrefixRoom(), values, ref count));
+            return count;
+#else
             return 0;
+#endif
         }
 
         /// <summary>Writes the leading captured string pairs that fit the default profile's current window.</summary>
@@ -1176,13 +1235,20 @@ namespace LuminPack.Core
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteStringPairPrefix<TOptions>(scoped ReadOnlySpan<KeyValuePair<string, string?>> pairs)
-            where TOptions : struct, ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions =>
+            ConstantStringProfile<TOptions>() ? default(TOptions).WritePairPrefix(ref this, pairs) : 0;
+
+        /// <summary>Writes the UTF-16 records that fit in the current window.</summary>
+        /// <param name="pairs">The source slots.</param>
+        /// <returns>The number of complete records or pairs.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal int WritePairPrefix(scoped ReadOnlySpan<KeyValuePair<string, string?>> pairs)
         {
 #if NET8_0_OR_GREATER
-            if (ConstantStringProfile<TOptions>() && UsesUtf16LengthRecords<TOptions>())
-                return WriteUtf16PairPrefix(pairs);
-#endif
+            return WriteUtf16PairPrefix(pairs);
+#else
             return 0;
+#endif
         }
 
 #if NET8_0_OR_GREATER
@@ -1467,58 +1533,18 @@ namespace LuminPack.Core
         /// <param name = "value">The original string, including null.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteReservedRecord<TOptions>(string? value)
-            where TOptions : struct, ILuminPackOptions
-        {
-            bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
-            var recording = default(TOptions).StringRecording;
-            if (recording == LuminPackStringRecording.VarInt)
-            {
-                WriteVarIntString<TOptions>(value, true);
-                return;
-            }
-            bool token = recording == LuminPackStringRecording.Token;
-            int header = token ? 0 : utf8 ? 8 : 4;
-            int bytes = 0;
-            int utf16Header = 0;
-            ref byte current = ref Current;
-            if (!string.IsNullOrEmpty(value))
-            {
-                if (utf8)
-                {
-                    Span<byte> destination = _buffer.Slice(Position + header);
-                    {
-                        var status = StringSerializer.Serialize<LuminPackUtf8LengthOptions>(value.AsSpan(), destination, out _, out bytes, replaceInvalidSequences: false);
-                        if (status != OperationStatus.Done)
-                            LuminPackExceptionHelper.ThrowFailedEncoding(status);
-                    }
-                }
-                else if (token)
-                {
-                    bytes = checked(value.Length * sizeof(char));
-                    StringSerializer.SerializeUtf16(ref Unsafe.Add(ref current, (nint)(uint)(header)), ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), (uint)bytes);
-                }
-                else
-                {
-                    utf16Header = StringSerializer.WriteUtf16RecordPayload(ref Unsafe.Add(ref current, (nint)(uint)(header)), value);
-                    bytes = StringSerializer.Utf16RecordPayload(utf16Header);
-                }
-            }
+            where TOptions : struct, ILuminPackOptions => default(TOptions).WriteReserved(ref this, value);
 
-            if (token)
-            {
-                Unsafe.Add(ref current, (nint)(uint)(bytes)) = 0;
-                if (!utf8)
-                    Unsafe.Add(ref current, (nint)(uint)(bytes + 1)) = 0;
-                Advance(bytes + (utf8 ? 1 : 2));
-            }
-            else
-            {
-                int length = value is null ? LuminPackCode.NullCollection : utf8 ? bytes : utf16Header;
-                LuminPackWriter.Write(ref current, length);
-                if (utf8)
-                    LuminPackWriter.Write(ref Unsafe.Add(ref current, sizeof(int)), value is null ? LuminPackCode.NullCollection : value.Length);
-                Advance(bytes + header);
-            }
+        /// <summary>Writes a UTF-16 length record at the published, reserved writer cursor.</summary>
+        /// <param name="value">The nullable string to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteReservedUtf16LengthString(string? value)
+        {
+            ref byte current = ref Current;
+            int header = string.IsNullOrEmpty(value) ? (value is null ? LuminPackCode.NullCollection : 0) :
+                StringSerializer.WriteUtf16RecordPayload(ref Unsafe.Add(ref current, sizeof(int)), value);
+            LuminPackWriter.Write(ref current, header);
+            Advance(sizeof(int) + (header < 0 ? 0 : StringSerializer.Utf16RecordPayload(header)));
         }
 
         /// <summary>Writes a reserved Utf8Length record at the published cursor.</summary>
@@ -1580,7 +1606,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void WriteReservedUtf8VarIntString(string? value)
         {
-            WriteVarIntString<LuminPackUtf8VarIntOptions>(value, true);
+            WriteVarIntString<byte>(value, true);
         }
 
         /// <summary>Writes a reserved Utf16VarInt record at the published cursor.</summary>
@@ -1588,52 +1614,29 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void WriteReservedUtf16VarIntString(string? value)
         {
-            WriteVarIntString<LuminPackUtf16VarIntOptions>(value, true);
-        }
-
-        /// <summary>Selects the non-default encoding kernel using a stateless profile.</summary>
-        /// <typeparam name = "TOptions">The compile-time encoding and framing profile.</typeparam>
-        /// <param name = "value">The string payload.</param>
-        /// <param name="completeRecord">Whether the returned width includes variable-length framing.</param>
-        /// <returns>The encoded payload width, including framing only when the complete-record flag is set.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private int WriteEncodedString<TOptions>(string? value, out bool completeRecord)
-            where TOptions : struct, ILuminPackOptions
-        {
-            completeRecord = false;
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
-            {
-                var recording = default(TOptions).StringRecording;
-                if (recording == LuminPackStringRecording.VarInt)
-                {
-                    completeRecord = true;
-                    return WriteVarIntStringBytes<TOptions>(value, false);
-                }
-                return recording == LuminPackStringRecording.Length ? WriteUtf8WithLength(Position, value) : WriteUtf8WithToken<TOptions>(Position, value);
-            }
-            return WriteUtf16WithToken<TOptions>(Position, value);
+            WriteVarIntString<char>(value, true);
         }
 
         /// <summary>Writes an opt-in variable-length string record while retaining capacity ownership.</summary>
-        /// <typeparam name="TOptions">The stateless string profile.</typeparam>
+        /// <typeparam name="TUnit">The stateless string profile.</typeparam>
         /// <param name="value">The nullable string.</param>
         /// <param name="capacityReserved">Whether the enclosing record has reserved the raw upper bound.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void WriteVarIntString<TOptions>(string? value, bool capacityReserved) where TOptions : struct, ILuminPackOptions
-            => AdvanceProven(WriteVarIntStringBytes<TOptions>(value, capacityReserved));
+        private void WriteVarIntString<TUnit>(string? value, bool capacityReserved) where TUnit : unmanaged
+            => AdvanceProven(WriteVarIntStringBytes<TUnit>(value, capacityReserved));
 
         /// <summary>Writes an exact variable-length record without advancing the owning cursor.</summary>
-        /// <typeparam name="TOptions">The stateless string profile.</typeparam>
+        /// <typeparam name="TUnit">The stateless string profile.</typeparam>
         /// <param name="value">The nullable string.</param>
         /// <param name="capacityReserved">Whether the enclosing record has reserved the raw upper bound.</param>
         /// <returns>The complete written width.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private int WriteVarIntStringBytes<TOptions>(string? value, bool capacityReserved) where TOptions : struct, ILuminPackOptions
+        private int WriteVarIntStringBytes<TUnit>(string? value, bool capacityReserved) where TUnit : unmanaged
         {
-            int length = VarIntRecordLength<TOptions>(value, out int payload);
+            int length = VarIntRecordLength<TUnit>(value, out int payload);
             if (!capacityReserved && !FitsRecord(length))
                 EnsureAdditionalCapacity(length);
-            WriteVarIntRecord<TOptions>(_buffer.Slice(Position, length), value, payload);
+            WriteVarIntRecord<TUnit>(_buffer.Slice(Position, length), value, payload);
             return length;
         }
 
@@ -1692,22 +1695,22 @@ namespace LuminPack.Core
 
 
         /// <summary>Calculates exact opt-in framing and payload sizes without changing the text representation.</summary>
-        /// <typeparam name="TOptions">The stateless encoding profile.</typeparam>
+        /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
         /// <param name="value">The nullable string.</param>
         /// <returns>The complete record byte count.</returns>
-        internal static int VarIntRecordLength<TOptions>(string? value) where TOptions : struct, ILuminPackOptions
-            => VarIntRecordLength<TOptions>(value, out _);
+        internal static int VarIntRecordLength<TUnit>(string? value) where TUnit : unmanaged
+            => VarIntRecordLength<TUnit>(value, out _);
 
 
         /// <summary>Calculates framing once and retains the payload width for the following write.</summary>
-        /// <typeparam name="TOptions">The stateless encoding profile.</typeparam>
+        /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
         /// <param name="value">The nullable string.</param>
         /// <param name="payload">Receives the payload byte count.</param>
         /// <returns>The complete record byte count.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static int VarIntRecordLength<TOptions>(string? value, out int payload) where TOptions : struct, ILuminPackOptions
+        internal static int VarIntRecordLength<TUnit>(string? value, out int payload) where TUnit : unmanaged
         {
-            bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+            bool utf8 = typeof(TUnit) == typeof(byte);
             payload = 0;
             if (string.IsNullOrEmpty(value))
                 return utf8 ? 2 : 1;
@@ -1718,14 +1721,14 @@ namespace LuminPack.Core
 
 
         /// <summary>Writes an exact-sized opt-in record through the established bounded text kernels.</summary>
-        /// <typeparam name="TOptions">The stateless encoding profile.</typeparam>
+        /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
         /// <param name="destination">The complete exact-sized output range.</param>
         /// <param name="value">The nullable string.</param>
         /// <param name="payload">The exact payload width established by the size pass.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static void WriteVarIntRecord<TOptions>(Span<byte> destination, string? value, int payload) where TOptions : struct, ILuminPackOptions
+        internal static void WriteVarIntRecord<TUnit>(Span<byte> destination, string? value, int payload) where TUnit : unmanaged
         {
-            bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+            bool utf8 = typeof(TUnit) == typeof(byte);
             if (string.IsNullOrEmpty(value))
             {
                 int header = value is null ? -1 : 0;

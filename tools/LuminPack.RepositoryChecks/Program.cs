@@ -62,6 +62,8 @@ internal static class RepositoryStandards
                     foreach (var diagnostic in tree.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error || diagnostic.Id == "CS1570"))
                         failures.Add($"{relative}:{diagnostic.Location.GetLineSpan().StartLinePosition.Line + 1}: {diagnostic.Id}: {diagnostic.GetMessage()}");
                     var syntax = tree.GetRoot();
+                    if (relative.StartsWith("src" + Path.DirectorySeparatorChar + "LuminPack.Core" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                        CheckBinaryStringDispatch(syntax, relative, failures);
                     foreach (var method in syntax.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
                     {
                         if (seen.Add(method.SpanStart)) methods++;
@@ -84,6 +86,35 @@ internal static class RepositoryStandards
         foreach (string failure in failures) Console.Error.WriteLine(failure);
         Console.WriteLine($"Checked {methods} method declarations in {files} C# files across .NET Standard, modern .NET, and Unity branches; {failures.Count} violation(s).");
         return failures.Count == 0 ? 0 : 1;
+    }
+
+    /// <summary>Rejects generic binary dispatch through option metadata outside its declared owners.</summary>
+    /// <param name="syntax">The active source configuration.</param>
+    /// <param name="file">The repository-relative source path.</param>
+    /// <param name="failures">The diagnostic destination.</param>
+    private static void CheckBinaryStringDispatch(SyntaxNode syntax, string file, ISet<string> failures)
+    {
+        string path = file.Replace(Path.DirectorySeparatorChar, '/');
+        if (path.StartsWith("src/LuminPack.Core/Setting/", StringComparison.Ordinal) ||
+            path.StartsWith("src/LuminPack.Core/Core/Json/", StringComparison.Ordinal))
+            return;
+        foreach (var access in syntax.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
+        {
+            if (access.Name.Identifier.ValueText is not ("StringEncoding" or "StringRecording") ||
+                access.Expression is not DefaultExpressionSyntax { Type: IdentifierNameSyntax type } ||
+                !type.Identifier.ValueText.StartsWith("T", StringComparison.Ordinal))
+                continue;
+            var method = access.FirstAncestorOrSelf<MethodDeclarationSyntax>();
+            // JSON value conversion and formatter registration retain their own encoding contract.
+            if (method?.ParameterList.Parameters.Any(p => p.Type?.ToString() is "LuminPackJsonReader" or "LuminPackJsonWriter") == true ||
+                (Path.GetFileName(file), method?.Identifier.ValueText) is ("LuminPackFormatter.cs", "TryGetJsonValue"))
+                continue;
+            // These two version-prefix methods belong to the separate version-tolerance contract.
+            if ((Path.GetFileName(file), method?.Identifier.ValueText) is
+                ("LuminPackWriter.Strings.cs", "BinaryProfile") or ("LuminPackReader.Framing.cs", "TryReadVersionSchema"))
+                continue;
+            failures.Add($"{file}:{access.GetLocation().GetLineSpan().StartLinePosition.Line + 1}: Forward binary string behavior to its codec.");
+        }
     }
 
     /// <summary>Rejects reserved identifiers and statements or members that share a line.</summary>

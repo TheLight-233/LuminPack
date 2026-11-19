@@ -53,12 +53,18 @@ public ref partial struct LuminPackWriter
     /// <summary>Frames a non-null character snapshot using the existing binary text representations.</summary>
     /// <typeparam name="TOptions">The compiled encoding and recording profile.</typeparam>
     /// <param name="text">The compact name, retained until encoding completes.</param>
-    private void WriteTypeNameSnapshot<TOptions>(scoped ReadOnlySpan<char> text) where TOptions : struct, ILuminPackOptions
+    private void WriteTypeNameSnapshot<TOptions>(scoped ReadOnlySpan<char> text) where TOptions : struct, ILuminPackOptions =>
+        default(TOptions).WriteText(ref this, text);
+
+    /// <summary>Writes a compact name with the code unit and framing chosen by its codec.</summary>
+    /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
+    /// <typeparam name="TFraming">The codec’s binary record framing.</typeparam>
+    /// <param name="text">The compact name snapshot.</param>
+    internal void WriteTextSnapshot<TUnit, TFraming>(scoped ReadOnlySpan<char> text) where TUnit : unmanaged where TFraming : struct
     {
-        bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
-        var recording = default(TOptions).StringRecording;
-        bool token = recording == LuminPackStringRecording.Token;
-        bool variable = recording == LuminPackStringRecording.VarInt;
+        bool utf8 = typeof(TUnit) == typeof(byte);
+        bool token = typeof(TFraming) == typeof(TokenStringFraming);
+        bool variable = typeof(TFraming) == typeof(VarIntStringFraming);
         if (utf8 && !variable)
         {
             WriteTypeNameUtf8(text, token);

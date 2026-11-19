@@ -51,6 +51,83 @@ public readonly struct LuminPackUtf8VarIntStrings : ILuminPackStringCodec
         StringSerializer.SerializeAsUtf8(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int Measure(string? value) =>
+        LuminPackWriter.VarIntRecordLength<byte>(value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteReserved(scoped ref LuminPackWriter writer, string? value) =>
+        writer.WriteReservedUtf8VarIntString(value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteText(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<char> text) =>
+        writer.WriteTextSnapshot<byte, VarIntStringFraming>(text);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public OperationStatus Decode(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+        StringSerializer.DecodeUtf8(source, destination, out bytesRead, out charsWritten, replaceInvalidSequences, isFinalBlock);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool SupportsUtf16Runs() =>
+        false;
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteSlots(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<string?> values) =>
+        writer.WriteSlots<LuminPackUtf8VarIntStrings, byte, VarIntStringFraming>(values);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteCheckedSlots(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<string?> values) =>
+        writer.WriteCheckedSlots<LuminPackUtf8VarIntStrings, byte, VarIntStringFraming>(values);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WritePairs(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<string?> keys, scoped ReadOnlySpan<string?> values) =>
+        writer.WritePairs<LuminPackUtf8VarIntStrings, byte, VarIntStringFraming>(keys, values);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WritePairRuns(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<string?> keys, scoped ReadOnlySpan<string?> values, bool allowRuns) =>
+        writer.WritePairRuns<LuminPackUtf8VarIntStrings, byte, VarIntStringFraming>(keys, values, allowRuns);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref byte WriteAtCursor(scoped ref LuminPackWriter writer, ref byte cursor, string? value) =>
+        ref writer.WriteAtCursor<LuminPackUtf8VarIntStrings, byte, VarIntStringFraming>(ref cursor, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int WriteSlotPrefix(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<string?> values) =>
+        0;
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int WritePairPrefix(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<KeyValuePair<string, string?>> pairs) =>
+        0;
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryPeekCharacterCount(scoped ref LuminPackReader reader, out int count)
+    {
+        count = 0;
+        return false;
+    }
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryPeekUtf16Payload(scoped ref LuminPackReader reader, int length, out int bytes, out bool latin1)
+    {
+        bytes = 0;
+        latin1 = false;
+        return false;
+    }
+
+    /// <inheritdoc/>
     public LuminPackStringEncoding Encoding
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

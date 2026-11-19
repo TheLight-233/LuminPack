@@ -44,6 +44,76 @@ public readonly struct LuminPackUtf16LengthStrings : ILuminPackStringCodec
         StringSerializer.SerializeAsUtf16(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
 
     /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int Measure(string? value) =>
+        checked((string.IsNullOrEmpty(value) ? 0 : StringSerializer.Utf16RecordPayloadLength(value)) + sizeof(int));
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteReserved(scoped ref LuminPackWriter writer, string? value) =>
+        writer.WriteReservedUtf16LengthString(value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteText(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<char> text) =>
+        writer.WriteTextSnapshot<char, LengthStringFraming>(text);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public OperationStatus Decode(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+        StringSerializer.DeserializeFromUtf16(source, destination, out bytesRead, out charsWritten, replaceInvalidSequences, isFinalBlock);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool SupportsUtf16Runs() =>
+        true;
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteSlots(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<string?> values) =>
+        writer.WriteSlots<LuminPackUtf16LengthStrings, char, LengthStringFraming>(values);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteCheckedSlots(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<string?> values) =>
+        writer.WriteCheckedSlots<LuminPackUtf16LengthStrings, char, LengthStringFraming>(values);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WritePairs(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<string?> keys, scoped ReadOnlySpan<string?> values) =>
+        writer.WritePairs<LuminPackUtf16LengthStrings, char, LengthStringFraming>(keys, values);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WritePairRuns(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<string?> keys, scoped ReadOnlySpan<string?> values, bool allowRuns) =>
+        writer.WritePairRuns<LuminPackUtf16LengthStrings, char, LengthStringFraming>(keys, values, allowRuns);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref byte WriteAtCursor(scoped ref LuminPackWriter writer, ref byte cursor, string? value) =>
+        ref writer.WriteAtCursor<LuminPackUtf16LengthStrings, char, LengthStringFraming>(ref cursor, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int WriteSlotPrefix(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<string?> values) =>
+        writer.WriteSlotPrefix(values);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int WritePairPrefix(scoped ref LuminPackWriter writer, scoped ReadOnlySpan<KeyValuePair<string, string?>> pairs) =>
+        writer.WritePairPrefix(pairs);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryPeekCharacterCount(scoped ref LuminPackReader reader, out int count) =>
+        reader.TryPeekCharacterCount<char>(out count);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryPeekUtf16Payload(scoped ref LuminPackReader reader, int length, out int bytes, out bool latin1) =>
+        reader.TryPeekUtf16Payload(length, out bytes, out latin1);
+
+    /// <inheritdoc/>
     public LuminPackStringEncoding Encoding
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

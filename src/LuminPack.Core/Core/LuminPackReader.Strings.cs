@@ -24,18 +24,54 @@ namespace LuminPack.Core
 {
     public ref partial struct LuminPackReader
     {
+        /// <summary>Peeks at a complete fixed-width length prefix for a reuse hint.</summary>
+        /// <typeparam name="TUnit">The encoded code unit.</typeparam>
+        /// <param name="count">Receives the character-count hint from the selected prefix.</param>
+        /// <returns>Whether the complete prefix was present.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal bool TryPeekCharacterCount<TUnit>(out int count) where TUnit : unmanaged
+        {
+            bool utf8 = typeof(TUnit) == typeof(byte);
+            int width = utf8 ? 2 * sizeof(int) : sizeof(int);
+            count = 0;
+            if (Buffer.Length - Position < width)
+                return false;
+            ref byte cursor = ref CurrentReference;
+            count = utf8 ? Read<int>(ref Unsafe.Add(ref cursor, sizeof(int))) : Read<int>(ref cursor) >> 1;
+            return true;
+        }
+
+        /// <summary>Validates the header and complete payload for a retained UTF-16 text of a known length.</summary>
+        /// <param name="length">The retained character count.</param>
+        /// <param name="bytes">Receives the validated payload width.</param>
+        /// <param name="latin1">Whether the payload contains compact Latin-1 characters.</param>
+        /// <returns>Whether the header matches the retained length.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal bool TryPeekUtf16Payload(int length, out int bytes, out bool latin1)
+        {
+            EnsureReadable(Position, sizeof(int));
+            int header = Read<int>(ref CurrentReference);
+            latin1 = length > 0 && header == StringSerializer.Latin1Header(length);
+            bytes = latin1 ? length : length * sizeof(char);
+            if (!latin1 && header != bytes)
+                return false;
+            EnsureReadable(Position, bytes + sizeof(int));
+            return true;
+        }
+
         /// <summary>Validates string length before the operation continues.</summary>
         /// <param name = "buffer">The complete retained input window.</param>
         /// <param name = "index">The position at which the operation starts.</param>
         /// <param name = "length">The number of bytes or elements to process.</param>
-        /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
+        /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
+        /// <typeparam name="TFraming">The codec’s binary record framing.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static void ValidateStringLength<TOptions>(Span<byte> buffer, int index, int length)
-            where TOptions : struct, ILuminPackOptions
+        private static void ValidateStringLength<TUnit, TFraming>(Span<byte> buffer, int index, int length)
+            where TUnit : unmanaged where TFraming : struct
         {
             if (length < 0 && length != LuminPackCode.NullCollection)
                 LuminPackExceptionHelper.ThrowInvalidStringLength(length);
-            int headerSize = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? sizeof(int) * 2 : sizeof(int);
+            int headerSize = (typeof(TUnit) == typeof(byte)) ? sizeof(int) * 2 : sizeof(int);
             if ((uint)index > (uint)buffer.Length || (uint)headerSize > (uint)(buffer.Length - index) || (length >= 0 && (uint)length > (uint)(buffer.Length - index - headerSize)))
                 LuminPackExceptionHelper.ThrowInSufficientBuffer(length);
         }
@@ -46,15 +82,16 @@ namespace LuminPack.Core
         /// <param name = "buffer">The complete retained input window.</param>
         /// <param name = "index"></param>
         /// <param name = "length"></param>
-        /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
+        /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
+        /// <typeparam name="TFraming">The codec’s binary record framing.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static void ReadStringLength<TOptions>(Span<byte> buffer, ref int index, out int length)
-            where TOptions : struct, ILuminPackOptions
+        private static void ReadStringLength<TUnit, TFraming>(Span<byte> buffer, ref int index, out int length)
+            where TUnit : unmanaged where TFraming : struct
         {
-            if ((default(TOptions).StringRecording == LuminPackStringRecording.Token))
+            if ((typeof(TFraming) == typeof(TokenStringFraming)))
             {
                 var remaining = buffer.Slice(index);
-                if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+                if ((typeof(TUnit) == typeof(byte)))
                 {
                     length = remaining.IndexOf((byte)0);
                 }
@@ -76,21 +113,7 @@ namespace LuminPack.Core
 #else
             length = LuminPackReader.Read<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(MemoryMarshal.GetReference(buffer)), (nint)(uint)index));
 #endif
-            ValidateStringLength<TOptions>(buffer, index, length);
-        }
-
-        /// <summary>Returns the fixed framing width or the variable-length header upper bound of the current mode.</summary>
-        /// <returns>The result of the operation.</returns>
-        /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private int StringRecordLength<TOptions>()
-            where TOptions : struct, ILuminPackOptions
-        {
-            // UTF-16 token mode uses a two-byte 0x0000 terminator because individual zero bytes are common within code units.
-            var recording = default(TOptions).StringRecording;
-            if (recording == LuminPackStringRecording.VarInt)
-                return default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? 10 : 5;
-            return (recording == LuminPackStringRecording.Token) ? ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2) : (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 8 : 4;
+            ValidateStringLength<TUnit, TFraming>(buffer, index, length);
         }
 
         /// <summary>
@@ -101,20 +124,20 @@ namespace LuminPack.Core
         /// <param name = "buffer">The complete retained input window.</param>
         /// <param name = "index">The position at which the operation starts.</param>
         /// <returns>The result of the operation.</returns>
-        /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
+        /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
+        /// <typeparam name="TFraming">The codec’s binary record framing.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-        private static string? ReadStringAndAdvance<TOptions>(Span<byte> buffer, ref int index)
-            where TOptions : struct, ILuminPackOptions
+        private static string? ReadStringAndAdvance<TUnit, TFraming>(Span<byte> buffer, ref int index)
+            where TUnit : unmanaged where TFraming : struct
         {
-            bool isUtf8 = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8);
-            var recording = default(TOptions).StringRecording;
-            if (recording == LuminPackStringRecording.Token)
+            bool isUtf8 = (typeof(TUnit) == typeof(byte));
+            if (typeof(TFraming) == typeof(TokenStringFraming))
             {
-                return ReadTokenStringAndAdvance<TOptions>(buffer, ref index, isUtf8);
+                return ReadTokenStringAndAdvance<TUnit>(buffer, ref index);
             }
-            if (recording == LuminPackStringRecording.VarInt)
+            if (typeof(TFraming) == typeof(VarIntStringFraming))
             {
-                string? result = ReadVarIntRecord<TOptions>(buffer.Slice(index), null, out int consumed);
+                string? result = ReadVarIntRecord<TUnit>(buffer.Slice(index), null, out int consumed);
                 index += consumed;
                 return result;
             }
@@ -146,7 +169,7 @@ namespace LuminPack.Core
                 LuminPackExceptionHelper.ThrowInSufficientBuffer(payload);
             }
 
-            var value = payload == 0 ? string.Empty : isUtf8 ? ReadUtf8StringWithLength<TOptions>(buffer, index, length) : ReadUtf16StringWithLength<TOptions>(buffer, index, length);
+            var value = payload == 0 ? string.Empty : isUtf8 ? ReadUtf8StringWithLength(buffer, index, length) : ReadUtf16StringWithLength(buffer, index, length);
             index += payload + recordLength;
             return value;
         }
@@ -154,17 +177,17 @@ namespace LuminPack.Core
         /// <summary>Reads token string and advance from the current input.</summary>
         /// <param name = "buffer">The complete retained input window.</param>
         /// <param name = "index">The position at which the operation starts.</param>
-        /// <param name = "isUtf8">The is utf8 used by this operation.</param>
         /// <returns>The result of the operation.</returns>
-        /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
+        /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-        private static string? ReadTokenStringAndAdvance<TOptions>(Span<byte> buffer, ref int index, bool isUtf8)
-            where TOptions : struct, ILuminPackOptions
+        private static string? ReadTokenStringAndAdvance<TUnit>(Span<byte> buffer, ref int index)
+            where TUnit : unmanaged
         {
-            ReadStringLength<TOptions>(buffer, ref index, out var length);
+            bool isUtf8 = typeof(TUnit) == typeof(byte);
+            ReadStringLength<TUnit, TokenStringFraming>(buffer, ref index, out var length);
             // Token mode has no null marker: null and empty are both encoded as an empty
             // token and must therefore deserialize to string.Empty.
-            var value = isUtf8 ? ReadUtf8StringWithToken<TOptions>(buffer, index, length) : ReadUtf16StringWithToken<TOptions>(buffer, index, length);
+            var value = isUtf8 ? ReadUtf8StringWithToken(buffer, index, length) : ReadUtf16StringWithToken(buffer, index, length);
             index += length + (isUtf8 ? 1 : 2);
             return value;
         }
@@ -174,10 +197,8 @@ namespace LuminPack.Core
         /// <param name = "index">The position at which the operation starts.</param>
         /// <param name = "length">The number of bytes or elements to process.</param>
         /// <returns>The result of the operation.</returns>
-        /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static string? ReadUtf8StringWithToken<TOptions>(Span<byte> buffer, int index, int length)
-            where TOptions : struct, ILuminPackOptions
+        private static string? ReadUtf8StringWithToken(Span<byte> buffer, int index, int length)
         {
 #if NET8_0_OR_GREATER
             ref var spanRef = ref Unsafe.Add(ref MemoryMarshal.GetReference(buffer), (nint)(uint)index);
@@ -198,10 +219,8 @@ namespace LuminPack.Core
         /// <param name = "index">The position at which the operation starts.</param>
         /// <param name = "length">The number of bytes or elements to process.</param>
         /// <returns>The result of the operation.</returns>
-        /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static string? ReadUtf16StringWithToken<TOptions>(Span<byte> buffer, int index, int length)
-            where TOptions : struct, ILuminPackOptions
+        private static string? ReadUtf16StringWithToken(Span<byte> buffer, int index, int length)
         {
 #if NET8_0_OR_GREATER
             ref var spanRef = ref Unsafe.Add(ref MemoryMarshal.GetReference(buffer), (nint)(uint)index);
@@ -216,10 +235,8 @@ namespace LuminPack.Core
         /// <param name = "index">The position at which the operation starts.</param>
         /// <param name = "length">The number of bytes or elements to process.</param>
         /// <returns>The result of the operation.</returns>
-        /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static string? ReadUtf8StringWithLength<TOptions>(Span<byte> buffer, int index, int length)
-            where TOptions : struct, ILuminPackOptions
+        private static string? ReadUtf8StringWithLength(Span<byte> buffer, int index, int length)
         {
             if (length < 0)
                 return null;
@@ -234,10 +251,8 @@ namespace LuminPack.Core
         /// <param name = "index">The position at which the operation starts.</param>
         /// <param name = "length">The number of bytes or elements to process.</param>
         /// <returns>The result of the operation.</returns>
-        /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static string? ReadUtf16StringWithLength<TOptions>(Span<byte> buffer, int index, int length)
-            where TOptions : struct, ILuminPackOptions
+        private static string? ReadUtf16StringWithLength(Span<byte> buffer, int index, int length)
         {
             if (length < 0)
                 return null;
@@ -257,17 +272,18 @@ namespace LuminPack.Core
 
         /// <summary>Reads a compiled-profile string record without allocating an unchanged string.</summary>
         /// <param name = "buffer">The complete retained input window.</param>
-        /// <typeparam name = "TOptions">The stateless binary string profile.</typeparam>
+        /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
+        /// <typeparam name="TFraming">The codec’s binary record framing.</typeparam>
         /// <param name = "index">The absolute input cursor, advanced only after a successful read.</param>
         /// <param name = "current">The string available for reuse.</param>
         /// <returns>The existing string when equal, or the normally decoded value.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static string? ReadStringAndAdvance<TOptions>(Span<byte> buffer, ref int index, string? current)
-            where TOptions : struct, ILuminPackOptions
+        private static string? ReadStringAndAdvance<TUnit, TFraming>(Span<byte> buffer, ref int index, string? current)
+            where TUnit : unmanaged where TFraming : struct
         {
             if (current is null)
-                return ReadStringAndAdvance<TOptions>(buffer, ref index);
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && default(TOptions).StringRecording == LuminPackStringRecording.Length)
+                return ReadStringAndAdvance<TUnit, TFraming>(buffer, ref index);
+            if (typeof(TUnit) == typeof(char) && typeof(TFraming) == typeof(LengthStringFraming))
             {
                 // The shared record reader validates the complete record, compares either payload form once and
                 // publishes the cursor only after success.
@@ -280,7 +296,7 @@ namespace LuminPack.Core
                 }
             }
 #if NET8_0_OR_GREATER
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && default(TOptions).StringRecording == LuminPackStringRecording.Length)
+            if (typeof(TUnit) == typeof(byte) && typeof(TFraming) == typeof(LengthStringFraming))
             {
                 int start = index;
                 int available = buffer.Length;
@@ -293,7 +309,7 @@ namespace LuminPack.Core
                     if (bytes > 0 && bytes <= available - start - sizeof(int) * 2)
                     {
                         if (characters > 0 && characters != current.Length)
-                            return ReadStringAndAdvance<TOptions>(buffer, ref index);
+                            return ReadStringAndAdvance<TUnit, TFraming>(buffer, ref index);
                         ref byte payloadStart = ref Unsafe.Add(ref MemoryMarshal.GetReference(buffer), (nint)(uint)start + sizeof(int) * 2);
                         bool matches;
                         if (bytes == current.Length)
@@ -313,52 +329,53 @@ namespace LuminPack.Core
                         }
 
                         // The validated payload was compared once; a mismatch needs the original decoder only.
-                        return ReadStringAndAdvance<TOptions>(buffer, ref index);
+                        return ReadStringAndAdvance<TUnit, TFraming>(buffer, ref index);
                     }
                 }
             }
 #endif
-            return ReadExistingStringAndAdvance<TOptions>(buffer, ref index, current);
+            return ReadExistingStringAndAdvance<TUnit, TFraming>(buffer, ref index, current);
         }
 
         /// <summary>Isolates fallback comparison work from the original fresh-string reader.</summary>
         /// <param name = "buffer">The complete retained input window.</param>
-        /// <typeparam name = "TOptions">The stateless binary string profile.</typeparam>
+        /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
+        /// <typeparam name="TFraming">The codec’s binary record framing.</typeparam>
         /// <param name = "index">The absolute record cursor.</param>
         /// <param name = "current">The non-null candidate string.</param>
         /// <returns>The reused or normally decoded string.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static string? ReadExistingStringAndAdvance<TOptions>(Span<byte> buffer, ref int index, string current)
-            where TOptions : struct, ILuminPackOptions
+        private static string? ReadExistingStringAndAdvance<TUnit, TFraming>(Span<byte> buffer, ref int index, string current)
+            where TUnit : unmanaged where TFraming : struct
         {
-            if (MatchesStringRecord<TOptions>(buffer, index, current, out int end))
+            if (MatchesStringRecord<TUnit, TFraming>(buffer, index, current, out int end))
             {
                 index = end;
                 return current;
             }
 
-            return ReadStringAndAdvance<TOptions>(buffer, ref index);
+            return ReadStringAndAdvance<TUnit, TFraming>(buffer, ref index);
         }
 
         /// <summary>Compares validated string payload bytes without publishing a cursor or creating text.</summary>
         /// <param name = "buffer">The complete retained input window.</param>
-        /// <typeparam name = "TOptions">The stateless binary string profile.</typeparam>
+        /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
+        /// <typeparam name="TFraming">The codec’s binary record framing.</typeparam>
         /// <param name = "index">The original record cursor.</param>
         /// <param name = "current">The candidate immutable string.</param>
         /// <param name = "end">Receives the complete record end after a match.</param>
         /// <returns>Whether the ordinary reader would produce the candidate text.</returns>
-        private static bool MatchesStringRecord<TOptions>(Span<byte> buffer, int index, string current, out int end)
-            where TOptions : struct, ILuminPackOptions
+        private static bool MatchesStringRecord<TUnit, TFraming>(Span<byte> buffer, int index, string current, out int end)
+            where TUnit : unmanaged where TFraming : struct
         {
             end = index;
-            bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
-            var recording = default(TOptions).StringRecording;
-            bool token = recording == LuminPackStringRecording.Token;
-            if (recording == LuminPackStringRecording.VarInt)
+            bool utf8 = typeof(TUnit) == typeof(byte);
+            bool token = typeof(TFraming) == typeof(TokenStringFraming);
+            if (typeof(TFraming) == typeof(VarIntStringFraming))
             {
                 if ((uint)index > (uint)buffer.Length)
                     return false;
-                ReadVarIntRecordHeader<TOptions>(buffer.Slice(index), out int prefix, out int bytes, out int characters, out bool latin1);
+                ReadVarIntRecordHeader<TUnit>(buffer.Slice(index), out int prefix, out int bytes, out int characters, out bool latin1);
                 if (bytes < 0 || characters != current.Length)
                     return false;
                 var variablePayload = buffer.Slice(index + prefix, bytes);
@@ -373,7 +390,7 @@ namespace LuminPack.Core
             int available = buffer.Length;
             if ((uint)index > (uint)available || (uint)header > (uint)(available - index))
                 return false;
-            ReadStringLength<TOptions>(buffer, ref index, out int length);
+            ReadStringLength<TUnit, TFraming>(buffer, ref index, out int length);
             // Null, empty and malformed records retain the original reader's normalization and failures.
             if (length <= 0)
                 return false;
@@ -742,7 +759,7 @@ namespace LuminPack.Core
             int start = Position;
             int index = start;
             // The decoders are static, so a fresh or retried read never takes this state's address.
-            string? result = ReadStringAndAdvance<LuminPackUtf8LengthOptions>(_buffer, ref index, current);
+            string? result = ReadStringAndAdvance<byte, LengthStringFraming>(_buffer, ref index, current);
             Advance(index - start);
             return result;
         }
@@ -756,7 +773,7 @@ namespace LuminPack.Core
             int start = Position;
             int index = start;
             // The decoders are static, so a fresh or retried read never takes this state's address.
-            string? result = ReadStringAndAdvance<LuminPackUtf8TokenOptions>(_buffer, ref index, current);
+            string? result = ReadStringAndAdvance<byte, TokenStringFraming>(_buffer, ref index, current);
             Advance(index - start);
             return result;
         }
@@ -770,7 +787,7 @@ namespace LuminPack.Core
             int start = Position;
             int index = start;
             // The decoders are static, so a fresh or retried read never takes this state's address.
-            string? result = ReadStringAndAdvance<LuminPackUtf16TokenOptions>(_buffer, ref index, current);
+            string? result = ReadStringAndAdvance<char, TokenStringFraming>(_buffer, ref index, current);
             Advance(index - start);
             return result;
         }
@@ -784,7 +801,7 @@ namespace LuminPack.Core
             int start = Position;
             int index = start;
             // The decoders are static, so a fresh or retried read never takes this state's address.
-            string? result = ReadStringAndAdvance<LuminPackUtf8VarIntOptions>(_buffer, ref index, current);
+            string? result = ReadStringAndAdvance<byte, VarIntStringFraming>(_buffer, ref index, current);
             Advance(index - start);
             return result;
         }
@@ -795,7 +812,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal string? ReadUtf16VarIntString(string? current)
         {
-            return ReadVarIntString<LuminPackUtf16VarIntOptions>(current);
+            return ReadVarIntString<char>(current);
         }
 
 #if NET8_0_OR_GREATER
@@ -813,13 +830,13 @@ namespace LuminPack.Core
 #endif
 
         /// <summary>Validates a variable-length record before decoding and publishing its successful cursor.</summary>
-        /// <typeparam name="TOptions">The stateless string profile.</typeparam>
+        /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
         /// <param name="current">The immutable candidate available for reuse.</param>
         /// <returns>The decoded or reused string, including null.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private string? ReadVarIntString<TOptions>(string? current) where TOptions : struct, ILuminPackOptions
+        private string? ReadVarIntString<TUnit>(string? current) where TUnit : unmanaged
         {
-            string? result = ReadVarIntRecord<TOptions>(_buffer.Slice(Position), current, out int consumed);
+            string? result = ReadVarIntRecord<TUnit>(_buffer.Slice(Position), current, out int consumed);
             Advance(consumed);
             return result;
         }
@@ -884,16 +901,16 @@ namespace LuminPack.Core
         }
 
         /// <summary>Validates both variable headers and the complete payload before allocation.</summary>
-        /// <typeparam name="TOptions">The stateless encoding profile.</typeparam>
+        /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
         /// <param name="source">The complete available record window.</param>
         /// <param name="prefix">Receives the complete framing width.</param>
         /// <param name="bytes">Receives the payload byte count, or minus one for null.</param>
         /// <param name="characters">Receives the decoded character count.</param>
         /// <param name="latin1">Receives whether the payload is compact Latin-1.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static void ReadVarIntRecordHeader<TOptions>(ReadOnlySpan<byte> source, out int prefix, out int bytes, out int characters, out bool latin1) where TOptions : struct, ILuminPackOptions
+        internal static void ReadVarIntRecordHeader<TUnit>(ReadOnlySpan<byte> source, out int prefix, out int bytes, out int characters, out bool latin1) where TUnit : unmanaged
         {
-            bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+            bool utf8 = typeof(TUnit) == typeof(byte);
             prefix = 0;
             int header = ReadVarIntHeader(source, ref prefix);
             characters = utf8 ? ReadVarIntHeader(source, ref prefix) : header >> 1;
@@ -906,15 +923,15 @@ namespace LuminPack.Core
         }
 
         /// <summary>Decodes a validated opt-in record while preserving equal immutable string storage.</summary>
-        /// <typeparam name="TOptions">The stateless encoding profile.</typeparam>
+        /// <typeparam name="TUnit">The codec’s byte or UTF-16 code unit.</typeparam>
         /// <param name="source">The complete available input.</param>
         /// <param name="current">The immutable candidate available for reuse.</param>
         /// <param name="consumed">Receives the complete validated record width.</param>
         /// <returns>The decoded or reused string, including null.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static string? ReadVarIntRecord<TOptions>(ReadOnlySpan<byte> source, string? current, out int consumed) where TOptions : struct, ILuminPackOptions
+        internal static string? ReadVarIntRecord<TUnit>(ReadOnlySpan<byte> source, string? current, out int consumed) where TUnit : unmanaged
         {
-            ReadVarIntRecordHeader<TOptions>(source, out int prefix, out int bytes, out int characters, out bool latin1);
+            ReadVarIntRecordHeader<TUnit>(source, out int prefix, out int bytes, out int characters, out bool latin1);
             consumed = prefix + Math.Max(bytes, 0);
             if (bytes < 0)
                 return null;
@@ -922,7 +939,7 @@ namespace LuminPack.Core
                 return string.Empty;
             var payload = source.Slice(prefix, bytes);
             ref byte text = ref MemoryMarshal.GetReference(payload);
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (typeof(TUnit) == typeof(byte))
                 return current is not null && current.Length == characters && StringSerializer.MatchesUtf8(payload, current) ? current : StringSerializer.DeserializeUtf8(ref text, bytes, characters);
             return latin1 ? StringSerializer.ReadLatin1Payload(ref text, bytes, current) : StringSerializer.ReadUtf16Payload(ref text, bytes, current);
         }

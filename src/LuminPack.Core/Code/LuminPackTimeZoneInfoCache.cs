@@ -176,18 +176,8 @@ public static class LuminPackTimeZoneInfoCache
     /// <returns>A bounded candidate whose full content still needs validation, or null.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Entry? GetTimeZoneCandidate<TOptions>(this ref LuminPackReader reader)
-        where TOptions : struct, ILuminPackOptions
-    {
-        if (default(TOptions).StringRecording != LuminPackStringRecording.Length)
-            return null;
-        int available = reader.Buffer.Length - reader.Position;
-        ref byte cursor = ref reader.CurrentReference;
-        if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && available >= sizeof(int))
-            return Find(LuminPackReader.Read<int>(ref cursor) >> 1);
-        if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && available >= 2 * sizeof(int))
-            return Find(LuminPackReader.Read<int>(ref Unsafe.Add(ref cursor, sizeof(int))));
-        return null;
-    }
+        where TOptions : struct, ILuminPackOptions =>
+        default(TOptions).TryPeekCharacterCount(ref reader, out int count) ? Find(count) : null;
 
     /// <summary>Reads a matching UTF-16 snapshot directly after validating its complete input range and content.</summary>
     /// <typeparam name="TOptions">The stateless binary profile.</typeparam>
@@ -200,19 +190,10 @@ public static class LuminPackTimeZoneInfoCache
         where TOptions : struct, ILuminPackOptions
     {
         value = null;
-        if (default(TOptions).StringEncoding != LuminPackStringEncoding.UTF16 ||
-            default(TOptions).StringRecording != LuminPackStringRecording.Length || candidate is null)
+        if (candidate is null || !default(TOptions).TryPeekUtf16Payload(ref reader, candidate.Text.Length, out int bytes, out bool latin1))
             return false;
-        reader.EnsureReadable(reader.Position, sizeof(int));
-        ref byte cursor = ref reader.CurrentReference;
         int length = candidate.Text.Length;
-        int header = LuminPackReader.Read<int>(ref cursor);
-        // Snapshots are written through the string kernel, so ASCII text arrives in the compact Latin-1 form.
-        bool latin1 = length > 0 && header == StringSerializer.Latin1Header(length);
-        int bytes = latin1 ? length : length * sizeof(char);
-        if (!latin1 && header != bytes)
-            return false;
-        reader.EnsureReadable(reader.Position, bytes + sizeof(int));
+        ref byte cursor = ref reader.CurrentReference;
         ref byte source = ref Unsafe.Add(ref cursor, sizeof(int));
         if (!Matches(ref source, bytes, latin1, candidate.Text))
         {

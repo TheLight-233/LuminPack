@@ -719,10 +719,20 @@ public static partial class StringSerializer
     /// <returns>The conversion status, including partial-buffer and streaming results.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static OperationStatus Deserialize<TOptions>(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
-        where TOptions : struct, ILuminPackOptions
+        where TOptions : struct, ILuminPackOptions =>
+        default(TOptions).Decode(source, destination, out bytesRead, out charsWritten, replaceInvalidSequences, isFinalBlock);
+
+    /// <summary>Decodes bytes using a stateless profile whose encoding can be specialized by the runtime compiler.</summary>
+    /// <param name = "source">The encoded bytes to consume.</param>
+    /// <param name = "destination">The bounded destination for decoded characters.</param>
+    /// <param name = "bytesRead">Receives the number of consumed bytes.</param>
+    /// <param name = "charsWritten">Receives the number of characters written.</param>
+    /// <param name = "replaceInvalidSequences">Whether malformed UTF-8 is replaced when decoding UTF-8.</param>
+    /// <param name = "isFinalBlock">Whether the source contains the final input block.</param>
+    /// <returns>The conversion status, including partial-buffer and streaming results.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static OperationStatus DecodeUtf8(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
     {
-        if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16)
-            return DeserializeFromUtf16(source, destination, out bytesRead, out charsWritten, replaceInvalidSequences, isFinalBlock);
 #if NET8_0_OR_GREATER
         return Utf8.ToUtf16(source, destination, out bytesRead, out charsWritten, replaceInvalidSequences, isFinalBlock);
 #else
@@ -1141,7 +1151,7 @@ public static partial class StringSerializer
     /// <param name = "replaceInvalidSequences">The replace invalid sequences used by this operation.</param>
     /// <param name = "isFinalBlock">The is final block used by this operation.</param>
     /// <returns>The result of the operation.</returns>
-    private static OperationStatus DeserializeFromUtf16(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
+    internal static OperationStatus DeserializeFromUtf16(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
     {
         bytesRead = 0;
         charsWritten = 0;
