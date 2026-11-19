@@ -113,6 +113,13 @@ python benchmarks/LuminPack.MatrixBenchmark/chart.py .tmp/benchmark-artifacts/be
 - Changing names, member order, enum values, null markers, string modes, framing or storage views can break persisted data. Public members without call sites here can still be used by consumers or generated code.
 - Keep third-party notices (`docs/xjb-LICENSE.txt`, `docs/xjb-NOTICE.md`) when editing the ported formatters.
 
+### Unmanaged struct layout
+
+- `Tagged` is the default. A contiguous multi-model collection block writes its verified native layout tag and raw bytes. A reader with the same layout copies the block. A reader with a different layout converts it with SIMD where supported and a scalar fallback. A writer with an unmodeled layout uses the canonical model. Individual values omit layout tags. Multi-model values use packed field order, and single-model Tagged values use native bytes.
+- `Packed` provides portable bytes in storage declaration order without padding. It propagates through enclosing storage and framework pairs and tuples. Explicit `Native` establishes a storage boundary. A raw copy requires proof that native order and width match the packed encoding.
+- `Native` keeps the full host storage, including padding, for endpoints with identical layouts.
+- Honor a type's layout declaration when available. Values that cannot carry a type-level option use the consuming project's assembly option. Keep tag meanings stable and verify wire fixtures and reads in both layout directions. See the [mechanism contract](docs/mechanism-contract.md#representations).
+
 ## Documentation
 
 - README is the project cover: introduction, installation, usage and links. No release notes, version histories, migration notices or experiment reports in README or `docs`.

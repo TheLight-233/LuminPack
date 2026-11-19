@@ -141,7 +141,7 @@ A struct without references is normally copied straight from memory. Its native 
 
 | Value | Storage |
 | --- | --- |
-| `Tagged` (default) | When every modeled platform has the same layout, the native bytes are copied with no tag. When layouts differ, a contiguous collection writes one layout tag and its raw elements; a reader with the same layout copies them, another layout converts them. Single values are stored field by field. |
+| `Tagged` (default) | A block or value with one modeled layout uses headerless native bytes. A multi-model collection block writes the matching tag and copies its native storage after verifying local stride and offsets once per closed type. A reader with that layout copies the block. A reader with a different layout converts it. An unmodeled writer converts to the first model. Individual multi-model values omit the tag and use packed field order. |
 | `Packed` | Fields in declaration order with no padding, identical on every platform. A struct proven to have no padding keeps the raw copy. |
 | `Native` | The complete native storage, including padding. Both ends must have identical layouts. |
 
@@ -158,11 +158,12 @@ public partial struct Packet
 ```
 
 - A struct's own setting overrides its assembly's. Referenced assemblies keep their own declarations.
-- In Next, built-in scalars, enums and framework value tuples in collections use the consuming assembly's setting. The default is `Tagged`.
+- Packed storage propagates through enclosing structures, including framework pairs and value tuples. A struct explicitly declared `Native` keeps its native storage and stops this propagation from its fields.
+- In Next, values that cannot carry a type-level `LuminPackOption` and have no LuminPack contract of their own use the consuming project's assembly option. This includes framework scalars, enums and value tuples in collections. The default is `Tagged`.
 - On supported .NET 8+ targets, collections of eligible `Nullable<T>` use the underlying type's layout. `Native` stores the complete nullable stride, including padding. A contiguous `Tagged` payload writes one tag when a nonempty block has multiple models. Element-wise collections use headerless native records for proven single-layout scalars and the element's nullable formatter for other `Tagged` payloads. `Packed` uses the nullable marker and the packed payload of each present element.
 - Older targets and unsupported nullable layouts use the element's nullable formatter. Both ends must select the same collection encoding.
 - Field expansion includes private and ignored fields and auto-property backing fields, recursively; `LuminPackOrder` does not change it. `long` always takes 8 bytes.
-- Collections of tagged or packed structs are converted with SIMD acceleration on .NET 8+; other platforms, including IL2CPP, produce the same bytes field by field.
+- Layout conversions use SIMD where the layout, element count and runtime support it. The scalar path transfers the same field bytes on other layouts and targets. A .NET Standard consumer can use an installed Burst layout hook on eligible blocks.
 - `Packed` reports a diagnostic for native integers, pointers, fixed buffers, inline arrays, runtime-sized vectors, `Custom` storage and layouts it cannot analyze.
 - None of these modes converts byte order; LuminPack requires little-endian. JSON members are not affected.
 - Raw padded structs can carry stale padding bytes. Use `Packed` or a field-oriented model for public protocols.

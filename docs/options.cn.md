@@ -141,7 +141,7 @@ OperationStatus decoded = StringSerializer.Deserialize<LuminPackUtf8LengthOption
 
 | 取值 | 存储 |
 | --- | --- |
-| `Tagged`（默认） | 所有建模平台布局一致时，直接复制原生字节，不写标签。布局不同时，连续集合写入一个布局标签和元素原始存储；读取方布局相同就直接复制，布局不同就转换。单个值按字段写入。 |
+| `Tagged`（默认） | 块或单值只有一个建模布局时，直接复制原生字节，省略标签。多布局集合块的写入端为每个封闭类型校验一次本机步幅和字段偏移，写入匹配的标签后直接复制整块。同布局读取端直接复制，异布局读取端做转换。写入端匹配不到模型时转换为第一个模型。多布局单值按 Packed 字段顺序编码，省略标签。 |
 | `Packed` | 按声明顺序写字段，不含 padding，所有平台一致。经证明没有 padding 的结构体保留原始复制。 |
 | `Native` | 完整的原生存储，包括 padding。双方布局必须完全一致。 |
 
@@ -158,11 +158,12 @@ public partial struct Packet
 ```
 
 - 结构体自己的设置覆盖程序集设置。引用程序集保持各自的声明。
-- 在 Next 中，集合里的内置标量、枚举和框架值元组使用消费程序集的设置。默认是 `Tagged`。
+- `Packed` 会递归影响外层结构体，包括框架的键值对和值元组。显式声明为 `Native` 的结构体保留自身原生布局，其字段的 `Packed` 设置不会穿透这一层。
+- 在 Next 中，无法在类型上声明 `LuminPackOption` 且没有独立 LuminPack 契约的值使用消费项目的程序集选项，包括集合里的框架标量、枚举和值元组。默认使用 `Tagged`。
 - 在受支持的 .NET 8+ 目标上，符合条件的 `Nullable<T>` 集合采用底层类型的布局。`Native` 存储包括 padding 在内的完整可空步幅。`Tagged` 的连续负载在非空块存在多套布局模型时写一个标签。逐元素集合为经证明只有单一布局的标量使用无标签原始记录，其余 `Tagged` 元素使用各自的 nullable formatter。`Packed` 写可空标记，并为非空元素写入紧凑负载。
 - 较旧目标和不支持的可空布局使用逐元素 nullable formatter。读写双方须使用同一种集合编码。
 - 字段展开包含 private 字段、被忽略的字段和自动属性的 backing field，并递归展开嵌套结构体；`LuminPackOrder` 不影响它。`long` 总是占 8 字节。
-- 在 .NET 8+ 上，tagged 或 packed 结构体的集合使用 SIMD 加速转换；其他平台（包括 IL2CPP）按字段逐个处理，产生相同的字节。
+- 布局、元素数量和运行时满足条件时，布局转换使用 SIMD。其他布局或平台通过标量路径转移相同的字段字节。.NET Standard 使用方安装 Burst 布局钩子后，符合条件的块可使用该钩子。
 - `Packed` 遇到原生整数、指针、fixed buffer、InlineArray、运行时大小的向量、`Custom` 存储以及无法分析的布局时会报诊断。
 - 这几种模式都不做字节序转换；LuminPack 要求小端。JSON 成员不受影响。
 - 带 padding 的原始结构体可能带出残留的 padding 字节。对外协议请使用 `Packed` 或按字段建模。

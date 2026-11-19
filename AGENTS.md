@@ -81,6 +81,27 @@ experiments/    untracked, isolated performance experiments; nothing here ships
    (`src/LuminPack.Generator`) is frozen and no longer maintained: do not modify it, mirror Next changes into it, or keep
    its parity tests current.
 
+### StructLayout
+
+- **Tagged is the default.** It keeps contiguous unmanaged storage fast across platforms. A block proven to have one
+  layout uses headerless native bytes. A multi-model block writes its verified local layout tag and copies its native
+  bytes. A reader with the same verified layout copies the block. A reader with a different layout converts it using
+  SIMD where supported, with bounded scalar tails and fallback. If the writer cannot match a modeled layout, it uses the
+  canonical model. Only multi-model collection blocks use layout tags. Individual multi-model Tagged values write their
+  fields in packed order. Single-model Tagged values copy their native bytes. Preserve existing tag meanings when adding
+  a model.
+- **Packed** gives supported values a portable, padding-free representation in storage declaration order. Apply the
+  packed contract recursively through enclosing structs, framework key/value pairs and value tuples. Structs explicitly
+  declared `Native` keep their own storage boundary. Packed block copies require a proof that the actual bytes already
+  match packed order and width.
+- **Native** transfers the entire host representation, including padding, for callers that can guarantee identical layouts
+  at both ends. Native blocks use neither a layout tag nor layout conversion.
+- Honor type-owned layout declarations. A value that cannot declare `LuminPackOption` on the type, such as a framework or
+  external non-LuminPackable type without a LuminPack contract, uses the consuming project's assembly
+  `LuminPackOption(StructLayout = ...)`. The project defaults to `Tagged` when the option is omitted.
+- Check actual field offsets and strides, malformed input, overlapping reused storage, and both directions of cross-layout
+  reads when changing layout handling. Preserve container framing and update exact wire fixtures for approved byte changes.
+
 ## Evidence
 
 - **Performance** is LuminPack's time divided by the reference library's, on the same machine, fixture, runtime,

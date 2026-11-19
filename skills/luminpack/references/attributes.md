@@ -58,7 +58,7 @@ Delegate targets use the formatter signature of the member type, for example `st
 
 These Union switches do not inherit from assemblies, containing types or base types, cannot be selected through operation profiles, and do not pin string profiles. A legacy standalone marker takes precedence over an explicit false option. Only assert `SingleImplementation` when no other assembly can add an implementation.
 
-In Next, built-in scalars, enums and framework value tuples in collections use the consuming assembly's `StructLayout` option, which defaults to `Tagged`. On supported .NET 8+ targets, eligible `Nullable<T>` collection elements follow the underlying type's layout. `Native` requires a matching runtime layout at both ends. `Tagged` contiguous blocks support conversion between modeled layouts. `Packed` writes the nullable marker and the packed payload of a present value.
+In Next, values without a type-owned LuminPack contract use the consuming assembly's `StructLayout` option. The default is `Tagged`. Contiguous `Tagged` blocks with multiple models write a verified native layout tag and raw bytes. Matching readers copy the block, and other layouts use the layout converter. `Packed` writes portable bytes without padding and propagates through enclosing structs, pairs and value tuples. A type explicitly declared `Native` is a storage boundary and requires matching runtime layouts. On supported .NET 8+ targets, eligible `Nullable<T>` collection elements follow the underlying type's layout. Packed nullable elements write a marker and the packed payload of a present value.
 
 The obsolete `GeneratorType.CircleReference` mode is an alias for `VersionTolerant` with `TrackReferences = true`. Use the IDE code fix to update the declaration.
 
