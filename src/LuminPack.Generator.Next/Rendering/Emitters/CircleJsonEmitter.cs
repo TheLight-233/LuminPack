@@ -13,6 +13,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 internal static class CircleJsonEmitter
 {
     private const string Profile = "TLuminProfile";
+    private const string IdName = "_luminId", ReferenceName = "_luminReference", SequenceName = "_luminSequence";
 
     /// <summary>Emits the complete JSON file body.</summary>
     /// <param name="model">The covered type.</param>
@@ -25,7 +26,10 @@ internal static class CircleJsonEmitter
         string type = model.GlobalName, container = "LuminRoots_" + model.Readable;
         string jsonWriter = w.A("LuminPackJsonWriter"), jsonReader = w.A("LuminPackJsonReader"), options = w.A("ILuminPackOptions");
         string serializer = w.A("LuminPackSerializer"), standard = model.DeclaredProfile != null ? w.A(model.DeclaredProfile) : w.A("LuminPackUtf16LengthOptions");
-        string constraint = "where TLuminProfile : struct, " + options;
+        string Arguments(params string[] extra) => model.TypeArguments(extra);
+        string Constraint(string profile) => (model.TypeConstraintText.Length == 0 ? string.Empty : model.TypeConstraintText + " ") +
+            "where " + profile + " : struct, " + options;
+        string constraint = Constraint(Profile);
         string inline = w.MethodImpl("AggressiveInlining");
         string helper = Helper(model);
 
@@ -37,7 +41,7 @@ internal static class CircleJsonEmitter
         w.Open();
         w.Suppressed = !writes;
         w.Line(w.Preserve);
-        w.Line("internal static void RootWriteJson<" + Profile + ">(scoped ref " + jsonWriter + " writer, " + type + "? input)");
+        w.Line("internal static void RootWriteJson" + Arguments(Profile) + "(scoped ref " + jsonWriter + " writer, " + type + "? input)");
         w.Indented(() => w.Line(constraint));
         w.Open();
         var writeBody = WriteBody(model, w, helper);
@@ -46,7 +50,7 @@ internal static class CircleJsonEmitter
         w.Blank();
         w.Suppressed = !reads;
         w.Line(w.Preserve);
-        w.Line("internal static void RootReadJson<" + Profile + ">(scoped ref " + jsonReader + " reader, scoped ref " + type + "? value)");
+        w.Line("internal static void RootReadJson" + Arguments(Profile) + "(scoped ref " + jsonReader + " reader, scoped ref " + type + "? value)");
         w.Indented(() => w.Line(constraint));
         w.Open();
         JsonEmitter.Lines(w, ReadBody(model, w, helper));
@@ -66,22 +70,26 @@ internal static class CircleJsonEmitter
         w.Open();
         w.Suppressed = !writes;
         w.Line(inline);
-        w.Line("internal static void Write(this ref " + jsonWriter + " state, in " + type + "? value) => " + serializer + "." + container +
-            ".RootWriteJson<" + standard + ">(ref state, value);");
+        w.Line("internal static void Write" + Arguments() + "(this ref " + jsonWriter + " state, in " + type + "? value)" +
+            (model.TypeConstraintText.Length == 0 ? string.Empty : " " + model.TypeConstraintText) + " => " + serializer + "." + container +
+            ".RootWriteJson" + Arguments(standard) + "(ref state, value);");
         w.Line(inline);
-        w.Line("internal static void Write<TOptions>(this ref " + jsonWriter + " state, in " + type + "? value)");
-        w.Indented(() => w.Line("where TOptions : struct, " + options + " => " + serializer + "." + container + ".RootWriteJson<TOptions>(ref state, value);"));
+        w.Line("internal static void Write" + Arguments("TOptions") + "(this ref " + jsonWriter + " state, in " + type + "? value)");
+        w.Indented(() => w.Line(Constraint("TOptions") + " => " + serializer + "." + container +
+            ".RootWriteJson" + Arguments("TOptions") + "(ref state, value);"));
         w.Suppressed = !reads;
         foreach (string profile in new[] { standard, "TOptions" })
         {
             w.Line(inline);
-            w.Line("internal static void Read" + (profile == "TOptions" ? "<TOptions>" : string.Empty) + "(this ref " + jsonReader + " state, ref " + type + "? value)");
-            if (profile == "TOptions")
-                w.Indented(() => w.Line("where TOptions : struct, " + options));
+            w.Line("internal static void Read" + (profile == "TOptions" ? Arguments("TOptions") : Arguments()) +
+                "(this ref " + jsonReader + " state, ref " + type + "? value)");
+            string readConstraints = profile == "TOptions" ? Constraint("TOptions") : model.TypeConstraintText;
+            if (readConstraints.Length != 0)
+                w.Indented(() => w.Line(readConstraints));
             w.Open();
             w.Line("if (state.CurrentTokenType == " + jsonReader + ".JsonTokenType.None && !state.Read<" + profile + ">())");
             w.Indented(() => w.Line(w.A("LuminPackExceptionHelper") + ".ThrowFormatException(\"JSON input does not contain a value.\");"));
-            w.Line(serializer + "." + container + ".RootReadJson<" + profile + ">(ref state, ref value);");
+            w.Line(serializer + "." + container + ".RootReadJson" + Arguments(profile) + "(ref state, ref value);");
             w.Line("state.CompleteValue();");
             w.Close();
             w.Blank();
@@ -106,13 +114,15 @@ internal static class CircleJsonEmitter
         {
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void " + prefix + (model.UniqueEntries ? "_" + model.Readable : string.Empty) + parameters + " => " + container + "." +
-                root + "<" + standard + ">(" + arguments + ");");
+            string entry = prefix + (model.UniqueEntries ? "_" + model.Readable : string.Empty);
+            w.Line("internal static void " + entry + Arguments() + parameters +
+                (model.TypeConstraintText.Length == 0 ? string.Empty : " " + model.TypeConstraintText) + " => " + container + "." +
+                root + Arguments(standard) + "(" + arguments + ");");
             w.Blank();
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void " + prefix + (model.UniqueEntries ? "_" + model.Readable : string.Empty) + "<" + Profile + ">" + parameters);
-            w.Indented(() => w.Line(constraint + " => " + container + "." + root + "<" + Profile + ">(" + arguments + ");"));
+            w.Line("internal static void " + entry + Arguments(Profile) + parameters);
+            w.Indented(() => w.Line(constraint + " => " + container + "." + root + Arguments(Profile) + "(" + arguments + ");"));
             w.Blank();
         }
     }
@@ -131,7 +141,7 @@ internal static class CircleJsonEmitter
     {
         var body = new List<string>();
         const string value = "value", isUtf8 = "isUtf8", exists = "existsReference", id = "id";
-        if (model.CircleGuarded)
+        if (model.Recursive)
             body.Add(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
         body.Add("var " + value + " = input;");
         body.Add("if (" + value + " == null)");
@@ -146,7 +156,7 @@ internal static class CircleJsonEmitter
         body.Add("{");
         body.Add("writer.WriteObjectStart<" + Profile + ">();");
         bool staticHeads = model.GeneratedPropertyHeads;
-        AppendProperty(body, helper, isUtf8, "@ref", "$ref", staticHeads);
+        AppendProperty(body, helper, isUtf8, ReferenceName, "$ref", staticHeads);
         body.Add("writer.Write<" + Profile + ">(" + id + ");");
         body.Add("writer.WriteObjectEnd<" + Profile + ">();");
         body.Add("return;");
@@ -156,14 +166,27 @@ internal static class CircleJsonEmitter
             body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " + value + "!);");
         body.Add("writer.WriteObjectStart<" + Profile + ">();");
         body.Add("// Write the object reference identifier.");
-        AppendProperty(body, helper, isUtf8, "id", "$id", staticHeads);
+        AppendProperty(body, helper, isUtf8, IdName, "$id", staticHeads);
         body.Add("writer.Write<" + Profile + ">(" + id + ");");
+        if (model.SequenceBase != null)
+        {
+            AppendProperty(body, helper, isUtf8, SequenceName, "$value", staticHeads);
+            body.AddRange(JsonEmitter.SequenceWriteBody(model, w, input: value));
+        }
         int tempCount = 0;
         foreach (var member in model.Members)
         {
             string access = (member.Mirrored ? "local" : value) + "." + member.Name;
             body.Add("// Field: " + member.Name);
             AppendProperty(body, helper, isUtf8, Member(member), member.Name, staticHeads);
+            if (member.Kind == RenderMemberKind.Parameter)
+            {
+                string parameter = "parameter" + (++tempCount).ToString(CultureInfo.InvariantCulture);
+                body.Add("var " + parameter + " = " + access + ";");
+                body.Add(w.A("LuminPackSerializer") + ".SerializeJson<" + member.Scalar + ", " + Profile +
+                    ">(ref writer, in " + parameter + ");");
+                continue;
+            }
             if (member.Raw)
             {
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, in " + access + ");");
@@ -187,15 +210,7 @@ internal static class CircleJsonEmitter
                 body.Add("");
                 continue;
             }
-            if (member.Kind != RenderMemberKind.Object || member.Nested != null && !member.Nested.Circle)
-            {
-                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, in " + access + ");");
-                continue;
-            }
-            string temp = ++tempCount == 1 ? "temp" : "temp" + tempCount.ToString(CultureInfo.InvariantCulture);
-            body.Add("var " + temp + " = " + access + ";");
-            body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + temp + ");");
-            body.Add("");
+            body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + access + ");");
         }
         body.Add("writer.WriteObjectEnd<" + Profile + ">();");
         return body;
@@ -233,7 +248,7 @@ internal static class CircleJsonEmitter
         var members = model.Members;
         string type = model.GlobalName, jsonReader = w.A("LuminPackJsonReader");
         var body = new List<string>();
-        if (model.CircleGuarded)
+        if (model.Recursive)
             body.Add(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
         body.Add("if (reader.IsNull())");
         body.Add("{");
@@ -241,8 +256,6 @@ internal static class CircleJsonEmitter
         body.Add("return;");
         body.Add("}");
         body.Add("");
-        body.Add("uint? objectId = null;");
-        body.Add("uint? refId = null;");
         body.Add("bool reuseExisting = value is not null && !reader.OptionState.IsObjectReferenceRegistered(value);");
         body.Add(type + " preCreatedInstance = value!;");
         body.Add("if (!reuseExisting)");
@@ -250,14 +263,13 @@ internal static class CircleJsonEmitter
         body.Add("preCreatedInstance = " + CircleBinaryEmitter.NewInstance(model) + ";");
         body.Add("}");
         body.Add("");
-        body.Add("value = preCreatedInstance;");
         if (members.Any(member => member.Mirrored))
-            body.Add("ref var reuseLocal = ref " + w.A("LuminPackMarshal") + ".As<" + type + ", " + model.Mirror + ">(ref value!);");
+            body.Add("ref var reuseLocal = ref " + w.A("LuminPackMarshal") + ".As<" + type + ", " + model.Mirror + ">(ref preCreatedInstance);");
         var temps = new string[members.Length];
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            temps[index] = Camel(member.Name) + "Temp";
+            temps[index] = "member" + index.ToString(CultureInfo.InvariantCulture);
             body.Add(member.TypeName + " " + temps[index] + " = default !;");
         }
         body.Add("reader.TryConsumeObjectStart<" + Profile + ">();");
@@ -289,7 +301,6 @@ internal static class CircleJsonEmitter
         body.Add("if (propertyIndex == -2)");
         body.Add("{");
         body.Add("var id = reader.Read<uint, " + Profile + ">();");
-        body.Add("objectId = id;");
         body.Add("reader.OptionState.AddObjectReference(id, preCreatedInstance);");
         body.Add("continue;");
         body.Add("}");
@@ -297,17 +308,20 @@ internal static class CircleJsonEmitter
         body.Add("if (propertyIndex == -3)");
         body.Add("{");
         body.Add("var rId = reader.Read<uint, " + Profile + ">();");
-        body.Add("refId = rId;");
-        body.Add("value = (" + type + ")reader.OptionState.GetObjectReference(rId);");
+        body.Add("var reference = " + w.A("LuminPackInputPolicy") + ".ReadReference<" + type +
+            ">(reader.OptionState.GetObjectReference(rId));");
         body.Add("while (reader.Read<" + Profile + ">() && reader.CurrentTokenType != " + jsonReader + ".JsonTokenType.ObjectEnd)");
         body.Add("{");
         body.Add("}");
         body.Add("");
+        body.Add("value = reference;");
         body.Add("return;");
         body.Add("}");
         body.Add("");
         body.Add("switch (propertyIndex)");
         body.Add("{");
+        if (model.SequenceBase != null)
+            AppendSequenceRead(model, w, body);
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
@@ -315,7 +329,12 @@ internal static class CircleJsonEmitter
             body.Add("{");
             body.Add("if (reuseExisting)");
             body.Add("\t" + temps[index] + " = " + Reuse(member) + ";");
-            if (member.Raw || member.Kind is RenderMemberKind.Special or RenderMemberKind.ForwardedCollection or RenderMemberKind.Sequence or RenderMemberKind.CultureInfo)
+            if (member.Kind == RenderMemberKind.Parameter)
+            {
+                body.Add(w.A("LuminPackSerializer") + ".DeserializeJson<" + member.Scalar + ", " + Profile +
+                    ">(ref reader, ref " + temps[index] + ");");
+            }
+            else if (member.Raw || member.Kind is RenderMemberKind.Special or RenderMemberKind.ForwardedCollection or RenderMemberKind.Sequence or RenderMemberKind.CultureInfo)
             {
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + temps[index] + ");");
             }
@@ -355,27 +374,49 @@ internal static class CircleJsonEmitter
         body.Add("");
         if (members.Any(member => member.Mirrored))
         {
-            body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + type + ", " + model.Mirror + ">(ref value!);");
+            body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + type + ", " + model.Mirror + ">(ref preCreatedInstance);");
             for (int index = 0; index < members.Length; index++)
-                body.Add((members[index].Mirrored ? "local" : "value!") + "." + members[index].Name + " = " + temps[index] + "!;");
+                body.Add((members[index].Mirrored ? "local" : "preCreatedInstance") + "." + members[index].Name + " = " + temps[index] + "!;");
         }
         else
             for (int index = 0; index < members.Length; index++)
-                body.Add("value." + members[index].Name + " = " + temps[index] + "!;");
+                body.Add("preCreatedInstance." + members[index].Name + " = " + temps[index] + "!;");
+        body.Add("value = preCreatedInstance;");
         return body;
 
-        string Reuse(RenderMember member) => (member.Mirrored ? "reuseLocal" : "value!") + "." + member.Name;
+        string Reuse(RenderMember member) => (member.Mirrored ? "reuseLocal" : "preCreatedInstance") + "." + member.Name;
+    }
+
+    /// <summary>Reads the payload of a list-derived object into its registered list instance.</summary>
+    private static void AppendSequenceRead(PayloadRenderModel model, CodeWriter w, List<string> body)
+    {
+        string reader = w.A("LuminPackJsonReader"), element = "global::LuminPack." + model.Owner;
+        body.Add("case -4:");
+        body.Add("{");
+        body.Add("if (reader.CurrentTokenType != " + reader + ".JsonTokenType.ArrayStart)");
+        body.Add("\t" + w.A("LuminPackExceptionHelper") + ".ThrowFormatException(\"A tracked list must contain an array payload.\");");
+        body.Add("reader.TryConsumeArrayStart<" + Profile + ">();");
+        body.Add("int count = 0;");
+        body.Add("while (reader.Read<" + Profile + ">() && reader.CurrentTokenType != " + reader + ".JsonTokenType.ArrayEnd)");
+        body.Add("{");
+        body.Add("var item = count < preCreatedInstance.Count ? preCreatedInstance[count] : default;");
+        body.Add(element + ".Read<" + Profile + ">(ref reader, ref item);");
+        body.Add("if (count < preCreatedInstance.Count)");
+        body.Add("\tpreCreatedInstance[count] = item;");
+        body.Add("else");
+        body.Add("\tpreCreatedInstance.Add(item);");
+        body.Add("count++;");
+        body.Add("}");
+        body.Add("if (count < preCreatedInstance.Count)");
+        body.Add("\tpreCreatedInstance.RemoveRange(count, preCreatedInstance.Count - count);");
+        body.Add("break;");
+        body.Add("}");
     }
 
     /// <summary>Handles member for <c>CircleJsonEmitter</c>.</summary>
     /// <param name="member">The member being analyzed or emitted.</param>
     /// <returns>The resulting text.</returns>
     private static string Member(RenderMember member) => JsonNames.MemberSuffix(member.Name);
-
-    /// <summary>Handles camel for <c>CircleJsonEmitter</c>.</summary>
-    /// <param name="name">The name to look up or emit.</param>
-    /// <returns>The resulting text.</returns>
-    private static string Camel(string name) => char.ToLowerInvariant(name[0]) + name.Substring(1);
 
     /// <summary>Writes the reference name tables, the lookups and the ordered-property reader.</summary>
     /// <param name="model">The normalized model for this contract.</param>
@@ -388,17 +429,18 @@ internal static class CircleJsonEmitter
         {
             w.Line("internal static class " + (utf8 ? "Utf8" : "Utf16"));
             w.Open();
-            foreach (var member in members)
-                w.Line(utf8
-                    ? "internal static readonly byte[] " + Member(member) + " = new byte[] { " + string.Join(", ", Encoding.UTF8.GetBytes(member.Name)
-                        .Select(item => item.ToString(CultureInfo.InvariantCulture))) + " };"
-                    : "internal static readonly char[] " + Member(member) + " = new char[] { " + string.Join(", ", member.Name.Select(item => "'" + item + "'")) + " };");
-            w.Line(utf8
-                ? "internal static readonly byte[] id = new byte[] { " + string.Join(", ", Encoding.UTF8.GetBytes("$id").Select(item => item.ToString(CultureInfo.InvariantCulture))) + " };"
-                : "internal static readonly char[] id = new char[] { '$', 'i', 'd' };");
-            w.Line(utf8
-                ? "internal static readonly byte[] @ref = new byte[] { " + string.Join(", ", Encoding.UTF8.GetBytes("$ref").Select(item => item.ToString(CultureInfo.InvariantCulture))) + " };"
-                : "internal static readonly char[] @ref = new char[] { '$', 'r', 'e', 'f' };");
+            foreach (var item in MemberNames(model))
+                WriteName(item.Name, item.Member);
+            WriteName("$id", IdName);
+            WriteName("$ref", ReferenceName);
+            if (model.SequenceBase != null)
+                WriteName("$value", SequenceName);
+
+            void WriteName(string name, string field) => w.Line(utf8
+                ? "internal static readonly byte[] " + field + " = new byte[] { " + string.Join(", ", Encoding.UTF8.GetBytes(name)
+                    .Select(item => item.ToString(CultureInfo.InvariantCulture))) + " };"
+                : "internal static readonly char[] " + field + " = new char[] { " + string.Join(", ", name.Select(item =>
+                    Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(item, true))) + " };");
             w.Close();
             w.Blank();
         }
@@ -439,19 +481,31 @@ internal static class CircleJsonEmitter
         w.Suppressed = false;
     }
 
+    /// <summary>Returns each current name and the read-only old names for a version-tolerant member.</summary>
+    private static IEnumerable<(string Name, int Index, string Member)> MemberNames(PayloadRenderModel model)
+    {
+        int alias = 0;
+        for (int index = 0; index < model.Members.Length; index++)
+        {
+            RenderMember member = model.Members[index];
+            yield return (member.Name, index, Member(member));
+            if (model.Version != null)
+                foreach (string name in model.Version.OldNames[index])
+                    yield return (name, index, "_luminOld" + (alias++).ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
     /// <summary>Writes a length switch for small tables or sparse length buckets, otherwise a hash switch.</summary>
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
     /// <param name="utf8">Whether to enable utf8 for this operation.</param>
     private static void Lookup(PayloadRenderModel model, CodeWriter w, bool utf8)
     {
-        var candidates = model.Members.Select((member, index) => (Name: member.Name, Index: index, Table: (utf8 ? "Utf8." : "Utf16.") + Member(member)))
-            .Concat(new[]
-            {
-                (Name: "$id", Index: -2, Table: (utf8 ? "Utf8." : "Utf16.") + "id"),
-                (Name: "$ref", Index: -3, Table: (utf8 ? "Utf8." : "Utf16.") + "@ref"),
-            })
-            .ToArray();
+        var names = MemberNames(model)
+            .Concat(new[] { (Name: "$id", Index: -2, Member: IdName), (Name: "$ref", Index: -3, Member: ReferenceName) });
+        if (model.SequenceBase != null)
+            names = names.Append((Name: "$value", Index: -4, Member: SequenceName));
+        var candidates = names.Select(item => (item.Name, item.Index, Table: (utf8 ? "Utf8." : "Utf16.") + item.Member)).ToArray();
         bool small = candidates.Length <= 8 || JsonNameDispatch.HasSmallBuckets(
             candidates.Select(item => utf8 ? Encoding.UTF8.GetByteCount(item.Name) : item.Name.Length));
         string element = utf8 ? "byte" : "char";

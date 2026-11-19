@@ -153,7 +153,7 @@ internal static partial class BinaryEmitter
             body.Add("}");
         }
         body.Add("");
-        AddVersionPublication(model, body, temps);
+        AddVersionPublication(model, body, temps, registered: !withNull);
         AppendMappedRead(model, w, body, fieldsType, profile, temps);
         for (int index = 0; index < members.Length; index++)
             AppendVersionFieldRead(model, w, body, fieldsType, index, temps[index]);
@@ -279,7 +279,8 @@ internal static partial class BinaryEmitter
     /// <param name="model">The reading payload.</param>
     /// <param name="body">The receiving statements.</param>
     /// <param name="temps">The staged member expressions.</param>
-    private static void AddVersionPublication(PayloadRenderModel model, List<string> body, string[] temps)
+    /// <param name="registered">Whether the instance was already registered for reference tracking.</param>
+    private static void AddVersionPublication(PayloadRenderModel model, List<string> body, string[] temps, bool registered)
     {
         var members = model.Members;
         bool mirroredMembers = model.Members.Any(member => member.Mirrored);
@@ -306,6 +307,11 @@ internal static partial class BinaryEmitter
             return;
         }
         body.Add("var completedInstance = value;");
+        if (registered)
+        {
+            PublishExisting();
+            return;
+        }
         body.Add("if (value is null)");
         body.Add("{");
         if (model.Rent != null)
@@ -334,11 +340,16 @@ internal static partial class BinaryEmitter
         body.Add("}");
         body.Add("else");
         body.Add("{");
-        if (mirroredMembers)
-            body.Add("ref var reuseLocal = ref " + "LuminPackMarshal" + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref completedInstance!);");
-        for (int index = 0; index < members.Length; index++)
-            body.Add((members[index].Mirrored ? "reuseLocal." : "completedInstance!.") + members[index].Name + " = " + temps[index] + "!;");
+        PublishExisting();
         body.Add("}");
+
+        void PublishExisting()
+        {
+            if (mirroredMembers)
+                body.Add("ref var reuseLocal = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref completedInstance!);");
+            for (int index = 0; index < members.Length; index++)
+                body.Add((members[index].Mirrored ? "reuseLocal." : "completedInstance!.") + members[index].Name + " = " + temps[index] + "!;");
+        }
     }
 
 

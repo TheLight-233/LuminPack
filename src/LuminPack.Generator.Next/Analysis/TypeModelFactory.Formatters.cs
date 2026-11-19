@@ -25,6 +25,13 @@ internal static partial class TypeModelFactory
             List<string> issues, Path path, bool ownFormatter = false)
         {
             ITypeSymbol type = member.Type;
+            // A closed unconstrained T? can carry an annotation even when substituted with a non-nullable value type.
+            if (policy.TrackReferences && type.IsValueType && type.NullableAnnotation == NullableAnnotation.Annotated &&
+                type is INamedTypeSymbol namedValue && namedValue.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T)
+            {
+                type = type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+                member = new MemberSite(member.Name, type, member.Volatile, member.Containing);
+            }
             if (type is ITypeParameterSymbol || type.TypeKind == TypeKind.Enum ||
                 type.SpecialType == SpecialType.System_String || Scalar(type) != null)
                 return ClassifySpecialized(member, storage, policy, owner, depth, issues, path);
@@ -183,7 +190,7 @@ internal static partial class TypeModelFactory
                 return new FormatterModel(spelling, definition, arguments, raw, rawCollection, layout);
             }
 
-            bool ordinary = named.TypeKind == TypeKind.Class && GenerationMode(named) == "Object" &&
+            bool ordinary = named.TypeKind == TypeKind.Class && !TracksReferences(named) && GenerationMode(named) == "Object" &&
                 !HasAttribute(named, UnionAttribute) && !HasAttribute(named, "System.Runtime.CompilerServices.UnionAttribute");
             if (path.Active.Contains(named))
                 return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, ordinaryObject: ordinary);
@@ -222,7 +229,7 @@ internal static partial class TypeModelFactory
             if (IsImplicitFormatterType(named))
             {
                 var localIssues = new List<string>();
-                StructModel payload = CreateStructModel(named, Identity(named), TypeAccessibility.Internal, TypePolicy(named, PayloadKind.Struct), depth + 1, localIssues, path, "Object", Array.Empty<string>());
+                StructModel payload = CreateStructModel(named, Identity(named), TypeAccessibility.Internal, TypePolicy(named), depth + 1, localIssues, path, "Object", Array.Empty<string>());
                 if (localIssues.Count == 0 && CanPublish(payload))
                     return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, raw: rawCollection, rawCollection: rawCollection, layout: layout, payload: payload, publishPayload: true);
             }

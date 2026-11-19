@@ -421,18 +421,27 @@ internal static class JsonEmitter
     /// <param name="model">The record whose payload is its list base.</param>
     /// <param name="w">The generated source writer.</param>
     /// <returns>The body lines.</returns>
-    private static List<string> SequenceWriteBody(PayloadRenderModel model, CodeWriter w)
+    /// <param name="input">The input expression, or <c>input</c> for a standalone root that also writes null.</param>
+    internal static List<string> SequenceWriteBody(PayloadRenderModel model, CodeWriter w, string input = null)
     {
         string element = "global::LuminPack." + model.Owner;
-        return new List<string>
+        var body = new List<string>();
+        if (input == null)
         {
-            "if (input is null)",
-            "{",
-            "\twriter.WriteNull<" + Profile + ">();",
-            "\treturn;",
-            "}",
+            input = "input";
+            body.AddRange(new[]
+            {
+                "if (input is null)",
+                "{",
+                "\twriter.WriteNull<" + Profile + ">();",
+                "\treturn;",
+                "}",
+            });
+        }
+        body.AddRange(new[]
+        {
             "writer.WriteArrayStart<" + Profile + ">();",
-            "var span = " + w.A("LuminPackMarshal") + ".GetListSpan(input);",
+            "var span = " + w.A("LuminPackMarshal") + ".GetListSpan(" + input + ");",
             "if (!span.IsEmpty)",
             "{",
             "\tref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(span);",
@@ -447,7 +456,8 @@ internal static class JsonEmitter
             "\twhile (++index < span.Length);",
             "}",
             "writer.WriteArrayEnd<" + Profile + ">();",
-        };
+        });
+        return body;
     }
 
     /// <summary>Emits the JSON read body of a list-derived payload, keeping the incoming derived instance.</summary>

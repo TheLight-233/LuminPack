@@ -25,6 +25,12 @@ internal static class CodeFixChecks
     /// <returns>The asynchronous test operation.</returns>
     internal static async Task RunAsync(string[] args)
     {
+        if (args.Length == 0 || args.Contains("--verify-reference-mode", StringComparer.Ordinal))
+        {
+            await VerifyReferenceModeAsync();
+            if (args.Length != 0)
+                return;
+        }
         if (args.Length == 0 || args.Contains("--verify-string-codecs", StringComparer.Ordinal))
         {
             await VerifyStringCodecsAsync();
@@ -161,6 +167,51 @@ internal static class CodeFixChecks
         return operations.OfType<ApplyChangesOperation>().Single().ChangedSolution;
     }
 
+    /// <summary>Migrates the actual obsolete enum diagnostic, preserving a preexisting option across partial declarations.</summary>
+    private static async Task VerifyReferenceModeAsync()
+    {
+        const string declaration = """
+            using Mode = LuminPack.Attribute.GeneratorType;
+            [LuminPackable(generatorType: Mode.CircleReference)]
+            public partial class Node
+            {
+                public Node? Parent;
+            }
+            """;
+        foreach (string[] sources in new[]
+        {
+            new[] { declaration },
+            new[] { declaration, "[LuminPackOption(MaxDepth = 4, TrackReferences = /* keep */ false)] public partial class Node { }" },
+        })
+        {
+            using var workspace = CreateWorkspace(sources);
+            var project = workspace.CurrentSolution.Projects.Single();
+            var compilation = (await project.GetCompilationAsync())!;
+            var diagnostic = compilation.GetDiagnostics().Single(d => d.Id == "CS0618");
+            var document = project.GetDocument(diagnostic.Location.SourceTree!)!;
+            var actions = await ActionsAsync(new LuminPackReferenceModeCodeFixProvider(), document, diagnostic);
+            Require(actions.Count == 1, "Expected one reference-tracking migration.");
+            var changed = (await ApplyAsync(actions[0])).GetProject(project.Id)!;
+            var updated = (await changed.GetCompilationAsync())!;
+            Require(!updated.GetDiagnostics().Any(d => d.Id == "CS0618" || d.Severity == DiagnosticSeverity.Error),
+                "The reference migration must compile without the obsolete enum warning.");
+            Require((await changed.Documents.First().GetTextAsync()).ToString().Contains("Mode.VersionTolerant", StringComparison.Ordinal),
+                "Preserve the enum alias and constructor argument name.");
+            var options = updated.GetTypeByMetadataName("Node")!.GetAttributes()
+                .Single(item => item.AttributeClass?.Name == "LuminPackOptionAttribute");
+            Require(options.NamedArguments.Any(argument => argument.Key == "TrackReferences" && argument.Value.Value is true),
+                "The migration must enable tracking on the declaration.");
+            if (sources.Length > 1)
+            {
+                Require(options.NamedArguments.Any(argument => argument.Key == "MaxDepth" && argument.Value.Value is 4),
+                    "Keep the existing option values.");
+                Require((await changed.Documents.Last().GetTextAsync()).ToString().Contains("/* keep */", StringComparison.Ordinal),
+                    "Keep comments on the option value.");
+            }
+        }
+        Console.WriteLine("Passed reference-tracking mode migration.");
+    }
+
     /// <summary>Applies the migration to an existing profile and compiles the resulting scoped signatures.</summary>
     /// <returns>The asynchronous verification.</returns>
     private static async Task VerifyStringCodecsAsync()
@@ -185,7 +236,11 @@ internal static class CodeFixChecks
         if (actions.Count != 1 || actions[0].EquivalenceKey != "LuminPackUtf8VarIntStrings")
             throw new InvalidOperationException("The profile migration did not select its original codec.");
         var solution = await ApplyAsync(actions[0]);
-        var updated = (await solution.GetProject(project.Id)!.GetCompilationAsync())!;
+        var updatedProject = solution.GetProject(project.Id)!;
+        string migrated = (await updatedProject.Documents.Single().GetTextAsync()).ToString();
+        Require(migrated.Contains(".Skip(ref reader, maxStringLength)", StringComparison.Ordinal),
+            "The profile migration must delegate versioned string skipping to its codec.");
+        var updated = (await updatedProject.GetCompilationAsync())!;
         var errors = updated.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
         if (errors.Length != 0)
             throw new InvalidOperationException(string.Join(Environment.NewLine, errors.Select(d => d.ToString())));

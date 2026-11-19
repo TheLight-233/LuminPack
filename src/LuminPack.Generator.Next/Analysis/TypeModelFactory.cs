@@ -355,8 +355,8 @@ internal static partial class TypeModelFactory
             TypeAccessibility accessibility = symbol.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public
                 ? TypeAccessibility.Public : TypeAccessibility.Internal;
             string[] constraints = TypeConstraints(symbol);
-            PayloadKind kind = Kind(symbol, generatorType);
-            WirePolicy policy = TypePolicy(symbol, kind);
+            PayloadKind kind = Kind(symbol);
+            WirePolicy policy = TypePolicy(symbol);
             // An explicit hostile-input declaration rejects input-selected shapes in both directions; the implicit default keeps
             // them working with checked reads.
             if (policy.Input == InputPolicy.Untrusted && policy.Limits.Explicit &&
@@ -411,31 +411,10 @@ internal static partial class TypeModelFactory
                         standardJson: UnionProfileAlias(encoding, recording), referenced: referenced, rejection: unionRejection,
                         closedWriteSlot: closedWriteSlot, hidesGetType: HidesObjectGetType(symbol));
                 }
-                case PayloadKind.CircleReference:
-                {
-                    MemberModel[] members = Members(symbol, policy, depth, issues, out bool derived, path);
-                    MirrorFields(symbol, out string[]? mirrorFields, out int[]? mirrorOffsets, out string? mirrorLayout);
-                    var declarations = Levels(symbol).SelectMany(OrderedStorageMembers).Where(member => TryStorage(member, out _))
-                        .ToDictionary(member => member.Name, StringComparer.Ordinal);
-                    int[] slots = members.Select(member => checked((int)(Order(declarations[member.Name]) ?? 0))).ToArray();
-                    int[] widths = members.Select(member => LegacyReferenceWidth(VersionFieldType(StorageType(declarations[member.Name])) ?? 19,
-                        StorageType(declarations[member.Name]))).ToArray();
-                    ConstructorModel? construction = SelectedConstructorModel(symbol, members, issues);
-                    CallbackModel? callbacks = SerializationCallbacks(symbol, identity.GlobalName);
-                    string? rent = PoolRent(symbol, identity.GlobalName, issues);
-                    if (rent != null && construction != null)
-                        construction = construction.Rented();
-                    bool rentByRef = rent != null && symbol.GetMembers().OfType<IMethodSymbol>()
-                        .Any(method => HasAttribute(method, PoolRentAttribute) && method.ReturnsByRef);
-                    return new CircleReferenceModel(identity, accessibility, members, policy, constraints, IsRecursive(symbol), derived,
-                        Rent(symbol), SelectedConstructor(symbol), Callbacks(symbol), FieldsInOrder(symbol, members),
-                        mirrorFields, mirrorOffsets, mirrorLayout, slots, widths, construction, callbacks, rent, rentByRef,
-                        CaptureMirrors(symbol, identity, issues));
-                }
                 default:
                 {
                     MemberModel[] members = Members(symbol, policy, depth, issues, out bool derived, path);
-                    bool versioned = generatorType == "VersionTolerant";
+                    bool versioned = generatorType is "VersionTolerant" or "CircleReference";
                     // A class whose serialized content is only a supported List<T> base publishes that list's body. Modeling it
                     // as an empty record would write the object marker alone and silently drop every element on read.
                     INamedTypeSymbol? sequenceBase = members.Length == 0 && !versioned ? SequenceBase(symbol) : null;
@@ -443,6 +422,8 @@ internal static partial class TypeModelFactory
                     // the legacy model computes them; a rent supplies the instance instead of the constructor.
                     ConstructorModel? constructor = SelectedConstructorModel(symbol, members, issues);
                     string? rent = PoolRent(symbol, identity.GlobalName, issues);
+                    bool rentByRef = policy.TrackReferences && rent != null && symbol.GetMembers().OfType<IMethodSymbol>()
+                        .Any(method => HasAttribute(method, PoolRentAttribute) && method.ReturnsByRef);
                     CallbackModel? callbacks = SerializationCallbacks(symbol, identity.GlobalName);
                     if (constructor != null && rent != null)
                         constructor = constructor.Rented();
@@ -464,12 +445,12 @@ internal static partial class TypeModelFactory
                             out mirror, out mirrorFields, out mirrorOffsets, out mirrorLayout);
                     // The proven object write needs every variable member to be a string; a rent declares a layout mirror for
                     // its public fields, which the proven write still reaches directly.
-                    bool proven = !versioned && !derived && !members.Any(member => member.Mirrored) &&
+                    bool proven = !policy.TrackReferences && !versioned && !derived && !members.Any(member => member.Mirrored) &&
                         policy.Bound == null && Options.Net8 && Options.Unsafe && !Options.Unity && members.Length != 0 &&
                         members.Any(member => member is TextMember) && members.All(member => member is ScalarMember or TextMember);
                     return new RecordModel(identity, accessibility, members, policy, constraints, versioned,
                         fixedUnionCase: !versioned && members.All(member => member is ScalarMember) && IsFixedUnionCase(symbol),
-                        derived, proven, RecordWidthSupported(symbol),
+                        derived, proven, !policy.TrackReferences && RecordWidthSupported(symbol),
                         // A pooled read rents its instance, so it never assigns a fresh result directly.
                         rent == null && CanDeserializeDirectlyIntoFreshResult(symbol, members),
                         mirror, mirrorFields, mirrorOffsets, mirrorLayout, version,
@@ -486,7 +467,9 @@ internal static partial class TypeModelFactory
                             symbol.BaseType is { SpecialType: SpecialType.System_Object } &&
                             !symbol.AllInterfaces.Any(contract => IsPackable(contract.OriginalDefinition) ||
                                 HasAttribute(contract.OriginalDefinition, UnionAttribute)) &&
-                            !symbol.GetMembers().OfType<IFieldSymbol>().Any(field => field.IsVolatile));
+                            !symbol.GetMembers().OfType<IFieldSymbol>().Any(field => field.IsVolatile),
+                        rentByRef: rentByRef, referenceConstruction: policy.TrackReferences && rent == null
+                            ? ReferenceConstruction(symbol, identity.GlobalName) : null);
                 }
             }
         }
@@ -1136,7 +1119,8 @@ internal static partial class TypeModelFactory
             // A generic payload closes over a formatter contract at the operation boundary; its complete member graph is not
             // expanded here, so it stays a member entry.
             if (type.IsGenericType)
-                return new PayloadMember(name, storage, policy, Reference(type), PayloadShape.MemberEntry, nested: null);
+                return new PayloadMember(name, storage, policy, Reference(type),
+                    TracksReferences(type) ? PayloadShape.ReferenceTracked : PayloadShape.MemberEntry, nested: null);
             // A referenced type keeps its own assembly's operations unless this assembly marks it as an external root.
             if (!marked && !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly))
                 return new PayloadMember(name, storage, policy, Reference(type), PayloadShape.MemberEntry, nested: null);
@@ -1146,7 +1130,7 @@ internal static partial class TypeModelFactory
                 // The framing of this member depends on the expansion path, so neither this payload nor its ancestors may be
                 // published to the session cache.
                 path.SawCycle = true;
-                if (GenerationMode(type) == "CircleReference")
+                if (TracksReferences(type))
                     return new PayloadMember(name, storage, policy, Reference(type), PayloadShape.ReferenceTracked, nested: null);
                 issues.Add("member '" + name + "' refers back to '" + type.ToDisplayString() + "' before its payload is complete");
                 return new PayloadMember(name, storage, policy, Reference(type), PayloadShape.MemberEntry, nested: null);
@@ -1281,7 +1265,7 @@ internal static partial class TypeModelFactory
                 ModelResult analyzed = Analyze(caseType, 0, path);
                 TypeModel? caseModel = analyzed.Model;
                 bool caseReadGeneric = caseModel == null || NeedsReadProfile(caseModel);
-                bool expandable = caseModel is RecordModel && analyzed.IsComplete &&
+                bool expandable = caseModel is RecordModel { Versioned: false, Policy.TrackReferences: false } && analyzed.IsComplete &&
                     caseModel.Members.Length != 0 && !caseModel.Members.Any(member => member.Mirrored) &&
                     caseModel.Members.All(member => member is ScalarMember) && !SelectedConstructor(caseType);
                 // A complete local record whose fixed body this pipeline does not expand inline reads through its own Union
@@ -1292,7 +1276,7 @@ internal static partial class TypeModelFactory
                     ownEntry = true;
                     caseReadGeneric = true;
                 }
-                if (!ownEntry && !expandable && caseModel is RecordModel or CircleReferenceModel && analyzed.IsComplete &&
+                if (!ownEntry && !expandable && caseModel is RecordModel && analyzed.IsComplete &&
                     SymbolEqualityComparer.Default.Equals(caseType.ContainingAssembly, _compilation.Assembly) &&
                     !ContainsTypeParameter(caseType) && GenerationMode(caseType) != "Custom")
                     ownEntry = true;
@@ -1387,7 +1371,7 @@ internal static partial class TypeModelFactory
         /// <returns>Whether the case owns its Union read entry.</returns>
         private bool ReadsOwnUnionEntry(INamedTypeSymbol type)
             => type is { IsReferenceType: true, IsAbstract: false, TypeKind: TypeKind.Class } && Owned(type) &&
-               !ContainsTypeParameter(type) && GenerationMode(type) != "Custom" && HasVariablePayload(type);
+               !ContainsTypeParameter(type) && GenerationMode(type) != "Custom" && (TracksReferences(type) || HasVariablePayload(type));
 
         /// <summary>Whether some instance field or property of the case or its bases is not unmanaged storage.</summary>
         /// <param name="type">The concrete case.</param>
@@ -1573,6 +1557,8 @@ internal static partial class TypeModelFactory
         {
             if (type is not { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } || !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly))
                 return false;
+            if (TracksReferences(type))
+                return false;
             bool hasRoot = false;
             for (var parent = type.BaseType; parent != null && parent.SpecialType != SpecialType.System_Object; parent = parent.BaseType)
             {
@@ -1725,9 +1711,8 @@ internal static partial class TypeModelFactory
 
         /// <summary>Resolves the declaration-time wire policy of one payload.</summary>
         /// <param name="symbol">The payload type.</param>
-        /// <param name="kind">The payload protocol, which selects reference tracking.</param>
         /// <returns>The effective policy.</returns>
-        private WirePolicy TypePolicy(INamedTypeSymbol symbol, PayloadKind kind)
+        private WirePolicy TypePolicy(INamedTypeSymbol symbol)
         {
             WirePolicy policy = _assemblyPolicy;
             var scopes = new Stack<INamedTypeSymbol>();
@@ -1735,7 +1720,7 @@ internal static partial class TypeModelFactory
                 scopes.Push(type);
             while (scopes.Count != 0)
                 policy = Apply(policy, scopes.Pop());
-            if (kind == PayloadKind.CircleReference && !policy.TrackReferences)
+            if (TracksReferences(symbol))
                 policy = new WirePolicy(policy.Input, policy.Strings, policy.Bound, trackReferences: true, declared: policy.Declared,
                     limits: policy.Limits);
             return policy;
@@ -2745,6 +2730,38 @@ internal static partial class TypeModelFactory
             return new ConstructorModel(arguments, constructed, StorageOrder(type));
         }
 
+        /// <summary>Creates an instance for reference registration using the selected constructor with typed defaults.</summary>
+        private static string ReferenceConstruction(INamedTypeSymbol type, string name)
+        {
+            IMethodSymbol? constructor = SelectConstructor(type, out _);
+            string arguments = constructor == null ? string.Empty : string.Join(", ", constructor.Parameters.Select(parameter =>
+                "default(" + parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ")!"));
+            string expression = "new " + name + "(" + arguments + ")";
+            if (constructor != null && HasAttribute(constructor, "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute"))
+                return expression;
+            string[] required = Levels(type).SelectMany(level => level.GetMembers()).Where(IsRequiredMember)
+                .Select(member => "@" + member.Name + " = default!").Distinct(StringComparer.Ordinal).ToArray();
+            return required.Length == 0 ? expression : expression + " { " + string.Join(", ", required) + " }";
+        }
+
+        /// <summary>Recognizes required members without depending on a newer Roslyn symbol API.</summary>
+        private static bool IsRequiredMember(ISymbol member)
+        {
+            if (member is not (IFieldSymbol or IPropertySymbol))
+                return false;
+            if (HasAttribute(member, "System.Runtime.CompilerServices.RequiredMemberAttribute"))
+                return true;
+            foreach (SyntaxReference reference in member.DeclaringSyntaxReferences)
+            {
+                var syntax = reference.GetSyntax();
+                var declaration = syntax is VariableDeclaratorSyntax ? syntax.Parent?.Parent : syntax;
+                if (declaration is PropertyDeclarationSyntax property && property.Modifiers.Any(token => token.ValueText == "required") ||
+                    declaration is FieldDeclarationSyntax field && field.Modifiers.Any(token => token.ValueText == "required"))
+                    return true;
+            }
+            return false;
+        }
+
         /// <summary>Matches a constructor parameter to the first serialized member with equal name, ignoring case.</summary>
         /// <param name="members">The serialized members in wire order.</param>
         /// <param name="parameter">The constructor parameter name.</param>
@@ -3319,13 +3336,6 @@ internal static partial class TypeModelFactory
             return new string((char)(fieldType | (compressed ? 32 : 0) | (encoding << 6) | ((int)policy.Strings.Recording << 7)), 1);
         }
 
-        /// <summary>Gets the width byte of the existing reference-tracked positional slot table.</summary>
-        /// <param name="fieldType">The slot's original field classification.</param>
-        /// <param name="type">The member type.</param>
-        /// <returns>The legacy slot width code.</returns>
-        private static int LegacyReferenceWidth(int fieldType, ITypeSymbol type) =>
-            fieldType is 12 or >= 15 ? 255 : PortableScalarSize(type);
-
         /// <summary>Gets a width that the existing field operation guarantees on each supported target.</summary>
         /// <param name="type">The declared field or nullable payload type.</param>
         /// <returns>The wire width, or null when it can vary.</returns>
@@ -3734,14 +3744,11 @@ internal static partial class TypeModelFactory
 
     /// <summary>Classifies the payload protocol from the declaration and its generator type.</summary>
     /// <param name="symbol">The declared payload type.</param>
-    /// <param name="generatorType">The declared generation mode name.</param>
     /// <returns>The payload protocol.</returns>
-    private static PayloadKind Kind(INamedTypeSymbol symbol, string generatorType)
+    private static PayloadKind Kind(INamedTypeSymbol symbol)
     {
         if (symbol.TypeKind == TypeKind.Interface || symbol.IsAbstract)
             return PayloadKind.Union;
-        if (generatorType == "CircleReference")
-            return PayloadKind.CircleReference;
         if (symbol.IsValueType)
             return PayloadKind.Struct;
         return PayloadKind.Record;
@@ -3857,6 +3864,11 @@ internal static partial class TypeModelFactory
             element = array.ElementType;
         return KnownValueTypes.Contains(Session.FormatterSpelling(element));
     }
+
+    /// <summary>Resolves the reference contract directly from a concrete class declaration.</summary>
+    private static bool TracksReferences(INamedTypeSymbol type) =>
+        type is { TypeKind: TypeKind.Class, IsAbstract: false } &&
+        (OptionSwitch(type, "TrackReferences") || GenerationMode(type) == "CircleReference");
 
     /// <summary>Reads a packable declaration's generation mode.</summary>
     /// <param name="symbol">The candidate type.</param>
@@ -4089,7 +4101,7 @@ internal static partial class TypeModelFactory
     /// <returns>The member framing.</returns>
     private static PayloadShape ShapeOf(TypeModel nested) => nested switch
     {
-        CircleReferenceModel => PayloadShape.ReferenceTracked,
+        RecordModel { Policy.TrackReferences: true } => PayloadShape.ReferenceTracked,
         RecordModel { Versioned: false } => PayloadShape.Inline,
         _ => PayloadShape.MemberEntry,
     };

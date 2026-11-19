@@ -25,6 +25,20 @@ internal static partial class NextPipeline
     /// <param name="context">The incremental generator context.</param>
     internal static void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        // Reference tracking is a class contract even when the invalid target has no generated model.
+        var referenceScopes = context.SyntaxProvider.ForAttributeWithMetadataName(
+            "LuminPack.Attribute.LuminPackOptionAttribute", static (node, _) => ConsumerTree(node.SyntaxTree),
+            static (attributeContext, _) => InvalidReferenceScope(attributeContext))
+            .Where(static diagnostic => diagnostic != null)
+            .Collect();
+        context.RegisterSourceOutput(referenceScopes.Combine(context.CompilationProvider), static (production, input) =>
+        {
+            var seen = new HashSet<DiagnosticInfo>();
+            foreach (DiagnosticInfo? item in input.Left)
+                if (item is DiagnosticInfo diagnostic && seen.Add(diagnostic))
+                    production.ReportDiagnostic(DiagnosticDescriptors.Create(diagnostic, input.Right));
+        });
+
         var models = context.SyntaxProvider.ForAttributeWithMetadataName(PackableAttribute,
             static (node, _) => node is TypeDeclarationSyntax,
             static (attributeContext, cancellationToken) =>
@@ -131,6 +145,20 @@ internal static partial class NextPipeline
                 production.ReportDiagnostic(DiagnosticDescriptors.Create(diagnostic, input.Right));
         });
         InitializePublication(context, requests, report);
+    }
+
+    /// <summary>Reports TrackReferences on any declaration other than a class.</summary>
+    private static DiagnosticInfo? InvalidReferenceScope(GeneratorAttributeSyntaxContext context)
+    {
+        if (context.TargetSymbol is INamedTypeSymbol { TypeKind: TypeKind.Class })
+            return null;
+        foreach (AttributeData attribute in context.Attributes)
+            foreach (var argument in attribute.NamedArguments)
+                if (argument.Key == "TrackReferences")
+                    return DiagnosticInfo.Capture(DiagnosticDescriptors.InvalidCompiledOption.Id,
+                        attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
+                        new[] { "TrackReferences", "TrackReferences applies only to class declarations." });
+        return null;
     }
 
     /// <summary>Models the referenced types the consuming assembly marks as external roots.</summary>

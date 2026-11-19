@@ -331,7 +331,7 @@ public enum LuminPackRegisterMode : byte
 /// Unspecified properties inherit the enclosing declaration's options. Assembly options override the library defaults;
 /// type and member declarations override the corresponding enclosing scope. Binary string settings can vary by member.
 /// JSON encoding, depth and syntax policy describe a complete document and are selected at its root.
-/// WideTag, SingleImplementation and ReuseRectangularArraySlots are declaration-only contracts and do not inherit enclosing options.
+/// WideTag, SingleImplementation, TrackReferences and ReuseRectangularArraySlots are declaration-only contracts and do not inherit enclosing options.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Struct |
     AttributeTargets.Interface | AttributeTargets.Field | AttributeTargets.Property, Inherited = false)]
@@ -344,6 +344,10 @@ public sealed class LuminPackOptionAttribute : System.Attribute
     /// <summary>Gets or sets the declaration's guarantee that the polymorphic root has one implementation everywhere.</summary>
     /// <remarks>Applies only to this class or interface. Retains the existing Union framing and virtual dispatch contract.</remarks>
     public bool SingleImplementation { get; set; }
+
+    /// <summary>Gets or sets whether this class preserves shared references and cycles.</summary>
+    /// <remarks>Applies only to the annotated class and works with either generated binary record format.</remarks>
+    public bool TrackReferences { get; set; }
 
     /// <summary>Gets or sets whether Next reuses existing slots when reading a binary rank-two array of this class.</summary>
     /// <remarks>

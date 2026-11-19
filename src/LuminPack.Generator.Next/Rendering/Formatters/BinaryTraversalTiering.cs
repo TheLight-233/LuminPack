@@ -31,7 +31,7 @@ internal static class BinaryTraversalTiering
             return true;
         if (payload != null)
         {
-            return payload is { IsStruct: false, UnionRoot: false, CamelSnapshots: false, FixedUnionCase: false, Circle: false, Recursive: false,
+            return payload is { IsStruct: false, UnionRoot: false, CamelSnapshots: false, FixedUnionCase: false, TrackReferences: false, Recursive: false,
                 Version: null, Rent: null, Rejection: null, SequenceBase: null, Bounded: null, HasCallbacks: false,
                 ConstructorArguments: null } &&
                 (payload.Members.Any(member => member.Kind is RenderMemberKind.Dictionary or RenderMemberKind.SortedList or

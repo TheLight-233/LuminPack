@@ -7,8 +7,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>Entry points of the model-direct emission that the Next pipeline owns.</summary>
 /// <remarks>The emitters below this boundary consume only <see cref="PayloadRenderModel"/> values; no Roslyn symbol, legacy
-/// analysis object or old generator service participates. Union and reference-tracked payloads keep their placeholders until
-/// their model facts are ported.</remarks>
+/// analysis object or old generator service participates.</remarks>
 internal static class PayloadEmitter
 {
     /// <summary>Renders one format of a covered payload.</summary>
@@ -24,13 +23,11 @@ internal static class PayloadEmitter
         using var writer = new CodeWriter(aliases) { Scoped = model.Net8, Json = json };
         if (json)
         {
-            if (model.Circle)
+            if (model.TrackReferences)
                 CircleJsonEmitter.Emit(model, writer, operations);
             else
                 JsonEmitter.Emit(model, writer, operations);
         }
-        else if (model.Circle)
-            CircleBinaryEmitter.Emit(model, writer, operations);
         else if (model.IsStruct)
             StructEmitter.Emit(model, writer, operations);
         else

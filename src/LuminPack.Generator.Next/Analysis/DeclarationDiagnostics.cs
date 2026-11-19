@@ -65,8 +65,6 @@ internal static partial class TypeModelFactory
             bool union = type.IsAbstract || HasAttribute(type, UnionAttribute);
             if (union)
                 ValidateUnion(type, ref diagnostics);
-            if (mode == "CircleReference")
-                ValidateCircleOrders(type, ref diagnostics);
 
             var members = new List<ISymbol>();
             var storageNames = new HashSet<string>(StringComparer.Ordinal);
@@ -111,7 +109,9 @@ internal static partial class TypeModelFactory
             }
             if (members.Count > 249)
                 diagnostics.Add(DiagnosticDescriptors.MembersCountOver250, type, type.Name, members.Count.ToString(CultureInfo.InvariantCulture));
-            ValidateVersionNames(type, members, mode, ref diagnostics);
+            ValidateVersionNames(type, members, mode == "CircleReference" ? "VersionTolerant" : mode, ref diagnostics);
+            if (TracksReferences(type))
+                ValidateReferenceJsonNames(type, members, ref diagnostics);
             ValidateCallbacks(type, ref diagnostics);
             if (!union && !type.IsStatic)
                 ValidateConstructors(type, members, ref diagnostics);
@@ -217,6 +217,18 @@ internal static partial class TypeModelFactory
                     if (attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOldNameAttribute")
                         ValidateVersionName(type, attribute.ConstructorArguments.FirstOrDefault().Value as string, names, ref diagnostics);
             }
+        }
+
+        /// <summary>Protects identity properties from alias dispatch in reference-tracked JSON.</summary>
+        private static void ValidateReferenceJsonNames(INamedTypeSymbol type, List<ISymbol> members,
+            ref DeclarationDiagnosticBag diagnostics)
+        {
+            foreach (ISymbol member in members)
+            foreach (AttributeData attribute in member.GetAttributes())
+                if (attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOldNameAttribute" &&
+                    attribute.ConstructorArguments.FirstOrDefault().Value is string name && name is "$id" or "$ref")
+                    diagnostics.Add(DiagnosticDescriptors.InvalidVersionMemberName, member, type.Name,
+                        "Serialized member name '" + name + "' is reserved for reference tracking.");
         }
 
         /// <summary>Checks one current or former binary member identity.</summary>

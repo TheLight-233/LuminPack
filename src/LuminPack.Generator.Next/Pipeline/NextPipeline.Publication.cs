@@ -560,7 +560,7 @@ internal static partial class NextPipeline
     /// <param name="model">The declaration or closed owner.</param>
     /// <returns>Whether the payload renderer supports applying a read scope.</returns>
     private static bool HasProjectableRead(TypeModel model) =>
-        model is RecordModel { Rejection: null } or StructModel { Storage: StructStorage.ManagedRecord, Rejection: null } or CircleReferenceModel;
+        model is RecordModel { Rejection: null } or StructModel { Storage: StructStorage.ManagedRecord, Rejection: null };
 
     /// <summary>Builds the closed operation catalog consumed by interception.</summary>
     /// <param name="payloads">The normalized declaration results.</param>

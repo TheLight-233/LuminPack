@@ -25,8 +25,6 @@ internal enum PayloadKind
     /// <summary>A polymorphic root with tagged cases.</summary>
     Union,
 
-    /// <summary>A reference-tracked graph node.</summary>
-    CircleReference,
 }
 
 /// <summary>A normalized payload type. The model owns no Roslyn or legacy analysis object.</summary>
@@ -349,6 +347,12 @@ internal sealed class RecordModel : TypeModel
     /// <summary>The static pool rent call of a pooled record, such as <c>global::N.T.Rent()</c>, or null.</summary>
     internal readonly string? Rent;
 
+    /// <summary>Whether the pool returns its reusable storage by reference.</summary>
+    internal readonly bool RentByRef;
+
+    /// <summary>The construction expression for a tracked instance before its members are read.</summary>
+    internal readonly string? ReferenceConstruction;
+
     /// <summary>The declared list base whose contents are this record's entire payload, or null.</summary>
     /// <remarks>A list-derived class with no serialized members would otherwise publish a memberless object and drop its
     /// elements. When this is set, the record writes and reads the list base body instead of member framing.</remarks>
@@ -385,12 +389,14 @@ internal sealed class RecordModel : TypeModel
     /// <param name="sequenceElement">The list base's element spelling.</param>
     /// <param name="scalarHeader">Whether the ordinary class can use a combined marker and scalar.</param>
     /// <param name="stringPairs">Whether ordinary reads can group direct string fields.</param>
+    /// <param name="rentByRef">Whether the rental returns storage by reference.</param>
+    /// <param name="referenceConstruction">Creates a shell to register before decoding its members.</param>
     internal RecordModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
         bool versioned, bool fixedUnionCase, bool derived, bool proven, bool recordWidth, bool freshResult, string? mirror,
         string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, VersionSchemaModel? version,
         ConstructorModel? constructor = null, CallbackModel? callbacks = null, string? rent = null, StorageMirrorModel[]? mirrors = null,
         string? rejection = null, bool recursive = false, bool implicitPayload = false,
-        string? sequenceBase = null, string? sequenceElement = null, bool scalarHeader = false, bool stringPairs = false)
+        string? sequenceBase = null, string? sequenceElement = null, bool scalarHeader = false, bool stringPairs = false, bool rentByRef = false, string? referenceConstruction = null)
         : base(identity, accessibility, PayloadKind.Record, members, policy, constraints)
     {
         StringPairs = stringPairs;
@@ -401,6 +407,8 @@ internal sealed class RecordModel : TypeModel
         Recursive = recursive;
         Rejection = rejection;
         Rent = rent;
+        RentByRef = rentByRef;
+        ReferenceConstruction = referenceConstruction;
         Callbacks = callbacks;
         Mirrors = mirrors ?? Array.Empty<StorageMirrorModel>();
         Constructor = constructor;
@@ -422,7 +430,7 @@ internal sealed class RecordModel : TypeModel
         other is RecordModel record && base.Equals(other) && Mirrors.SequenceEqual(record.Mirrors) && Versioned == record.Versioned &&
         FixedUnionCase == record.FixedUnionCase && Derived == record.Derived && StringPairs == record.StringPairs &&
         Proven == record.Proven && RecordWidth == record.RecordWidth && FreshResult == record.FreshResult &&
-        Mirror == record.Mirror && Rent == record.Rent && Rejection == record.Rejection && Recursive == record.Recursive && Implicit == record.Implicit &&
+        Mirror == record.Mirror && Rent == record.Rent && RentByRef == record.RentByRef && ReferenceConstruction == record.ReferenceConstruction && Rejection == record.Rejection && Recursive == record.Recursive && Implicit == record.Implicit &&
         SequenceBase == record.SequenceBase && SequenceElement == record.SequenceElement && ScalarHeader == record.ScalarHeader &&
         Equals(Constructor, record.Constructor) &&
         Equals(Callbacks, record.Callbacks) &&
@@ -1049,120 +1057,4 @@ internal sealed class UnionModel : TypeModel
     /// <returns>Whether the input satisfies the same check.</returns>
     private static bool Same<T>(T[] left, T[] right) where T : IEquatable<T>
         => ReferenceEquals(left, right) || left.Length == right.Length && Enumerable.SequenceEqual(left, right);
-}
-
-/// <summary>A reference-tracked graph node.</summary>
-internal sealed class CircleReferenceModel : TypeModel
-{
-    /// <summary>The inherited Local storage declarations.</summary>
-    internal readonly StorageMirrorModel[] Mirrors;
-    /// <summary>Whether the node participates in cycle detection or only reference sharing.</summary>
-    internal readonly bool Guarded;
-
-    /// <summary>Whether the node has a base payload whose storage would join its mirror.</summary>
-    internal readonly bool Derived;
-
-    /// <summary>Whether the node declares a pool rent method.</summary>
-    internal readonly bool Rent;
-
-    /// <summary>Whether the node selects a constructor with parameters for its reads.</summary>
-    internal readonly bool SelectedConstructor;
-
-    /// <summary>Whether the node declares a serialization callback.</summary>
-    internal readonly bool Callbacks;
-
-    /// <summary>Whether every serialized member sits at its declared wire position.</summary>
-    internal readonly bool FieldsInOrder;
-
-    /// <summary>The node's complete storage mirror declarations in storage order, or null when the storage cannot be
-    /// reproduced exactly.</summary>
-    internal readonly string[]? MirrorFields;
-
-    /// <summary>The explicit-layout offset per mirror field, or null when the storage is sequential.</summary>
-    internal readonly int[]? MirrorOffsets;
-
-    /// <summary>The CLR layout attribute line of the storage mirror, or null.</summary>
-    internal readonly string? MirrorLayout;
-
-    /// <summary>The explicit wire slot of each member in sorted member order.</summary>
-    internal readonly int[] Slots;
-
-    /// <summary>The raw or length-framed width of each member, with zero for a runtime raw width.</summary>
-    internal readonly int[] Widths;
-
-    /// <summary>The selected construction metadata.</summary>
-    internal readonly ConstructorModel? Construction;
-
-    /// <summary>The validated callbacks.</summary>
-    internal readonly CallbackModel? SerializationCallbacks;
-
-    /// <summary>The static rental expression, or null.</summary>
-    internal readonly string? RentCall;
-
-    /// <summary>Whether rental rebinds destination storage by reference.</summary>
-    internal readonly bool RentByRef;
-
-    /// <summary>Captures a reference-tracked node.</summary>
-    /// <param name="identity">The identity supplied to <c>CircleReferenceModel</c>.</param>
-    /// <param name="accessibility">The accessibility supplied to <c>CircleReferenceModel</c>.</param>
-    /// <param name="members">The members supplied to <c>CircleReferenceModel</c>.</param>
-    /// <param name="policy">The policy supplied to <c>CircleReferenceModel</c>.</param>
-    /// <param name="constraints">The constraints supplied to <c>CircleReferenceModel</c>.</param>
-    /// <param name="guarded">Whether to enable guarded for this operation.</param>
-    /// <param name="derived">Whether to enable derived for this operation.</param>
-    /// <param name="rent">Whether to enable rent for this operation.</param>
-    /// <param name="selectedConstructor">Whether to enable selected constructor for this operation.</param>
-    /// <param name="callbacks">Whether to enable callbacks for this operation.</param>
-    /// <param name="fieldsInOrder">Whether to enable fields in order for this operation.</param>
-    /// <param name="mirrorFields">The mirror fields supplied to <c>CircleReferenceModel</c>.</param>
-    /// <param name="mirrorOffsets">The mirror offsets supplied to <c>CircleReferenceModel</c>.</param>
-    /// <param name="mirrorLayout">The mirror layout supplied to <c>CircleReferenceModel</c>.</param>
-    /// <param name="slots">The slots supplied to <c>CircleReferenceModel</c>.</param>
-    /// <param name="widths">The widths supplied to <c>CircleReferenceModel</c>.</param>
-    /// <param name="construction">The construction supplied to <c>CircleReferenceModel</c>.</param>
-    /// <param name="serializationCallbacks">The serialization callbacks supplied to <c>CircleReferenceModel</c>.</param>
-    /// <param name="rentCall">The rent call supplied to <c>CircleReferenceModel</c>.</param>
-    /// <param name="rentByRef">Whether to enable rent by ref for this operation.</param>
-    /// <param name="mirrors">The mirrors supplied to <c>CircleReferenceModel</c>.</param>
-    internal CircleReferenceModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy,
-        string[] constraints, bool guarded, bool derived, bool rent, bool selectedConstructor, bool callbacks, bool fieldsInOrder,
-        string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, int[] slots, int[] widths,
-        ConstructorModel? construction, CallbackModel? serializationCallbacks, string? rentCall, bool rentByRef, StorageMirrorModel[]? mirrors = null)
-        : base(identity, accessibility, PayloadKind.CircleReference, members, policy, constraints)
-    {
-        MirrorLayout = mirrorLayout;
-        MirrorOffsets = mirrorOffsets;
-        MirrorFields = mirrorFields;
-        Mirrors = mirrors ?? Array.Empty<StorageMirrorModel>();
-        Slots = slots;
-        Widths = widths;
-        Construction = construction;
-        SerializationCallbacks = serializationCallbacks;
-        RentCall = rentCall;
-        RentByRef = rentByRef;
-        FieldsInOrder = fieldsInOrder;
-        Callbacks = callbacks;
-        SelectedConstructor = selectedConstructor;
-        Rent = rent;
-        Derived = derived;
-        Guarded = guarded;
-    }
-
-    /// <inheritdoc/>
-    public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
-        other is CircleReferenceModel circle && base.Equals(other) && Mirrors.SequenceEqual(circle.Mirrors) && Guarded == circle.Guarded && Derived == circle.Derived &&
-        Rent == circle.Rent && SelectedConstructor == circle.SelectedConstructor && Callbacks == circle.Callbacks &&
-        FieldsInOrder == circle.FieldsInOrder && Slots.SequenceEqual(circle.Slots) && Widths.SequenceEqual(circle.Widths) &&
-        Equals(Construction, circle.Construction) && Equals(SerializationCallbacks, circle.SerializationCallbacks) &&
-        RentCall == circle.RentCall && RentByRef == circle.RentByRef && MirrorLayout == circle.MirrorLayout &&
-        (ReferenceEquals(MirrorFields, circle.MirrorFields) || MirrorFields != null && circle.MirrorFields != null &&
-            Enumerable.SequenceEqual(MirrorFields, circle.MirrorFields)) &&
-        (ReferenceEquals(MirrorOffsets, circle.MirrorOffsets) || MirrorOffsets != null && circle.MirrorOffsets != null &&
-            Enumerable.SequenceEqual(MirrorOffsets, circle.MirrorOffsets));
-
-    /// <inheritdoc/>
-    public override bool Equals(object? obj) => Equals(obj as TypeModel);
-
-    /// <inheritdoc/>
-    public override int GetHashCode() => Identity.GetHashCode();
 }

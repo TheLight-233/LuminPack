@@ -487,6 +487,12 @@ internal static partial class BinaryEmitter
                 Method(MemberWriteBody(model, w), "RootWriteMember", !fixedProfile, "(scoped ref " + writer + " writer, " + type + "? input)", inline);
                 w.Blank();
             }
+            if (model.TrackReferences)
+            {
+                TrackedRoots();
+                w.Close();
+                return;
+            }
             if (model.Version != null)
             {
                 VersionRoots();
@@ -530,6 +536,55 @@ internal static partial class BinaryEmitter
             RootAdapter("RootReadUnion", "Read", genericRead, readParameters, "ref reader, ref value", "LuminPackPayloadFraming");
             w.Suppressed = false;
             w.Close();
+        }
+
+        void TrackedRoots()
+        {
+            bool versioned = model.Version != null;
+            string writeParameters = "(scoped ref " + writer + " writer, " + type + "? input)";
+            string readParameters = "(scoped ref " + reader + " reader, scoped ref " + type + "? value)";
+            string noInline = w.MethodImpl("NoInlining");
+
+            w.Suppressed = !writes;
+            var write = CircleBinaryEmitter.WriteHeader(model, w, Root("WriteReferenceRecord", genericWrite));
+            Method(ApplyBoundedWrite(model, write), "RootWrite", genericWrite, writeParameters, inline);
+            w.Blank();
+            Alias("RootWriteUnion", "RootWrite", genericWrite, writeParameters, "ref writer, input");
+            w.Blank();
+            var record = versioned ? VersionWriteBody(model, w, withNull: false) : WriteBody(model, w, union: false, structValue: true, wrapBound: false);
+            record = Mirrored(model, w, record, writes: true, union: false);
+            if (!versioned && allFixed && members.Length != 0 && model.SequenceBase == null)
+                CircleBinaryEmitter.PrependNewHeader(model, record, "checked(6 + " + FixedObjectWidth(model) + ")");
+            else
+                CircleBinaryEmitter.PrependNewHeader(model, record, "7");
+            record.AddRange(model.WriteAfter);
+            Method(record, "WriteReferenceRecord", genericWrite, "(scoped ref " + writer + " writer, " + type + " input, int reference)", noInline);
+
+            w.Suppressed = !reads;
+            w.Blank();
+            var header = CircleBinaryEmitter.ReadHeader(model, w, Root("ReadReferenceRecord", genericRead));
+            if (model.Recursive)
+                header.Insert(0, w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
+            Method(header, "RootRead", genericRead, readParameters, inline, prepared: true);
+            w.Blank();
+            Alias("RootReadUnion", "RootRead", genericRead, readParameters, "ref reader, ref value");
+            w.Blank();
+            var read = new List<string>();
+            CircleBinaryEmitter.ReadNewRecord(model, w, read, Root("ReadRecord", genericRead));
+            Method(read, "ReadReferenceRecord", genericRead, readParameters, noInline, prepared: true);
+            w.Blank();
+            Method(TrackedRecordReadBody(model, w), "ReadRecord", genericRead, readParameters, noInline);
+            w.Suppressed = false;
+
+            void Alias(string name, string root, bool generic, string parameters, string values)
+            {
+                w.Line(w.Preserve);
+                w.Line(inline);
+                w.Line("internal static void " + Root(name, generic) + parameters);
+                string constraint = ConstraintLine(generic);
+                w.Indented(() => w.Line((constraint.Length == 0 ? string.Empty : constraint + " ") +
+                    "=> " + Root(root, generic) + "(" + values + ");"));
+            }
         }
 
         void VersionRoots()
@@ -775,14 +830,15 @@ internal static partial class BinaryEmitter
     /// <param name="union">Whether to enable union for this operation.</param>
     /// <param name="structValue">Whether to enable struct value for this operation.</param>
     /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
-    private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, bool union, bool structValue = false)
+    /// <param name="wrapBound">Whether this method owns the complete-record capacity bound.</param>
+    private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, bool union, bool structValue = false, bool wrapBound = true)
     {
         if (model.SequenceBase != null)
-            return SequenceWriteBody(model, w, union);
+            return SequenceWriteBody(model, w, union, wrapBound);
         var members = model.Members;
         var body = new List<string>();
         string count = members.Length.ToString(CultureInfo.InvariantCulture);
-        bool bounded = model.Bounded != null;
+        bool bounded = wrapBound && model.Bounded != null;
         if (!union && !structValue && CanReserveFixedObject(model))
             return ReservedFixedObject(model, w);
         body.Add("var value = input;");
@@ -810,7 +866,7 @@ internal static partial class BinaryEmitter
                 body.Add("writer.Cursor = (byte)0;");
                 body.Add("writer.Advance(1);");
             }
-            AddBoundExit(body, model, union);
+            CloseBound();
             return body;
         }
         if (members.All(member => member.IsFixed))
@@ -830,7 +886,7 @@ internal static partial class BinaryEmitter
             {
                 // A lone fixed member is not a contiguous group; the writer stores it directly.
                 body.Add("writer.Write(value." + members[0].Name + ");");
-                AddBoundExit(body, model, union);
+                CloseBound();
                 return body;
             }
             string width = Width(members, 0, members.Length - 1);
@@ -844,7 +900,7 @@ internal static partial class BinaryEmitter
             body.Add("}");
             if (bounded)
                 body.Add("");
-            AddBoundExit(body, model, union);
+            CloseBound();
             return body;
         }
         bool nullableRecord = members.Any(member => member.NativeNullablePayload != null) &&
@@ -858,7 +914,7 @@ internal static partial class BinaryEmitter
                 AddStorageProfileBranches(model, w, body, AppendSegments);
             else
                 AppendSegments(body, reserveNativeSpans: true);
-            AddBoundExit(body, model, union);
+            CloseBound();
             return body;
 
             void AppendSegments(List<string> branch, bool reserveNativeSpans)
@@ -873,7 +929,7 @@ internal static partial class BinaryEmitter
         if (!nullableRecord && model.StreamRecord)
         {
             StreamWriteBody(model, w, union, body);
-            AddBoundExit(body, model, union);
+            CloseBound();
             return body;
         }
 
@@ -888,7 +944,7 @@ internal static partial class BinaryEmitter
                 ? "cursor = ref writer.WriteRecordString<" + WriteProfile(model, w, members[0]) + ">(ref cursor, value." + members[0].Name + ");"
                 : "cursor = ref writer.WriteRecordSpan(ref cursor, value." + members[0].Name + ");");
             body.Add("writer.Cursor = ref cursor;");
-            AddBoundExit(body, model, union);
+            CloseBound();
             return body;
         }
         var terms = new List<string>();
@@ -975,8 +1031,14 @@ internal static partial class BinaryEmitter
         body.Add("writer.Cursor = ref cursor;");
         if (model.Bounded != null)
             body.Add("");
-        AddBoundExit(body, model, union);
+        CloseBound();
         return body;
+
+        void CloseBound()
+        {
+            if (bounded)
+                AddBoundExit(body, model, union);
+        }
     }
 
     /// <summary>Builds the write body of a list-derived payload by forwarding to the closed list owner.</summary>
@@ -985,7 +1047,8 @@ internal static partial class BinaryEmitter
     /// <param name="union">Whether the body writes a Union payload.</param>
     /// <returns>The body lines.</returns>
     /// <remarks>The list owner writes the null header, length and elements, so a Union payload is byte-identical to a root.</remarks>
-    private static List<string> SequenceWriteBody(PayloadRenderModel model, CodeWriter w, bool union)
+    /// <param name="wrapBound">Whether this method owns the complete-record capacity bound.</param>
+    private static List<string> SequenceWriteBody(PayloadRenderModel model, CodeWriter w, bool union, bool wrapBound)
     {
         string roots = w.A("LuminPackSerializer") + ".LuminRoots_" +
             ReadableTypeName.Of(GeneratedNames.PayloadKey(model.SequenceBase!));
@@ -995,7 +1058,8 @@ internal static partial class BinaryEmitter
             roots + ".RootWrite<" + Profile + ">(ref writer, in " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName +
                 ", " + model.SequenceBase + ">(ref value));",
         };
-        AddBoundExit(body, model, union);
+        if (wrapBound)
+            AddBoundExit(body, model, union);
         return body;
     }
 
@@ -1010,7 +1074,7 @@ internal static partial class BinaryEmitter
             ReadableTypeName.Of(GeneratedNames.PayloadKey(model.SequenceBase!));
         return new List<string>
         {
-            "value ??= new " + model.GlobalName + "();",
+            model.TrackReferences ? string.Empty : "value ??= new " + model.GlobalName + "();",
             roots + ".RootRead<" + Profile + ">(ref reader, ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName +
                 ", " + model.SequenceBase + ">(ref value));",
         };
@@ -1170,10 +1234,25 @@ internal static partial class BinaryEmitter
     {
         bool versioned = model.Version != null;
         // Interface Union struct cases call their ordinary owner and retain its record header.
-        var body = model.Circle ? CircleBinaryEmitter.ReadBody(model, w, unionCase, expanded: null) :
-            versioned ? VersionReadBody(model, w) : model.IsStruct ? StructReadBody(model, w, union: false) :
-            Mirrored(model, w, ReadBody(model, w, unionCase), writes: false, unionCase);
-        body = InputChecks(model, w, model.Circle ? body : AddReadCallbacks(model, body), read: true);
+        List<string> body;
+        if (model.TrackReferences)
+        {
+            body = CircleBinaryEmitter.ReadHeader(model, w, "ReadReferenceRecord");
+            body.Add("static void ReadReferenceRecord(scoped ref " + w.A("LuminPackReader") + " reader, ref " + model.GlobalName + "? value)");
+            body.Add("{");
+            CircleBinaryEmitter.ReadNewRecord(model, w, body, "ReadRecord");
+            body.Add("}");
+            body.Add("static void ReadRecord(scoped ref " + w.A("LuminPackReader") + " reader, ref " + model.GlobalName + "? value)");
+            body.Add("{");
+            body.AddRange(InputChecks(model, w, TrackedRecordReadBody(model, w), read: true));
+            body.Add("}");
+        }
+        else
+        {
+            body = versioned ? VersionReadBody(model, w) : model.IsStruct ? StructReadBody(model, w, union: false) :
+                Mirrored(model, w, ReadBody(model, w, unionCase), writes: false, unionCase);
+            body = InputChecks(model, w, AddReadCallbacks(model, body), read: true);
+        }
         w.Line(w.Preserve);
         w.Line("internal static void " + methodPrefix + model.Readable + model.TypeArguments(Profile) + "(scoped ref " + w.A("LuminPackReader") +
             " reader, scoped ref " + model.GlobalName + (model.IsStruct ? " value)" : "? value)"));
@@ -1186,6 +1265,19 @@ internal static partial class BinaryEmitter
             w.Line(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
         JsonEmitter.Lines(w, body);
         w.Close();
+    }
+
+    /// <summary>Reads into the registered instance with the selected record's ordinary member operations.</summary>
+    private static List<string> TrackedRecordReadBody(PayloadRenderModel model, CodeWriter w)
+    {
+        var body = model.Version != null ? VersionReadBody(model, w, withNull: false) :
+            Mirrored(model, w, ReadBody(model, w, union: false), writes: false, union: false);
+        if (model.Version == null && model.ConstructorArguments != null)
+            return body;
+        body = AddReadCallbacks(model, body);
+        if (model.ReadBefore.Length != 0)
+            body.RemoveRange(0, model.ReadBefore.Length);
+        return body;
     }
 
     /// <summary>Builds a mixed record's write body: the leading members reserved with the header, each inline object in
@@ -2567,8 +2659,9 @@ internal static partial class BinaryEmitter
         // The constructed read declares its temporaries in declaration order, while the wire order drives the decodes.
         var declared = model.DeclaredOrder == null ? members : model.DeclaredOrder
             .Select(name => System.Array.Find(members, member => member.Name == name)).Where(member => member != null).ToArray();
-        foreach (var member in declared)
-            body.Add(TempType(member) + " " + Camel(member.Name) + "Temp = default !;");
+        if (!model.TrackReferences)
+            foreach (var member in declared)
+                body.Add(TempType(member) + " " + Camel(member.Name) + "Temp = default !;");
         if (!union)
         {
             body.Add(model.Trusted ? "if (reader.Read<byte>() == 255)" :
@@ -2578,11 +2671,16 @@ internal static partial class BinaryEmitter
             body.Add("}");
             body.Add("");
         }
-        body.Add("if (value is not null)");
-        body.Add("{");
-        body.Add("ReadExisting(ref reader, value);");
-        body.Add("return;");
-        body.Add("}");
+        if (model.TrackReferences)
+            body.Add("ReadExisting(ref reader, value);");
+        else
+        {
+            body.Add("if (value is not null)");
+            body.Add("{");
+            body.Add("ReadExisting(ref reader, value);");
+            body.Add("return;");
+            body.Add("}");
+        }
         body.Add("");
         body.Add(w.MethodImpl("NoInlining"));
         body.Add("static void ReadExisting(ref " + w.A("LuminPackReader") + " reader2, " + model.GlobalName + "? value2)");
@@ -2594,6 +2692,8 @@ internal static partial class BinaryEmitter
         foreach (string call in model.ReadAfter)
             body.Add(call.Replace("value?.", "value2?."));
         body.Add("}");
+        if (model.TrackReferences)
+            return body;
         body.Add("");
         foreach (var member in members)
             AddMemberRead(body, model, member, w, "reader", Camel(member.Name) + "Temp", fresh: true);
@@ -2742,7 +2842,7 @@ internal static partial class BinaryEmitter
         bool freshInstance = freshPayload && HasFreshPayloadRun(model);
         if (freshInstance)
             body.Add("bool freshInstance = value is null;");
-        body.Add("var instance = value ??= " + NewInstance(model) + ";");
+        body.Add(model.TrackReferences ? "var instance = value!;" : "var instance = value ??= " + NewInstance(model) + ";");
         int cursors = 0, strings = 0;
         for (int index = 0; index < members.Length; index++)
         {
@@ -2890,7 +2990,7 @@ internal static partial class BinaryEmitter
                 members.Length.ToString(CultureInfo.InvariantCulture) + "))");
             body.Add("\treturn;");
         }
-        body.Add("var instance = value ??= " + NewInstance(model) + ";");
+        body.Add(model.TrackReferences ? "var instance = value!;" : "var instance = value ??= " + NewInstance(model) + ";");
         int cursors = 0, strings = 0, ends = 0;
         AddStreamRead(body, model, "instance", 0, !union, w, new Dictionary<string, int>(StringComparer.Ordinal), ref cursors, ref strings, ref ends, pairFields);
         while (body.Count != 0 && body[body.Count - 1].Length == 0)

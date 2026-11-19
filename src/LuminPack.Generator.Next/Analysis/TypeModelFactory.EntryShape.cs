@@ -281,7 +281,7 @@ internal static partial class TypeModelFactory
             // The raw and portable binary operations do not visit the modeled JSON members.
             StructModel { Storage: StructStorage.RawUnmanaged or StructStorage.PortableUnmanaged } => true,
             StructModel { Versioned: false } => payload.Members.All(IsStatelessMember),
-            RecordModel { Versioned: false, SequenceBase: null } => payload.Members.All(IsStatelessMember),
+            RecordModel { Versioned: false, SequenceBase: null, Policy.TrackReferences: false } => payload.Members.All(IsStatelessMember),
             // A Union may dispatch a registered case; reference-tracked nodes always share a table.
             _ => false,
         };
@@ -401,7 +401,8 @@ internal static partial class TypeModelFactory
         /// <returns>Whether the input is fixed record.</returns>
         private static bool IsFixedRecord(ITypeSymbol type)
         {
-            if (type is not INamedTypeSymbol named || named.TypeKind is not (TypeKind.Class or TypeKind.Struct) || named.IsAbstract ||
+            if (type is not INamedTypeSymbol named || TracksReferences(named) ||
+                named.TypeKind is not (TypeKind.Class or TypeKind.Struct) || named.IsAbstract ||
                 named.IsStatic || named.IsRefLikeType || ContainsOpenParameter(named))
                 return false;
             AttributeData? packable = named.GetAttributes().FirstOrDefault(attribute => attribute.AttributeClass?.ToDisplayString() == PackableAttribute);

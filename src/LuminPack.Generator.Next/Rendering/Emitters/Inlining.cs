@@ -18,7 +18,7 @@ internal static class DirectInlining
     /// <param name="read">Whether the reader's inlining budget applies.</param>
     /// <returns>Whether the corresponding operation and its state accesses are eligible to inline.</returns>
     internal static bool FlatRecord(PayloadRenderModel model, bool read) =>
-        RenderModelFactory.Covered(model) && !model.Circle && !model.Recursive && !model.UnionRoot &&
+        RenderModelFactory.Covered(model) && !model.TrackReferences && !model.Recursive && !model.UnionRoot &&
         model.SequenceBase == null && model.Bounded == null && model.Rejection == null && model.Redirect == null &&
         model.Limits?.Bounded != true && model.TypeParameters.Length == 0 &&
         model.Members.All(member => !member.Volatile && !member.Property && member.ScopeProfile == null &&

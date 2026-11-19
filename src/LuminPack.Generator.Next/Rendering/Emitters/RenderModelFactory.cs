@@ -11,7 +11,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 /// <summary>Maps a Next payload model onto the render model the direct emitters consume.</summary>
 /// <remarks>This adapter is the only place where the normalized <see cref="TypeModel"/> facts become emitter input. It covers
 /// ordinary records whose members are public fields of a fixed scalar, text, a supported sequence or a supported keyed family,
-/// raw, portable and managed structs, and reference-tracked nodes whose complete framing the circle emitters reproduce.
+/// raw, portable and managed structs, and reference-tracked records.
 /// Features whose rendering facts are not modeled return null so the pipeline emits nothing instead of partial code.</remarks>
 internal static class RenderModelFactory
 {
@@ -25,8 +25,6 @@ internal static class RenderModelFactory
     {
         if (model is UnionModel union)
             return Union(union, options, checkedUnionCopy);
-        if (model is CircleReferenceModel circle)
-            return Circle(circle, options);
         if (model is StructModel { Versioned: true, Version: null })
             return null;
         bool raw = model is StructModel { Storage: StructStorage.RawUnmanaged, Layout: null } ||
@@ -81,7 +79,7 @@ internal static class RenderModelFactory
         // its storage through the mirror, so neither write is its original record body. A callback keeps both out, as the
         // legacy model does.
         bool proven = model is RecordModel { Proven: true } && !hasCallbacks;
-        bool memberWrite = !hasCallbacks && !model.Members.Any(member => member.Mirrored) &&
+        bool memberWrite = !model.Policy.TrackReferences && !hasCallbacks && !model.Members.Any(member => member.Mirrored) &&
             model is RecordModel { Versioned: false, Derived: false } && model.Policy.Bound == null &&
             model.Members.Length != 0 && model.Members.Any(member => member is TextMember) &&
             model.Members.All(member => member is ScalarMember or TextMember);
@@ -112,11 +110,13 @@ internal static class RenderModelFactory
             managedStruct: managed, rent: rent!,
             writeBefore: callbacks?.WriteBefore!, writeAfter: callbacks?.WriteAfter!,
             readBefore: callbacks?.ReadBefore!, readAfter: callbacks?.ReadAfter!,
-            declaredOrder: constructor?.DeclaredOrder!, rentByRef: structure?.RentByRef ?? false,
+            declaredOrder: constructor?.DeclaredOrder!, rentByRef: record?.RentByRef ?? structure?.RentByRef ?? false,
             declaredProfile: model.Policy.Declared ? ProfileNames.Type(model.Policy.Strings) : null,
             constantSpans: options.Net8 && options.CSharpVersion >= 1200, mirrors: record?.Mirrors!, rejection: record?.Rejection ?? structure?.Rejection,
             limits: model.Policy.Input == InputPolicy.Untrusted ? model.Policy.Limits : null, recursive: record?.Recursive ?? false,
             generatedInt32Runs: json && options.GeneratedJsonInt32Reader && options.CSharpVersion >= 1100,
+            trackReferences: model.Policy.TrackReferences, referenceConstruction: record?.ReferenceConstruction!,
+            generatedPropertyHeads: model.Policy.TrackReferences && options.GeneratedJsonPropertyWriter && options.CSharpVersion >= 1100,
             sequenceBase: record?.SequenceBase!, sequenceElement: record?.SequenceElement!, scalarHeader: record?.ScalarHeader ?? false,
             stringPairs: !json && record?.StringPairs == true);
     }
@@ -183,107 +183,6 @@ internal static class RenderModelFactory
             result[index] = new UnionRenderSlot(slot.Suffix, slot.Profile, slot.Identity, slot.Encoding, slot.Recording);
         }
         return result;
-    }
-
-    /// <summary>Maps a reference-tracked node when every legacy circle check passes.</summary>
-    /// <param name="model">The normalized node.</param>
-    /// <param name="options">The project facts.</param>
-    /// <returns>The render model, or null when the node's framing is outside the circle emitters.</returns>
-    private static PayloadRenderModel? Circle(CircleReferenceModel model, GeneratorOptions options)
-    {
-        // The reference-tracked renderer requires complete physical storage and the byte-sized object slot surface.
-        if (model.MirrorFields == null || model.Identity.IsGeneric ||
-            model.Members.Length > 249 || model.Slots.Any(slot => slot >= 249))
-            return null;
-        string extension = GeneratedNames.Extension(options.AssemblyName);
-        var members = new RenderMember[model.Members.Length];
-        for (int index = 0; index < members.Length; index++)
-        {
-            RenderMember? member = CircleMember(model, model.Members[index], extension, options);
-            if (member == null)
-                return null;
-            members[index] = member;
-        }
-        string globalName = model.Identity.GlobalName;
-        string readable = ReadableTypeName.Of(GeneratedNames.PayloadKey(globalName));
-        return new PayloadRenderModel(globalName, readable, extension,
-            GeneratedNames.JsonHelperName("Json_" + GeneratedNames.Sanitize(globalName)), freshResult: false,
-            uniqueEntries: options.Interceptors, members, proven: false, mirror: model.Mirrors.Length == 0 ? MirrorName(model, globalName) : model.Mirrors[model.Mirrors.Length - 1].Name,
-            mirrorFields: model.MirrorFields, derived: false, isStruct: false, view: null!, viewElided: false,
-            fixedUnionCase: false, measureRecord: false, constructorArguments: model.Construction?.Arguments!, constructorMembers: model.Construction?.Members!, memberWrite: false,
-            net8: options.Net8, utf8Literals: options.Net8 && options.CSharpVersion > 1000, version: null!,
-            referencePayload: model.Members.Any(item => item is not ScalarMember), layoutAttribute: model.MirrorLayout,
-            circle: true, circleGuarded: model.Guarded, mirrorOffsets: model.MirrorOffsets,
-            typeParameters: model.Identity.TypeParameters, typeConstraints: model.Constraints,
-            rent: model.RentCall!, rentByRef: model.RentByRef, writeBefore: model.SerializationCallbacks?.WriteBefore!,
-            writeAfter: model.SerializationCallbacks?.WriteAfter!, readBefore: model.SerializationCallbacks?.ReadBefore!,
-            readAfter: model.SerializationCallbacks?.ReadAfter!, trusted: model.Policy.Input == InputPolicy.Trusted,
-            declaredProfile: model.Policy.Declared ? ProfileNames.Type(model.Policy.Strings) : null,
-            circleSlots: model.Slots, circleWidths: model.Widths, mirrors: model.Mirrors, bounded: model.Policy.Bound,
-            limits: model.Policy.Input == InputPolicy.Untrusted ? model.Policy.Limits : null,
-            generatedPropertyHeads: options.GeneratedJsonPropertyWriter && options.CSharpVersion >= 1100);
-    }
-
-    /// <summary>Maps one circle member: a fixed scalar of at most four bytes, a string or another reference-tracked node.</summary>
-    /// <param name="owner">The declaring node.</param>
-    /// <param name="member">The normalized member.</param>
-    /// <param name="extension">The assembly's extension container.</param>
-    /// <param name="options">The project facts.</param>
-    /// <returns>The render member, or null when the member is outside the circle framing.</returns>
-    private static RenderMember? CircleMember(CircleReferenceModel owner, MemberModel member, string extension, GeneratorOptions options)
-    {
-        switch (member)
-        {
-            case PayloadMember { Shape: PayloadShape.ReferenceTracked } payload:
-                // A self member reuses this model; any other member is modeled as its own reference-tracked record.
-                PayloadRenderModel? nested = null;
-                if (payload.Nested != null)
-                {
-                    nested = Create(payload.Nested, options);
-                    if (nested == null || !nested.Circle)
-                        return null;
-                }
-                else if (payload.Type.GlobalName != owner.Identity.GlobalName)
-                    return null;
-                return new RenderMember(payload.Name, RenderMemberKind.Object, payload.Type.GlobalName, payload.Type.GlobalName,
-                    0, "global::LuminPack." + GeneratedNames.Owner(extension, payload.Type.GlobalName), ScalarKind.Other,
-                    mirrored: member.Mirrored, nested: nested);
-            default:
-                return Member(member, extension, options);
-        }
-    }
-
-    /// <summary>Spells the node's storage mirror the way the legacy model names it.</summary>
-    /// <param name="model">The normalized node.</param>
-    /// <param name="globalName">The node's fully qualified spelling.</param>
-    /// <returns>The mirror declaration name.</returns>
-    private static string MirrorName(CircleReferenceModel model, string globalName)
-    {
-        string digest;
-        using (SHA256 hash = SHA256.Create())
-            digest = string.Concat(hash.ComputeHash(Encoding.UTF8.GetBytes(globalName))
-                .Select(value => value.ToString("x2", CultureInfo.InvariantCulture)));
-        uint slot = 2166136261;
-        unchecked
-        {
-            foreach (char character in globalName)
-            {
-                slot ^= character;
-                slot *= 16777619;
-            }
-        }
-        string readable = new string(globalName.Where(character => char.IsLetterOrDigit(character) || character == '_').ToArray());
-        string local = model.Identity.DisplayName;
-        if (local.StartsWith("global::", StringComparison.Ordinal))
-            local = local.Substring(8);
-        local = local.Replace(".", "_").Replace('+', '_');
-        int generic = local.IndexOf('<');
-        if (generic >= 0)
-            local = local.Substring(0, generic);
-        string parameters = model.Identity.TypeParameters.Length == 0
-            ? string.Empty : "<" + string.Join(", ", model.Identity.TypeParameters) + ">";
-        return "LuminLayout_" + digest + "_" + readable + "_" + slot.ToString("x8", CultureInfo.InvariantCulture) + "_Local" + local +
-            parameters;
     }
 
     /// <summary>Maps the model's positional view onto the emitter's view.</summary>
@@ -375,6 +274,10 @@ internal static class RenderModelFactory
                     nativeNullablePayload: special.Formatter?.NativeNullablePayload,
                     originalSpanReservation: special.Formatter is { Definition: FormatterDefinitions.Array, Arguments.Length: 1 } vector &&
                         vector.Arguments[0] is { Definition: FormatterDefinitions.Scalar, Underlying: null });
+            case PayloadMember { Shape: PayloadShape.ReferenceTracked } payload:
+                return new RenderMember(payload.Name, RenderMemberKind.Special, ReadableTypeName.Of(payload.Type.GlobalName),
+                    payload.Type.GlobalName, 0, "global::LuminPack." + GeneratedNames.Owner(extension, payload.Type.GlobalName),
+                    ScalarKind.Other, mirrored, property: property, referencePayload: true);
             case PayloadMember { Shape: PayloadShape.Inline, Nested: RecordModel { Derived: false } nested } payload
                 when !mirrored && nested.Policy.Bound == null && Element(nested, options) is { } element:
                 return new RenderMember(payload.Name, RenderMemberKind.Object, payload.Type.GlobalName, payload.Type.GlobalName,

@@ -16,7 +16,6 @@ internal sealed class JsonRenderer : IRenderer
     {
         RecordModel record => Record(record, context),
         StructModel structModel => Struct(structModel, context),
-        CircleReferenceModel circle => Circle(circle, context),
         _ => string.Empty,
     };
 
@@ -32,11 +31,6 @@ internal sealed class JsonRenderer : IRenderer
     /// <returns>The resulting text.</returns>
     private static string Struct(StructModel model, RenderContext context) => Emit(model, context);
 
-    /// <summary>Handles circle for <c>JsonRenderer</c>.</summary>
-    /// <param name="model">The normalized model for this contract.</param>
-    /// <param name="context">The context in scope for the operation.</param>
-    /// <returns>The resulting text.</returns>
-    private static string Circle(CircleReferenceModel model, RenderContext context) => Emit(model, context);
 
     /// <summary>Handles emit for <c>JsonRenderer</c>.</summary>
     /// <param name="model">The normalized model for this contract.</param>

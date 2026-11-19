@@ -11,7 +11,7 @@ internal static partial class BinaryEmitter
     /// <param name="model">The candidate class record.</param>
     /// <returns>Whether the write may reserve and publish its record once.</returns>
     internal static bool CanReserveFixedObject(PayloadRenderModel model) =>
-        model.Net8 && !model.IsStruct && model.TypeParameters.Length == 0 && !model.UnionRoot && !model.Circle &&
+        model.Net8 && !model.IsStruct && model.TypeParameters.Length == 0 && !model.UnionRoot && !model.TrackReferences &&
         model.Rejection == null && model.Version == null && model.Bounded == null && model.Mirror == null &&
         !model.HasCallbacks && model.Rent == null && model.Members.Length != 0 &&
         model.Members.All(member => member.IsFixed && !member.Volatile && !member.Mirrored && !member.Property);
@@ -20,7 +20,7 @@ internal static partial class BinaryEmitter
     /// <param name="model">The candidate positional object.</param>
     /// <returns>Whether every field write has a finite upper bound and requires no writer state.</returns>
     internal static bool CanReserveBoundedNullableObject(PayloadRenderModel model) =>
-        model.Net8 && !model.IsStruct && model.TypeParameters.Length == 0 && !model.UnionRoot && !model.Circle &&
+        model.Net8 && !model.IsStruct && model.TypeParameters.Length == 0 && !model.UnionRoot && !model.TrackReferences &&
         !model.Recursive && model.Rejection == null && model.Version == null && model.Bounded == null && model.Mirror == null &&
         model.SequenceBase == null && model.Redirect == null && !model.HasCallbacks && model.Rent == null &&
         model.Members.Any(member => member.NativeNullablePayload != null) &&

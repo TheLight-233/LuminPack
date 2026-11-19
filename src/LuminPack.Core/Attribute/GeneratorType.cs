@@ -7,7 +7,8 @@ public enum GeneratorType : byte
     Object,
     /// <summary>Specifies version tolerant.</summary>
     VersionTolerant,
-    /// <summary>Specifies circle reference.</summary>
+    /// <summary>Specifies a version-tolerant record with reference tracking enabled.</summary>
+    [System.Obsolete("Use GeneratorType.VersionTolerant with LuminPackOption(TrackReferences = true).")]
     CircleReference,
     /// <summary>Specifies non generator.</summary>
     NonGenerator,

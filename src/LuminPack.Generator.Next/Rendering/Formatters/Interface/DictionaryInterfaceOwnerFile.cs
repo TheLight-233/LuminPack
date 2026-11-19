@@ -80,7 +80,7 @@ internal static class DictionaryInterfaceOwnerFile
         var compound = c.Key == "string" && c.Supports("DenseDictionaryView") ? c.DenseCompoundValue : null;
         bool denseCompound = compound != null;
         // A compound value that would inline here can make its reserved writes exceed the loop's inlining budget.
-        bool outlineDenseValue = compound is { Circle: false, Recursive: false, UnionRoot: false } &&
+        bool outlineDenseValue = compound is { TrackReferences: false, Recursive: false, UnionRoot: false } &&
             compound.Members.Any(member => member.Kind == RenderMemberKind.Text) && DirectInlining.Write(compound, union: false, sizes: 0);
         bool dense = denseText || denseCompound;
         bool frozenTraversal = c.Supports("FrozenDictionaryTraversal");

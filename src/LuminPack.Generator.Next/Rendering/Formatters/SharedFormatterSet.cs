@@ -373,7 +373,7 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
             SequenceFamily(sequence.SequenceBase) is { } family)
             facts.Add(SequenceOwnerFact.ForForwarding(family, sequence.SequenceBase, sequence.SequenceElement));
         // A circle reference read and a version-tolerant record read call the shared string formatter owner.
-        if (text && (model is CircleReferenceModel || model is RecordModel { Version: not null }))
+        if (text && (model.Policy.TrackReferences || model is RecordModel { Version: not null }))
             owners.Add(FormatterRegistry.String);
         if (model is UnionModel union)
             for (int index = 0; index < union.Cases.Length; index++)

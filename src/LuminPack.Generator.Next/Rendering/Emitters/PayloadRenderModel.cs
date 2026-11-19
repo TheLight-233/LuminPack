@@ -488,16 +488,17 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <summary>The complete-record byte bound a <c>[LuminPackBounded]</c> declaration guarantees, which the write roots reserve
     /// once and assert, or null.</summary>
     internal readonly int? Bounded;
-    /// <summary>Whether the type is reference-tracked: its record carries a slot table and an object reference id.</summary>
-    internal readonly bool Circle;
+    /// <summary>Whether the type's record carries an object reference header.</summary>
+    internal readonly bool TrackReferences;
+
+    /// <summary>The construction expression for a tracked instance before its members are read.</summary>
+    internal readonly string ReferenceConstruction;
     /// <summary>Whether a declaration disables hostile-input handling for this type's roots, whose reads then keep the plain
     /// marker, batch and Boolean checks of the trusted template.</summary>
     internal bool Trusted { get; private set; }
     /// <summary>The imported string options type a type-level declaration owns, or null when the roots take the operation's
     /// profile. Its member writes also fix the record's string operations to that profile.</summary>
     internal readonly string DeclaredProfile;
-    /// <summary>Whether a reference-tracked type participates in a reference cycle, so its roots guard the stack.</summary>
-    internal readonly bool CircleGuarded;
     /// <summary>The serialization callbacks, spelled as statements of the write or read root, in declaration order.</summary>
     internal readonly string[] WriteBefore = System.Array.Empty<string>(), WriteAfter = System.Array.Empty<string>(),
         ReadBefore = System.Array.Empty<string>(), ReadAfter = System.Array.Empty<string>();
@@ -557,12 +558,6 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal readonly StorageMirrorModel[] Mirrors;
 
     /// <summary>The declared circle-reference slots and widths in member order.</summary>
-    internal readonly int[] CircleSlots;
-    internal readonly int[] CircleWidths;
-
-    /// <summary>The number of circle slots, including declared gaps.</summary>
-    internal int CircleSlotCount => CircleSlots.Length == 0 ? 0 : CircleSlots.Max() + 1;
-
     /// <summary>Whether the compiler supports static constant span collection expressions.</summary>
     internal readonly bool ConstantSpans;
 
@@ -667,8 +662,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <param name="unionStandardJson">The union standard JSON supplied to <c>PayloadRenderModel</c>.</param>
     /// <param name="unionTier">The union tier supplied to <c>PayloadRenderModel</c>.</param>
     /// <param name="unionHidesGetType">Whether the Union's declarations can hide <c>object.GetType</c>.</param>
-    /// <param name="circle">Whether to enable circle for this operation.</param>
-    /// <param name="circleGuarded">Whether to enable circle guarded for this operation.</param>
+    /// <param name="trackReferences">Whether to frame this record with an object reference header.</param>
     /// <param name="managedStruct">Whether to enable managed struct for this operation.</param>
     /// <param name="portableView">The portable view supplied to <c>PayloadRenderModel</c>.</param>
     /// <param name="unionWide">Whether to enable union wide for this operation.</param>
@@ -679,8 +673,6 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <param name="declaredProfile">The declared profile supplied to <c>PayloadRenderModel</c>.</param>
     /// <param name="rentByRef">Whether to enable rent by ref for this operation.</param>
     /// <param name="constantSpans">Whether to enable constant spans for this operation.</param>
-    /// <param name="circleSlots">The circle slots supplied to <c>PayloadRenderModel</c>.</param>
-    /// <param name="circleWidths">The circle widths supplied to <c>PayloadRenderModel</c>.</param>
     /// <param name="mirrors">The mirrors supplied to <c>PayloadRenderModel</c>.</param>
     /// <param name="rejection">The rejection supplied to <c>PayloadRenderModel</c>.</param>
     /// <param name="limits">The limits supplied to <c>PayloadRenderModel</c>.</param>
@@ -692,6 +684,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <param name="sequenceElement">The list base's element spelling.</param>
     /// <param name="scalarHeader">Whether the writer and class shape allow a combined marker and scalar.</param>
     /// <param name="stringPairs">Whether this record can group direct string field reads.</param>
+    /// <param name="referenceConstruction">Creates the instance before its members are read.</param>
     internal PayloadRenderModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         RenderMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
@@ -701,12 +694,12 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         bool unionCursor = false, bool unionReadGeneric = false, string[] unionChain = null, string unionNamespace = null, bool unionReferenced = false,
         UnionRenderSlot[] unionBinarySlots = null, UnionRenderSlot[] unionJsonSlots = null, bool unionCanonical = false,
         string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, bool unionHidesGetType = false,
-        bool circle = false, bool circleGuarded = false, bool managedStruct = false,
+        bool trackReferences = false, bool managedStruct = false,
         PortableView portableView = null, bool unionWide = false, int[] mirrorOffsets = null, string[] typeParameters = null,
-        string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, int[] circleSlots = null, int[] circleWidths = null, StorageMirrorModel[] mirrors = null,
+        string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, StorageMirrorModel[] mirrors = null,
         string rejection = null, InputLimits limits = null, bool recursive = false, bool registration = true,
         bool generatedPropertyHeads = false, bool generatedInt32Runs = false,
-        string sequenceBase = null, string sequenceElement = null, bool scalarHeader = false, bool stringPairs = false)
+        string sequenceBase = null, string sequenceElement = null, bool scalarHeader = false, bool stringPairs = false, string referenceConstruction = null)
     {
         StringPairs = stringPairs;
         SequenceBase = sequenceBase;
@@ -719,8 +712,6 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         Recursive = recursive;
         Rejection = rejection;
         Mirrors = mirrors ?? Array.Empty<StorageMirrorModel>();
-        CircleSlots = circleSlots ?? Array.Empty<int>();
-        CircleWidths = circleWidths ?? Array.Empty<int>();
         ConstantSpans = constantSpans;
         RentByRef = rentByRef;
         DeclaredProfile = declaredProfile;
@@ -731,8 +722,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         UnionWide = unionWide;
         PortableView = portableView;
         ManagedStruct = managedStruct;
-        CircleGuarded = circleGuarded;
-        Circle = circle;
+        TrackReferences = trackReferences;
+        ReferenceConstruction = referenceConstruction;
         UnionTier = unionTier;
         UnionHidesGetType = unionHidesGetType;
         UnionStandardJson = unionStandardJson;
@@ -811,8 +802,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         UnionTier == other.UnionTier && UnionHidesGetType == other.UnionHidesGetType && UnionWide == other.UnionWide &&
         Same(UnionChain, other.UnionChain) && UnionReferenced == other.UnionReferenced &&
          Same(UnionBinarySlots, other.UnionBinarySlots) && Same(UnionJsonSlots, other.UnionJsonSlots) &&
-        Same(Mirrors, other.Mirrors) && Circle == other.Circle && CircleGuarded == other.CircleGuarded && Same(CircleSlots, other.CircleSlots) &&
-        Same(CircleWidths, other.CircleWidths) &&
+        Same(Mirrors, other.Mirrors) && TrackReferences == other.TrackReferences && ReferenceConstruction == other.ReferenceConstruction &&
         Same(UnionCases, other.UnionCases) && Same(TypeParameters, other.TypeParameters) && Same(TypeConstraints, other.TypeConstraints) &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Same(MirrorOffsets, other.MirrorOffsets) &&

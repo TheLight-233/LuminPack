@@ -284,32 +284,6 @@ internal static partial class TypeModelFactory
                 "<" + string.Join(",", named.TypeArguments.Select(CanonicalUnionName)) + ">");
         }
 
-        /// <summary>Checks the legacy declared-member order requirements for circle-reference records.</summary>
-        /// <param name="type">The circle declaration.</param>
-        /// <param name="diagnostics">Receives missing and duplicate orders.</param>
-        private static void ValidateCircleOrders(INamedTypeSymbol type, ref DeclarationDiagnosticBag diagnostics)
-        {
-            var orders = new Dictionary<uint, List<ISymbol>>();
-            foreach (ISymbol member in type.GetMembers())
-            {
-                if (member.IsStatic || member is IFieldSymbol { IsConst: true } || member.IsImplicitlyDeclared)
-                    continue;
-                if (member is not (IFieldSymbol or IPropertySymbol) || HasAttribute(member, IgnoreAttribute) || InvalidOverrideAnnotation(member) != null)
-                    continue;
-                if (Order(member) is not uint order)
-                {
-                    diagnostics.Add(DiagnosticDescriptors.CircularReferenceAndVersionTolerantRequiredOrder, member, member.Name);
-                    continue;
-                }
-                if (!orders.TryGetValue(order, out List<ISymbol>? entries))
-                    orders.Add(order, entries = new List<ISymbol>());
-                entries.Add(member);
-            }
-            foreach (KeyValuePair<uint, List<ISymbol>> pair in orders)
-                if (pair.Value.Count > 1)
-                    diagnostics.Add(DiagnosticDescriptors.CircularReferenceAndVersionTolerantDuplicateOrder, pair.Value[0],
-                        pair.Key.ToString(CultureInfo.InvariantCulture), string.Join(", ", pair.Value.Select(member => member.Name)));
-        }
 
         /// <summary>An analysis-only case declaration, never retained by incremental models.</summary>
         private readonly struct UnionCaseDeclaration
