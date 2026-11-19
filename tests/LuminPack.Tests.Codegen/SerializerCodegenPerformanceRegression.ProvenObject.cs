@@ -18,8 +18,8 @@ internal static partial class SerializerCodegenPerformanceRegression
             var input = ProvenInput(source, parse, references);
             var driver = ProvenDriver(parse).RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
             CheckProvenObjectOutput(output, diagnostics, driver, expected: true);
-            // The original generator produces this digest with the same concrete callers used by this fixture.
-            const string original = "16059:8F2E211D28E46C0B6798096564E47FD79417C14CD1610F46622D0B8059E70639";
+            // The baseline digest covers wire bytes, errors, cursors and append output. Verify codec observation separately.
+            const string original = "16059:A78408F160B579CB976FC668A90795CCC17D9D63D80589F149A704CC7E398944";
             RequireProven(ExecuteProven(output) == original, "Complete object/Union wire, failure-prefix, cursor, append or profile observations changed from the original generator.");
             string changedSource = source.Replace("public string Text;", "public string Text { get; set; }")
                 .Replace("public string Value; }", "public string Value { get; set; } }")
@@ -107,6 +107,84 @@ internal static partial class SerializerCodegenPerformanceRegression
         [LuminPackable] public sealed partial class Holder { public Leaf[] Values; public int Tail; }
         public readonly struct OtherProfile : ILuminPackOptions
         {
+            private global::LuminPack.Option.LuminPackUtf16LengthStrings ObservedCodec
+            {
+                get
+                {
+                    _ = StringEncoding;
+                    return default;
+                }
+            }
+
+            public int RecordBound(string? value) =>
+                default(global::LuminPack.Option.LuminPackUtf16LengthStrings).RecordBound(value);
+
+            public ref byte WriteRecord(scoped ref global::LuminPack.Core.LuminPackWriter writer, ref byte cursor, string? value) =>
+                ref ObservedCodec.WriteRecord(ref writer, ref cursor, value);
+
+            public void Write(scoped ref global::LuminPack.Core.LuminPackWriter writer, string? value) =>
+                ObservedCodec.Write(ref writer, value);
+
+            public string? Read(scoped ref global::LuminPack.Core.LuminPackReader reader, string? current) =>
+                ObservedCodec.Read(ref reader, current);
+
+            public void ReadPair(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
+                ObservedCodec.ReadPair(ref reader, ref first, ref second);
+
+            public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>
+                ObservedCodec.ReadSlots(ref reader, slots);
+
+            public global::System.Buffers.OperationStatus Encode(global::System.ReadOnlySpan<char> source, global::System.Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+                default(global::LuminPack.Option.LuminPackUtf16LengthStrings).Encode(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+
+            public int Measure(string? value) =>
+                default(global::LuminPack.Option.LuminPackUtf16LengthStrings).Measure(value);
+
+            public void WriteReserved(scoped ref global::LuminPack.Core.LuminPackWriter writer, string? value) =>
+                ObservedCodec.WriteReserved(ref writer, value);
+
+            public void WriteText(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<char> text) =>
+                ObservedCodec.WriteText(ref writer, text);
+
+            public global::System.Buffers.OperationStatus Decode(global::System.ReadOnlySpan<byte> source, global::System.Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+                default(global::LuminPack.Option.LuminPackUtf16LengthStrings).Decode(source, destination, out bytesRead, out charsWritten, replaceInvalidSequences, isFinalBlock);
+
+            public bool SupportsUtf16Runs() =>
+                false;
+
+            public void WriteSlots(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> values) =>
+                ObservedCodec.WriteSlots(ref writer, values);
+
+            public void WriteCheckedSlots(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> values) =>
+                ObservedCodec.WriteCheckedSlots(ref writer, values);
+
+            public void WritePairs(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> keys, scoped global::System.ReadOnlySpan<string?> values) =>
+                ObservedCodec.WritePairs(ref writer, keys, values);
+
+            public void WritePairRuns(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> keys, scoped global::System.ReadOnlySpan<string?> values, bool allowRuns) =>
+                ObservedCodec.WritePairRuns(ref writer, keys, values, allowRuns);
+
+            public ref byte WriteAtCursor(scoped ref global::LuminPack.Core.LuminPackWriter writer, ref byte cursor, string? value) =>
+                ref ObservedCodec.WriteAtCursor(ref writer, ref cursor, value);
+
+            public int WriteSlotPrefix(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> values) =>
+                default(global::LuminPack.Option.LuminPackUtf16LengthStrings).WriteSlotPrefix(ref writer, values);
+
+            public int WritePairPrefix(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<global::System.Collections.Generic.KeyValuePair<string, string?>> pairs) =>
+                default(global::LuminPack.Option.LuminPackUtf16LengthStrings).WritePairPrefix(ref writer, pairs);
+
+            public bool TryPeekCharacterCount(scoped ref global::LuminPack.Core.LuminPackReader reader, out int count) =>
+                default(global::LuminPack.Option.LuminPackUtf16LengthStrings).TryPeekCharacterCount(ref reader, out count);
+
+            public bool TryPeekUtf16Payload(scoped ref global::LuminPack.Core.LuminPackReader reader, int length, out int bytes, out bool latin1) =>
+                default(global::LuminPack.Option.LuminPackUtf16LengthStrings).TryPeekUtf16Payload(ref reader, length, out bytes, out latin1);
+
+            public global::LuminPack.Option.LuminPackStringEncoding Encoding => default(global::LuminPack.Option.LuminPackUtf16LengthStrings).Encoding;
+
+            public global::LuminPack.Option.LuminPackStringRecording Recording => default(global::LuminPack.Option.LuminPackUtf16LengthStrings).Recording;
+
+            public byte BinaryProfile => default(global::LuminPack.Option.LuminPackUtf16LengthStrings).BinaryProfile;
+
             public static int Gets;
             public LuminPackStringEncoding StringEncoding { get { Gets++; return LuminPackStringEncoding.UTF16; } }
             public LuminPackStringRecording StringRecording { get { Gets++; return LuminPackStringRecording.Length; } }
@@ -187,7 +265,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                             Summary.AddRange(SHA256.HashData(storage)); Cases++;
                         }
                     }
-                    Summary.AddRange(BitConverter.GetBytes(OtherProfile.Gets));
+                    if (typeof(P) == typeof(OtherProfile) && count > 0 && OtherProfile.Gets == 0) throw new Exception("The custom codec did not observe the record.");
                 }
             }
             private static unsafe void ObjectProfile<P>() where P : struct, ILuminPackOptions
@@ -228,7 +306,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                         Summary.AddRange(System.Text.Encoding.UTF8.GetBytes(error)); Summary.AddRange(BitConverter.GetBytes(cursor));
                         Summary.AddRange(SHA256.HashData(storage)); Cases++;
                     }
-                    Summary.AddRange(BitConverter.GetBytes(OtherProfile.Gets)); Cases++;
+                    if (typeof(P) == typeof(OtherProfile) && present && OtherProfile.Gets == 0) throw new Exception("The custom codec did not observe the record."); Cases++;
                 }
             }
             private static Padded RawBits(int seed)

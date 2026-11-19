@@ -1,3 +1,11 @@
+global using TestUtf8Length = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf8LengthStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackTrustedJson>;
+global using TestUtf8Token = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf8TokenStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackTrustedJson>;
+global using TestUtf16Length = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf16LengthStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackTrustedJson>;
+global using TestUtf16Token = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf16TokenStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackTrustedJson>;
+global using TestStrictUtf8Length = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf8LengthStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackStrictJson>;
+global using TestStrictUtf8Token = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf8TokenStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackStrictJson>;
+global using TestStrictUtf16Length = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf16LengthStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackStrictJson>;
+global using TestStrictUtf16Token = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf16TokenStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackStrictJson>;
 using System.Buffers;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -402,136 +410,5 @@ namespace LuminPackUnitTest
                 return LuminPackSerializer.DeserializeJson<T, TOptions>(Input.AsSpan(), ref Value);
             }
         }
-    }
-}
-
-namespace LuminPack.Option
-{
-    /// <summary>Provides one statically closed row of the serialization test matrix.</summary>
-    [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8, StringRecording = LuminPackStringRecording.Length, ValidateJsonSyntax = false)]
-    internal readonly struct TestUtf8Length : ILuminPackOptions
-    {
-        /// <inheritdoc/>
-        public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF8;
-        /// <inheritdoc/>
-        public LuminPackStringRecording StringRecording => LuminPackStringRecording.Length;
-        /// <inheritdoc/>
-        public StandardFormat StandardFormat => new('G');
-        /// <inheritdoc/>
-        public int MaxJsonDepth => 1024;
-        /// <inheritdoc/>
-        public bool ValidateJsonSyntax => false;
-    }
-
-    /// <summary>Provides one statically closed row of the serialization test matrix.</summary>
-    [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8, StringRecording = LuminPackStringRecording.Token, ValidateJsonSyntax = false)]
-    internal readonly struct TestUtf8Token : ILuminPackOptions
-    {
-        /// <inheritdoc/>
-        public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF8;
-        /// <inheritdoc/>
-        public LuminPackStringRecording StringRecording => LuminPackStringRecording.Token;
-        /// <inheritdoc/>
-        public StandardFormat StandardFormat => new('G');
-        /// <inheritdoc/>
-        public int MaxJsonDepth => 1024;
-        /// <inheritdoc/>
-        public bool ValidateJsonSyntax => false;
-    }
-
-    /// <summary>Provides one statically closed row of the serialization test matrix.</summary>
-    [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF16, StringRecording = LuminPackStringRecording.Length, ValidateJsonSyntax = false)]
-    internal readonly struct TestUtf16Length : ILuminPackOptions
-    {
-        /// <inheritdoc/>
-        public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF16;
-        /// <inheritdoc/>
-        public LuminPackStringRecording StringRecording => LuminPackStringRecording.Length;
-        /// <inheritdoc/>
-        public StandardFormat StandardFormat => new('G');
-        /// <inheritdoc/>
-        public int MaxJsonDepth => 1024;
-        /// <inheritdoc/>
-        public bool ValidateJsonSyntax => false;
-    }
-
-    /// <summary>Provides one statically closed row of the serialization test matrix.</summary>
-    [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF16, StringRecording = LuminPackStringRecording.Token, ValidateJsonSyntax = false)]
-    internal readonly struct TestUtf16Token : ILuminPackOptions
-    {
-        /// <inheritdoc/>
-        public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF16;
-        /// <inheritdoc/>
-        public LuminPackStringRecording StringRecording => LuminPackStringRecording.Token;
-        /// <inheritdoc/>
-        public StandardFormat StandardFormat => new('G');
-        /// <inheritdoc/>
-        public int MaxJsonDepth => 1024;
-        /// <inheritdoc/>
-        public bool ValidateJsonSyntax => false;
-    }
-
-    /// <summary>Provides one statically closed row of the serialization test matrix.</summary>
-    [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8, StringRecording = LuminPackStringRecording.Length, ValidateJsonSyntax = true)]
-    internal readonly struct TestStrictUtf8Length : ILuminPackOptions
-    {
-        /// <inheritdoc/>
-        public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF8;
-        /// <inheritdoc/>
-        public LuminPackStringRecording StringRecording => LuminPackStringRecording.Length;
-        /// <inheritdoc/>
-        public StandardFormat StandardFormat => new('G');
-        /// <inheritdoc/>
-        public int MaxJsonDepth => 1024;
-        /// <inheritdoc/>
-        public bool ValidateJsonSyntax => true;
-    }
-
-    /// <summary>Provides one statically closed row of the serialization test matrix.</summary>
-    [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8, StringRecording = LuminPackStringRecording.Token, ValidateJsonSyntax = true)]
-    internal readonly struct TestStrictUtf8Token : ILuminPackOptions
-    {
-        /// <inheritdoc/>
-        public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF8;
-        /// <inheritdoc/>
-        public LuminPackStringRecording StringRecording => LuminPackStringRecording.Token;
-        /// <inheritdoc/>
-        public StandardFormat StandardFormat => new('G');
-        /// <inheritdoc/>
-        public int MaxJsonDepth => 1024;
-        /// <inheritdoc/>
-        public bool ValidateJsonSyntax => true;
-    }
-
-    /// <summary>Provides one statically closed row of the serialization test matrix.</summary>
-    [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF16, StringRecording = LuminPackStringRecording.Length, ValidateJsonSyntax = true)]
-    internal readonly struct TestStrictUtf16Length : ILuminPackOptions
-    {
-        /// <inheritdoc/>
-        public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF16;
-        /// <inheritdoc/>
-        public LuminPackStringRecording StringRecording => LuminPackStringRecording.Length;
-        /// <inheritdoc/>
-        public StandardFormat StandardFormat => new('G');
-        /// <inheritdoc/>
-        public int MaxJsonDepth => 1024;
-        /// <inheritdoc/>
-        public bool ValidateJsonSyntax => true;
-    }
-
-    /// <summary>Provides one statically closed row of the serialization test matrix.</summary>
-    [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF16, StringRecording = LuminPackStringRecording.Token, ValidateJsonSyntax = true)]
-    internal readonly struct TestStrictUtf16Token : ILuminPackOptions
-    {
-        /// <inheritdoc/>
-        public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF16;
-        /// <inheritdoc/>
-        public LuminPackStringRecording StringRecording => LuminPackStringRecording.Token;
-        /// <inheritdoc/>
-        public StandardFormat StandardFormat => new('G');
-        /// <inheritdoc/>
-        public int MaxJsonDepth => 1024;
-        /// <inheritdoc/>
-        public bool ValidateJsonSyntax => true;
     }
 }

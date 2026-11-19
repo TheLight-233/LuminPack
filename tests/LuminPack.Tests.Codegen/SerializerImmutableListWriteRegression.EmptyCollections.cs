@@ -25,6 +25,7 @@ internal static partial class SerializerImmutableListWriteRegression
     }
 
     private const string EmptyCollectionsSource = """
+        using Strict8 = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf8LengthStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackStrictJson>;
         using System;
         using System.Buffers;
         using System.Text;
@@ -53,14 +54,7 @@ internal static partial class SerializerImmutableListWriteRegression
             public IImmutableDictionary<string,int> MapInterface;
             public ImmutableSortedDictionary<string,int> SortedMap;
         }
-        public readonly struct Strict8:ILuminPackOptions
-        {
-            public LuminPackStringEncoding StringEncoding=>LuminPackStringEncoding.UTF8;
-            public LuminPackStringRecording StringRecording=>LuminPackStringRecording.Length;
-            public StandardFormat StandardFormat=>new('G');
-            public int MaxJsonDepth=>1024;
-            public bool ValidateJsonSyntax=>true;
-        }
+
         public static class EmptyCollectionsEntry
         {
             public static void Check()

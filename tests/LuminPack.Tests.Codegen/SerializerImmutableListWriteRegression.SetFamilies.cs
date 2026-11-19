@@ -62,6 +62,8 @@ internal static partial class SerializerImmutableListWriteRegression
     }
 
     private const string SetFamilySource = """
+        using HashStrict16 = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf16LengthStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackStrictJson>;
+        using HashStrict8 = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf8LengthStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackStrictJson>;
         using System;
         using System.Linq;
         using System.Text;

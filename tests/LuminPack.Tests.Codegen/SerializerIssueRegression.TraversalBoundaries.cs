@@ -46,6 +46,84 @@ internal static partial class SerializerIssueRegression
             [LuminPackable] public sealed class FieldRunPrefix { public int A; public int B; public List<TraversalParent> Items; }
             public readonly struct ConcurrentUserProfile : ILuminPackOptions
             {
+                private global::LuminPack.Option.LuminPackUtf16LengthStrings ObservedCodec
+                {
+                    get
+                    {
+                        _ = StringEncoding;
+                        return default;
+                    }
+                }
+
+                public int RecordBound(string? value) =>
+                    default(global::LuminPack.Option.LuminPackUtf16LengthStrings).RecordBound(value);
+
+                public ref byte WriteRecord(scoped ref global::LuminPack.Core.LuminPackWriter writer, ref byte cursor, string? value) =>
+                    ref ObservedCodec.WriteRecord(ref writer, ref cursor, value);
+
+                public void Write(scoped ref global::LuminPack.Core.LuminPackWriter writer, string? value) =>
+                    ObservedCodec.Write(ref writer, value);
+
+                public string? Read(scoped ref global::LuminPack.Core.LuminPackReader reader, string? current) =>
+                    ObservedCodec.Read(ref reader, current);
+
+                public void ReadPair(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
+                    ObservedCodec.ReadPair(ref reader, ref first, ref second);
+
+                public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>
+                    ObservedCodec.ReadSlots(ref reader, slots);
+
+                public global::System.Buffers.OperationStatus Encode(global::System.ReadOnlySpan<char> source, global::System.Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+                    default(global::LuminPack.Option.LuminPackUtf16LengthStrings).Encode(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+
+                public int Measure(string? value) =>
+                    default(global::LuminPack.Option.LuminPackUtf16LengthStrings).Measure(value);
+
+                public void WriteReserved(scoped ref global::LuminPack.Core.LuminPackWriter writer, string? value) =>
+                    ObservedCodec.WriteReserved(ref writer, value);
+
+                public void WriteText(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<char> text) =>
+                    ObservedCodec.WriteText(ref writer, text);
+
+                public global::System.Buffers.OperationStatus Decode(global::System.ReadOnlySpan<byte> source, global::System.Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+                    default(global::LuminPack.Option.LuminPackUtf16LengthStrings).Decode(source, destination, out bytesRead, out charsWritten, replaceInvalidSequences, isFinalBlock);
+
+                public bool SupportsUtf16Runs() =>
+                    false;
+
+                public void WriteSlots(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> values) =>
+                    ObservedCodec.WriteSlots(ref writer, values);
+
+                public void WriteCheckedSlots(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> values) =>
+                    ObservedCodec.WriteCheckedSlots(ref writer, values);
+
+                public void WritePairs(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> keys, scoped global::System.ReadOnlySpan<string?> values) =>
+                    ObservedCodec.WritePairs(ref writer, keys, values);
+
+                public void WritePairRuns(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> keys, scoped global::System.ReadOnlySpan<string?> values, bool allowRuns) =>
+                    ObservedCodec.WritePairRuns(ref writer, keys, values, allowRuns);
+
+                public ref byte WriteAtCursor(scoped ref global::LuminPack.Core.LuminPackWriter writer, ref byte cursor, string? value) =>
+                    ref ObservedCodec.WriteAtCursor(ref writer, ref cursor, value);
+
+                public int WriteSlotPrefix(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> values) =>
+                    default(global::LuminPack.Option.LuminPackUtf16LengthStrings).WriteSlotPrefix(ref writer, values);
+
+                public int WritePairPrefix(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<global::System.Collections.Generic.KeyValuePair<string, string?>> pairs) =>
+                    default(global::LuminPack.Option.LuminPackUtf16LengthStrings).WritePairPrefix(ref writer, pairs);
+
+                public bool TryPeekCharacterCount(scoped ref global::LuminPack.Core.LuminPackReader reader, out int count) =>
+                    default(global::LuminPack.Option.LuminPackUtf16LengthStrings).TryPeekCharacterCount(ref reader, out count);
+
+                public bool TryPeekUtf16Payload(scoped ref global::LuminPack.Core.LuminPackReader reader, int length, out int bytes, out bool latin1) =>
+                    default(global::LuminPack.Option.LuminPackUtf16LengthStrings).TryPeekUtf16Payload(ref reader, length, out bytes, out latin1);
+
+                public global::LuminPack.Option.LuminPackStringEncoding Encoding => default(global::LuminPack.Option.LuminPackUtf16LengthStrings).Encoding;
+
+                public global::LuminPack.Option.LuminPackStringRecording Recording => default(global::LuminPack.Option.LuminPackUtf16LengthStrings).Recording;
+
+                public byte BinaryProfile => default(global::LuminPack.Option.LuminPackUtf16LengthStrings).BinaryProfile;
+
                 public static int EncodingReads;
                 public LuminPackStringEncoding StringEncoding { get { EncodingReads++; return LuminPackStringEncoding.UTF16; } }
                 public LuminPackStringRecording StringRecording => LuminPackStringRecording.Length;
@@ -279,7 +357,7 @@ internal static partial class SerializerIssueRegression
             {
                 string body = owners.Where(owner => owner.Identifier.ValueText == expected.Item1).SelectMany(owner => owner.Members)
                     .OfType<MethodDeclarationSyntax>().Single(method => method.Identifier.ValueText == "Write" && method.Body != null).ToString();
-                if (body.Contains("WriteReservedUtf16Record(ref text", StringComparison.Ordinal) != expected.Item2 ||
+                if (body.Contains("WriteReservedRecordWidth<TLuminProfile>(ref text", StringComparison.Ordinal) != expected.Item2 ||
                     expected.Item2 && (!body.Contains("CommitRecords(ref cursor)", StringComparison.Ordinal) ||
                         !body.Contains("EnumerateConcurrentDictionary", StringComparison.Ordinal) ||
                         !body.Contains("WritePairSlow", StringComparison.Ordinal)))

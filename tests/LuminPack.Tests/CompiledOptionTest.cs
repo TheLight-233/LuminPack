@@ -219,6 +219,99 @@ LuminPackSerializer.DeserializeJson<string, TOptions>(ref reader, ref text);
     public readonly struct EquivalentUtf16Token : ILuminPackOptions
     {
         /// <inheritdoc/>
+        public int RecordBound(string? value) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).RecordBound(value);
+
+        /// <inheritdoc/>
+        public ref byte WriteRecord(scoped ref global::LuminPack.Core.LuminPackWriter writer, ref byte cursor, string? value) =>
+            ref default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteRecord(ref writer, ref cursor, value);
+
+        /// <inheritdoc/>
+        public void Write(scoped ref global::LuminPack.Core.LuminPackWriter writer, string? value) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Write(ref writer, value);
+
+        /// <inheritdoc/>
+        public string? Read(scoped ref global::LuminPack.Core.LuminPackReader reader, string? current) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Read(ref reader, current);
+
+        /// <inheritdoc/>
+        public void ReadPair(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).ReadPair(ref reader, ref first, ref second);
+
+        /// <inheritdoc/>
+        public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).ReadSlots(ref reader, slots);
+
+        /// <inheritdoc/>
+        public global::System.Buffers.OperationStatus Encode(global::System.ReadOnlySpan<char> source, global::System.Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Encode(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+
+        /// <inheritdoc/>
+        public int Measure(string? value) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Measure(value);
+
+        /// <inheritdoc/>
+        public void WriteReserved(scoped ref global::LuminPack.Core.LuminPackWriter writer, string? value) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteReserved(ref writer, value);
+
+        /// <inheritdoc/>
+        public void WriteText(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<char> text) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteText(ref writer, text);
+
+        /// <inheritdoc/>
+        public global::System.Buffers.OperationStatus Decode(global::System.ReadOnlySpan<byte> source, global::System.Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Decode(source, destination, out bytesRead, out charsWritten, replaceInvalidSequences, isFinalBlock);
+
+        /// <inheritdoc/>
+        public bool SupportsUtf16Runs() =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).SupportsUtf16Runs();
+
+        /// <inheritdoc/>
+        public void WriteSlots(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> values) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteSlots(ref writer, values);
+
+        /// <inheritdoc/>
+        public void WriteCheckedSlots(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> values) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteCheckedSlots(ref writer, values);
+
+        /// <inheritdoc/>
+        public void WritePairs(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> keys, scoped global::System.ReadOnlySpan<string?> values) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WritePairs(ref writer, keys, values);
+
+        /// <inheritdoc/>
+        public void WritePairRuns(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> keys, scoped global::System.ReadOnlySpan<string?> values, bool allowRuns) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WritePairRuns(ref writer, keys, values, allowRuns);
+
+        /// <inheritdoc/>
+        public ref byte WriteAtCursor(scoped ref global::LuminPack.Core.LuminPackWriter writer, ref byte cursor, string? value) =>
+            ref default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteAtCursor(ref writer, ref cursor, value);
+
+        /// <inheritdoc/>
+        public int WriteSlotPrefix(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> values) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteSlotPrefix(ref writer, values);
+
+        /// <inheritdoc/>
+        public int WritePairPrefix(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<global::System.Collections.Generic.KeyValuePair<string, string?>> pairs) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WritePairPrefix(ref writer, pairs);
+
+        /// <inheritdoc/>
+        public bool TryPeekCharacterCount(scoped ref global::LuminPack.Core.LuminPackReader reader, out int count) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).TryPeekCharacterCount(ref reader, out count);
+
+        /// <inheritdoc/>
+        public bool TryPeekUtf16Payload(scoped ref global::LuminPack.Core.LuminPackReader reader, int length, out int bytes, out bool latin1) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).TryPeekUtf16Payload(ref reader, length, out bytes, out latin1);
+
+        /// <inheritdoc/>
+        public global::LuminPack.Option.LuminPackStringEncoding Encoding => default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Encoding;
+
+        /// <inheritdoc/>
+        public global::LuminPack.Option.LuminPackStringRecording Recording => default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Recording;
+
+        /// <inheritdoc/>
+        public byte BinaryProfile => default(global::LuminPack.Option.LuminPackUtf16TokenStrings).BinaryProfile;
+
+        /// <inheritdoc/>
         public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF16;
         /// <inheritdoc/>
         public LuminPackStringRecording StringRecording => LuminPackStringRecording.Token;
@@ -233,6 +326,99 @@ LuminPackSerializer.DeserializeJson<string, TOptions>(ref reader, ref text);
     /// <summary>Matches the composite profile generated by the host's depth and member's encoding declarations.</summary>
     public readonly struct DeepUtf16Token : ILuminPackOptions
     {
+        /// <inheritdoc/>
+        public int RecordBound(string? value) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).RecordBound(value);
+
+        /// <inheritdoc/>
+        public ref byte WriteRecord(scoped ref global::LuminPack.Core.LuminPackWriter writer, ref byte cursor, string? value) =>
+            ref default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteRecord(ref writer, ref cursor, value);
+
+        /// <inheritdoc/>
+        public void Write(scoped ref global::LuminPack.Core.LuminPackWriter writer, string? value) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Write(ref writer, value);
+
+        /// <inheritdoc/>
+        public string? Read(scoped ref global::LuminPack.Core.LuminPackReader reader, string? current) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Read(ref reader, current);
+
+        /// <inheritdoc/>
+        public void ReadPair(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).ReadPair(ref reader, ref first, ref second);
+
+        /// <inheritdoc/>
+        public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).ReadSlots(ref reader, slots);
+
+        /// <inheritdoc/>
+        public global::System.Buffers.OperationStatus Encode(global::System.ReadOnlySpan<char> source, global::System.Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Encode(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+
+        /// <inheritdoc/>
+        public int Measure(string? value) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Measure(value);
+
+        /// <inheritdoc/>
+        public void WriteReserved(scoped ref global::LuminPack.Core.LuminPackWriter writer, string? value) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteReserved(ref writer, value);
+
+        /// <inheritdoc/>
+        public void WriteText(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<char> text) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteText(ref writer, text);
+
+        /// <inheritdoc/>
+        public global::System.Buffers.OperationStatus Decode(global::System.ReadOnlySpan<byte> source, global::System.Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences, bool isFinalBlock) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Decode(source, destination, out bytesRead, out charsWritten, replaceInvalidSequences, isFinalBlock);
+
+        /// <inheritdoc/>
+        public bool SupportsUtf16Runs() =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).SupportsUtf16Runs();
+
+        /// <inheritdoc/>
+        public void WriteSlots(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> values) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteSlots(ref writer, values);
+
+        /// <inheritdoc/>
+        public void WriteCheckedSlots(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> values) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteCheckedSlots(ref writer, values);
+
+        /// <inheritdoc/>
+        public void WritePairs(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> keys, scoped global::System.ReadOnlySpan<string?> values) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WritePairs(ref writer, keys, values);
+
+        /// <inheritdoc/>
+        public void WritePairRuns(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> keys, scoped global::System.ReadOnlySpan<string?> values, bool allowRuns) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WritePairRuns(ref writer, keys, values, allowRuns);
+
+        /// <inheritdoc/>
+        public ref byte WriteAtCursor(scoped ref global::LuminPack.Core.LuminPackWriter writer, ref byte cursor, string? value) =>
+            ref default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteAtCursor(ref writer, ref cursor, value);
+
+        /// <inheritdoc/>
+        public int WriteSlotPrefix(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<string?> values) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteSlotPrefix(ref writer, values);
+
+        /// <inheritdoc/>
+        public int WritePairPrefix(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped global::System.ReadOnlySpan<global::System.Collections.Generic.KeyValuePair<string, string?>> pairs) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WritePairPrefix(ref writer, pairs);
+
+        /// <inheritdoc/>
+        public bool TryPeekCharacterCount(scoped ref global::LuminPack.Core.LuminPackReader reader, out int count) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).TryPeekCharacterCount(ref reader, out count);
+
+        /// <inheritdoc/>
+        public bool TryPeekUtf16Payload(scoped ref global::LuminPack.Core.LuminPackReader reader, int length, out int bytes, out bool latin1) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).TryPeekUtf16Payload(ref reader, length, out bytes, out latin1);
+
+        /// <inheritdoc/>
+        public global::LuminPack.Option.LuminPackStringEncoding Encoding => default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Encoding;
+
+        /// <inheritdoc/>
+        public global::LuminPack.Option.LuminPackStringRecording Recording => default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Recording;
+
+        /// <inheritdoc/>
+        public byte BinaryProfile => default(global::LuminPack.Option.LuminPackUtf16TokenStrings).BinaryProfile;
+
         /// <inheritdoc/>
         public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF16;
         /// <inheritdoc/>

@@ -211,6 +211,8 @@ The history of individual approvals lives in Git. When this document, the code a
 
 ### Options and generation
 
+- Binary string hot paths forward constrained calls on `default(TOptions)` to the selected codec. Inlinable methods must select binary encoding and framing behavior through that codec. Each of the six built-in representations owns its reservation bound, transcoding and cursor publication. Generated batch writes must prove room for the complete record and preserve the published prefix on failure.
+
 - **Compile-time options.** `[LuminPackOption]` scopes (assembly, type, member) and stateless `ILuminPackOptions` profiles are compiled in. There is no runtime options object or mutable global default. JSON encoding, depth and syntax policy apply to a whole document, selected by its root.
 - **`UntrustedData`** selects checked binary reads at compile time and is on by default; `UntrustedData = false` generates exactly the trusted code. Untrusted records use the ordinary wire format and writers. Generated reads of objects, version-tolerant records, reference-tracked records and Unions check object markers, Boolean domains, back-reference types, raw slot widths, compressed counts and declared collection and string limits at the actual read sites, with the root's limits frozen as constants; undeclared limits are unbounded constants. Depth is counted only in recursive types with a declared `MaxDepth`; Reader bounds and stack guards stay on. An explicit hostile-input declaration also selects the strict JSON profile. Input-selected types fail closed. There is no envelope, ambient accounting state or schema prepass.
 - **`[LuminPackBounded]`** is a caller guarantee: the bounded record reserves once and drops inner container checks.

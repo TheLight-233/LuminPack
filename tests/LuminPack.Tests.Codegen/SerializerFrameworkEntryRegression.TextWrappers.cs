@@ -53,6 +53,8 @@ internal static partial class SerializerFrameworkEntryRegression
     }
 
     private const string TextWrapperSource = """
+        using TextStrict16 = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf16LengthStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackStrictJson>;
+        using TextStrict8 = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf8LengthStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackStrictJson>;
         using System;
         using System.Linq;
         using System.Reflection;
@@ -67,8 +69,7 @@ internal static partial class SerializerFrameworkEntryRegression
         using LuminPack.Option;
         using LuminPack.Utility;
         [assembly:LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
-        public readonly struct TextStrict8:ILuminPackOptions {public LuminPackStringEncoding StringEncoding=>LuminPackStringEncoding.UTF8;public LuminPackStringRecording StringRecording=>LuminPackStringRecording.Length;public StandardFormat StandardFormat=>new('G');public int MaxJsonDepth=>1024;public bool ValidateJsonSyntax=>true;}
-        public readonly struct TextStrict16:ILuminPackOptions {public LuminPackStringEncoding StringEncoding=>LuminPackStringEncoding.UTF16;public LuminPackStringRecording StringRecording=>LuminPackStringRecording.Length;public StandardFormat StandardFormat=>new('G');public int MaxJsonDepth=>1024;public bool ValidateJsonSyntax=>true;}
+
         public sealed class NameType:TypeDelegator
         {
             readonly string name;public static int Gets;public NameType(string name):base(typeof(int)){this.name=name;}

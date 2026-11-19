@@ -25,6 +25,12 @@ internal static class CodeFixChecks
     /// <returns>The asynchronous test operation.</returns>
     internal static async Task RunAsync(string[] args)
     {
+        if (args.Length == 0 || args.Contains("--verify-string-codecs", StringComparer.Ordinal))
+        {
+            await VerifyStringCodecsAsync();
+            if (args.Length != 0)
+                return;
+        }
         if (args.Length == 2 && args[0] == "--verify-package")
         {
             VerifyPackage(args[1]);
@@ -153,6 +159,37 @@ internal static class CodeFixChecks
     {
         var operations = await action.GetOperationsAsync(CancellationToken.None);
         return operations.OfType<ApplyChangesOperation>().Single().ChangedSolution;
+    }
+
+    /// <summary>Applies the migration to an existing profile and compiles the resulting scoped signatures.</summary>
+    /// <returns>The asynchronous verification.</returns>
+    private static async Task VerifyStringCodecsAsync()
+    {
+        const string source = """
+            using LuminPack.Option;
+            public readonly struct TextOptions : ILuminPackOptions
+            {
+                public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF8;
+                public LuminPackStringRecording StringRecording => LuminPackStringRecording.VarInt;
+                public System.Buffers.StandardFormat StandardFormat => new('G');
+                public bool ValidateJsonSyntax => true;
+                public int MaxJsonDepth => 32;
+            }
+            """;
+        using var workspace = CreateWorkspace(source);
+        var project = workspace.CurrentSolution.Projects.Single();
+        var document = project.Documents.Single();
+        var compilation = (await project.GetCompilationAsync())!;
+        var diagnostic = compilation.GetDiagnostics().First(d => d.Id == "CS0535");
+        var actions = await ActionsAsync(new LuminPackStringCodecCodeFixProvider(), document, diagnostic);
+        if (actions.Count != 1 || actions[0].EquivalenceKey != "LuminPackUtf8VarIntStrings")
+            throw new InvalidOperationException("The profile migration did not select its original codec.");
+        var solution = await ApplyAsync(actions[0]);
+        var updated = (await solution.GetProject(project.Id)!.GetCompilationAsync())!;
+        var errors = updated.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
+        if (errors.Length != 0)
+            throw new InvalidOperationException(string.Join(Environment.NewLine, errors.Select(d => d.ToString())));
+        Console.WriteLine("Passed binary string codec forwarding migration.");
     }
 
     /// <summary>Checks symbol-directed edits across files and all containing partial declarations.</summary>

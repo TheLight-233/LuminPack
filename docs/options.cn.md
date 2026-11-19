@@ -71,6 +71,18 @@ LuminPackSerializer.Deserialize<Message, LuminPackUtf8LengthOptions>(bytes, ref 
 
 内置配置：`LuminPackDefaultOptions`（UTF-16、固定长度记录）、`LuminPackUtf8LengthOptions`、`LuminPackUtf8TokenOptions`、`LuminPackUtf16LengthOptions`、`LuminPackUtf16TokenOptions`、`LuminPackUtf8VarIntOptions`、`LuminPackUtf16VarIntOptions`。也可以自己定义一个实现 `ILuminPackOptions` 的 `struct`。
 
+组合配置的四个类型参数依次选择二进制字符串编解码器、数字格式、JSON 深度和语法策略。下例使用 UTF-8 可变长度头和严格 JSON。
+
+```csharp
+using TextOptions = LuminPack.Option.LuminPackOptions<
+    LuminPack.Option.LuminPackUtf8VarIntStrings,
+    LuminPack.Option.LuminPackGeneralFormat,
+    LuminPack.Option.LuminPackDefaultDepth,
+    LuminPack.Option.LuminPackStrictJson>;
+```
+
+直接实现 `ILuminPackOptions` 的结构体要把 `ILuminPackStringCodec` 的各成员转发给所选编解码器。**Forward string operations to LuminPack…Strings** 代码修复会补齐缺少的成员并保留已有实现。编码与记录方式为常量时会匹配相应编解码器，计算属性可从六种内置实现中选择。元数据属性须与实际使用的编码一致。自定义编解码器返回的预留上界须涵盖完整记录。预留写入返回下一个游标，异常时须保留 writer 已发布的前缀。
+
 ## 紧凑长度头
 
 小字符串集合更重视字节数而不是最高编码速度时，可以选择 `VarInt`：

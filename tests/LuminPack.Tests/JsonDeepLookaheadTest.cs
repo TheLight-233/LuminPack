@@ -1,3 +1,5 @@
+using Strict8 = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf8LengthStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackStrictJson>;
+using Strict16 = global::LuminPack.Option.LuminPackOptions<global::LuminPack.Option.LuminPackUtf16LengthStrings, global::LuminPack.Option.LuminPackGeneralFormat, global::LuminPack.Option.LuminPackDefaultDepth, global::LuminPack.Option.LuminPackStrictJson>;
 using System.Buffers;
 using System.Text;
 using LuminPack.Core;
@@ -90,21 +92,4 @@ public sealed unsafe class JsonDeepLookaheadTest
         }
     }
 
-    private readonly struct Strict8 : ILuminPackOptions
-    {
-        public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF8;
-        public LuminPackStringRecording StringRecording => LuminPackStringRecording.Length;
-        public bool ValidateJsonSyntax => true;
-        public int MaxJsonDepth => 1024;
-        public StandardFormat StandardFormat => new('G');
-    }
-    /// <summary>Supplies strict UTF-16 grammar without generated profile state.</summary>
-    private readonly struct Strict16 : ILuminPackOptions
-    {
-        public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF16;
-        public LuminPackStringRecording StringRecording => LuminPackStringRecording.Length;
-        public bool ValidateJsonSyntax => true;
-        public int MaxJsonDepth => 1024;
-        public StandardFormat StandardFormat => new('G');
-    }
 }

@@ -63,22 +63,7 @@ internal static partial class SerializerImmutableListWriteRegression
             public ImmutableSortedSet<int> Sorted;
             public int Tail;
         }
-        public readonly struct HashStrict8:ILuminPackOptions
-        {
-            public LuminPackStringEncoding StringEncoding=>LuminPackStringEncoding.UTF8;
-            public LuminPackStringRecording StringRecording=>LuminPackStringRecording.Length;
-            public System.Buffers.StandardFormat StandardFormat=>new('G');
-            public int MaxJsonDepth=>1024;
-            public bool ValidateJsonSyntax=>true;
-        }
-        public readonly struct HashStrict16:ILuminPackOptions
-        {
-            public LuminPackStringEncoding StringEncoding=>LuminPackStringEncoding.UTF16;
-            public LuminPackStringRecording StringRecording=>LuminPackStringRecording.Length;
-            public System.Buffers.StandardFormat StandardFormat=>new('G');
-            public int MaxJsonDepth=>1024;
-            public bool ValidateJsonSyntax=>true;
-        }
+
         [LuminPackable(GeneratorType.Custom)] public sealed class ObservedHash:IEquatable<ObservedHash>
         {
             public int Id;

@@ -71,6 +71,18 @@ LuminPackSerializer.Deserialize<Message, LuminPackUtf8LengthOptions>(bytes, ref 
 
 Built-in profiles: `LuminPackDefaultOptions` (UTF-16, fixed length), `LuminPackUtf8LengthOptions`, `LuminPackUtf8TokenOptions`, `LuminPackUtf16LengthOptions`, `LuminPackUtf16TokenOptions`, `LuminPackUtf8VarIntOptions`, `LuminPackUtf16VarIntOptions`. You can define your own as a `struct` implementing `ILuminPackOptions`.
 
+Use a closed composite profile to select the binary codec, numeric format, JSON depth and syntax policy. This example selects UTF-8 with variable-length headers and strict JSON.
+
+```csharp
+using TextOptions = LuminPack.Option.LuminPackOptions<
+    LuminPack.Option.LuminPackUtf8VarIntStrings,
+    LuminPack.Option.LuminPackGeneralFormat,
+    LuminPack.Option.LuminPackDefaultDepth,
+    LuminPack.Option.LuminPackStrictJson>;
+```
+
+A directly implemented profile forwards every member of `ILuminPackStringCodec` to its codec. The **Forward string operations to LuminPack…Strings** code fix adds the missing members and retains existing implementations. It selects the codec from constant encoding and recording properties, or offers the six built-in codecs when those values are computed. Keep the metadata properties consistent with the forwarded representation. A custom codec's record bound covers the complete framed record. Its reserved write returns the next cursor and preserves the writer's published prefix on failure.
+
 ## Compact length headers
 
 Select `VarInt` for collections of small strings when reducing bytes matters more than peak encoding speed:
