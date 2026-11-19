@@ -193,8 +193,7 @@ internal static class DictionaryInterfaceOwnerFile
             w.Line(w.MethodImpl("NoInlining", c.OptimizeBinaryTraversal));
             w.Line("static bool TryWriteDense(scoped ref " + writer + " operationState, " + concrete + " items)");
             w.Open();
-            w.Line("if (" + c.Memory + ".SizeOf<global::System.IntPtr>() != 8 ||");
-            w.Line("    !" + marshal + ".TryGetDictionaryView(items, out var view))");
+            w.Line("if (!" + marshal + ".TryGetDenseDictionaryView(items, out var view))");
             w.Indented(() => w.Line("return false;"));
             w.Line("int count = items.Count;");
             w.Line("if (view._count != count || view._freeCount != 0)");

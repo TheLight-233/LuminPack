@@ -105,9 +105,8 @@ internal static class DictionarySlotReuseEmitter
         void DensePrefix()
         {
             w.Line("int matched = 0;");
-            w.Line("if (seen is null && global::System.IntPtr.Size == 8)");
+            w.Line("if (seen is null && global::LuminPack.Code.LuminPackMarshal.TryGetDenseDictionaryView(destination, out var view))");
             w.Open();
-            w.Line("var view = global::LuminPack.Code.LuminPackMarshal.GetDictionaryView(destination);");
             w.Line("if (view._freeCount == 0 && view._count == count)");
             w.Open();
             w.Line("int keyWidth = global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + key.Type + ">();");
@@ -142,11 +141,11 @@ internal static class DictionarySlotReuseEmitter
         {
             const string builtIn = "typeof(TLuminProfile) == typeof(global::LuminPack.Option.";
             w.Line("int matched = 0;");
-            w.Line("if (seen is null && global::System.IntPtr.Size == 8 &&");
+            w.Line("if (seen is null &&");
             w.Line("    (" + builtIn + "LuminPackDefaultOptions) || " + builtIn + "LuminPackUtf16LengthOptions) ||");
             w.Line("     " + builtIn + "LuminPackUtf8LengthOptions) || " + builtIn + "LuminPackUtf16TokenOptions) ||");
             w.Line("     " + builtIn + "LuminPackUtf8TokenOptions)) &&");
-            w.Line("    global::LuminPack.Code.LuminPackMarshal.TryGetDictionaryView(destination, out var view) &&");
+            w.Line("    global::LuminPack.Code.LuminPackMarshal.TryGetDenseDictionaryView(destination, out var view) &&");
             w.Line("    view._freeCount == 0 && view._count == count)");
             w.Open();
             w.Line("int keyWidth = global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + key.Type + ">();");

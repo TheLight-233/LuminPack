@@ -78,7 +78,7 @@ internal static class PayloadDictionaryOwnerFile
     private static void FreshUnionDictionary(PairedDictionaryContext c, PayloadRenderModel union)
     {
         var w = c.W;
-        w.Line("if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() != 8)");
+        w.Line("if (!global::LuminPack.Code.LuminPackMarshal.CanPopulateDictionaryEntries<" + c.Key + ", " + c.Value + ">())");
         w.Open();
         w.Line("var fallback = new " + c.Dictionary + "(length);");
         w.Line("int fallbackRemaining = length;");

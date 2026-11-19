@@ -218,18 +218,10 @@ internal static class ClosedGenericOwnerFile
                 if (direct)
                 {
                     w.Line("#if NET8_0_OR_GREATER");
-                    w.Line("if (global::System.IntPtr.Size == 8)");
-                    w.Open();
-                    if (model.Supports("ReadNativeNullablePayload"))
-                        w.Line("reader.ReadNativeNullablePayload<" + argument.Type + ">(ref value);");
-                    else
-                    {
-                        GenericOwnerFile.NullablePayload(w, argument.Type, "value");
-                        w.Line("reader.Read(ref payload);");
-                        GenericOwnerFile.PublishNullable(w, argument.Type, "value");
-                    }
+                    w.Line(model.Supports("ReadNativeNullablePayload")
+                        ? "reader.ReadNativeNullablePayload<" + argument.Type + ">(ref value);"
+                        : "value = reader.Read<" + argument.Type + ">();");
                     w.Line("return;");
-                    w.Close();
                     w.Line("#endif");
                 }
                 else if (staged)

@@ -220,15 +220,8 @@ internal static class GenericOwnerFile
         w.Blank();
         if (nullable)
         {
-            w.Line("#if NET8_0_OR_GREATER");
-            w.Line("if (global::System.IntPtr.Size == 8)");
-            w.Open();
-            NullablePayload(w, type, "value");
-            w.Line("reader.Read(ref payload);");
-            PublishNullable(w, type, "value");
-            w.Line("return;");
-            w.Close();
-            w.Line("#endif");
+            w.Line("value = reader.Read<" + type + ">();");
+            return;
         }
         w.Line(Declare(type, "item"));
         ReadItem(w, c, type, "item");

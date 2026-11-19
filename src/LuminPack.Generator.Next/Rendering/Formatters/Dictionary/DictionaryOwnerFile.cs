@@ -192,9 +192,8 @@ internal static class DictionaryOwnerFile
                     w.Line("private static bool WriteDense<TLuminProfile>(ref " + writer + " operationState, " + dictionary + " value, int count)");
                     w.Line(generic + options);
                     w.Open();
-                    w.Line("if (" + memory + ".SizeOf<global::System.IntPtr>() != 8)");
+                    w.Line("if (!global::LuminPack.Code.LuminPackMarshal.TryGetDenseDictionaryView(value, out var dictionaryView))");
                     w.Indented(() => w.Line("return false;"));
-                    w.Line("var dictionaryView = global::LuminPack.Code.LuminPackMarshal.GetDictionaryView(value);");
                     w.Line("if (dictionaryView._count != count)");
                     w.Indented(() => w.Line("return false;"));
                     w.Line("int version = dictionaryView._version;");
@@ -406,11 +405,11 @@ internal static class DictionaryOwnerFile
                     {
                         // Raw keys and values carry no identity and run no user code, so an empty default-comparer destination is refilled
                         // through the fresh bucket build and keeps its capacity and enumeration order.
-                        w.Line("if (value.Count == 0 && " + memory + ".SizeOf<global::System.IntPtr>() == 8 &&");
+                        w.Line("if (value.Count == 0 && global::LuminPack.Code.LuminPackMarshal.TryGetDenseDictionaryView(value, out var existingView) &&");
                         w.Line("    global::System.Object.ReferenceEquals(value.Comparer, global::System.Collections.Generic.EqualityComparer<" + key + ">.Default))");
                         w.Open();
                         ValidateRawPairs("refillSource", "refillBytes");
-                        w.Line("int refillVersion = global::LuminPack.Code.LuminPackMarshal.GetDictionaryView(value)._version;");
+                        w.Line("int refillVersion = existingView._version;");
                         w.Line("var refillView = global::LuminPack.Code.LuminPackMarshal.PrepareDictionaryRefill(value, length);");
                         w.Line("ref var refillRef = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(refillView._entries!);");
                         FillRawEntries("refillView", "refillRef", "refillSource", "refillBytes", "refillEntry", "refillRemaining");
@@ -427,7 +426,7 @@ internal static class DictionaryOwnerFile
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
                     w.Blank();
-                    w.Line("if (" + memory + ".SizeOf<global::System.IntPtr>() != 8)");
+                    w.Line("if (!global::LuminPack.Code.LuminPackMarshal.CanPopulateDictionaryEntries<" + key + ", " + value + ">())");
                     w.Open();
                     w.Line("var fallback = new " + dictionary + "(length);");
                     w.Line("int fallbackRemaining = length;");

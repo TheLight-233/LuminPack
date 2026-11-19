@@ -447,11 +447,10 @@ internal sealed partial class PairedDictionaryContext
         W.Line("operationState.WriteCollectionHeader(count);");
         W.Line("if (count != 0)");
         W.Open();
-        W.Line("if (" + Memory + ".SizeOf<global::System.IntPtr>() != 8 || " + marshal + ".GetDictionaryView(value)._count != count)");
+        W.Line("if (!" + marshal + ".TryGetDenseDictionaryView(value, out var dictionaryView) || dictionaryView._count != count)");
         W.Indented(() => W.Line("WriteSparseDictionary(ref operationState, value);"));
         W.Line("else");
         W.Open();
-        W.Line("var dictionaryView = " + marshal + ".GetDictionaryView(value);");
         W.Line("int version = dictionaryView._version;");
         W.Line("ref var entryRef = ref " + marshal + ".GetNotNullArrayReference(dictionaryView._entries!);");
         W.Line("int index = 0;");

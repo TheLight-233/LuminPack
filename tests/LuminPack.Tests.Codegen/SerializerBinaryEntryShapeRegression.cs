@@ -432,6 +432,21 @@ internal static class SerializerBinaryEntryShapeRegression
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release, allowUnsafe: true));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+        var ordinary = driver.GetRunResult().GeneratedTrees.Where(tree =>
+            tree.FilePath.EndsWith(".PackedCell.g.cs", StringComparison.Ordinal) ||
+            tree.FilePath.EndsWith(".ReadBoundaryCell.g.cs", StringComparison.Ordinal) ||
+            tree.FilePath.EndsWith(".PlainGraph.g.cs", StringComparison.Ordinal)).ToArray();
+        if (ordinary.Length == 0)
+            throw new InvalidOperationException("Missing ordinary record platform coverage.");
+        foreach (var tree in ordinary)
+        {
+            string body = tree.GetText().ToString();
+            if (body.Contains("SizeOf<global::System.IntPtr>()", StringComparison.Ordinal) ||
+                body.Contains("SizeOf<nint>() == 8", StringComparison.Ordinal) ||
+                body.Contains("IntPtr.Size == 8", StringComparison.Ordinal) ||
+                body.Contains("Supports64BitStorage", StringComparison.Ordinal))
+                throw new InvalidOperationException("Generated platform dispatch in " + tree.FilePath);
+        }
         var declarations = driver.GetRunResult().GeneratedTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
         VerifyCollectionReadBoundaries(declarations);
         var managedNullableReader = declarations.Single(method => (method.Identifier.ValueText is "Read" or "RootRead") &&

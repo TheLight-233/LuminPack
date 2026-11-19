@@ -100,13 +100,13 @@ internal static partial class BinaryEmitter
         body.Add(cursor + " = ref " + unsafeType + ".Add(ref " + cursor + ", 1);");
         if (last > 0)
         {
-            body.Add("if (" + Proof(w, members, 0, last, value, readOnly: true) + ")");
+            body.Add("if (" + Proof(w, members, 0, last, value, readOnly: true, coreLayout: true) + ")");
             body.Add("\t" + w.A("LuminPackMarshal") + ".CopyBlockUnaligned(ref " + cursor + ", ref " +
                 Bytes(w, members[0], value, readOnly: true) + ", (uint)(" + width + "));");
             body.Add("else");
             body.Add("{");
         }
-        AddFixedStores(w, members, 0, last, cursor, body, value);
+        AddScalarStores(w, members, 0, last, cursor, body, value);
         if (last > 0)
             body.Add("}");
         body.Add(cursor + " = ref " + unsafeType + ".Add(ref " + cursor + ", " + width + ");");

@@ -205,15 +205,7 @@ internal static class StructEmitter
             string unsafeName = w.A("Unsafe");
             w.Line("int portableIndex = writer.Position;");
             w.Line("ref byte portableWire = ref " + unsafeName + ".Add(ref " + w.A("MemoryMarshal") + ".GetReference(writer.Buffer), unchecked((nint)(uint)(portableIndex)));");
-            var snapshots = new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
-            w.Line("if (" + unsafeName + ".SizeOf<global::System.IntPtr>() == 8)");
-            w.Open();
-            Transfers("portableStorage", true, (address, field) => unsafeName + ".WriteUnaligned(ref " + address + ", " + field + ");", snapshots);
-            w.Close();
-            w.Line("else");
-            w.Open();
-            Transfers("portableStorage02", true, (address, field) => w.A("LuminPackWriter") + ".Write(ref " + address + ", " + field + ");", snapshots);
-            w.Close();
+            Transfers("portableStorage", true, (address, field) => w.A("LuminPackWriter") + ".Write(ref " + address + ", " + field + ");");
             w.Blank();
             w.Line("writer.Advance(" + width + ");");
             w.Close();

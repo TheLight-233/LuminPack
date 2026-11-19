@@ -23,6 +23,8 @@ The history of individual approvals lives in Git. When this document, the code a
 
 ### Storage access
 
+- Ordinary binary class records containing nested objects, unions or collections mark their record bodies `NoInlining` to preserve the parent loop’s inline budget. Reference-tracked objects apply this boundary at the root. Scalar stores and loads use Core’s `Write`, `WriteReserved` and `Read` helpers. Core obtains a supported dictionary view, native input span or record window for each storage operation. Generated field copies prove each adjacent offset and use scalar access when the proof fails.
+
 - **Local + As views.** Private, protected, readonly and auto-property backing storage is accessed through generated layout mirrors and `Unsafe.As`, never reflection. Mirrors replicate the inheritance chain and `LayoutKind` (including explicit offsets). Accessible writable fields are accessed directly.
 - **Storage placeholders.** Mirror fields, padding members and hidden storage must not be removed because ordinary call-site searches find no use.
 - **Adjacent-field bulk copies.** Consecutive unmanaged fields may be copied as one block only on 64-bit, after proving the actual field addresses match the packed offsets, excluding volatile fields, and keeping a field-wise fallback.

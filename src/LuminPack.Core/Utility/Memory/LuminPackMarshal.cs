@@ -11,6 +11,45 @@ namespace LuminPack.Code;
 public static partial class LuminPackMarshal
 {
 
+    /// <summary>Proves the first pair of an adjacent native-field batch on layouts eligible for bulk transfer.</summary>
+    /// <param name="first">The first field's actual address.</param>
+    /// <param name="next">The next field's actual address.</param>
+    /// <param name="width">The wire width of the first field.</param>
+    /// <returns>Whether both fields can participate in the proposed bulk copy.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool CanBatchFields(ref byte first, ref byte next, int width) =>
+        IntPtr.Size == 8 && Unsafe.ByteOffset(ref first, ref next) == width;
+
+    /// <summary>Tests whether the validated native entry layout can be populated directly for this dictionary.</summary>
+    /// <typeparam name="TKey">The dictionary key type.</typeparam>
+    /// <typeparam name="TValue">The dictionary value type.</typeparam>
+    /// <returns>Whether the runtime supports direct population of this entry layout.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool CanPopulateDictionaryEntries<TKey, TValue>() where TKey : notnull =>
+        IntPtr.Size == 8 && DictionaryView<TKey, TValue>.Recognized;
+
+    /// <summary>Obtains the native entry view used by dense dictionary traversals.</summary>
+    /// <typeparam name="TKey">The dictionary key type.</typeparam>
+    /// <typeparam name="TValue">The dictionary value type.</typeparam>
+    /// <param name="dictionary">The dictionary to traverse.</param>
+    /// <param name="view">The validated entry view.</param>
+    /// <returns>Whether the entry view is available.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryGetDenseDictionaryView<TKey, TValue>(Dictionary<TKey, TValue> dictionary, out DictionaryView<TKey, TValue> view)
+        where TKey : notnull
+    {
+        if (CanPopulateDictionaryEntries<TKey, TValue>())
+        {
+            view = new DictionaryView<TKey, TValue>(dictionary);
+            return true;
+        }
+        view = default;
+        return false;
+    }
+
     // List, Stack and Queue storage is reached through the offsets probed by LuminCollectionLayouts; see that type for the
     // probe and its fallback. The offsets are constants in optimized code, as the former compiled views' fields were.
 

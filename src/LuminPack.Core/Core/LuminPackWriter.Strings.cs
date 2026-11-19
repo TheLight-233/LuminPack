@@ -1110,6 +1110,23 @@ namespace LuminPack.Core
             return sizeof(int) + count * pair;
         }
 
+        /// <summary>Obtains the native record window for a profile eligible for a proven object write.</summary>
+        /// <param name="profileEligible">Whether the formatter can bound this profile's complete record.</param>
+        /// <param name="room">The remaining non-growing window, which can be negative beyond the threshold.</param>
+        /// <returns>Whether the native window is available for the selected profile.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryGetObjectRecordRoom(bool profileEligible, out int room)
+        {
+            if (IntPtr.Size == 8 && profileEligible)
+            {
+                room = RecordRoom();
+                return true;
+            }
+            room = 0;
+            return false;
+        }
+
         /// <summary>Returns the room an unchecked record may use at the cursor: the storage and the collection threshold.</summary>
         /// <returns>The available bytes, negative once the threshold is passed.</returns>
         [EditorBrowsable(EditorBrowsableState.Never)]

@@ -156,13 +156,11 @@ internal static class RectangularArrayOwnerFile
                 w.Line("int copyBytes;");
                 w.Line("ref byte payload = ref " + Unsafe + ".NullRef<byte>();");
                 w.Line("var target = value;");
-                w.Line("if (target is not null && " + Unsafe + ".SizeOf<global::System.IntPtr>() == 8)");
+                w.Line("if (target is not null)");
                 w.Open();
                 w.Line("long recordBytes = " + header + " + (long)target.Length * " + width + ";");
-                w.Line("var input = reader.Buffer;");
                 w.Line("ref byte record = ref reader.Cursor;");
-                w.Line("long position = (long)" + Unsafe + ".ByteOffset(ref " + Marshal + ".GetReference(input), ref record);");
-                w.Line("if (recordBytes <= input.Length && (ulong)position <= (ulong)(input.Length - recordBytes) &&");
+                w.Line("if (reader.CanReadRectangularRecord(recordBytes) &&");
                 w.Line("    record != global::LuminPack.Code.LuminPackCode.NullObject &&");
                 w.Line("    " + binaryReader + ".Read<int>(ref " + Unsafe + ".Add(ref record, 1)) == target.GetLength(0) &&");
                 w.Line("    " + binaryReader + ".Read<int>(ref " + Unsafe + ".Add(ref record, 1 + sizeof(int))) == target.GetLength(1) &&");

@@ -246,6 +246,40 @@ namespace LuminPack.Core
             return code != LuminPackCode.NullObject;
         }
 
+        /// <summary>Checks the complete record before reusing rectangular array storage.</summary>
+        /// <param name="width">The rectangular header and payload width.</param>
+        /// <returns>Whether the entire record fits in a supported input window.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool CanReadRectangularRecord(long width)
+        {
+            if (IntPtr.Size != 8 || (ulong)width > (uint)_buffer.Length)
+                return false;
+            nint position = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref Current);
+            return (nuint)position <= (nuint)(_buffer.Length - width);
+        }
+
+        /// <summary>Consumes a short, validated block of native elements for immediate immutable construction.</summary>
+        /// <typeparam name="T">The raw unmanaged element type.</typeparam>
+        /// <param name="count">The number of elements.</param>
+        /// <param name="items">The complete borrowed input, valid during construction.</param>
+        /// <returns>Whether the native input was consumed.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryReadSmallNativeSpan<T>(int count, out ReadOnlySpan<T> items) where T : unmanaged
+        {
+            if (IntPtr.Size != 8 || (uint)count > 8)
+            {
+                items = default;
+                return false;
+            }
+            int bytes = checked(count * Unsafe.SizeOf<T>());
+            int start = Position;
+            Advance(bytes);
+            items = MemoryMarshal.Cast<byte, T>(_buffer.Slice(start, bytes));
+            return true;
+        }
+
         /// <summary>Reads and advances past an object member count.</summary>
         /// <param name = "memberCount">Receives the serialized member count.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -374,6 +408,11 @@ namespace LuminPack.Core
         public void ReadNativeNullablePayload<T>(scoped ref T? value)
             where T : unmanaged
         {
+            if (IntPtr.Size != 8)
+            {
+                value = Read<T>();
+                return;
+            }
             ref T payload = ref Unsafe.AsRef(in Nullable.GetValueRefOrDefaultRef(in value));
             if (Unsafe.SizeOf<T>() == 12 && Unsafe.SizeOf<T?>() == 16 && IntPtr.Size == 8 &&
                 BitConverter.IsLittleEndian && Vector128.IsHardwareAccelerated &&

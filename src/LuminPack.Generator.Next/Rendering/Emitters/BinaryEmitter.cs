@@ -435,7 +435,13 @@ internal static partial class BinaryEmitter
         // mixed record counts its inline objects' expanded bodies structurally, because their member runs, not their call
         // sites, decide the budget. A member write stays a call boundary whose callee keeps its own budget, so the runtime
         // sizes the entry instead, and any record that calls one keeps no inline hint.
-        string WriteHint(List<string> body, bool union) => model.HasDictionary ? null :
+        bool IsHeavyRecord() => !model.IsStruct && model.Version == null && members.Any(member =>
+            member.Kind is RenderMemberKind.Array or RenderMemberKind.List or RenderMemberKind.Object or
+                RenderMemberKind.Dictionary or RenderMemberKind.SparseDictionary or RenderMemberKind.SortedList or
+                RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.ForwardedCollection or
+                RenderMemberKind.Sequence || member.ReferencePayload);
+
+        string WriteHint(List<string> body, bool union) => IsHeavyRecord() ? w.MethodImpl("NoInlining") : model.HasDictionary ? null :
             (model.StreamRecord || model.MixedRecord) &&
             !body.Any(line => line.IndexOf(".SerializeMember_", StringComparison.Ordinal) >= 0) &&
             !body.Any(line => line == "do" || line.StartsWith("for (", StringComparison.Ordinal) || line.StartsWith("foreach (", StringComparison.Ordinal) ||
@@ -443,7 +449,7 @@ internal static partial class BinaryEmitter
             ? ((model.StreamRecord ? InvocationCounter.Count(body) <= 16 : DirectInlining.MixedWrite(model, union)) ? inline : null)
             : (model.StreamRecord || model.MixedRecord ? null : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null));
 
-        string ReadHint(List<string> body) => model.StreamRecord || model.MixedRecord
+        string ReadHint(List<string> body) => IsHeavyRecord() ? w.MethodImpl("NoInlining") : model.StreamRecord || model.MixedRecord
             ? (InvocationCounter.Count(body) <= 16 ? inline : null)
             : (model.ConstructorArguments != null ? (DirectInlining.ConstructedRead(model) ? inline : null)
                 : (DirectInlining.Read(model, Sizes(body)) ? inline : null));
@@ -707,22 +713,26 @@ internal static partial class BinaryEmitter
     /// <param name="owner">The type or declaration that owns the operation.</param>
     /// <param name="readOnly">Whether to enable read only for this operation.</param>
     /// <returns>The resulting text.</returns>
-    internal static string Proof(CodeWriter w, RenderMember[] members, int first, int last, string owner, bool readOnly)
+    /// <param name="coreLayout">Whether the ordinary record uses the Core storage-layout capability.</param>
+    internal static string Proof(CodeWriter w, RenderMember[] members, int first, int last, string owner, bool readOnly, bool coreLayout = false)
     {
         for (int index = first; index <= last; index++)
             if (members[index].Volatile)
                 return "false";
         string memory = w.A("Unsafe");
-        var proof = new System.Text.StringBuilder().Append(memory).Append(".SizeOf<global::System.IntPtr>() == 8");
+        var proof = new System.Text.StringBuilder(coreLayout ? string.Empty : memory + ".SizeOf<global::System.IntPtr>() == 8");
         string address = Bytes(w, members[first], owner, readOnly);
         for (int index = first; index < last; index++)
         {
             string next = Bytes(w, members[index + 1], owner, readOnly);
-            proof.Append(" && ").Append(memory).Append(".ByteOffset(ref ").Append(address).Append(", ref ").Append(next)
-                .Append(") == ").Append(members[index].Raw ? memory + ".SizeOf<" + members[index].Scalar + ">()" : members[index].Width);
+            string width = members[index].Raw ? memory + ".SizeOf<" + members[index].Scalar + ">()" : members[index].Width;
+            if (coreLayout && index == first)
+                proof.Append("global::LuminPack.Code.LuminPackMarshal.CanBatchFields(ref ").Append(address).Append(", ref ").Append(next).Append(", ").Append(width).Append(')');
+            else
+                proof.Append(" && ").Append(memory).Append(".ByteOffset(ref ").Append(address).Append(", ref ").Append(next).Append(") == ").Append(width);
             address = next;
         }
-        return proof.ToString();
+        return proof.Length == 0 ? "false" : proof.ToString();
     }
 
     /// <summary>Ends a run of consecutive fixed members.</summary>
@@ -822,12 +832,12 @@ internal static partial class BinaryEmitter
                 return body;
             }
             string width = Width(members, 0, members.Length - 1);
-            body.Add("if (" + Proof(w, members, 0, members.Length - 1, "value", readOnly: true) + ")");
+            body.Add("if (" + Proof(w, members, 0, members.Length - 1, "value", readOnly: true, coreLayout: true) + ")");
             body.Add("\twriter.Write(ref " + Bytes(w, members[0], "value", readOnly: true, plain: true) + ", " + width + ");");
             body.Add("else");
             body.Add("{");
             body.Add("ref byte cursor = ref writer.Cursor;");
-            AddFixedStores(w, members, 0, members.Length - 1, "cursor", body);
+            AddScalarStores(w, members, 0, members.Length - 1, "cursor", body);
             body.Add("writer.Advance(" + width + ");");
             body.Add("}");
             if (bounded)
@@ -934,36 +944,16 @@ internal static partial class BinaryEmitter
                 int last = RunEnd(members, index);
                 if (last == index)
                 {
-                    if (member.Size >= 8 || member.Raw)
-                    {
-                        // A raw framework struct keeps its aligned store on 64-bit targets and its checked reserved
-                        // store otherwise; an eight-byte scalar uses the same split without the size test.
-                        body.Add("if (" + w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8" +
-                            (member.Raw ? " || " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">() <= 4" : string.Empty) + ")");
-                        body.Add("{");
-                        body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
-                        body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
-                        body.Add("}");
-                        body.Add("else");
-                        body.Add("{");
-                        body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReserved<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
-                        body.Add("}");
-                        body.Add("");
-                    }
-                    else
-                    {
-                        body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
-                        body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
-                    }
+                    body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReserved<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
                     continue;
                 }
                 string width = Width(members, index, last);
-                body.Add("if (" + Proof(w, members, index, last, "value", readOnly: true) + ")");
+                body.Add("if (" + Proof(w, members, index, last, "value", readOnly: true, coreLayout: true) + ")");
                 body.Add("\tcursor = ref " + w.A("LuminPackWriter") + ".WriteReservedBlock(ref cursor, ref " + Bytes(w, member, "value", readOnly: true) + ", " +
                     width + ");");
                 body.Add("else");
                 body.Add("{");
-                AddFixedStores(w, members, index, last, "cursor", body);
+                AddScalarStores(w, members, index, last, "cursor", body);
                 body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + width + ");");
                 body.Add("}");
                 body.Add("");
@@ -1585,13 +1575,13 @@ internal static partial class BinaryEmitter
                 return;
             }
             string width = Width(members, 0, members.Length - 1);
-            body.Add("if (" + Proof(w, members, 0, members.Length - 1, owner, readOnly: true) + ")");
+            body.Add("if (" + Proof(w, members, 0, members.Length - 1, owner, readOnly: true, coreLayout: true) + ")");
             body.Add("\t" + state + ".Write(ref " + Bytes(w, members[0], owner, readOnly: true) + ", " + width + ");");
             body.Add("else");
             body.Add("{");
             string cursor = CursorName(ref cursors);
             body.Add("ref byte " + cursor + " = ref " + state + ".Cursor;");
-            AddFixedStores(w, members, 0, members.Length - 1, cursor, body, owner);
+            AddScalarStores(w, members, 0, members.Length - 1, cursor, body, owner);
             body.Add(state + ".Advance(" + width + ");");
             body.Add("}");
             body.Add("");
@@ -1637,35 +1627,17 @@ internal static partial class BinaryEmitter
                 int last = RunEnd(members, index);
                 if (last == index)
                 {
-                    if (member.Size >= 8 || member.Raw)
-                    {
-                        body.Add("if (" + w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8" +
-                            (member.Raw ? " || " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">() <= 4" : string.Empty) + ")");
-                        body.Add("{");
-                        body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref " + elementCursor + ", " + owner + "." + member.Name + ");");
-                        body.Add(elementCursor + " = ref " + w.A("Unsafe") + ".Add(ref " + elementCursor + ", " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
-                        body.Add("}");
-                        body.Add("else");
-                        body.Add("{");
-                        body.Add(elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReserved<" + member.Scalar + ">(ref " + elementCursor + ", " +
+                    body.Add(elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReserved<" + member.Scalar + ">(ref " + elementCursor + ", " +
                             owner + "." + member.Name + ");");
-                        body.Add("}");
-                        body.Add("");
-                    }
-                    else
-                    {
-                        body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref " + elementCursor + ", " + owner + "." + member.Name + ");");
-                        body.Add(elementCursor + " = ref " + w.A("Unsafe") + ".Add(ref " + elementCursor + ", " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
-                    }
                     continue;
                 }
                 string runWidth = Width(members, index, last);
-                body.Add("if (" + Proof(w, members, index, last, owner, readOnly: true) + ")");
+                body.Add("if (" + Proof(w, members, index, last, owner, readOnly: true, coreLayout: true) + ")");
                 body.Add("\t" + elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReservedBlock(ref " + elementCursor + ", ref " +
                     Bytes(w, member, owner, readOnly: true) + ", " + runWidth + ");");
                 body.Add("else");
                 body.Add("{");
-                AddFixedStores(w, members, index, last, elementCursor, body, owner);
+                AddScalarStores(w, members, index, last, elementCursor, body, owner);
                 body.Add(elementCursor + " = ref " + w.A("Unsafe") + ".Add(ref " + elementCursor + ", " + runWidth + ");");
                 body.Add("}");
                 body.Add("");
@@ -1870,36 +1842,16 @@ internal static partial class BinaryEmitter
                     end = last;
                 if (end == index)
                 {
-                    if (member.Size >= 8 || member.Raw)
-                    {
-                        // A raw framework struct keeps its aligned store on 64-bit targets and its checked reserved store
-                        // otherwise; an eight-byte scalar uses the same split without the size test.
-                        body.Add("if (" + w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8" +
-                            (member.Raw ? " || " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">() <= 4" : string.Empty) + ")");
-                        body.Add("{");
-                        body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
-                        body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
-                        body.Add("}");
-                        body.Add("else");
-                        body.Add("{");
-                        body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReserved<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
-                        body.Add("}");
-                        body.Add("");
-                    }
-                    else
-                    {
-                        body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
-                        body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
-                    }
+                    body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReserved<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
                     continue;
                 }
                 string width = Width(members, index, end);
-                body.Add("if (" + Proof(w, members, index, end, "value", readOnly: true) + ")");
+                body.Add("if (" + Proof(w, members, index, end, "value", readOnly: true, coreLayout: true) + ")");
                 body.Add("\tcursor = ref " + w.A("LuminPackWriter") + ".WriteReservedBlock(ref cursor, ref " + Bytes(w, member, "value", readOnly: true) + ", " +
                     width + ");");
                 body.Add("else");
                 body.Add("{");
-                AddFixedStores(w, members, index, end, "cursor", body);
+                AddScalarStores(w, members, index, end, "cursor", body);
                 body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + width + ");");
                 body.Add("}");
                 body.Add("");
@@ -2083,13 +2035,13 @@ internal static partial class BinaryEmitter
                 continue;
             }
             string width = Width(members, index, last);
-            body.Add("if (" + Proof(w, members, index, last, owner, readOnly: true) + ")");
+            body.Add("if (" + Proof(w, members, index, last, owner, readOnly: true, coreLayout: true) + ")");
             body.Add("\twriter.Write(ref " + Bytes(w, members[index], owner, readOnly: true) + ", " + width + ");");
             body.Add("else");
             body.Add("{");
             string cursor = "cursor" + (cursors++ == 0 ? string.Empty : cursors.ToString(CultureInfo.InvariantCulture));
             body.Add("ref byte " + cursor + " = ref writer.Cursor;");
-            AddFixedStores(w, members, index, last, cursor, body, owner);
+            AddScalarStores(w, members, index, last, cursor, body, owner);
             body.Add("writer.Advance(" + width + ");");
             body.Add("}");
             index = last;
@@ -2439,12 +2391,12 @@ internal static partial class BinaryEmitter
                 continue;
             }
             string widthText = Width(members, index, last);
-            body.Add("if (" + Proof(w, members, index, last, "value", readOnly: true) + ")");
+            body.Add("if (" + Proof(w, members, index, last, "value", readOnly: true, coreLayout: true) + ")");
             body.Add("\twriter.Write(ref " + Bytes(w, member, "value", readOnly: true) + ", " + widthText + ");");
             body.Add("else");
             body.Add("{");
             body.Add("ref byte cursor = ref writer.Cursor;");
-            AddFixedStores(w, members, index, last, "cursor", body);
+            AddScalarStores(w, members, index, last, "cursor", body);
             body.Add("writer.Advance(" + widthText + ");");
             body.Add("}");
             body.Add("");
@@ -2504,7 +2456,7 @@ internal static partial class BinaryEmitter
 
         var body = new List<string>
         {
-            "if (!(" + unsafeName + ".SizeOf<global::System.IntPtr>() == 8 && " + profiles + "))",
+            "if (!writer.TryGetObjectRecordRoom(" + profiles + ", out int objectRecordRoom))",
             "{",
             "WriteChecked(ref writer, input);",
             "return;",
@@ -2516,7 +2468,7 @@ internal static partial class BinaryEmitter
         };
         body.AddRange(captures);
         body.Add("long objectRecordBound = " + bound + ";");
-        body.Add("if (writer.RecordRoom() >= objectRecordBound)");
+        body.Add("if (objectRecordRoom >= objectRecordBound)");
         body.Add("{");
         body.Add("WriteRecord(" + arguments + ");");
         body.Add("return;");
@@ -2558,6 +2510,25 @@ internal static partial class BinaryEmitter
     /// <param name="body">The statements in the generated operation body.</param>
     private static void AddFixedStores(CodeWriter w, RenderMember[] members, int first, int last, string cursor, List<string> body)
         => AddFixedStores(w, members, first, last, cursor, body, "value");
+
+    /// <summary>Emits architecture-safe field stores after an ordinary record fails its layout proof.</summary>
+    /// <param name="w">The source writer.</param>
+    /// <param name="members">The ordered record fields.</param>
+    /// <param name="first">The index of the first field.</param>
+    /// <param name="last">The index of the last field.</param>
+    /// <param name="cursor">The output cursor.</param>
+    /// <param name="body">The generated statements.</param>
+    /// <param name="owner">The record expression.</param>
+    private static void AddScalarStores(CodeWriter w, RenderMember[] members, int first, int last, string cursor, List<string> body, string owner = "value")
+    {
+        string offset = "0";
+        for (int index = first; index <= last; index++)
+        {
+            var member = members[index];
+            body.Add(w.A("LuminPackWriter") + ".Write(ref " + At(w, cursor, offset) + ", " + owner + "." + member.Name + ");");
+            offset = Add(offset, member.Width);
+        }
+    }
 
     /// <summary>Stores a run of fixed fields of one record, which may be an inline object, at their packed offsets from a cursor.</summary>
     /// <param name="w">The generated source writer.</param>
@@ -2809,7 +2780,7 @@ internal static partial class BinaryEmitter
                     : "unchecked((nint)(uint)((" + widthText + ")))";
                 if (useFieldProof)
                 {
-                    body.Add("if (" + (freshBlock ? "freshInstance && " : string.Empty) + Proof(w, members, index, last, "instance", readOnly: false) + ")");
+                    body.Add("if (" + (freshBlock ? "freshInstance && " : string.Empty) + Proof(w, members, index, last, "instance", readOnly: false, coreLayout: true) + ")");
                     string block = Bytes(w, member, "instance", readOnly: false, plain: true);
                     if (offsets.Count == 0 || trusted)
                         body.Add("\treader.Read(ref " + block + ", " + widthText + ");");
@@ -3099,7 +3070,7 @@ internal static partial class BinaryEmitter
                 : "unchecked((nint)(uint)((" + widthText + ")))";
             if (prove)
             {
-                body.Add("if (" + Proof(w, members, index, last, owner, readOnly: false) + ")");
+                body.Add("if (" + Proof(w, members, index, last, owner, readOnly: false, coreLayout: true) + ")");
                 string block = Bytes(w, member, owner, readOnly: false, plain: true);
                 if (offsets.Count == 0 || trusted)
                     body.Add("\treader.Read(ref " + block + ", " + widthText + ");");

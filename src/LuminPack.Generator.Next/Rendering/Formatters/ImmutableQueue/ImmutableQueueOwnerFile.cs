@@ -158,12 +158,8 @@ internal static class ImmutableQueueOwnerFile
                     if (!boolean && set.FindFormatter(queue)?.Supports("ImmutableSpan") == true)
                     {
                         // Borrow the validated bytes on 64-bit targets. A typed span never escapes construction.
-                        w.Line("if (length <= 8 && global::System.IntPtr.Size == 8)");
+                        w.Line("if (reader.TryReadSmallNativeSpan<" + scalar + ">(length, out var items))");
                         w.Open();
-                        w.Line("int byteCount = checked(length * " + memory + ".SizeOf<" + scalar + ">());");
-                        w.Line("int start = reader.Position;");
-                        w.Line("reader.Advance(byteCount);");
-                        w.Line("global::System.ReadOnlySpan<" + scalar + "> items = " + marshal + ".Cast<byte, " + scalar + ">(reader.Buffer.Slice(start, byteCount));");
                         w.Line("value = " + factory + ".Create(items);");
                         w.Line("return;");
                         w.Close();

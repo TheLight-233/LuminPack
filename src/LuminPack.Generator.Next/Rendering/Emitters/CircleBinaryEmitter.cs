@@ -190,17 +190,17 @@ internal static partial class CircleBinaryEmitter
             w.Line("internal static partial class " + container);
             w.Open();
             w.Suppressed = !writes;
-            Method(write, "RootWrite", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)", genericWrite ? null : inline);
+            Method(write, "RootWrite", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)", w.MethodImpl("NoInlining"));
             w.Blank();
             w.Suppressed = !reads;
-            Method(read, "RootRead", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)", null);
+            Method(read, "RootRead", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)", w.MethodImpl("NoInlining"));
             w.Blank();
             w.Suppressed = !writes;
-            Method(write, "RootWriteUnion", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)", genericWrite ? null : inline);
+            Method(write, "RootWriteUnion", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)", w.MethodImpl("NoInlining"));
             w.Blank();
             w.Suppressed = !reads;
             Method(readUnion, "RootReadUnion", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
-                model.ReferencePayload ? w.MethodImpl("NoInlining") : null);
+                w.MethodImpl("NoInlining"));
             w.Suppressed = false;
             w.Close();
         }
