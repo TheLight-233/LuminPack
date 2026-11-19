@@ -13,7 +13,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreTextAlgorithms
     {
-// Core source SHA256: Utility/Text/StringSerializer.cs AAE8E9F0C84678A69ED28A37798CD3842970600D8AC9A4031283BBFF17B5289D
+// Core source SHA256: Utility/Text/StringSerializer.cs 1B2A1D7495D3AEC341A73BC14E4565A8931ED9F81A41CFCEE2307E204253F063
 /// <summary>Performs the prefer custom simd step for the current operation.</summary>
 /// <param name = "source">The input data to process.</param>
 /// <param name = "destinationLength">The destination length used by this operation.</param>
@@ -1272,7 +1272,7 @@ internal static unsafe bool Matches(ReadOnlySpan<byte> bytes, ReadOnlySpan<char>
     return byteOffset == bytes.Length;
 }
     }
-// Core source SHA256: Core/Json/LuminPackJsonReader.Capacity.cs A6BC783FE05390392D71DE5ACFCAF06B897513CFA51C297156B42E1D449127B2
+// Core source SHA256: Core/Json/LuminPackJsonReader.Capacity.cs 0A6E3C45FC5879960CEB6FF49D1B68F8CD73BA3AC278623CFA2F43E48CEE0E76
 internal static unsafe class CoreJsonCapacity
 {
 /// <summary>Scans complete UTF-8 blocks with cross-block quote and escape state.</summary>
@@ -2414,7 +2414,7 @@ internal static unsafe void Copy256(ref byte input, ref byte output, ref nint bl
     }
 }
 }
-// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 65AF7055E53F24337250266BDB03F32D3ECE2AD2C39E2156681491E65F45B96F
+// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 8426077DB001B33B27D3BDEEF9BF0B55E89934F5DCE351A28336373BB163D587
 internal static unsafe class CoreLatin1Records
 {
 /// <summary>Checks a character span using the same bounded Latin-1 kernels as string records.</summary>

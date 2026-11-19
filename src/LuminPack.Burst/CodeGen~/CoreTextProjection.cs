@@ -262,6 +262,7 @@ internal static class CoreTextProjection
             .Replace("global::LuminPack.Internal.Utf8Latin1Transcoder", "CoreLatinUtf8", StringComparison.Ordinal)
             .Replace("Utf8TwoByteComparer", "CoreTwoByteComparer", StringComparison.Ordinal)
             .Replace("StringSerializer.", "CoreTextAlgorithms.", StringComparison.Ordinal)
+            .Replace(" | LuminPackJit.Optimized", string.Empty, StringComparison.Ordinal)
             .Replace("LuminByteShuffle.", "CoreByteShuffle.", StringComparison.Ordinal)
             .Replace("masks.Fill(0xFF)", "KernelMemory.InitBlockUnaligned(ref MemoryMarshal.GetReference(masks), 0xFF, (uint)masks.Length)", StringComparison.Ordinal)
             .Replace("string text", "ReadOnlySpan<char> text", StringComparison.Ordinal)
