@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -152,7 +153,15 @@ internal static partial class Program
             using var image = new MemoryStream();
             var emitted = result.Output.Emit(image);
             RequireIncremental(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
-            checks += (int)Assembly.Load(image.ToArray()).GetType("AutomaticRegistrationFixture")!.GetMethod("Exercise")!.Invoke(null, null)!;
+            image.Position = 0;
+            checks += ExerciseCollectibleRegistration(image, out var context);
+            for (int attempt = 0; attempt < 12 && context.IsAlive; attempt++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+            }
+            RequireIncremental(!context.IsAlive, "Generated formatters for framework payloads retained their consuming assembly.");
         }
         checks += VerifyStaticBackends(references, parse);
         {
@@ -247,6 +256,26 @@ internal static partial class Program
         }
     }
 
+    /// <summary>Runs default and explicit profile registrations in a collectible consuming assembly.</summary>
+    /// <param name="image">The emitted consuming assembly.</param>
+    /// <param name="contextReference">A weak reference that observes unload after the operation returns.</param>
+    /// <returns>The number of completed runtime checks.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int ExerciseCollectibleRegistration(Stream image, out WeakReference contextReference)
+    {
+        var context = new AssemblyLoadContext("AutomaticRegistrationFixture", isCollectible: true);
+        contextReference = new WeakReference(context);
+        try
+        {
+            var fixture = context.LoadFromStream(image).GetType("AutomaticRegistrationFixture", throwOnError: true)!;
+            return (int)fixture.GetMethod("Exercise")!.Invoke(null, null)!;
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
     private const string AutomaticRegistrationFixture = """
         using System;
         using System.Collections.Generic;
@@ -281,13 +310,14 @@ internal static partial class Program
                 var values = new Dictionary<int, string> { [7] = "seven" };
                 if (Read<AutoPayload>(Write(new AutoPayload { Values = values })).Values[7] != "seven") throw new Exception("Generated model registration.");
                 if (Read<Dictionary<int, string>>(Write(values))[7] != "seven") throw new Exception("Closed collection binary registration.");
+                if (ReadJson<Dictionary<int, string>>(WriteJson(values))[7] != "seven") throw new Exception("Closed collection JSON registration.");
                 if (ReadUtf8Json<Dictionary<int, string>>(WriteUtf8Json(values))[7] != "seven") throw new Exception("Closed collection profile registration.");
                 if (!LuminPackSerializer.Serialize(values).AsSpan().SequenceEqual(Write(values))) throw new Exception("Concrete and generic bytes differ.");
                 LuminPackSerializer.Register<AutoPayload>(
                     static (ref LuminPackWriter writer, in AutoPayload value) => writer.Write(123),
                     static (ref LuminPackReader reader, ref AutoPayload value) => value = new AutoPayload { Values = { [reader.Read<int>()] = "manual" } });
                 if (Read<AutoPayload>(Write(new AutoPayload())).Values[123] != "manual") throw new Exception("Explicit registration lost priority.");
-                return 7;
+                return 8;
             }
             private static byte[] Write<T>(T value) => LuminPackSerializer.Serialize(value);
             private static T Read<T>(byte[] bytes) => LuminPackSerializer.Deserialize<T>(bytes);

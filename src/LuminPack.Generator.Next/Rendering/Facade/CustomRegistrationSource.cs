@@ -43,7 +43,7 @@ internal static class CustomRegistrationSource
             {
                 public static partial class LuminPackSerializer
                 {
-                    private static readonly global::LuminPack.Code.LuminPackFormatterTable DefaultGeneratedFormatters;
+                    private static readonly global::System.Collections.Generic.Dictionary<nint, global::LuminPack.Code.LuminPackFormatter> DefaultGeneratedFormatters;
 
                     static LuminPackSerializer()
                     {
@@ -88,14 +88,15 @@ internal static class CustomRegistrationSource
                     private static class GeneratedFormatters<TOptions>
                         where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
                     {
-                        internal static readonly global::LuminPack.Code.LuminPackFormatterTable Table = RegisterGeneratedFormatters<TOptions, TOptions>();
+                        internal static readonly global::System.Collections.Generic.Dictionary<nint, global::LuminPack.Code.LuminPackFormatter> Table = RegisterGeneratedFormatters<TOptions, TOptions>();
                     }
 
-                    private static global::LuminPack.Code.LuminPackFormatterTable RegisterGeneratedFormatters<TOptions, TJsonReadOptions>()
+                    private static global::System.Collections.Generic.Dictionary<nint, global::LuminPack.Code.LuminPackFormatter> RegisterGeneratedFormatters<TOptions, TJsonReadOptions>()
                         where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
                         where TJsonReadOptions : struct, global::LuminPack.Option.ILuminPackOptions
                     {
-                        var table = new global::LuminPack.Code.LuminPackFormatterTable();
+                        // The consuming assembly owns generated delegates, including operations for framework payloads.
+                        var table = new global::System.Collections.Generic.Dictionary<nint, global::LuminPack.Code.LuminPackFormatter>();
             """).Append('\n');
         foreach (var entry in generated)
         {
@@ -121,7 +122,7 @@ internal static class CustomRegistrationSource
         file.Append("""
 
                     private static void RegisterGenerated<T>(
-                        global::LuminPack.Code.LuminPackFormatterTable table,
+                        global::System.Collections.Generic.Dictionary<nint, global::LuminPack.Code.LuminPackFormatter> table,
                         global::LuminPack.Code.LuminPackWriteDelegate<T>? write,
                         global::LuminPack.Code.LuminPackReadDelegate<T>? read,
                         global::LuminPack.Code.LuminPackJsonWriteDelegate<T>? writeJson,
@@ -134,7 +135,8 @@ internal static class CustomRegistrationSource
                             WriteValueJson = writeJson,
                             ReadValueJson = readJson
                         };
-                        table.TryAdd(typeof(T), formatter);
+                        var key = global::LuminPack.Code.LuminPackMarshal.GetMethodTable(typeof(T));
+                        table.TryAdd(key, formatter);
                     }
                 }
             }

@@ -120,7 +120,7 @@ internal static class FormatterRegistryCacheTest
         GC.KeepAlive(payloads);
     }
 
-    /// <summary>Warms the typed snapshot for a payload loaded in a disposable context.</summary>
+    /// <summary>Warms generated registrations and an explicit snapshot in a disposable context.</summary>
     /// <returns>A weak reference that must not survive collection.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference CheckCollectible()
@@ -128,6 +128,11 @@ internal static class FormatterRegistryCacheTest
         var context = new AssemblyLoadContext("RegistryCachePayload", isCollectible: true);
         Type payload = context.LoadFromAssemblyPath(typeof(FormatterRegistryCacheTest).Assembly.Location)
             .GetType(typeof(CollectiblePayload).FullName!, throwOnError: true)!;
+#if LUMINPACK_NEXT_GENERATOR
+        // Initialize the consuming assembly's generated delegates even when its module warmup is independent.
+        var serializer = payload.Assembly.GetType("LuminPack.LuminPackSerializer", throwOnError: true)!;
+        RuntimeHelpers.RunClassConstructor(serializer.TypeHandle);
+#endif
         var callback = payload.GetMethod(nameof(CollectiblePayload.Callback), BindingFlags.Public | BindingFlags.Static)!
             .CreateDelegate(typeof(Func<nint>));
         LuminPackFormatterRegistry.Register(payload, callback, callback);
