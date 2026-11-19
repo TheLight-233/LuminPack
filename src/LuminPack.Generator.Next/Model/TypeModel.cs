@@ -308,6 +308,8 @@ internal sealed class RecordModel : TypeModel
     internal readonly bool FixedUnionCase;
     /// <summary>Whether a plain class can use the referenced writer's scalar header overload.</summary>
     internal readonly bool ScalarHeader;
+    /// <summary>Whether ordinary record reads can group direct string fields.</summary>
+    internal readonly bool StringPairs;
 
     /// <summary>Whether the record has a base payload whose members follow its own.</summary>
     internal readonly bool Derived;
@@ -382,14 +384,16 @@ internal sealed class RecordModel : TypeModel
     /// <param name="sequenceBase">The list base whose contents are the record's payload.</param>
     /// <param name="sequenceElement">The list base's element spelling.</param>
     /// <param name="scalarHeader">Whether the ordinary class can use a combined marker and scalar.</param>
+    /// <param name="stringPairs">Whether ordinary reads can group direct string fields.</param>
     internal RecordModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
         bool versioned, bool fixedUnionCase, bool derived, bool proven, bool recordWidth, bool freshResult, string? mirror,
         string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, VersionSchemaModel? version,
         ConstructorModel? constructor = null, CallbackModel? callbacks = null, string? rent = null, StorageMirrorModel[]? mirrors = null,
         string? rejection = null, bool recursive = false, bool implicitPayload = false,
-        string? sequenceBase = null, string? sequenceElement = null, bool scalarHeader = false)
+        string? sequenceBase = null, string? sequenceElement = null, bool scalarHeader = false, bool stringPairs = false)
         : base(identity, accessibility, PayloadKind.Record, members, policy, constraints)
     {
+        StringPairs = stringPairs;
         Implicit = implicitPayload;
         SequenceBase = sequenceBase;
         SequenceElement = sequenceElement;
@@ -416,7 +420,7 @@ internal sealed class RecordModel : TypeModel
     /// <inheritdoc/>
     public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
         other is RecordModel record && base.Equals(other) && Mirrors.SequenceEqual(record.Mirrors) && Versioned == record.Versioned &&
-        FixedUnionCase == record.FixedUnionCase && Derived == record.Derived &&
+        FixedUnionCase == record.FixedUnionCase && Derived == record.Derived && StringPairs == record.StringPairs &&
         Proven == record.Proven && RecordWidth == record.RecordWidth && FreshResult == record.FreshResult &&
         Mirror == record.Mirror && Rent == record.Rent && Rejection == record.Rejection && Recursive == record.Recursive && Implicit == record.Implicit &&
         SequenceBase == record.SequenceBase && SequenceElement == record.SequenceElement && ScalarHeader == record.ScalarHeader &&

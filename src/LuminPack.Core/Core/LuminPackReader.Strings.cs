@@ -492,6 +492,72 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string? Read(string? current = null) => Read<LuminPackDefaultOptions>(current);
 
+        /// <summary>Reads two consecutive string records, publishing each field at its original boundary.</summary>
+        /// <typeparam name="TOptions">The compiled string profile.</typeparam>
+        /// <param name="first">The first string field.</param>
+        /// <param name="second">The second string field.</param>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void ReadStringPair<TOptions>(scoped ref string? first, scoped ref string? second)
+            where TOptions : struct, ILuminPackOptions
+        {
+#if NET8_0_OR_GREATER
+            if ((typeof(TOptions) == typeof(LuminPackUtf16LengthOptions) ||
+                 typeof(TOptions) == typeof(LuminPackDefaultOptions)) &&
+                Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8)
+            {
+                const int pairCapacity = 2 * (sizeof(int) + 16);
+                nint available = Unsafe.ByteOffset(ref Cursor, ref _end);
+                if (unchecked((nuint)(available - pairCapacity)) <= int.MaxValue - pairCapacity)
+                {
+                    int firstHeader = Read<int>(ref Current);
+                    if (IsShortLatin1Header(firstHeader))
+                    {
+                        ReadProvenShortString(firstHeader, ref first);
+                        int secondHeader = Read<int>(ref Current);
+                        if (IsShortLatin1Header(secondHeader))
+                        {
+                            ReadProvenShortString(secondHeader, ref second);
+                            return;
+                        }
+                        ReadStringPairTail<TOptions>(ref second);
+                        return;
+                    }
+                }
+            }
+#endif
+            ReadStringPairFallback<TOptions>(ref first, ref second);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void ReadStringPairFallback<TOptions>(scoped ref string? first, scoped ref string? second)
+            where TOptions : struct, ILuminPackOptions
+        {
+            Read<TOptions>(ref first);
+            ReadStringPairTail<TOptions>(ref second);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void ReadStringPairTail<TOptions>(scoped ref string? slot)
+            where TOptions : struct, ILuminPackOptions => Read<TOptions>(ref slot);
+
+#if NET8_0_OR_GREATER
+        /// <summary>Publishes one short Latin-1 payload whose complete byte range has been checked.</summary>
+        /// <param name="header">The validated short Latin-1 header.</param>
+        /// <param name="slot">The destination and optional retained string.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ReadProvenShortString(int header, scoped ref string? slot)
+        {
+            int length = header >> 1;
+            ref byte payload = ref Unsafe.Add(ref Current, sizeof(int));
+            AdvanceValidated(sizeof(int) + length);
+            string? current = slot;
+            string decoded = StringSerializer.ReadShortLatin1Payload(ref payload, length, current);
+            if (!ReferenceEquals(current, decoded))
+                slot = decoded;
+        }
+#endif
+
         /// <summary>Reads validated string slots with the default profile, retaining equal immutable values.</summary>
         /// <param name="strings">The destination slots after their collection framing has been validated.</param>
         [EditorBrowsable(EditorBrowsableState.Never)]

@@ -117,7 +117,8 @@ internal static class RenderModelFactory
             constantSpans: options.Net8 && options.CSharpVersion >= 1200, mirrors: record?.Mirrors!, rejection: record?.Rejection ?? structure?.Rejection,
             limits: model.Policy.Input == InputPolicy.Untrusted ? model.Policy.Limits : null, recursive: record?.Recursive ?? false,
             generatedInt32Runs: json && options.GeneratedJsonInt32Reader && options.CSharpVersion >= 1100,
-            sequenceBase: record?.SequenceBase!, sequenceElement: record?.SequenceElement!, scalarHeader: record?.ScalarHeader ?? false);
+            sequenceBase: record?.SequenceBase!, sequenceElement: record?.SequenceElement!, scalarHeader: record?.ScalarHeader ?? false,
+            stringPairs: !json && record?.StringPairs == true);
     }
 
     /// <summary>Projects the modeled schema onto the emitter's schema contract.</summary>

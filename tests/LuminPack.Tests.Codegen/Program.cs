@@ -109,6 +109,11 @@ try
         SerializerBinaryEntryShapeRegression.Run(references);
         return 0;
     }
+    if (args.Length is 1 or 2 && args[0] == "--verify-binary-string-pairs")
+    {
+        SerializerBinaryStringPairRegression.Run(references, args.Length == 2 ? args[1] : null);
+        return 0;
+    }
     if (args is ["--verify-immutable-scalar-set-reuse"])
     {
         SerializerImmutableScalarSetReuseRegression.Run(references);
@@ -459,6 +464,7 @@ try
     SerializerPartitionRegression.Run(references);
     SerializerSharedFacadeRegression.Run(references);
     SerializerWideReadRegression.Run(references);
+    SerializerBinaryStringPairRegression.Run(references, olderCore: null);
     SerializerIssueRegression.RunTraversalBoundaries(references);
     SerializerBinaryInliningRegression.Run(references);
     SerializerCollectionInliningRegression.Run(references);

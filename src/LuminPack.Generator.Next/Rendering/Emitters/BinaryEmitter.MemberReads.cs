@@ -6,6 +6,33 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 internal static partial class BinaryEmitter
 {
+    /// <summary>Groups two consecutive wire string reads with direct field destinations and one compiled profile.</summary>
+    /// <param name="body">The receiving method statements.</param>
+    /// <param name="model">The enclosing payload facts.</param>
+    /// <param name="owner">The local holding the target instance.</param>
+    /// <param name="w">The source writer.</param>
+    /// <param name="index">The first member's index, advanced past the second member on success.</param>
+    /// <returns>Whether both members were emitted.</returns>
+    private static bool TryAddStringPairRead(List<string> body, PayloadRenderModel model, string owner, CodeWriter w, ref int index)
+    {
+        const string utf16Length = "LuminPackUtf16LengthOptions";
+        if (!model.StringPairs || model.Redirect != null || model.Limits?.Bounded == true || index + 1 == model.Members.Length)
+            return false;
+        var first = model.Members[index];
+        var second = model.Members[index + 1];
+        if (!DirectText(first) || !DirectText(second))
+            return false;
+        string declared = first.ScopeProfile ?? model.DeclaredProfile;
+        if (declared != (second.ScopeProfile ?? model.DeclaredProfile) || declared != null && declared != utf16Length)
+            return false;
+        body.Add("reader.ReadStringPair<" + ReadProfile(model, w, first) + ">(ref " + owner + "." + first.Name +
+            ", ref " + owner + "." + second.Name + ");");
+        index++;
+        return true;
+
+        static bool DirectText(RenderMember member) => member.Kind == RenderMemberKind.Text && !member.Mirrored && !member.Property;
+    }
+
     /// <summary>Reads a staged or reused member through its existing scalar or concrete static owner contract.</summary>
     /// <param name="body">The receiving method statements.</param>
     /// <param name="model">The enclosing payload facts.</param>

@@ -451,6 +451,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal readonly bool FixedUnionCase;
     /// <summary>Whether a plain class can use the combined object marker and scalar field write.</summary>
     internal readonly bool ScalarHeader;
+    /// <summary>Whether the ordinary record can group direct string field reads.</summary>
+    internal readonly bool StringPairs;
 
     /// <summary>Whether the fixed case can carry a managed output cursor.</summary>
     internal bool ManagedFixedUnionCase => FixedUnionCase && Net8 && Bounded == null;
@@ -689,6 +691,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <param name="sequenceBase">The list base whose contents are the payload's body.</param>
     /// <param name="sequenceElement">The list base's element spelling.</param>
     /// <param name="scalarHeader">Whether the writer and class shape allow a combined marker and scalar.</param>
+    /// <param name="stringPairs">Whether this record can group direct string field reads.</param>
     internal PayloadRenderModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         RenderMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
@@ -703,8 +706,9 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, int[] circleSlots = null, int[] circleWidths = null, StorageMirrorModel[] mirrors = null,
         string rejection = null, InputLimits limits = null, bool recursive = false, bool registration = true,
         bool generatedPropertyHeads = false, bool generatedInt32Runs = false,
-        string sequenceBase = null, string sequenceElement = null, bool scalarHeader = false)
+        string sequenceBase = null, string sequenceElement = null, bool scalarHeader = false, bool stringPairs = false)
     {
+        StringPairs = stringPairs;
         SequenceBase = sequenceBase;
         SequenceElement = sequenceElement;
         ScalarHeader = scalarHeader;
@@ -797,7 +801,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         DeclaredProfile == other.DeclaredProfile &&
         Same(ConstructorArguments, other.ConstructorArguments) && Same(ConstructorMembers, other.ConstructorMembers) &&
         Same(DeclaredOrder, other.DeclaredOrder) && Bounded == other.Bounded &&
-        Net8 == other.Net8 && Utf8Literals == other.Utf8Literals && GeneratedPropertyHeads == other.GeneratedPropertyHeads &&
+        StringPairs == other.StringPairs && Net8 == other.Net8 && Utf8Literals == other.Utf8Literals && GeneratedPropertyHeads == other.GeneratedPropertyHeads &&
         GeneratedInt32Runs == other.GeneratedInt32Runs &&
         Equals(Version, other.Version) &&
         ReferencePayload == other.ReferencePayload && LayoutAttribute == other.LayoutAttribute &&

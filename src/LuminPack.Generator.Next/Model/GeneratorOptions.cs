@@ -69,6 +69,9 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <summary>Whether the referenced Core exposes the generated integer-run reader.</summary>
     internal readonly bool GeneratedJsonInt32Reader;
 
+    /// <summary>Whether the referenced Core exposes the two-field binary string reader.</summary>
+    internal readonly bool BinaryStringPairReader;
+
     /// <summary>Whether the referenced Core can prepare a reused hash set for a direct refill.</summary>
     internal readonly bool HashSetRefill;
 
@@ -123,6 +126,7 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <param name="readOnlyDictionaryRefill">Whether the referenced Core exposes a read-only dictionary's backing dictionary.</param>
     /// <param name="concurrentDictionaryRefill">Whether the referenced Core exposes the in-place concurrent dictionary refill.</param>
     /// <param name="concurrentStackSeed">Whether the referenced Core exposes the concurrent stack read seeding.</param>
+    /// <param name="binaryStringPairReader">Whether the referenced Core exposes the two-field binary string reader.</param>
     internal GeneratorOptions(bool net8, int csharpVersion, bool @unsafe, bool unity, RegisterMode registerMode, int availableAliases,
         string assemblyName, bool interceptors, bool ilRewrite = false, bool pointerCursor = false, string[]? ambiguousNames = null,
         int formatterInterfaces = 0, bool knownFormatters = false, bool quotedScalarReader = false, bool spanCursor = false,
@@ -130,8 +134,9 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
         bool linkedListAppender = false, bool concurrentDictionaryBuilder = false,
         bool queueRefill = false, bool stackRefill = false, bool readOnlyCollectionRefill = false,
         bool readOnlyDictionaryRefill = false, bool concurrentDictionaryRefill = false,
-        bool concurrentStackSeed = false)
+        bool concurrentStackSeed = false, bool binaryStringPairReader = false)
     {
+        BinaryStringPairReader = binaryStringPairReader;
         ConcurrentStackSeed = concurrentStackSeed;
         ConcurrentDictionaryRefill = concurrentDictionaryRefill;
         ReadOnlyDictionaryRefill = readOnlyDictionaryRefill;
@@ -167,7 +172,7 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
         Interceptors == other.Interceptors && IlRewrite == other.IlRewrite && PointerCursor == other.PointerCursor && SpanCursor == other.SpanCursor && FormatterInterfaces == other.FormatterInterfaces &&
         KnownFormatters == other.KnownFormatters && QuotedScalarReader == other.QuotedScalarReader &&
         GeneratedJsonPropertyWriter == other.GeneratedJsonPropertyWriter && GeneratedJsonInt32Reader == other.GeneratedJsonInt32Reader &&
-        HashSetRefill == other.HashSetRefill && LinkedListAppender == other.LinkedListAppender &&
+        BinaryStringPairReader == other.BinaryStringPairReader && HashSetRefill == other.HashSetRefill && LinkedListAppender == other.LinkedListAppender &&
         ConcurrentDictionaryBuilder == other.ConcurrentDictionaryBuilder && QueueRefill == other.QueueRefill &&
         StackRefill == other.StackRefill && ReadOnlyCollectionRefill == other.ReadOnlyCollectionRefill &&
         ReadOnlyDictionaryRefill == other.ReadOnlyDictionaryRefill &&

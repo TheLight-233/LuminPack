@@ -480,7 +480,13 @@ internal static partial class TypeModelFactory
                         recursive: sequenceBase != null || IsRecursive(symbol), implicitPayload: attribute == null,
                         sequenceBase: sequenceBase?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                         sequenceElement: sequenceBase?.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                        scalarHeader: symbol.BaseType?.SpecialType == SpecialType.System_Object && symbol.AllInterfaces.IsEmpty && HasScalarHeader);
+                        scalarHeader: symbol.BaseType?.SpecialType == SpecialType.System_Object && symbol.AllInterfaces.IsEmpty && HasScalarHeader,
+                        stringPairs: Options.BinaryStringPairReader && !versioned && constructor == null &&
+                            callbacks == null && rent == null && mirror == null && policy.Bound == null &&
+                            symbol.BaseType is { SpecialType: SpecialType.System_Object } &&
+                            !symbol.AllInterfaces.Any(contract => IsPackable(contract.OriginalDefinition) ||
+                                HasAttribute(contract.OriginalDefinition, UnionAttribute)) &&
+                            !symbol.GetMembers().OfType<IFieldSymbol>().Any(field => field.IsVolatile));
                 }
             }
         }

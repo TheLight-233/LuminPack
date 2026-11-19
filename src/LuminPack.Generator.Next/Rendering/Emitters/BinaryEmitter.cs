@@ -1735,8 +1735,9 @@ internal static partial class BinaryEmitter
     /// <param name="strings">The mirrored string local counter shared by the whole method.</param>
     /// <param name="ends">The exit label counter shared by the whole method.</param>
     /// <param name="clearOnNull">Whether the local aliases a reused slot that a null marker must clear.</param>
+    /// <param name="pairFields">Whether this is the ordinary list slot reader.</param>
     internal static void AddSequenceElementRead(List<string> body, PayloadRenderModel element, string local, string reference,
-        CodeWriter w, Dictionary<string, int> names, ref int cursors, ref int strings, ref int ends, bool clearOnNull = false)
+        CodeWriter w, Dictionary<string, int> names, ref int cursors, ref int strings, ref int ends, bool clearOnNull = false, bool pairFields = false)
     {
         string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
         ends++;
@@ -1755,7 +1756,7 @@ internal static partial class BinaryEmitter
         if (clearOnNull)
             body.Add("}");
         body.Add("var " + instance + " = " + local + " ??= " + NewInstance(element) + ";");
-        AddStreamRead(body, element, instance, 0, prove: true, w, names, ref cursors, ref strings, ref ends);
+        AddStreamRead(body, element, instance, 0, prove: true, w, names, ref cursors, ref strings, ref ends, pairFields);
         body.Add(exit + ":");
         body.Add("\t;");
         body.Add("}");
@@ -2738,8 +2739,9 @@ internal static partial class BinaryEmitter
     /// <param name="freshUnion">Whether a Union case reads into a new destination.</param>
     /// <param name="freshPayload">Whether the payload body of a record root may read a fixed run of a newly created instance
     /// through the object body's proven checked batch; both framing bodies then declare the freshness test.</param>
+    /// <param name="allowStringPairs">Whether this scope permits grouping direct field reads.</param>
     /// <returns>The body.</returns>
-    private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, bool freshUnion = false, bool freshPayload = false)
+    private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, bool freshUnion = false, bool freshPayload = false, bool allowStringPairs = true)
     {
         // A list-derived payload reads the list base body; the list owner's own length framing replaces the record marker.
         if (model.SequenceBase != null)
@@ -2751,7 +2753,7 @@ internal static partial class BinaryEmitter
         // A mixed record reads with the stream protocol: the inline objects keep their markers, so the reserved write
         // segments change nothing about the order and shape of the reads.
         if (model.StreamRecord || model.MixedRecord)
-            return StreamReadBody(model, w, union);
+            return StreamReadBody(model, w, union, allowStringPairs && !union);
         var members = model.Members;
         var body = new List<string>();
         string Policy() => w.A("LuminPackInputPolicy");
@@ -2843,6 +2845,8 @@ internal static partial class BinaryEmitter
                 index = last;
                 continue;
             }
+            if (allowStringPairs && !union && TryAddStringPairRead(body, model, "instance", w, ref index))
+                continue;
             if (member.Kind == RenderMemberKind.Text && member.Mirrored && member.Property)
             {
                 string number = strings++ == 0 ? string.Empty : strings.ToString(CultureInfo.InvariantCulture);
@@ -2901,7 +2905,8 @@ internal static partial class BinaryEmitter
     /// <param name="w">The generated source writer.</param>
     /// <param name="union">Whether to enable union for this operation.</param>
     /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
-    private static List<string> StreamReadBody(PayloadRenderModel model, CodeWriter w, bool union)
+    /// <param name="pairFields">Whether this scope permits grouping direct field reads.</param>
+    private static List<string> StreamReadBody(PayloadRenderModel model, CodeWriter w, bool union, bool pairFields)
     {
         var members = model.Members;
         var body = new List<string>();
@@ -2914,7 +2919,7 @@ internal static partial class BinaryEmitter
         }
         body.Add("var instance = value ??= " + NewInstance(model) + ";");
         int cursors = 0, strings = 0, ends = 0;
-        AddStreamRead(body, model, "instance", 0, !union, w, new Dictionary<string, int>(StringComparer.Ordinal), ref cursors, ref strings, ref ends);
+        AddStreamRead(body, model, "instance", 0, !union, w, new Dictionary<string, int>(StringComparer.Ordinal), ref cursors, ref strings, ref ends, pairFields);
         while (body.Count != 0 && body[body.Count - 1].Length == 0)
             body.RemoveAt(body.Count - 1);
         ReduceInlineNames(body);
@@ -2933,8 +2938,9 @@ internal static partial class BinaryEmitter
     /// <param name="cursors">The cursor local counter shared by the whole method.</param>
     /// <param name="strings">The mirrored string local counter shared by the whole method.</param>
     /// <param name="ends">The exit-label counter of the outlined trusted child reads.</param>
+    /// <param name="pairFields">Whether the surrounding reader can group direct string fields.</param>
     private static void AddStreamRead(List<string> body, PayloadRenderModel model, string owner, int depth, bool prove,
-        CodeWriter w, Dictionary<string, int> names, ref int cursors, ref int strings, ref int ends)
+        CodeWriter w, Dictionary<string, int> names, ref int cursors, ref int strings, ref int ends, bool pairFields)
     {
         var members = model.Members;
         string Policy() => w.A("LuminPackInputPolicy");
@@ -2965,7 +2971,7 @@ internal static partial class BinaryEmitter
                     body.Add("\t: " + owner + "." + member.Name + ";");
                     body.Add("{");
                     string instanceName = "instance" + (depth + 2).ToString(CultureInfo.InvariantCulture);
-                    body.AddRange(InlineRootRead(member.Nested, w, "nestedInput", instanceName, exit, ref cursors));
+                    body.AddRange(InlineRootRead(member.Nested, w, "nestedInput", instanceName, exit, ref cursors, pairFields));
                     body.Add("}");
                     body.Add("");
                     body.Add(owner + "." + member.Name + " = nestedInput!;");
@@ -2986,7 +2992,7 @@ internal static partial class BinaryEmitter
                 body.Add("else");
                 body.Add("{");
                 body.Add("var " + name + " = " + owner + "." + member.Name + " ?? " + NewInstance(member.Nested) + ";");
-                AddStreamRead(body, member.Nested, name, depth + 1, prove, w, names, ref cursors, ref strings, ref ends);
+                AddStreamRead(body, member.Nested, name, depth + 1, prove, w, names, ref cursors, ref strings, ref ends, pairFields);
                 body.Add(owner + "." + member.Name + " = " + name + ";");
                 body.Add("}");
                 // A following unproven fixed run opens with its own cursor local, which the presentation keeps directly
@@ -2999,6 +3005,8 @@ internal static partial class BinaryEmitter
             }
             if (member.Kind == RenderMemberKind.Text)
             {
+                if (pairFields && TryAddStringPairRead(body, model, owner, w, ref index))
+                    continue;
                 if (member.Mirrored)
                 {
                     // A mirrored string is assigned only when the decoded instance differs, so its storage keeps the old one.
@@ -3215,10 +3223,11 @@ internal static partial class BinaryEmitter
     /// <param name="instanceName">The local the child members are stored in, numbered by nesting depth.</param>
     /// <param name="exit">The label a null child jumps to.</param>
     /// <param name="cursors">The parent method's cursor local counter, advanced by the child's own cursors.</param>
+    /// <param name="pairFields">Whether the surrounding reader can group direct string fields.</param>
     /// <returns>The child body lines.</returns>
-    private static List<string> InlineRootRead(PayloadRenderModel child, CodeWriter w, string target, string instanceName, string exit, ref int cursors)
+    private static List<string> InlineRootRead(PayloadRenderModel child, CodeWriter w, string target, string instanceName, string exit, ref int cursors, bool pairFields)
     {
-        var lines = ReadBody(child, w, union: false);
+        var lines = ReadBody(child, w, union: false, allowStringPairs: pairFields);
         var instance = new System.Text.RegularExpressions.Regex(@"\binstance\b");
         string declaration = "var instance = value ??= " + NewInstance(child) + ";";
         for (int index = 0; index < lines.Count; index++)

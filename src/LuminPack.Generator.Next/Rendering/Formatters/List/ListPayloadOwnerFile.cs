@@ -25,6 +25,6 @@ internal static class ListPayloadOwnerFile
         var w = c.W;
         w.Line("value ??= new " + c.Sequence + "(length);");
         w.Line("global::System.Span<" + c.Scalar + "> span = global::LuminPack.Code.LuminPackMarshal.GetListSpan(value, length);");
-        c.ReadBlockInPlace("span");
+        c.ReadBlockInPlace("span", pairFields: true);
     }
 }

@@ -263,7 +263,8 @@ internal sealed partial class EnumerableOwnerContext
     /// only when absent.</remarks>
     /// <param name="array">An array expression read through its unchecked first-element reference, as the original array read
     /// did, instead of the span.</param>
-    internal void ReadBlockInPlace(string span, string? array = null)
+    /// <param name="pairFields">Whether the ordinary list reader can group direct string fields.</param>
+    internal void ReadBlockInPlace(string span, string? array = null, bool pairFields = false)
     {
         if (Payload == null)
         {
@@ -283,7 +284,7 @@ internal sealed partial class EnumerableOwnerContext
         W.Line("ref " + Scalar + " payloadItem = ref slot!;");
         var body = new List<string>();
         BinaryEmitter.AddSequenceElementRead(body, Payload, "payloadItem", null, W, _readNames, ref _readCursors, ref _readStrings,
-            ref _readEnds, clearOnNull: true);
+            ref _readEnds, clearOnNull: true, pairFields: pairFields);
         foreach (string line in body)
             W.Line(line);
         W.Close();
