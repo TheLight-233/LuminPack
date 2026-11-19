@@ -26,6 +26,9 @@ internal static class SerializerBinaryStringPairRegression
             : "Verified binary string pair generation, read boundaries, and older Core compatibility.");
     }
 
+    /// <summary>Compiles representative field shapes and checks the emitted calls against the referenced Core.</summary>
+    /// <param name="references">The runtime and serializer assemblies for the test compilation.</param>
+    /// <param name="expectPairs">Whether the selected Core exposes the paired string reader.</param>
     private static void Verify(MetadataReference[] references, bool expectPairs)
     {
         var parse = new CSharpParseOptions(LanguageVersion.Preview,

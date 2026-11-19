@@ -529,6 +529,10 @@ namespace LuminPack.Core
             ReadStringPairFallback<TOptions>(ref first, ref second);
         }
 
+        /// <summary>Reads each field through its individual decoder when the pair has no checked short-string window.</summary>
+        /// <typeparam name="TOptions">The compiled string profile.</typeparam>
+        /// <param name="first">The first destination, published before reading the second.</param>
+        /// <param name="second">The second destination.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void ReadStringPairFallback<TOptions>(scoped ref string? first, scoped ref string? second)
             where TOptions : struct, ILuminPackOptions
@@ -537,6 +541,9 @@ namespace LuminPack.Core
             ReadStringPairTail<TOptions>(ref second);
         }
 
+        /// <summary>Reads the second field at its original cursor after the first field has been published.</summary>
+        /// <typeparam name="TOptions">The compiled string profile.</typeparam>
+        /// <param name="slot">The second destination and its retained string.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void ReadStringPairTail<TOptions>(scoped ref string? slot)
             where TOptions : struct, ILuminPackOptions => Read<TOptions>(ref slot);
