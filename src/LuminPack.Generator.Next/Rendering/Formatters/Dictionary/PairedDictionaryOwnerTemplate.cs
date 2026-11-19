@@ -1140,7 +1140,8 @@ internal static class PairedDictionaryOwnerTemplate
                     if (fact.Family.JsonReuseStore != null)
                         DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, fact.Family.JsonReuseStore, jsonReader,
                             context.Supports("SortedListTraversal") ? dictionary : null,
-                            context.Supports("ConcurrentTraversal") ? (dictionary, context.Source) : null, stringProperties: propertyKeys);
+                            context.Supports("ConcurrentTraversal") ? (dictionary, context.Source) : null, stringProperties: propertyKeys,
+                            stagedConcurrent: context.Supports("StagedStringPublication"));
                     else if (dictionary.StartsWith("global::System.Collections.Generic.IDictionary<", StringComparison.Ordinal) ||
                         dictionary.StartsWith("global::System.Collections.Generic.IReadOnlyDictionary<", StringComparison.Ordinal))
                     {

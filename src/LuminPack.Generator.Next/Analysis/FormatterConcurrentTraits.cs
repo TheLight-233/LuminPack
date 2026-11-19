@@ -44,6 +44,30 @@ internal static class FormatterConcurrentTraits
                     parameter.RefKind == argument.Ref && SymbolEqualityComparer.Default.Equals(parameter.Type, argument.Type)).All(match => match));
     }
 
+    /// <summary>Checks the optional staged publication operation for the concrete string-key dictionary.</summary>
+    /// <param name="compilation">The referenced Core and framework assemblies.</param>
+    /// <param name="dictionary">The closed string-key concurrent dictionary.</param>
+    /// <returns>Whether the referenced Core can publish its decoded pairs.</returns>
+    internal static bool HasStagedStringPublication(Compilation compilation, INamedTypeSymbol dictionary)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var entry = compilation.GetTypeByMetadataName("System.Collections.Generic.KeyValuePair`2");
+        if (access is not { IsStatic: true, DeclaredAccessibility: Accessibility.Public } || entry == null)
+            return false;
+        var pairs = compilation.CreateArrayTypeSymbol(entry.Construct(dictionary.TypeArguments.ToArray()));
+        return access.GetMembers("TryPublishStagedStringDictionary").OfType<IMethodSymbol>().Any(method =>
+        {
+            if (method.DeclaredAccessibility != Accessibility.Public || !method.IsStatic || method.Arity != 1 ||
+                method.ReturnType.SpecialType != SpecialType.System_Boolean || method.Parameters.Length != 3)
+                return false;
+            var parameters = method.Construct(dictionary.TypeArguments[1]).Parameters;
+            return parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+                SymbolEqualityComparer.Default.Equals(parameters[0].Type, dictionary) &&
+                SymbolEqualityComparer.Default.Equals(parameters[1].Type, pairs) &&
+                parameters[2].Type.SpecialType == SpecialType.System_Int32;
+        });
+    }
+
     /// <summary>Recognizes the optional bounded raw reader of a rented or concurrent dictionary.</summary>
     /// <param name="compilation">The consumer's Core and framework references.</param>
     /// <param name="concurrent">Whether the helper owns the existing concurrent fresh or reuse operation.</param>

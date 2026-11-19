@@ -523,6 +523,10 @@ internal static class FormatterCapabilities
             FormatterConcurrentTraits.HasConcurrentDictionaryKeyRefill(compilation, named))
             result.Add("ConcurrentDictionaryKeyRefill");
         if (definition == "System.Collections.Concurrent.ConcurrentDictionary" && modern && !unity &&
+            named.TypeArguments[0].SpecialType == SpecialType.System_String &&
+            FormatterConcurrentTraits.HasStagedStringPublication(compilation, named))
+            result.Add("StagedStringPublication");
+        if (definition == "System.Collections.Concurrent.ConcurrentDictionary" && modern && !unity &&
             named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
             result.Add("ConcurrentBinaryTextPair");

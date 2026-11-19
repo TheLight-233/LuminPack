@@ -30,6 +30,16 @@ public static partial class LuminPackCollectionAccess
     }
 
 #if NET10_0_OR_GREATER
+    /// <summary>Publishes a complete staged string-key record through the binary concurrent refill kernel.</summary>
+    /// <typeparam name="TValue">The dictionary value type.</typeparam>
+    /// <param name="map">The dictionary whose comparer and lock protocol are retained.</param>
+    /// <param name="pairs">The decoded key/value pairs in input order.</param>
+    /// <param name="count">The initialized prefix of the staging array.</param>
+    /// <returns>Whether publication succeeded. A false result leaves the normal clear and insert path available.</returns>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public static bool TryPublishStagedStringDictionary<TValue>(ConcurrentDictionary<string, TValue> map,
+        KeyValuePair<string, TValue>[] pairs, int count) => TryRefillStagedConcurrentDictionary(map, pairs, count);
+
     /// <summary>Checks and extends the framework table publication protocol for an already decoded record.</summary>
     /// <typeparam name="TKey">The exact string key type.</typeparam>
     /// <typeparam name="TValue">The dictionary value type.</typeparam>

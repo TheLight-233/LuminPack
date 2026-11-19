@@ -15,8 +15,9 @@ internal static class DictionaryJsonReuseEmitter
     /// <param name="sortedList">The exact sorted-list type when the runtime can traverse its validated storage.</param>
     /// <param name="exactSnapshot">The exact runtime type and its existing value traversal, if available.</param>
     /// <param name="stringProperties">Whether this family accepts the object form for string keys.</param>
+    /// <param name="stagedConcurrent">Whether the runtime can publish this concrete string-keyed concurrent dictionary.</param>
     internal static void Emit(CodeWriter w, string key, string value, string keyOwner, string valueOwner, string store, string jsonReader,
-        string? sortedList = null, (string Type, string Source)? exactSnapshot = null, bool stringProperties = false)
+        string? sortedList = null, (string Type, string Source)? exactSnapshot = null, bool stringProperties = false, bool stagedConcurrent = false)
     {
         string pair = "global::System.Collections.Generic.KeyValuePair<" + key + ", " + value + ">";
         string pool = "global::System.Buffers.ArrayPool<" + pair + ">.Shared";
@@ -143,6 +144,11 @@ internal static class DictionaryJsonReuseEmitter
         {
             w.Close();
             w.Line(firstEntry);
+        }
+        if (stagedConcurrent)
+        {
+            w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryPublishStagedStringDictionary(value, entries, count))");
+            w.Indented(() => w.Line("return;"));
         }
         w.Line("value.Clear();");
         w.Line("if (count != 0)");
