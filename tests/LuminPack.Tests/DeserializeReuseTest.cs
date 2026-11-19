@@ -304,6 +304,9 @@ LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Single(target);
         Assert.Same(first, target["first"]);
         Assert.Equal(11, first.Number);
+        Assert.Equal("first", Assert.Single(target.Keys));
+        // Equal wire spelling exercises reuse of the retained string instance.
+        bytes = LuminPackSerializer.Serialize(new Dictionary<string, ReuseNode> { ["first"] = new() { Number = 11 } });
         for (int i = 0; i < 128; i++) LuminPackSerializer.Deserialize(bytes, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize(bytes, ref target);

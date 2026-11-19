@@ -36,7 +36,7 @@ public sealed class DictionaryInterfaceReuseTest
         Assert.Same(StringComparer.OrdinalIgnoreCase, backing.Comparer);
         Assert.Same(previous, target["a"]);
         Assert.Equal(137, previous.Number);
-        Assert.Equal("A", Assert.Single(target.Keys));
+        Assert.Equal("a", Assert.Single(target.Keys));
     }
 
     /// <summary>A profile getter can replace the enumerated value while the matching key is being decoded.</summary>

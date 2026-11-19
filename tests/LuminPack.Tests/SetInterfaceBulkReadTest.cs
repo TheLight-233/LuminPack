@@ -51,24 +51,24 @@ public class SetInterfaceBulkReadTest
         Assert.Equal(new[] { 99 }, previous);
     }
 
-    /// <summary>Checks null strings, hash collisions and the approved absence of duplicate normalization.</summary>
+    /// <summary>Checks hash collision comparisons, duplicate compaction and null string entries.</summary>
     [Fact]
-    public void BucketConstructionDoesNotCompareElements()
+    public void BucketConstructionComparesCollisionsAndKeepsDistinctElements()
     {
         var input = new[] { new SetCollisionValue { Value = 1 }, new SetCollisionValue { Value = 2 } };
         byte[] bytes = LuminPackSerializer.Serialize(input);
         SetCollisionValue.Comparisons = 0;
         var values = global::LuminPackUnitTest.ConcreteReads.Read<ISet<SetCollisionValue>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISet<SetCollisionValue> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
-        Assert.Equal(0, SetCollisionValue.Comparisons);
+        Assert.Equal(1, SetCollisionValue.Comparisons);
         Assert.Equal(new[] { 1, 2 }, values.Select(value => value.Value));
         SetCollisionValue.Comparisons = 0;
         var readOnly = global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlySet<SetCollisionValue>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlySet<SetCollisionValue> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
-        Assert.Equal(0, SetCollisionValue.Comparisons);
+        Assert.Equal(1, SetCollisionValue.Comparisons);
         Assert.Equal(new[] { 1, 2 }, readOnly.Select(value => value.Value));
 
         bytes = LuminPackSerializer.Serialize(new[] { 7, 7 });
-        Assert.Equal(2, global::LuminPackUnitTest.ConcreteReads.Read<ISet<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Count);
-        Assert.Equal(2, global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlySet<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlySet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Count);
+        Assert.Equal(7, Assert.Single(global::LuminPackUnitTest.ConcreteReads.Read<ISet<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
+        Assert.Equal(7, Assert.Single(global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlySet<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlySet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
 
         ISet<string?> strings = new HashSet<string?> { null, "ascii", "\u00e9", "\u4e2d" };
         bytes = LuminPackSerializer.Serialize(strings);

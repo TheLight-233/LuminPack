@@ -281,7 +281,8 @@ public class DictionaryBucketRangeTest
         var comparer = custom.Comparer;
 LuminPackSerializer.Deserialize<Dictionary<string, long>, TOptions>(payload, ref custom);
         Assert.Same(comparer, custom.Comparer);
-        Assert.Equal(source.ToArray(), custom.ToArray());
+        Assert.Equal(new[] { "FIRST_KEY", keys[1], keys[2] }, custom.Keys);
+        Assert.Equal(source.Values, custom.Values);
 
         var incomplete = keys.ToDictionary(key => key, key => -11L);
         var before = incomplete.ToArray();
