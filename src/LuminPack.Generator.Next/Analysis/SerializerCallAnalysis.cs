@@ -197,9 +197,12 @@ internal static class SerializerCallAnalysis
                 definition = generic.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 typeArguments = string.Join(", ", TypeModelFactory.AllTypeArguments(generic).Select(argument => argument.ToDisplayString(PayloadFormat)));
             }
+            Diagnostics.DiagnosticInfo[] diagnostics = _hasExternalMarkers
+                ? TypeModelFactory.MissingCallStorage(payload, _compilation) : Array.Empty<Diagnostics.DiagnosticInfo>();
+            if (root == null && TypeModelFactory.UnsupportedPackedCallStorage(payload, _compilation, _options) is { } unsupported)
+                diagnostics = [.. diagnostics, unsupported];
             return new PayloadBinding(spelling, root, definition, typeArguments, TypeModelFactory.EntryShapeOf(payload, _compilation, _options),
-                OperationUsageAnalysis.Payload(payload, _compilation), _hasExternalMarkers
-                    ? TypeModelFactory.MissingCallStorage(payload, _compilation) : Array.Empty<Diagnostics.DiagnosticInfo>());
+                OperationUsageAnalysis.Payload(payload, _compilation), diagnostics);
         }
     }
 

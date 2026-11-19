@@ -257,6 +257,7 @@ internal static partial class WireFixtures
         File.WriteAllBytes(Path.Combine(directory, "dictionary-string.json"), JsonDictionaryBytes());
         File.WriteAllText(Path.Combine(directory, "references.json"), ReferenceJson());
         WriteVersionFixtures(directory);
+        WriteRecursivePackedFixture(directory);
 #endif
         Put(directory, "queue", CreateQueue());
         Put(directory, "stack", CreateStack());
@@ -278,6 +279,7 @@ internal static partial class WireFixtures
         VerifyJsonDictionary(directory);
         VerifyReferenceJson(directory);
         VerifyVersionFixtures(directory);
+        VerifyRecursivePackedFixture(directory);
 #endif
         VerifyWrittenBytes(directory);
         Check(Get<int>(directory, "int") == -123456789, "int");

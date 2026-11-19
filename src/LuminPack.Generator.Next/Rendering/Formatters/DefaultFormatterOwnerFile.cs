@@ -30,7 +30,7 @@ internal static class DefaultFormatterOwnerFile
             if (model.Rank > 1)
                 return RectangularArrayOwnerFile.Render(set, model, operations);
             FormatterModel element = model.Arguments[0];
-            if (element.RawCollection)
+            if (element.RawCollection && element.Definition != FormatterDefinitions.Registered)
                 return ArrayScalarOwnerFile.Render(set, SequenceOwnerFact.ForScalar(FormatterRegistry.Array, model.Type, element.Type), operations);
             if (element.Definition == FormatterDefinitions.Array)
                 return ArrayForwardingOwnerFile.Render(set, SequenceOwnerFact.ForForwarding(FormatterRegistry.Array, model.Type, element.Type), operations);

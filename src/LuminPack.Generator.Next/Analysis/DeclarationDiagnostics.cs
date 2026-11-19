@@ -156,6 +156,11 @@ internal static partial class TypeModelFactory
         /// <param name="diagnostics">Receives invalid nested types.</param>
         private void ValidateNestedType(ITypeSymbol type, ISymbol member, ref DeclarationDiagnosticBag diagnostics)
         {
+            if (type is INamedTypeSymbol namedStorage && IsUnsupportedPackedStorage(namedStorage))
+            {
+                diagnostics.Add(DiagnosticDescriptors.UnsupportedPortableStorage, member, namedStorage.ToDisplayString());
+                return;
+            }
             if (type is ITypeParameterSymbol || type.TypeKind == TypeKind.Error || type.IsUnmanagedType ||
                 type.SpecialType is SpecialType.System_String or SpecialType.System_Object)
                 return;

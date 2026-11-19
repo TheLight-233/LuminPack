@@ -3,12 +3,30 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using LuminPack.SourceGenerator.Next.Diagnostics;
+using LuminPack.SourceGenerator.Next.Model;
+using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator.Next.Analysis;
 
 internal static partial class TypeModelFactory
 {
+    /// <summary>Reports a recursive Packed layout that cannot be generated for a closed serializer call.</summary>
+    /// <param name="type">The closed call payload.</param>
+    /// <param name="compilation">The compilation supplying the payload symbols.</param>
+    /// <param name="options">The normalized generator options.</param>
+    /// <returns>An unsupported-storage diagnostic, if required.</returns>
+    internal static DiagnosticInfo? UnsupportedPackedCallStorage(ITypeSymbol type, Compilation compilation, GeneratorOptions options)
+    {
+        Session session = Sessions.GetValue(compilation, item => new Session(item, options));
+        INamedTypeSymbol? unsupported = session.UnsupportedPackedStorage(type);
+        if (unsupported == null || SymbolEqualityComparer.Default.Equals(type, unsupported) && IsPackable(unsupported) &&
+            !unsupported.IsGenericType && unsupported.DeclaringSyntaxReferences.Length != 0)
+            return null;
+        return DiagnosticInfo.Capture(DiagnosticDescriptors.UnsupportedPortableStorage.Id,
+            unsupported.Locations.FirstOrDefault(location => location.IsInSource), [unsupported.ToDisplayString()]);
+    }
+
     private sealed partial class Session
     {
         private DiagnosticInfo[]? _assemblyDiagnostics;
@@ -87,12 +105,32 @@ internal static partial class TypeModelFactory
         /// <summary>Checks packed storage before an unsupported field can fall back to raw bytes.</summary>
         /// <param name="type">The payload declaration.</param>
         /// <param name="diagnostics">Receives unsupported portable storage.</param>
-        private static void ValidatePortableStorage(INamedTypeSymbol type, ref DeclarationDiagnosticBag diagnostics)
+        private void ValidatePortableStorage(INamedTypeSymbol type, ref DeclarationDiagnosticBag diagnostics)
         {
-            int? declared = ReadStructLayoutOption(type.GetAttributes());
-            bool packed = type.TypeKind == TypeKind.Struct && (declared.HasValue ? declared.Value == 1 : type.IsUnmanagedType && LayoutStrategy(type) == 1);
+            bool packed = type.TypeKind == TypeKind.Struct && (type.IsUnmanagedType || ReadStructLayoutOption(type.GetAttributes()) == 1) &&
+                LayoutStrategy(type) == 1;
             if (packed && (GenerationMode(type) != "Object" || !SupportedPortableStorage(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default))))
                 diagnostics.Add(DiagnosticDescriptors.UnsupportedPortableStorage, type, type.ToDisplayString());
+        }
+
+        /// <summary>Finds unsupported Packed payloads among closed array and framework formatter arguments.</summary>
+        /// <param name="type">The payload or formatter container.</param>
+        /// <returns>The first unsupported aggregate, or null when the contract can be emitted.</returns>
+        internal INamedTypeSymbol? UnsupportedPackedStorage(ITypeSymbol type)
+        {
+            if (type is IArrayTypeSymbol array)
+                return UnsupportedPackedStorage(array.ElementType);
+            if (type is not INamedTypeSymbol named)
+                return null;
+            if (IsUnsupportedPackedStorage(named))
+                return named;
+            if (named.IsUnmanagedType || !named.IsGenericType ||
+                !(SequenceKind(named) != null || DictionaryKind(named) != null || GenericIdentity.Of(FormatterSpelling(named)) != null))
+                return null;
+            foreach (ITypeSymbol argument in named.TypeArguments)
+                if (UnsupportedPackedStorage(argument) is { } unsupported)
+                    return unsupported;
+            return null;
         }
 
         /// <summary>Validates generic portable storage without constructing closed native layout permutations.</summary>

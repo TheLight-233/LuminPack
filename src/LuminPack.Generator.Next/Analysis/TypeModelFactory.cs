@@ -140,6 +140,7 @@ internal static partial class TypeModelFactory
         private readonly WirePolicy _assemblyPolicy;
         private readonly Dictionary<AnalysisKey, ModelResult> _completed = new Dictionary<AnalysisKey, ModelResult>();
         private readonly Dictionary<ITypeSymbol, MemberModel?> _roots = new Dictionary<ITypeSymbol, MemberModel?>(SymbolEqualityComparer.Default);
+        private readonly Dictionary<INamedTypeSymbol, bool> _packedFields = new Dictionary<INamedTypeSymbol, bool>(SymbolEqualityComparer.Default);
         private readonly object _gate = new object();
         private bool? _canReuseCultureInfo;
 
@@ -277,7 +278,10 @@ internal static partial class TypeModelFactory
             // references, as the original state contract rule does; only a definition that is unmanaged itself stores natively.
             bool unmanaged = symbol.IsUnmanagedType && !(symbol.IsGenericType && !symbol.OriginalDefinition.IsUnmanagedType);
             PortableLayout? layout = unmanaged && generatorType == "Object" ? TryPortableLayout(symbol) : null;
-            bool nativeContract = unmanaged && generatorType == "Object" &&
+            bool unsupportedPacked = unmanaged && IsUnsupportedPackedStorage(symbol);
+            if (unsupportedPacked)
+                issues.Add("the recursive Packed layout contains unsupported storage");
+            bool nativeContract = unmanaged && generatorType == "Object" && !unsupportedPacked &&
                 !ContainsCustomContract(symbol, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
             StructStorage storage = !nativeContract ? StructStorage.ManagedRecord :
                 layout == null ? StructStorage.RawUnmanaged : StructStorage.PortableUnmanaged;
@@ -1047,7 +1051,7 @@ internal static partial class TypeModelFactory
                 return false;
             if (HasAttribute(named, UnionAttribute) || HasAttribute(named, "System.Runtime.CompilerServices.UnionAttribute"))
                 return false;
-            return TryPortableLayout(named) == null;
+            return TryPortableLayout(named) == null && !IsUnsupportedPackedStorage(named);
         }
 
         /// <summary>Classifies an element the raw sequence owners store as native storage: a scalar keyword, an enum or a framework
@@ -1851,10 +1855,8 @@ internal static partial class TypeModelFactory
         {
             if (symbol.SpecialType != SpecialType.None || symbol.IsRefLikeType)
                 return null;
-            int? declared = ReadStructLayoutOption(symbol.GetAttributes());
-            bool optedIn = declared.HasValue ? declared.Value == 1 : symbol.IsUnmanagedType && LayoutStrategy(symbol) == 1;
             PortablePlan? plan;
-            if (optedIn)
+            if (LayoutStrategy(symbol) == 1)
             {
                 if (GenerationMode(symbol) != "Object")
                     return null;
@@ -1875,7 +1877,7 @@ internal static partial class TypeModelFactory
         /// <param name="named">The resolved storage type.</param>
         /// <param name="strategy">The consumer-resolved strategy, when the type is used through a collection formatter.</param>
         /// <returns>The tagged plan, or null when the struct is not analyzable, has a single layout or owns no formatter.</returns>
-        private static PortablePlan? TryTaggedPlan(INamedTypeSymbol named, int? strategy = null)
+        private PortablePlan? TryTaggedPlan(INamedTypeSymbol named, int? strategy = null)
         {
             if (named.TypeKind != TypeKind.Struct || named.SpecialType != SpecialType.None || !named.IsUnmanagedType)
                 return null;
@@ -1887,31 +1889,93 @@ internal static partial class TypeModelFactory
             if (plan == null || plan.Fields == null || plan.WireSize <= 0 || HasVolatile(plan))
                 return null;
             plan.Models = BuildModels(plan);
-            if (plan.Models.Length < 2 || !FormatterOwned(named))
+            if (plan.Models.Length < 2)
                 return null;
             plan.Tagged = true;
             return plan;
         }
 
-        /// <summary>Resolves the declared unmanaged storage strategy, type first and assembly second.</summary>
+        /// <summary>Resolves unmanaged storage from the type, its physical fields and the applicable assembly default.</summary>
         /// <param name="symbol">The unmanaged struct.</param>
         /// <returns>Zero for tagged, one for packed or two for native storage.</returns>
-        private static int LayoutStrategy(INamedTypeSymbol symbol)
+        private int LayoutStrategy(INamedTypeSymbol symbol)
         {
-            int? declared = ReadStructLayoutOption(symbol.GetAttributes());
-            if (declared.HasValue)
-                return declared.Value;
-            return ReadStructLayoutOption(symbol.ContainingAssembly.GetAttributes()) ?? 0;
+            int? declaration = ReadStructLayoutOption(symbol.GetAttributes());
+            int strategy = declaration ?? ReadStructLayoutOption(LayoutAssembly(symbol, _compilation.Assembly).GetAttributes()) ?? 0;
+            if (declaration == 2 || strategy == 1 || !CanInheritPackedStorage(symbol))
+                return strategy;
+            return HasPackedField(symbol) ? 1 : strategy;
         }
 
-        /// <summary>Recognizes a struct this compilation gives an implicit formatter, so a tagged plan has a writer and reader.</summary>
-        /// <param name="type">The candidate type.</param>
-        /// <returns>Whether the struct behaves like an ordinary local packable struct.</returns>
-        private static bool FormatterOwned(INamedTypeSymbol type)
-            => IsValueTuple(type) || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T ||
-               type.OriginalDefinition.MetadataName == "KeyValuePair`2" &&
-               type.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" ||
-               IsPackable(type) || IsImplicitFormatterType(type);
+        /// <summary>Selects the assembly whose layout default a declaration inherits.</summary>
+        /// <param name="symbol">The storage declaration.</param>
+        /// <param name="consumer">The assembly generating the enclosing contract.</param>
+        /// <returns>The declaring assembly for a packable type, or the consumer for unannotated storage.</returns>
+        private static IAssemblySymbol LayoutAssembly(INamedTypeSymbol symbol, IAssemblySymbol consumer) =>
+            IsPackable(symbol) ? symbol.ContainingAssembly : consumer;
+
+        /// <summary>Identifies native aggregate declarations which can adopt a field's Packed storage.</summary>
+        /// <param name="symbol">The prospective enclosing type.</param>
+        /// <returns>Whether the type has an ordinary unmanaged layout with fields to inspect.</returns>
+        private static bool CanInheritPackedStorage(INamedTypeSymbol symbol) =>
+            symbol is { TypeKind: TypeKind.Struct, IsUnmanagedType: true, SpecialType: SpecialType.None or SpecialType.System_Nullable_T } &&
+            Opaque(symbol) == null && !FrameworkScalarBody.Contains(FormatterName(symbol)) && GenerationMode(symbol) == "Object";
+
+        /// <summary>Recognizes aggregates whose selected Packed layout cannot be emitted.</summary>
+        /// <param name="symbol">The unmanaged aggregate.</param>
+        /// <returns>Whether emitting its native layout would silently bypass Packed storage.</returns>
+        private bool IsUnsupportedPackedStorage(INamedTypeSymbol symbol) =>
+            symbol.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T && CanInheritPackedStorage(symbol) && LayoutStrategy(symbol) == 1 &&
+            !SupportedPortableStorage(symbol, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
+
+        /// <summary>Shares the recursive Packed field check across entry, declaration and formatter analysis.</summary>
+        /// <param name="symbol">The enclosing storage type.</param>
+        /// <returns>Whether the enclosing storage contains a Packed field.</returns>
+        private bool HasPackedField(INamedTypeSymbol symbol)
+        {
+            lock (_gate)
+                if (_packedFields.TryGetValue(symbol, out bool cached))
+                    return cached;
+            IAssemblySymbol assembly = LayoutAssembly(symbol, _compilation.Assembly);
+            bool result = HasPackedField(symbol, assembly, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
+            lock (_gate)
+                _packedFields[symbol] = result;
+            return result;
+        }
+
+        /// <summary>Finds a Packed declaration reachable through physical value fields without crossing an explicit Native boundary.</summary>
+        /// <param name="symbol">The enclosing storage type.</param>
+        /// <param name="assembly">The enclosing contract's assembly.</param>
+        /// <param name="visited">The aggregate types already visited.</param>
+        /// <returns>Whether the enclosing native copy would override a nested Packed declaration.</returns>
+        private static bool HasPackedField(INamedTypeSymbol symbol, IAssemblySymbol assembly, HashSet<ITypeSymbol> visited)
+        {
+            if (!visited.Add(symbol))
+                return false;
+            // Inspect fields even when a sibling makes portable transfer unsupported. Framework Nullable and pair metadata
+            // need their closed arguments because the reference assembly can omit or substitute their physical fields.
+            IEnumerable<ITypeSymbol> fields = symbol.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T || IsKeyValuePair(symbol)
+                ? symbol.TypeArguments : StorageFields(symbol).Select(field => field.Type);
+            try
+            {
+                foreach (ITypeSymbol field in fields)
+                {
+                    if (field is not INamedTypeSymbol child || !CanInheritPackedStorage(child))
+                        continue;
+                    int? declaration = ReadStructLayoutOption(child.GetAttributes());
+                    if (declaration == 2)
+                        continue;
+                    IAssemblySymbol childAssembly = LayoutAssembly(child, assembly);
+                    if ((declaration ?? ReadStructLayoutOption(childAssembly.GetAttributes()) ?? 0) == 1 || HasPackedField(child, childAssembly, visited))
+                        return true;
+                }
+                return false;
+            }
+            finally
+            {
+                visited.Remove(symbol);
+            }
+        }
 
         /// <summary>Recognizes a top-level source struct without the packable attribute that still receives an implicit formatter.</summary>
         /// <param name="type">The candidate type.</param>
@@ -2287,8 +2351,7 @@ internal static partial class TypeModelFactory
                     new PortablePlanField { Type = boolean, Name = "hasValue" },
                     new PortablePlanField { Type = named.TypeArguments[0], Name = "value" }
                 };
-            if (named.OriginalDefinition.MetadataName == "KeyValuePair`2" &&
-                named.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
+            if (IsKeyValuePair(named))
                 return new[]
                 {
                     new PortablePlanField { Type = named.TypeArguments[0], Name = "key" },
@@ -2310,6 +2373,13 @@ internal static partial class TypeModelFactory
                 Type = field.Type, Name = field.Name, IsVolatile = field.IsVolatile, Offset = FieldOffset(field)
             }).ToArray();
         }
+
+        /// <summary>Recognizes the framework's generic key and value storage pair.</summary>
+        /// <param name="type">The candidate storage type.</param>
+        /// <returns>Whether its physical fields are the two closed generic arguments.</returns>
+        private static bool IsKeyValuePair(INamedTypeSymbol type) =>
+            type.OriginalDefinition.MetadataName == "KeyValuePair`2" &&
+            type.ContainingNamespace.ToDisplayString() == "System.Collections.Generic";
 
         /// <summary>Gets physical instance storage without tuple aliases or flattened elements already stored in Rest.</summary>
         /// <param name="type">The current aggregate storage type.</param>

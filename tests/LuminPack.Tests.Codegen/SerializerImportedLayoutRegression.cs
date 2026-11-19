@@ -1,8 +1,11 @@
+extern alias ModelBasedAnalyzer;
+
 using System.Reflection;
 using System.Runtime.Loader;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using NextGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 /// <summary>Checks source and imported packing, declared size and explicit offsets retain the same storage contract.</summary>
 internal static class SerializerImportedLayoutRegression
@@ -84,7 +87,86 @@ internal static class SerializerImportedLayoutRegression
             Require(result.Success, string.Join(Environment.NewLine, result.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
             Assembly.Load(image.ToArray()).GetType("ImportedAuditConsumer.Entry")!.GetMethod("Run")!.Invoke(null, null);
         }
+        VerifyConsumingLayoutDefaults(references, parse);
         Console.WriteLine("Passed imported Pack, Size and FieldOffset storage in Full and Minimal modes.");
+    }
+
+    /// <summary>Exercises consumer defaults for unannotated storage and producer defaults for authored contracts.</summary>
+    /// <param name="references">The current platform and runtime references.</param>
+    /// <param name="parse">The generator's current language and conditional symbols.</param>
+    private static void VerifyConsumingLayoutDefaults(MetadataReference[] references, CSharpParseOptions parse)
+    {
+        SyntaxTree foreign = CSharpSyntaxTree.ParseText("""
+            using LuminPack.Attribute;
+            [assembly: LuminPackOption(StructLayout = LuminPackStructLayout.Native)]
+            namespace ForeignLayoutDefaults;
+            public struct Plain
+            {
+                public byte Tag;
+                private long number;
+                public long Number => number;
+                public static Plain Create() => new Plain { Tag = 13, number = 17 };
+            }
+            [LuminPackable]
+            public struct Authored { public byte Tag; public long Number; }
+            [LuminPackOption(StructLayout = LuminPackStructLayout.Native)]
+            public struct ExplicitNative { public byte Tag; public long Number; }
+            """, parse, "ForeignLayoutDefaults.cs");
+        CSharpCompilation producer = TestCompilation.Create("ForeignLayoutDefaults", [foreign], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        using var reference = new MemoryStream();
+        Require(producer.Emit(reference).Success, "Could not emit the layout-default metadata assembly.");
+        byte[] foreignBytes = reference.ToArray();
+        using (var dependency = new MemoryStream(foreignBytes)) AssemblyLoadContext.Default.LoadFromStream(dependency);
+        foreach (string mode in new[] { "Packed", "Tagged", "Native" })
+        {
+            string source = $$"""
+                using System;
+                using System.Collections.Generic;
+                using System.Runtime.CompilerServices;
+                using ForeignLayoutDefaults;
+                using LuminPack;
+                using LuminPack.Attribute;
+                [assembly: LuminPackOption(StructLayout = LuminPackStructLayout.{{mode}})]
+                public static class Entry
+                {
+                    public static void Run()
+                    {
+                        bool packed = "{{mode}}" == "Packed";
+                        bool tagged = "{{mode}}" == "Tagged";
+                        var plain = Plain.Create();
+                        byte[] bytes = LuminPackSerializer.Serialize(new[] { plain });
+                        Require(bytes.Length == 4 + (packed ? 9 : Unsafe.SizeOf<Plain>() + (tagged ? 1 : 0)),
+                            "Unannotated foreign struct did not follow the consumer layout.");
+                        Plain[] plainCopy = null!;
+                        Require(LuminPackSerializer.Deserialize(bytes, ref plainCopy) == bytes.Length && plainCopy[0].Tag == plain.Tag &&
+                            plainCopy[0].Number == plain.Number, "Foreign private field did not survive consumer layout transfer.");
+                        var pairs = new[] { KeyValuePair.Create((byte)23, 29L) };
+                        bytes = LuminPackSerializer.Serialize(pairs);
+                        Require(bytes.Length == 4 + (packed ? 9 : Unsafe.SizeOf<KeyValuePair<byte, long>>() + (tagged ? 1 : 0)),
+                            "Framework pair did not follow the consumer layout.");
+                        Require(LuminPackSerializer.Serialize(new Authored[] { default }).Length == 4 + Unsafe.SizeOf<Authored>(),
+                            "A declaration-owned layout was replaced by the consumer default.");
+                        Require(LuminPackSerializer.Serialize(new ExplicitNative[] { default }).Length == 4 + Unsafe.SizeOf<ExplicitNative>(),
+                            "An explicit layout was replaced by the consumer default.");
+                    }
+                    private static void Require(bool condition, string message)
+                    {
+                        if (!condition) throw new InvalidOperationException(message);
+                    }
+                }
+                """;
+            CSharpCompilation consumer = TestCompilation.Create("ConsumerLayoutDefaults_" + mode,
+                [CSharpSyntaxTree.ParseText(source, parse, "ConsumerLayoutDefaults.cs")], references.Append(MetadataReference.CreateFromImage(foreignBytes)),
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+            GeneratorDriver driver = CSharpGeneratorDriver.Create([new NextGenerator().AsSourceGenerator()], parseOptions: parse);
+            driver.RunGeneratorsAndUpdateCompilation(consumer, out var output, out var diagnostics);
+            Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+            using var image = new MemoryStream();
+            var emitted = output.Emit(image);
+            Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
+            Assembly.Load(image.ToArray()).GetType("Entry")!.GetMethod("Run")!.Invoke(null, null);
+        }
     }
 
     /// <summary>Reports a compiler or storage invariant with the original diagnostic context.</summary>

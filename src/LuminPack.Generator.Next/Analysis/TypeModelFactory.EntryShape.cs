@@ -41,20 +41,6 @@ internal static partial class TypeModelFactory
 
     private sealed partial class Session
     {
-        /// <summary>Resolves the declared storage strategy of a collection's unmanaged payload.</summary>
-        /// <param name="payload">The reference-free value wrapped by the nullable element.</param>
-        /// <returns>The existing Tagged, Packed, or Native strategy value.</returns>
-        private int CollectionLayoutStrategy(INamedTypeSymbol payload)
-        {
-            if (ReadStructLayoutOption(payload.GetAttributes()) is int declared)
-                return declared;
-            var assembly = payload.ContainingAssembly;
-            if (payload.SpecialType != SpecialType.None || payload.TypeKind == TypeKind.Enum || IsValueTuple(payload) ||
-                FrameworkScalarBody.Contains(FormatterName(payload)))
-                assembly = _compilation.Assembly;
-            return ReadStructLayoutOption(assembly.GetAttributes()) ?? 0;
-        }
-
         /// <summary>Determines the read and write shapes independently from the published root contract.</summary>
         /// <param name="type">The closed root type.</param>
         /// <returns>The closed entry shape.</returns>
@@ -348,7 +334,7 @@ internal static partial class TypeModelFactory
         /// <param name="type">The type being analyzed or emitted.</param>
         /// <returns>Whether the operation can use unmanaged serialization.</returns>
         private bool CanUseUnmanagedSerialization(ITypeSymbol type) => type.IsUnmanagedType && !ContainsOpenParameter(type) &&
-            (type is not INamedTypeSymbol named || TryPortableLayout(named) == null) &&
+            (type is not INamedTypeSymbol named || TryPortableLayout(named) == null && !IsUnsupportedPackedStorage(named)) &&
             !ContainsCustomContract(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
 
         /// <summary>Checks whether known scalar.</summary>

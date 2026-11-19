@@ -82,6 +82,7 @@ internal static partial class TypeModelFactory
         // The specialized scalar owner handles only these four framework types. Other framework scalars need their full
         // formatter graph retained so collections publish the element's JSON owner as well as their raw binary path.
         private static bool RequiresDefault(FormatterModel model) => model.Layout != null || model.Capabilities.Length != 0 ||
+            model.Definition == FormatterDefinitions.Registered && model.RawCollection ||
             model.Definition == FormatterDefinitions.FrameworkScalar && model.Type is not
                 ("global::System.DateTime" or "global::System.Guid" or "global::System.DateTimeOffset" or "global::System.TimeSpan") ||
             model.PublishPayload || model.Definition is FormatterDefinitions.GenericUnion or FormatterDefinitions.CompilerUnion || FormatterDefinitions.HasGeneric(model.Definition) ||
@@ -160,6 +161,8 @@ internal static partial class TypeModelFactory
                 return null;
             if (GenerationMode(named)is "Custom" or "NonGenerator")
                 return new FormatterModel(spelling, FormatterDefinitions.Registered);
+            if (IsUnsupportedPackedStorage(named))
+                return null;
             if (Owned(named) && CompilerUnion.IsUnion(named, _compilation))
                 return CompilerUnionFormatter(named, spelling, depth, path);
             string definition = named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.OriginalDefinition.Name;
@@ -294,7 +297,7 @@ internal static partial class TypeModelFactory
         {
             if (!type.IsUnmanagedType || GenerationMode(type) != "Object")
                 return null;
-            int strategy = CollectionLayoutStrategy(type);
+            int strategy = LayoutStrategy(type);
             PortablePlan? plan;
             if (strategy == 1)
             {
@@ -321,7 +324,7 @@ internal static partial class TypeModelFactory
                  ContainsCustomContract(payload, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default))))
                 return default;
 
-            int strategy = CollectionLayoutStrategy(payload);
+            int strategy = LayoutStrategy(payload);
             if (strategy == 1 || !FormatterRuntimeTraits.HasNullableCollectionStorage(_compilation))
                 return default;
 

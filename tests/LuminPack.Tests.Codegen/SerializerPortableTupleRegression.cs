@@ -1,8 +1,11 @@
+extern alias ModelBasedAnalyzer;
+
 using System.Reflection;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using NextGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 /// <summary>Checks portable tuple storage, direct field addressing and alias-only incremental edits.</summary>
 internal static class SerializerPortableTupleRegression
@@ -13,6 +16,137 @@ internal static class SerializerPortableTupleRegression
     {
         foreach (string mode in new[] { "Full", "Minimal" })
             foreach (bool modern in new[] { true, false }) Verify(references, mode, modern);
+        VerifyRecursivePacked(references);
+    }
+
+    /// <summary>Checks an explicitly packed field governs enclosing unmanaged storage under the default Tagged policy.</summary>
+    /// <param name="references">Current runtime and framework metadata.</param>
+    private static void VerifyRecursivePacked(MetadataReference[] references)
+    {
+        const string source = """
+            using System;
+            using System.Buffers.Binary;
+            using System.Collections.Generic;
+            using System.Runtime.CompilerServices;
+            using LuminPack;
+            using LuminPack.Attribute;
+            namespace RecursivePackedStorage;
+            [LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]
+            public struct Cell { public byte Tag; public long Number; }
+            [LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Tagged)]
+            public struct TaggedParent { public int Prefix; public Cell Item; }
+            [LuminPackable]
+            public struct Grandparent { public byte Prefix; public TaggedParent Parent; }
+            [LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Native)]
+            public struct NativeParent { public int Prefix; public Cell Item; }
+            [LuminPackable]
+            public struct TaggedControl { public byte Tag; public long Number; }
+            [LuminPackable]
+            public struct StableTagged { public byte Tag; public int Number; }
+            [LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]
+            public struct StablePacked { public byte Tag; public int Number; }
+            [LuminPackable]
+            public sealed class MemberOwners
+            {
+                public (int, Cell)[] Tuples = null!;
+                public List<KeyValuePair<int, Cell>> Pairs = null!;
+            }
+            public static class Entry
+            {
+                public static void Run()
+                {
+                    Cell cell = default;
+                    Unsafe.InitBlockUnaligned(ref Unsafe.As<Cell, byte>(ref cell), 0xCC, (uint)Unsafe.SizeOf<Cell>());
+                    cell.Tag = 7;
+                    cell.Number = 0x0102030405060708;
+                    int key = 41;
+                    var pair = KeyValuePair.Create(key, cell);
+                    var tuple = (key, cell);
+                    var tagged = new TaggedParent { Prefix = key, Item = cell };
+                    var grandparent = new Grandparent { Prefix = 9, Parent = tagged };
+                    byte[] expected = new byte[17];
+                    BinaryPrimitives.WriteInt32LittleEndian(expected, 1);
+                    BinaryPrimitives.WriteInt32LittleEndian(expected.AsSpan(4), key);
+                    expected[8] = cell.Tag;
+                    BinaryPrimitives.WriteInt64LittleEndian(expected.AsSpan(9), cell.Number);
+                    byte[] pairBytes = LuminPackSerializer.Serialize(new[] { pair });
+                    byte[] tupleBytes = LuminPackSerializer.Serialize(new[] { tuple });
+                    byte[] listBytes = LuminPackSerializer.Serialize(new List<KeyValuePair<int, Cell>> { pair });
+                    byte[] taggedBytes = LuminPackSerializer.Serialize(new[] { tagged });
+                    Check(pairBytes.AsSpan().SequenceEqual(expected) && tupleBytes.AsSpan().SequenceEqual(expected) &&
+                        listBytes.AsSpan().SequenceEqual(expected) && taggedBytes.AsSpan().SequenceEqual(expected),
+                        $"Packed descendants did not produce {Convert.ToHexString(expected)}. Pair {Convert.ToHexString(pairBytes)}, " +
+                        $"tuple {Convert.ToHexString(tupleBytes)}, list {Convert.ToHexString(listBytes)}, struct {Convert.ToHexString(taggedBytes)}.");
+                    Check(LuminPackSerializer.Serialize(tuple).AsSpan().SequenceEqual(expected.AsSpan(4)) &&
+                        LuminPackSerializer.Serialize(tagged).AsSpan().SequenceEqual(expected.AsSpan(4)), "Packed standalone bytes.");
+                    var pairs = default(KeyValuePair<int, Cell>[]);
+                    var tuples = default((int, Cell)[]);
+                    var list = new List<KeyValuePair<int, Cell>> { default, default };
+                    Check(LuminPackSerializer.Deserialize(pairBytes, ref pairs) == expected.Length && pairs![0].Key == key &&
+                        pairs[0].Value.Number == cell.Number, "Packed pair read.");
+                    Check(LuminPackSerializer.Deserialize(tupleBytes, ref tuples) == expected.Length && tuples![0].Item1 == key &&
+                        tuples[0].Item2.Tag == cell.Tag && tuples[0].Item2.Number == cell.Number, "Packed tuple read.");
+                    Check(LuminPackSerializer.Deserialize(listBytes, ref list) == expected.Length && list.Count == 1 &&
+                        list[0].Value.Number == cell.Number, "Packed pair list reuse.");
+                    var members = new MemberOwners { Tuples = new[] { tuple }, Pairs = list };
+                    byte[] memberBytes = LuminPackSerializer.Serialize(members);
+                    Check(memberBytes.Length == 1 + 2 * expected.Length && memberBytes.AsSpan(1, expected.Length).SequenceEqual(expected) &&
+                        memberBytes.AsSpan(1 + expected.Length).SequenceEqual(expected), "Packed nested collection fast paths.");
+                    byte[] transitive = LuminPackSerializer.Serialize(new[] { grandparent });
+                    Check(transitive.Length == 18 && transitive[4] == grandparent.Prefix &&
+                        transitive.AsSpan(5).SequenceEqual(expected.AsSpan(4)), "Packed propagation stopped at the immediate parent.");
+                    TaggedParent?[] optional = { tagged, null };
+                    byte[] nullable = LuminPackSerializer.Serialize(optional);
+                    Check(nullable.Length == 19 && nullable[4] == 0 && nullable[^1] == byte.MaxValue &&
+                        nullable.AsSpan(5, 13).SequenceEqual(expected.AsSpan(4)), "Nullable container did not select packed elements.");
+                    var native = new NativeParent { Prefix = key, Item = cell };
+                    Check(LuminPackSerializer.Serialize(new[] { native }).Length == sizeof(int) + Unsafe.SizeOf<NativeParent>(),
+                        "Explicit Native lost its native stride.");
+                    var taggedControl = new TaggedControl { Tag = cell.Tag, Number = cell.Number };
+                    byte[] tag = LuminPackSerializer.Serialize(new[] { taggedControl });
+                    Check(tag.Length == sizeof(int) + 1 + Unsafe.SizeOf<TaggedControl>() && tag[4] != 0,
+                        "Tagged without a Packed descendant lost its native layout tag.");
+                    Check(LuminPackSerializer.Serialize(taggedControl).Length == 9,
+                        "A multi-model Tagged value emitted a tag or native padding outside a collection block.");
+                    var stableTagged = new StableTagged { Tag = 5, Number = 0x01020304 };
+                    var stablePacked = new StablePacked { Tag = 5, Number = 0x01020304 };
+                    Check(LuminPackSerializer.Serialize(stableTagged).Length == 8,
+                        "A single-model Tagged value lost its native stride.");
+                    Check(LuminPackSerializer.Serialize(stablePacked).AsSpan().SequenceEqual(Convert.FromHexString("0504030201")),
+                        "A single-model Packed value included native padding.");
+                }
+                private static void Check(bool condition, string message)
+                {
+                    if (!condition) throw new InvalidOperationException(message);
+                }
+            }
+            """;
+        CSharpParseOptions parse = new(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]);
+        SyntaxTree tree = CSharpSyntaxTree.ParseText(source, parse, "RecursivePackedStorage.cs");
+        CSharpCompilation input = TestCompilation.Create("RecursivePackedStorage", [tree], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new NextGenerator().AsSourceGenerator()], parseOptions: parse);
+        driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
+        Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+        using var image = new MemoryStream();
+        var emitted = output.Emit(image);
+        Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
+        Assembly.Load(image.ToArray()).GetType("RecursivePackedStorage.Entry")!.GetMethod("Run")!.Invoke(null, null);
+
+        const string unsupported = """
+            namespace RecursivePackedStorage;
+            [LuminPack.Attribute.LuminPackable] public struct Unsupported { public Cell Packed; public nint PlatformWidth; }
+            public static class InvalidEntry
+            {
+                public static byte[] Write() => LuminPack.LuminPackSerializer.Serialize(new (nint, Cell)[] { default });
+            }
+            """;
+        var invalid = driver.RunGenerators(input.AddSyntaxTrees(CSharpSyntaxTree.ParseText(unsupported, parse, "Unsupported.cs")));
+        string[] errors = invalid.GetRunResult().Diagnostics.Where(item => item.Id == "LuminPack111")
+            .Select(item => item.GetMessage()).ToArray();
+        Require(errors.Any(message => message.Contains("RecursivePackedStorage.Unsupported", StringComparison.Ordinal)) &&
+            errors.Any(message => message.Contains("(nint, RecursivePackedStorage.Cell)", StringComparison.Ordinal)),
+            "Recursive Packed with unsupported members did not report LuminPack111 at declaration and call boundaries.");
     }
 
     /// <summary>Checks component bytes, retained raw roots and freshly rendered output after changing only tuple names.</summary>
