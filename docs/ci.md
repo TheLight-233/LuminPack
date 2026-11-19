@@ -54,6 +54,8 @@ Manually dispatching `ci.yml` with `run_benchmarks` enabled times the BenchmarkD
 
 `LuminPack.NinoBenchmark` is part of the solution. It compares LuminPack with Nino on 12 Workloads scenarios and eight AppData scenarios adapted from the [Nino benchmark suite](https://github.com/JasonXuDeveloper/Nino/tree/185220ad24f07a9aeff53c21c4f30a0556c17e23/runtimes/csharp/benchmarks/Nino.Benchmark). Each operation uses Nino as its baseline and reports allocations and timing ratios. Regular CI verifies the fixtures on Linux, Windows and macOS. The manual timing job uses three launches on Linux x64 with stock .NET 10, TieredPGO and Server GC. It uploads the `nino-benchmark` artifact with per-measurement CSV and full JSON reports.
 
+Both libraries write the same values to retained, preallocated buffers. Every invocation writes an independent document. LuminPack's stateful cases reset the schema or reference state as well as the cursor. Readers decode each library's own wire bytes and use retained destinations for the same two workloads. These are default-format measurements, including Nino's adaptive Latin-1/UTF-16 strings and LuminPack's UTF-16 strings. Read the timing and allocation ratios alongside `payload-sizes.csv`, which lists both wire sizes for every timed operation. Fixture verification checks repeated writes against the expected bytes and requires both buffers to retain their initial capacity.
+
 ```bash
 dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release -- --verify
 dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release -- --filter '*' --artifacts .tmp/nino-benchmark

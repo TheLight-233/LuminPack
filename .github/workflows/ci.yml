@@ -190,7 +190,9 @@ jobs:
       - name: Build and verify the benchmark
         run: |
           dotnet build benchmarks/LuminPack.NinoBenchmark -c Release
-          dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release --no-build -- --verify
+          mkdir -p .tmp/nino-benchmark
+          dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release --no-build -- --verify | tee .tmp/nino-benchmark/payload-sizes.csv
+        shell: bash
 
       - name: Measure Nino and LuminPack
         run: dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release --no-build -- --filter '*' --artifacts "$GITHUB_WORKSPACE/.tmp/nino-benchmark" --buildTimeout 600

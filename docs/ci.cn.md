@@ -54,6 +54,8 @@ Unity 2022.3.51f1 和 6000.0.43f1 依次运行 Editor 测试、IL2CPP smoke Play
 
 `LuminPack.NinoBenchmark` 已加入解决方案。它移植了 [Nino 基准套件](https://github.com/JasonXuDeveloper/Nino/tree/185220ad24f07a9aeff53c21c4f30a0556c17e23/runtimes/csharp/benchmarks/Nino.Benchmark)的 12 个 Workloads 场景和 8 个 AppData 场景，用于对比 LuminPack 和 Nino。每项操作都以 Nino 为基准，报告分配量和耗时比值。常规 CI 在 Linux、Windows 和 macOS 上校验夹具。手动计时任务在 Linux x64 上使用 stock .NET 10、TieredPGO 和 Server GC，每项操作启动三个进程。`nino-benchmark` 产物包含逐次测量的 CSV 和完整 JSON 报告。
 
+两个库把相同的数据写入各自预分配且重复使用的缓冲区。每次调用都写出独立文档。LuminPack 有状态的场景会同时重置游标以及版本描述表或引用状态。反序列化读取各自的格式，仅在相同的两个场景复用读取目标。结果反映各库默认格式，包括 Nino 自适应的 Latin-1/UTF-16 字符串和 LuminPack 的 UTF-16 字符串。`payload-sizes.csv` 列出每项操作的两份负载大小，可与耗时和分配量一起解读。夹具验证检查重复写出的字节是否符合预期，以及两个缓冲区是否保有初始容量。
+
 ```bash
 dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release -- --verify
 dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release -- --filter '*' --artifacts .tmp/nino-benchmark
