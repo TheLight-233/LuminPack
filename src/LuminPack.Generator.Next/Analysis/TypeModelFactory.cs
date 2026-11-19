@@ -1498,6 +1498,14 @@ internal static partial class TypeModelFactory
                     method.Parameters.All(parameter => parameter.IsOptional || parameter.IsParams)));
         }
 
+        /// <summary>Checks whether a Union root can select the fixed cursor protocol for its eligible cases.</summary>
+        /// <param name="root">The Union root.</param>
+        /// <returns>Whether the root is a non-generic abstract class or a non-generic interface with exact dispatch.</returns>
+        private bool IsFixedCursorUnionRoot(INamedTypeSymbol root) =>
+            !root.IsGenericType &&
+            (root is { TypeKind: TypeKind.Class, IsAbstract: true } ||
+                root.TypeKind == TypeKind.Interface && UnionTier(root) == UnionDispatchTier.Exact);
+
         /// <summary>Lists the cases whose complete fixed payload uses the returning cursor kernel.</summary>
         /// <param name="root">The Union root.</param>
         /// <param name="declared">The declared cases.</param>
@@ -1506,7 +1514,7 @@ internal static partial class TypeModelFactory
         private HashSet<ITypeSymbol> FixedUnionCases(INamedTypeSymbol root, List<(int Tag, INamedTypeSymbol Type)> declared, List<string> issues)
         {
             var cases = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
-            if (issues.Count != 0 || root is not { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } ||
+            if (issues.Count != 0 || !IsFixedCursorUnionRoot(root) ||
                 !SymbolEqualityComparer.Default.Equals(root.ContainingAssembly, _compilation.Assembly) || GenerationMode(root) != "Object")
                 return cases;
             foreach (var item in declared.OrderBy(member => member.Tag))
@@ -1531,13 +1539,13 @@ internal static partial class TypeModelFactory
                 return false;
             var issues = new List<string>();
             var declared = UnionMembers(root, issues, out _);
-            if (issues.Count != 0 || root is not { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } ||
+            if (issues.Count != 0 || !IsFixedCursorUnionRoot(root) ||
                 !SymbolEqualityComparer.Default.Equals(root.ContainingAssembly, _compilation.Assembly) || GenerationMode(root) != "Object")
                 return false;
             return declared.Any(item => SymbolEqualityComparer.Default.Equals(item.Type, type)) && CanUseCursorPayload(type);
         }
 
-        /// <summary>Finds the nearest base Union root that declares the given case.</summary>
+        /// <summary>Finds the nearest declaring base Union or the first eligible declaring interface Union.</summary>
         /// <param name="type">The candidate case.</param>
         /// <returns>The declaring root, or null when the type is not a declared case.</returns>
         private INamedTypeSymbol? FixedUnionRoot(INamedTypeSymbol type)
@@ -1551,7 +1559,10 @@ internal static partial class TypeModelFactory
                 if (UnionCaseDeclarations(parent).Any(declaration => SymbolEqualityComparer.Default.Equals(declaration.Type, type)))
                     return parent;
             }
-            return null;
+            return type.AllInterfaces.FirstOrDefault(parent => IsPackable(parent) &&
+                IsFixedCursorUnionRoot(parent) && SymbolEqualityComparer.Default.Equals(parent.ContainingAssembly, _compilation.Assembly) &&
+                GenerationMode(parent) == "Object" && UnionCaseDeclarations(parent).Any(declaration =>
+                    SymbolEqualityComparer.Default.Equals(declaration.Type, type)));
         }
 
         /// <summary>Whether a case payload is entirely public raw fields, as the returning cursor kernel requires.</summary>
@@ -1563,15 +1574,9 @@ internal static partial class TypeModelFactory
                 return false;
             if (TracksReferences(type))
                 return false;
-            bool hasRoot = false;
             for (var parent = type.BaseType; parent != null && parent.SpecialType != SpecialType.System_Object; parent = parent.BaseType)
-            {
                 if (parent.IsGenericType)
                     return false;
-                hasRoot |= parent.IsAbstract && SymbolEqualityComparer.Default.Equals(parent.ContainingAssembly, _compilation.Assembly) && IsPackable(parent);
-            }
-            if (!hasRoot)
-                return false;
             int fields = 0;
             var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
             for (var level = type; level != null && level.SpecialType != SpecialType.System_Object; level = level.BaseType)

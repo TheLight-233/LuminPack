@@ -133,7 +133,8 @@ internal static partial class SerializerIssueRegression
             $"[LuminPackable] public sealed partial class ProbeOther{index} : ProbeBox<byte> {{ }}"));
         foreach (string mode in new[] { "Full", "Light", "Minimal" })
             Execute(references, source.Replace("MODE", mode, StringComparison.Ordinal) + "\n" + unrelatedCases, "Union" + mode, InspectUnion);
-        Console.WriteLine("Passed discovered closed generic Union case compilation, reuse, and round trips.");
+        VerifyFixedInterfaceUnion(references);
+        Console.WriteLine("Passed closed Union compilation, exact interface cursor and generic fallback contracts, reuse, and round trips.");
     }
 
     /// <summary>Checks the case dispatch and inlining boundaries of closed Union roots and collection elements.</summary>
