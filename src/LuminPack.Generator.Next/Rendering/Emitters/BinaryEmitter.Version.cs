@@ -190,16 +190,21 @@ internal static partial class BinaryEmitter
         body.Add("}");
         body.Add("");
         body.Add(fieldsType + " fields = default;");
-        if (!model.IsStruct && members.Any(member => !member.IsFixed))
+        if (members.Any(member => !member.IsFixed))
         {
-            body.Add("if (value is not null)");
-            body.Add("{");
+            string seedOwner = model.IsStruct ? "value" : "value!";
+            if (!model.IsStruct)
+            {
+                body.Add("if (value is not null)");
+                body.Add("{");
+            }
             if (members.Any(member => !member.IsFixed && member.Mirrored))
-                body.Add("ref var seed = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
+                body.Add("ref var seed = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref " + seedOwner + ");");
             for (int index = 0; index < members.Length; index++)
                 if (!members[index].IsFixed)
-                    body.Add(temps[index] + " = " + (members[index].Mirrored ? "seed." : "value!.") + members[index].Name + ";");
-            body.Add("}");
+                    body.Add(temps[index] + " = " + (members[index].Mirrored ? "seed" : seedOwner) + "." + members[index].Name + ";");
+            if (!model.IsStruct)
+                body.Add("}");
         }
 
         body.Add("if (record.Map is { } map)");
