@@ -35,13 +35,13 @@ Unity 2022.3.51f1 and 6000.0.43f1 run Editor tests, an IL2CPP smoke player, the 
 
 ## Benchmarks
 
-Manually dispatching `ci.yml` with `run_benchmarks` enabled times both the BenchmarkDotNet suites and the [serialization matrix](../benchmarks/LuminPack.MatrixBenchmark).
+Manually dispatching `ci.yml` with `run_benchmarks` enabled times the BenchmarkDotNet suites, the Nino Workloads and AppData suites, and the [serialization matrix](../benchmarks/LuminPack.MatrixBenchmark).
 
 | Input | Default | Effect |
 | --- | --- | --- |
-| `run_benchmarks` | off | Run BenchmarkDotNet on three hosts and time the matrix. |
-| `benchmark_jit` | `both` | Selects the BenchmarkDotNet jobs. `TieredPGO` enables tiered compilation and dynamic PGO, and `FullOpts` disables both. |
-| `benchmark_satori` | `only` | `only` measures the Satori GC runtime prepared by `eng/SatoriCompiler`, `both` adds the stock-runtime jobs, `off` measures only the stock runtime. |
+| `run_benchmarks` | off | Run the main BenchmarkDotNet suites on three hosts and time the Nino comparison and matrix. |
+| `benchmark_jit` | `both` | Selects the main BenchmarkDotNet jobs. `TieredPGO` enables tiered compilation and dynamic PGO, and `FullOpts` disables both. |
+| `benchmark_satori` | `only` | For the main BenchmarkDotNet suites, `only` measures the Satori GC runtime prepared by `eng/SatoriCompiler`, `both` adds the stock-runtime jobs, and `off` measures only the stock runtime. |
 
 ### BenchmarkDotNet
 
@@ -49,6 +49,15 @@ Manually dispatching `ci.yml` with `run_benchmarks` enabled times both the Bench
 - Each job uses three processes, 8–30 adaptive warmup iterations and 15 measurements targeting one second each, keeping outliers. Fixed seeds and timestamps keep input bytes identical across processes; `--verify-fixtures` checks fresh instances and repeated setup before timing.
 - Full JSON and measurement CSV artifacts keep every process. `process-stability.md` and the job summary report process means, CV, max/min, allocations and LuminPack/reference ratios within the same operation and JIT job. A process spread above 10% produces a warning; inspect the distribution and native code before claiming a win. Independently launched libraries are not paired by process index.
 - BenchmarkDotNet polymorphism disassembly runs on Windows and Linux; the installed version does not support CoreCLR disassembly on macOS. Separate, untimed JIT probes capture optimized LuminPack and Nino polymorphism read/write assembly and generated-root metadata on the Linux hosts. Validation, execution or required probe failures fail the job.
+
+### Nino Workloads and AppData
+
+`LuminPack.NinoBenchmark` is part of the solution. It compares LuminPack with Nino on 12 Workloads scenarios and eight AppData scenarios adapted from the [Nino benchmark suite](https://github.com/JasonXuDeveloper/Nino/tree/185220ad24f07a9aeff53c21c4f30a0556c17e23/runtimes/csharp/benchmarks/Nino.Benchmark). Each operation uses Nino as its baseline and reports allocations and timing ratios. Regular CI verifies the fixtures on Linux, Windows and macOS. The manual timing job uses three launches on Linux x64 with stock .NET 10, TieredPGO and Server GC. It uploads the `nino-benchmark` artifact with per-measurement CSV and full JSON reports.
+
+```bash
+dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release -- --verify
+dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release -- --filter '*' --artifacts .tmp/nino-benchmark
+```
 
 ### Serialization matrix
 

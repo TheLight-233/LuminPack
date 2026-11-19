@@ -35,13 +35,13 @@ Unity 2022.3.51f1 和 6000.0.43f1 依次运行 Editor 测试、IL2CPP smoke Play
 
 ## 基准测试
 
-手动触发 `ci.yml` 并开启 `run_benchmarks` 后，会同时为 BenchmarkDotNet 套件和[序列化矩阵](../benchmarks/LuminPack.MatrixBenchmark)计时。
+手动触发 `ci.yml` 并开启 `run_benchmarks` 后，会为 BenchmarkDotNet 主套件、Nino 的 Workloads 和 AppData 套件以及[序列化矩阵](../benchmarks/LuminPack.MatrixBenchmark)计时。
 
 | 输入 | 默认值 | 作用 |
 | --- | --- | --- |
-| `run_benchmarks` | 关闭 | 在三台主机上运行 BenchmarkDotNet，并为矩阵计时。 |
-| `benchmark_jit` | `both` | 选择 BenchmarkDotNet 任务。`TieredPGO` 启用分层编译和动态 PGO，`FullOpts` 关闭两者。 |
-| `benchmark_satori` | `only` | `only` 只测 `eng/SatoriCompiler` 准备的 Satori GC 运行时，`both` 额外加上 stock 运行时任务，`off` 只测 stock 运行时。 |
+| `run_benchmarks` | 关闭 | 在三台主机上运行 BenchmarkDotNet 主套件，并为 Nino 对照和矩阵计时。 |
+| `benchmark_jit` | `both` | 选择 BenchmarkDotNet 主套件的任务。`TieredPGO` 启用分层编译和动态 PGO，`FullOpts` 关闭两者。 |
+| `benchmark_satori` | `only` | 针对 BenchmarkDotNet 主套件，`only` 只测 `eng/SatoriCompiler` 准备的 Satori GC 运行时，`both` 加测 stock 运行时，`off` 只测 stock 运行时。 |
 
 ### BenchmarkDotNet
 
@@ -49,6 +49,15 @@ Unity 2022.3.51f1 和 6000.0.43f1 依次运行 Editor 测试、IL2CPP smoke Play
 - 每个任务使用三个进程、8–30 次自适应预热和 15 次以一秒为目标的正式测量，保留离群值。固定随机种子和时间戳让各进程的输入字节一致；计时前用 `--verify-fixtures` 检查新实例和重复初始化。
 - 完整的 JSON 和测量 CSV 产物保留每个进程的数据。`process-stability.md` 和任务摘要列出进程均值、变异系数、最大值/最小值、分配量，以及同一操作、同一 JIT 任务内的 LuminPack/对照库比值。进程间差异超过 10% 会产生警告；在宣称更快之前先检查分布和原生代码。各库独立启动的进程不按进程编号配对。
 - BenchmarkDotNet 的多态反汇编在 Windows 和 Linux 上运行；当前版本不支持 macOS 上的 CoreCLR 反汇编。Linux 主机上另有不计时的 JIT 探针，采集 LuminPack 和 Nino 多态读写的优化后汇编以及生成根方法的信息。校验、执行或必需探针失败都会让任务失败。
+
+### Nino Workloads 和 AppData
+
+`LuminPack.NinoBenchmark` 已加入解决方案。它移植了 [Nino 基准套件](https://github.com/JasonXuDeveloper/Nino/tree/185220ad24f07a9aeff53c21c4f30a0556c17e23/runtimes/csharp/benchmarks/Nino.Benchmark)的 12 个 Workloads 场景和 8 个 AppData 场景，用于对比 LuminPack 和 Nino。每项操作都以 Nino 为基准，报告分配量和耗时比值。常规 CI 在 Linux、Windows 和 macOS 上校验夹具。手动计时任务在 Linux x64 上使用 stock .NET 10、TieredPGO 和 Server GC，每项操作启动三个进程。`nino-benchmark` 产物包含逐次测量的 CSV 和完整 JSON 报告。
+
+```bash
+dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release -- --verify
+dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release -- --filter '*' --artifacts .tmp/nino-benchmark
+```
 
 ### 序列化矩阵
 

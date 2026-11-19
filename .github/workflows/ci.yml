@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       run_benchmarks:
-        description: Run BenchmarkDotNet on three hosts and time the serialization matrix
+        description: Time the BenchmarkDotNet suites, Nino workloads and serialization matrix
         type: boolean
         default: false
       benchmark_jit:
@@ -101,6 +101,9 @@ jobs:
       - name: Build complete solution (Release)
         run: dotnet build LuminPack.sln -c Release
 
+      - name: Verify Nino benchmark fixtures
+        run: dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release --no-build -- --verify
+
       - name: Generated code contracts
         run: dotnet run --project tests/LuminPack.Tests.Codegen/LuminPack.Tests.Codegen.csproj -c Release
 
@@ -171,6 +174,33 @@ jobs:
     uses: ./.github/workflows/benchmark-matrix.yml
     with:
       timing: true
+
+  nino-benchmark:
+    name: Nino workloads and AppData benchmark
+    if: github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          dotnet-version: 10.0.x
+
+      - name: Build and verify the benchmark
+        run: |
+          dotnet build benchmarks/LuminPack.NinoBenchmark -c Release
+          dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release --no-build -- --verify
+
+      - name: Measure Nino and LuminPack
+        run: dotnet run --project benchmarks/LuminPack.NinoBenchmark -c Release --no-build -- --filter '*' --artifacts "$GITHUB_WORKSPACE/.tmp/nino-benchmark" --buildTimeout 600
+
+      - name: Upload Nino benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nino-benchmark
+          path: .tmp/nino-benchmark
 
   benchmark:
     name: Benchmark (${{ matrix.host }})
