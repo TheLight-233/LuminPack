@@ -1269,7 +1269,8 @@ internal static partial class TypeModelFactory
                 ModelResult analyzed = Analyze(caseType, 0, path);
                 TypeModel? caseModel = analyzed.Model;
                 bool caseReadGeneric = caseModel == null || NeedsReadProfile(caseModel);
-                bool expandable = caseModel is RecordModel { Versioned: false, Policy.TrackReferences: false } && analyzed.IsComplete &&
+                // Pooled cases own their read entry because that entry also owns the rental's storage mirror.
+                bool expandable = caseModel is RecordModel { Versioned: false, Policy.TrackReferences: false, Rent: null } && analyzed.IsComplete &&
                     caseModel.Members.Length != 0 && !caseModel.Members.Any(member => member.Mirrored) &&
                     caseModel.Members.All(member => member is ScalarMember) && !SelectedConstructor(caseType);
                 // A complete local record whose fixed body this pipeline does not expand inline reads through its own Union

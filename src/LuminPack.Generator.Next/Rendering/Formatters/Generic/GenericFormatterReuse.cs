@@ -87,6 +87,12 @@ internal static class GenericFormatterReuse
     /// <returns>Whether the compressed roots call the element's compressed operations through its compressed strategy.</returns>
     internal static bool IsCompressedPlaceholder(string type) => s_current?.Compressed.Contains(type) == true;
 
+    /// <summary>Recognizes a vector or a nested chain of vectors for a forwarded compressed element operation.</summary>
+    /// <param name="type">The concrete element spelling in outermost-first rank order.</param>
+    /// <returns>Whether the element has only vector ranks over a non-generic type.</returns>
+    internal static bool IsJaggedCompressionElement(string type) => type.IndexOf('<') < 0 && type.IndexOf(',') < 0 &&
+        type.EndsWith("[]", StringComparison.Ordinal);
+
     /// <summary>Whether a laid-out placeholder stands for a payload or tuple whose closed minimum record width is its packed
     /// width.</summary>
     /// <param name="model">A formatter contract.</param>
@@ -298,8 +304,8 @@ internal static class GenericFormatterReuse
             bool forwarding = shape == ArrayFamily && item.Definition is FormatterDefinitions.Array or "$forwarded";
             // The closed templates test the forwarded spelling itself.
             string itemSpelling = fact?.ForwardedType ?? item.Type;
-            bool compressed = (forwarding || shape.Definition == "System.Collections.Generic.List") && itemSpelling.IndexOf('<') < 0 &&
-                itemSpelling.EndsWith("[]", StringComparison.Ordinal) && category == Category.Element;
+            bool compressed = (forwarding || shape.Definition == "System.Collections.Generic.List") &&
+                IsJaggedCompressionElement(itemSpelling) && category == Category.Element;
             _plans.Add(new Plan
             {
                 Family = shape,

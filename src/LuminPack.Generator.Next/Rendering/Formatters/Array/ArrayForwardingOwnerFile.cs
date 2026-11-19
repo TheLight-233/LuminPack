@@ -1,4 +1,3 @@
-using System;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
@@ -31,7 +30,7 @@ internal static class ArrayForwardingOwnerFile
         string root = serializer + "." + roots;
         string elementOwner = "global::LuminPack." + GeneratedNames.Owner(extension, itemType);
         string owner = GeneratedNames.Owner(extension, collection);
-        bool compressElements = itemType.IndexOf('<') < 0 && itemType.EndsWith("[]", StringComparison.Ordinal) ||
+        bool compressElements = GenericFormatterReuse.IsJaggedCompressionElement(itemType) ||
             GenericFormatterReuse.IsCompressedPlaceholder(itemType);
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots,

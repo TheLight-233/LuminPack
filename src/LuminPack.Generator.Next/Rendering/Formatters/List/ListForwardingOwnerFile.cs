@@ -1,4 +1,3 @@
-using System;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 using LuminPack.SourceGenerator.Next.Model;
 
@@ -45,7 +44,7 @@ internal static class ListForwardingOwnerFile
         string jsonWriter = w.A("LuminPackJsonWriter");
         string options = w.A("ILuminPackOptions");
         bool stringElement = item == "string";
-        bool compressElements = item.IndexOf('<') < 0 && item.EndsWith("[]", StringComparison.Ordinal) ||
+        bool compressElements = GenericFormatterReuse.IsJaggedCompressionElement(item) ||
             GenericFormatterReuse.IsCompressedPlaceholder(item);
 
         string roots = "LuminRoots_" + ReadableTypeName.Of(GeneratedNames.PayloadKey(collection));

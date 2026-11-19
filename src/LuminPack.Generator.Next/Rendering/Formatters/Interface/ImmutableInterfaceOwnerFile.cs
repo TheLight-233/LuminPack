@@ -182,7 +182,7 @@ internal static class ImmutableInterfaceOwnerFile
             w.Line("    " + culture + ".CurrentCulture.GetType() == typeof(" + culture + "))");
             w.Open();
         }
-        w.Line(c.Scalar + "[] items = null;");
+        w.Line(ContiguousOwnerFile.ArrayType(c.Scalar) + " items = null;");
         w.Line("int count = 0;");
         w.Line("int capacity = 0;");
         w.Line("ref var first = ref " + c.Memory + ".NullRef<" + c.Scalar + ">();");
