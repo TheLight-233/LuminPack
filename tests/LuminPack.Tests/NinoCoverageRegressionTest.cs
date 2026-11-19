@@ -123,7 +123,7 @@ public sealed class NinoCoverageRegressionTest
         var memory = new Memory<bool?>(expected);
 
         Assert.Equal(expected, LuminPackSerializer.Deserialize<Queue<bool?>>(LuminPackSerializer.Serialize(queue)));
-        Assert.Equal(expected.Reverse(), LuminPackSerializer.Deserialize<ConcurrentStack<bool?>>(LuminPackSerializer.Serialize(stack)));
+        Assert.Equal(Enumerable.Reverse(expected), LuminPackSerializer.Deserialize<ConcurrentStack<bool?>>(LuminPackSerializer.Serialize(stack)));
         Assert.Equal(expected, LuminPackSerializer.Deserialize<ImmutableQueue<bool?>>(LuminPackSerializer.Serialize(immutable)));
         Assert.Equal(expected, LuminPackSerializer.Deserialize<Memory<bool?>>(LuminPackSerializer.Serialize(memory)).ToArray());
     }
