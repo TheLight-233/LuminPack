@@ -23,7 +23,7 @@ The history of individual approvals lives in Git. When this document, the code a
 
 ### Storage access
 
-- Ordinary binary class records containing nested objects, unions or collections mark their record bodies `NoInlining` to preserve the parent loop’s inline budget. Reference-tracked objects apply this boundary at the root. Scalar stores and loads use Core’s `Write`, `WriteReserved` and `Read` helpers. Core obtains a supported dictionary view, native input span or record window for each storage operation. Generated field copies prove each adjacent offset and use scalar access when the proof fails.
+- Ordinary binary class records use the generator’s inlining budgets even when they contain nested objects, unions or collections. Eligible small record bodies receive `AggressiveInlining`. Other record bodies leave the decision to the JIT. Collection loop methods and cold helpers keep their explicit non-inlining boundaries. Reference-tracked objects keep the call boundaries in their root read and write paths. Scalar stores and loads use Core’s `Write`, `WriteReserved` and `Read` helpers. Core obtains a supported dictionary view, native input span or record window for each storage operation. Generated field copies prove each adjacent offset and use scalar access when the proof fails.
 
 - **Local + As views.** Private, protected, readonly and auto-property backing storage is accessed through generated layout mirrors and `Unsafe.As`, never reflection. Mirrors replicate the inheritance chain and `LayoutKind` (including explicit offsets). Accessible writable fields are accessed directly.
 - **Storage placeholders.** Mirror fields, padding members and hidden storage must not be removed because ordinary call-site searches find no use.

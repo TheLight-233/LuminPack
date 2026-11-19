@@ -437,13 +437,7 @@ internal static partial class BinaryEmitter
         // mixed record counts its inline objects' expanded bodies structurally, because their member runs, not their call
         // sites, decide the budget. A member write stays a call boundary whose callee keeps its own budget, so the runtime
         // sizes the entry instead, and any record that calls one keeps no inline hint.
-        bool IsHeavyRecord() => !model.IsStruct && model.Version == null && members.Any(member =>
-            member.Kind is RenderMemberKind.Array or RenderMemberKind.List or RenderMemberKind.Object or
-                RenderMemberKind.Dictionary or RenderMemberKind.SparseDictionary or RenderMemberKind.SortedList or
-                RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.ForwardedCollection or
-                RenderMemberKind.Sequence || member.ReferencePayload);
-
-        string WriteHint(List<string> body, bool union) => IsHeavyRecord() ? w.MethodImpl("NoInlining") : model.HasDictionary ? null :
+        string WriteHint(List<string> body, bool union) => model.HasDictionary ? null :
             (model.StreamRecord || model.MixedRecord) &&
             !body.Any(line => line.IndexOf(".SerializeMember_", StringComparison.Ordinal) >= 0) &&
             !body.Any(line => line == "do" || line.StartsWith("for (", StringComparison.Ordinal) || line.StartsWith("foreach (", StringComparison.Ordinal) ||
@@ -451,7 +445,7 @@ internal static partial class BinaryEmitter
             ? ((model.StreamRecord ? InvocationCounter.Count(body) <= 16 : DirectInlining.MixedWrite(model, union)) ? inline : null)
             : (model.StreamRecord || model.MixedRecord ? null : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null));
 
-        string ReadHint(List<string> body) => IsHeavyRecord() ? w.MethodImpl("NoInlining") : model.StreamRecord || model.MixedRecord
+        string ReadHint(List<string> body) => model.StreamRecord || model.MixedRecord
             ? (InvocationCounter.Count(body) <= 16 ? inline : null)
             : (model.ConstructorArguments != null ? (DirectInlining.ConstructedRead(model) ? inline : null)
                 : (DirectInlining.Read(model, Sizes(body)) ? inline : null));
