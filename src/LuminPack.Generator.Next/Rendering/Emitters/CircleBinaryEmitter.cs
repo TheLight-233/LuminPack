@@ -102,6 +102,15 @@ internal static class CircleBinaryEmitter
             body.Add("\t" + exceptions + ".ThrowFormatException(\"A reference definition must contain a non-null record.\");");
         }
 
+        int depth = model.Limits?.Depth ?? int.MaxValue;
+        bool enterDepth = model.Recursive && depth != int.MaxValue;
+        string policy = w.A("LuminPackInputPolicy");
+        if (enterDepth)
+        {
+            body.Add("try");
+            body.Add("{");
+            body.Add(policy + ".EnterDepth(ref reader, " + depth.ToString(CultureInfo.InvariantCulture) + ");");
+        }
         body.Add("var instance = value;");
         body.Add("if (instance is null || !reader.OptionState.ClaimReference(id, instance))");
         body.Add("{");
@@ -116,6 +125,14 @@ internal static class CircleBinaryEmitter
         body.Add("}");
         body.Add(record + "(ref reader, ref instance);");
         body.Add("value = instance;");
+        if (enterDepth)
+        {
+            body.Add("}");
+            body.Add("finally");
+            body.Add("{");
+            body.Add(policy + ".ExitDepth(ref reader);");
+            body.Add("}");
+        }
     }
 
     /// <summary>Creates the reference shell using the declaration's pool or constructor.</summary>

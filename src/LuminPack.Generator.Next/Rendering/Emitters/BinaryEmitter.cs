@@ -573,7 +573,7 @@ internal static partial class BinaryEmitter
             CircleBinaryEmitter.ReadNewRecord(model, w, read, Root("ReadRecord", genericRead));
             Method(read, "ReadReferenceRecord", genericRead, readParameters, noInline, prepared: true);
             w.Blank();
-            Method(TrackedRecordReadBody(model, w), "ReadRecord", genericRead, readParameters, noInline);
+            Method(TrackedRecordReadBody(model, w), "ReadRecord", genericRead, readParameters, noInline, prepared: true);
             w.Suppressed = false;
 
             void Alias(string name, string root, bool generic, string parameters, string values)
@@ -1258,7 +1258,7 @@ internal static partial class BinaryEmitter
             body.Add("}");
             body.Add("static void ReadRecord(scoped ref " + w.A("LuminPackReader") + " reader, ref " + model.GlobalName + "? value)");
             body.Add("{");
-            body.AddRange(InputChecks(model, w, TrackedRecordReadBody(model, w), read: true));
+            body.AddRange(TrackedRecordReadBody(model, w));
             body.Add("}");
         }
         else
@@ -1289,12 +1289,13 @@ internal static partial class BinaryEmitter
     {
         var body = model.Version != null ? VersionReadBody(model, w, withNull: false) :
             Mirrored(model, w, ReadBody(model, w, union: false), writes: false, union: false);
-        if (model.Version == null && model.ConstructorArguments != null)
-            return body;
-        body = AddReadCallbacks(model, body);
-        if (model.ReadBefore.Length != 0)
-            body.RemoveRange(0, model.ReadBefore.Length);
-        return body;
+        if (model.Version != null || model.ConstructorArguments == null)
+        {
+            body = AddReadCallbacks(model, body);
+            if (model.ReadBefore.Length != 0)
+                body.RemoveRange(0, model.ReadBefore.Length);
+        }
+        return InputChecks(model, w, body, read: true, enterDepth: false);
     }
 
     /// <summary>Builds a mixed record's write body: the leading members reserved with the header, each inline object in

@@ -43,8 +43,9 @@ internal static partial class BinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="body">The finished body.</param>
     /// <param name="read">Whether the operation reads input.</param>
+    /// <param name="enterDepth">Whether this body owns the depth of an identified record.</param>
     /// <returns>The checked body.</returns>
-    internal static List<string> InputChecks(PayloadRenderModel model, CodeWriter w, List<string> body, bool read)
+    internal static List<string> InputChecks(PayloadRenderModel model, CodeWriter w, List<string> body, bool read, bool enterDepth = true)
     {
         InputLimits limits = read ? model.Limits : null;
         // Under a bounded root, a nested read whose own entry applies other checks runs as the root's checked copy.
@@ -86,7 +87,7 @@ internal static partial class BinaryEmitter
                 line = InputReadRenderer.Project(line, limits, w.A("LuminPackInputPolicy"));
             result.Add(line);
         }
-        if (limits == null || !model.Recursive || limits.Depth == int.MaxValue)
+        if (!enterDepth || limits == null || !model.Recursive || limits.Depth == int.MaxValue)
             return result;
         // A null record is not a nested value: depth is entered after the object template's null test, and every later
         // successful return leaves it.
