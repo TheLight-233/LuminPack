@@ -90,13 +90,15 @@ public sealed class LinkedListJsonReuseTest
         Assert.True(reader.Read<StrictUtf8>());
         Assert.True(reader.Read<StrictUtf8>());
         Assert.Equal(LuminPackJsonReader.JsonTokenType.ArrayStart, reader.CurrentTokenType);
-        var target = new LinkedList<string?>(["old", "old", "removed"]);
+        string kept = new string("caf\u00e9".AsSpan());
+        var target = new LinkedList<string?>([kept, "old", "removed"]);
         var first = target.First!;
         var second = first.Next!;
 
         LuminPackSerializer.DeserializeJson<LinkedList<string?>, StrictUtf8>(ref reader, ref target);
 
-        Assert.Equal(new string?[] { "café", null }, target);
+        Assert.Equal(new string?[] { "caf\u00e9", null }, target);
+        Assert.Same(kept, target.First!.Value);
         Assert.Same(first, target.First);
         Assert.Same(second, target.Last);
         Assert.True(reader.Read<StrictUtf8>());
@@ -104,6 +106,23 @@ public sealed class LinkedListJsonReuseTest
         reader.ConsumeArrayEnd<StrictUtf8>();
         reader.EnsureEndOfDocument<StrictUtf8>();
         Assert.Equal(bytes.Length, reader.Position);
+    }
+
+    /// <summary>A malformed string detaches the unread tail without publishing its temporary value.</summary>
+    [Fact]
+    public void InvalidStringKeepsThePreviousUnpublishedValue()
+    {
+        string unchanged = new string("keep".AsSpan());
+        var target = new LinkedList<string>([unchanged, "old"]);
+        var second = target.Last!;
+        byte[] bytes = """["keep","bad\x"]"""u8.ToArray();
+
+        Assert.Throws<FormatException>(() =>
+            LuminPackSerializer.DeserializeJson<LinkedList<string>, StrictUtf8>(bytes, ref target));
+
+        Assert.Same(unchanged, Assert.Single(target));
+        Assert.Null(second.List);
+        Assert.Equal("old", second.Value);
     }
 
     /// <summary>Keeps the old clear and append path for derived runtime lists.</summary>
@@ -165,6 +184,7 @@ public sealed class LinkedListJsonReuseTest
             Assert.Same(original, target);
             Assert.Null(LinkedListJsonObserverProfile.Target);
             Assert.Equal(new[] { "keep", "observed", "new" }, target);
+            Assert.NotSame(first, target.First!.Value);
             Assert.Null(oldNode.List);
         }
         finally

@@ -228,8 +228,8 @@ internal static class LinkedListOwnerFile
     /// <param name="c">The linked-list formatter context.</param>
     /// <param name="reader">The generated reader type name.</param>
     /// <param name="options">The generated profile constraint type name.</param>
-    /// <param name="readItems">The ordinary loop, with a callback after each completed value.</param>
-    internal static void ReadExistingJson(EnumerableOwnerContext c, string reader, string options, Action<Action, bool> readItems)
+    /// <param name="readItems">The ordinary loop, with a value seed and a callback after each completed value.</param>
+    internal static void ReadExistingJson(EnumerableOwnerContext c, string reader, string options, Action<Action, string> readItems)
     {
         var w = c.W;
         w.Line(w.MethodImpl("NoInlining"));
@@ -252,7 +252,7 @@ internal static class LinkedListOwnerFile
             w.Line("reuseNode.Value = item;");
             w.Line("reuseNode = reuseNode.Next!;");
             w.Close();
-        }, false);
+        }, c.Text ? "reuseNode?.Value" : "default !");
         w.Close();
         w.Line("finally");
         w.Open();

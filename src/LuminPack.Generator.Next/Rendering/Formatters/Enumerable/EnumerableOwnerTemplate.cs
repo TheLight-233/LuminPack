@@ -1005,7 +1005,7 @@ internal static class EnumerableOwnerTemplate
                     w.Line(spec.JsonAdd);
             }
 
-            void ReadJsonItems(Action append, bool hasFirstToken)
+            void ReadJsonItems(Action append, bool hasFirstToken, string seed = "default !")
             {
                 w.Line(hasFirstToken ? "do" : "while (reader.Read<TLuminProfile>())");
                 w.Open();
@@ -1013,7 +1013,7 @@ internal static class EnumerableOwnerTemplate
                 w.Line("    break;");
                 w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
                 w.Line("    continue;");
-                ReadItem("default !");
+                ReadItem(seed);
                 append();
                 w.Close();
                 if (hasFirstToken)
@@ -1240,7 +1240,8 @@ internal static class EnumerableOwnerTemplate
                     w.Close();
                     w.Blank();
                     if (linkedListReuse)
-                        LinkedListOwnerFile.ReadExistingJson(context, jsonReader, options, ReadJsonItems);
+                        LinkedListOwnerFile.ReadExistingJson(context, jsonReader, options,
+                            (append, seed) => ReadJsonItems(append, false, seed));
                     if (observableBacking)
                     {
                         w.Line(w.MethodImpl("NoInlining"));
