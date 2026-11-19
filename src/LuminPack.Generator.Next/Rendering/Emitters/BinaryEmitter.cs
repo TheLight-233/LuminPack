@@ -589,22 +589,38 @@ internal static partial class BinaryEmitter
 
         void VersionRoots()
         {
-            // The Union payload of a version-tolerant record is the record itself; only the inline hint follows the body size.
-            // A mirrored record keeps its null handling in both bodies, so the mirror view is declared at the same position.
-            // A struct never writes or reads a null marker and keeps its callbacks around the same schema body.
             string value = model.IsStruct ? type : type + "?";
-            var writeBody = VersionWriteBody(model, w);
+            bool small = VersionWriteInline(model);
+            bool splitWrite = !small && !model.IsStruct && model.Bounded == null &&
+                model.WriteBefore.Length == 0 && model.WriteAfter.Length == 0;
+            string writeHint = small ? inline : w.MethodImpl("NoInlining");
+            var writeBody = VersionWriteBody(model, w, withNull: !splitWrite);
             var write = AddCallbacks(Mirrored(model, w, writeBody, writes: true, union: false), model.WriteBefore, model.WriteAfter);
-            string writeHint = VersionWriteInline(model) ? inline : null;
+            string writeParameters = "(scoped ref " + writer + " writer, " + (model.IsStruct ? "scoped in " : string.Empty) + value + " input)";
             w.Suppressed = !writes;
-            Method(write, "RootWrite", true, "(scoped ref " + writer + " writer, " + (model.IsStruct ? "scoped in " : string.Empty) + value + " input)", writeHint);
+            if (splitWrite)
+            {
+                Method(new List<string>
+                {
+                    "if (input is null)",
+                    "{",
+                    "writer.EnsureAdditionalCapacity(1);",
+                    "writer.WriteNullObjectHeader();",
+                    "return;",
+                    "}",
+                    "WriteVersionPayload" + Arguments(Profile) + "(ref writer, input);",
+                }, "RootWrite", true, writeParameters, inline);
+                w.Blank();
+                Method(write, "WriteVersionPayload", true, "(scoped ref " + writer + " writer, " + type + " input)", writeHint);
+            }
+            else
+                Method(write, "RootWrite", true, writeParameters, writeHint);
             w.Blank();
             w.Suppressed = !reads;
             Method(AddReadCallbacks(model, VersionReadBody(model, w)), "RootRead", true,
                 "(scoped ref " + reader + " reader, scoped ref " + value + " value)", null);
             w.Blank();
             w.Suppressed = !writes;
-            string writeParameters = "(scoped ref " + writer + " writer, " + (model.IsStruct ? "scoped in " : string.Empty) + value + " input)";
             if (model.Mirror == null || model.WriteBefore.Length == 0 && model.WriteAfter.Length == 0)
                 VersionAlias("RootWriteUnion", "RootWrite", writeParameters, "ref writer, input");
             else

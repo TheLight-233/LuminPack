@@ -294,9 +294,13 @@ internal static partial class SerializerIssueRegression
                 !files.Any(text => text.Contains("struct FixedRecordArrayFormatter", StringComparison.Ordinal) &&
                     text.Contains("RecordRoom(ref cursor)", StringComparison.Ordinal)))
                 throw new InvalidOperationException("The fixed object or array lost its shared capacity check.");
-            if (!files.Any(text => text.Contains("struct VersionRecordFormatter", StringComparison.Ordinal) &&
-                    text.Contains("WriteVersionRecord", StringComparison.Ordinal)))
-                throw new InvalidOperationException("The versioned formatter lost its descriptor record header.");
+            string versioned = files.Single(text => text.Contains("struct VersionRecordFormatter", StringComparison.Ordinal) &&
+                text.Contains("WriteVersionRecord", StringComparison.Ordinal));
+            if (!versioned.Contains("WriteVersionRecord", StringComparison.Ordinal) ||
+                !versioned.Contains("WriteVersionPayload", StringComparison.Ordinal))
+                throw new InvalidOperationException("The versioned formatter lost its outlined descriptor record write.");
+            if (versioned.Split("scope = writer.EnterVersionScope();", StringSplitOptions.None).Length != 2)
+                throw new InvalidOperationException("Only the profile-dependent string dictionary should open a writer schema scope.");
         });
         Console.WriteLine("Passed fixed class and array reservations, callbacks, profile observation order, and version descriptor widths and scoped lengths.");
     }

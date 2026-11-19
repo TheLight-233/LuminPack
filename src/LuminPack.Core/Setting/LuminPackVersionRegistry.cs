@@ -22,6 +22,7 @@ internal struct LuminPackVersionRegistry
     private LuminPackVersionRegistration[]? _entries;
     private int[]? _index;
     private int _count;
+    private int _lastWriterMatch;
 
     internal readonly int Count
     {
@@ -40,13 +41,47 @@ internal struct LuminPackVersionRegistry
         return _entries![ordinal];
     }
 
+    /// <summary>Checks whether a short record names a live positional registration for the receiving model.</summary>
+    /// <param name="ordinal">The ordinal recorded in the short header.</param>
+    /// <param name="owner">The receiving model's generated descriptor owner.</param>
+    /// <returns>Whether the record can use the positional member reader.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal readonly bool IsPositional(uint ordinal, LuminPackVersionMapCache owner)
+    {
+        if (ordinal >= (uint)_count)
+            return false;
+        ref var entry = ref _entries![ordinal];
+        return ReferenceEquals(entry.Owner, owner) && entry.Map is null;
+    }
+
     /// <summary>Finds an active registration by exact schema and table.</summary>
     /// <param name="schema">The schema identity to find.</param>
     /// <param name="owner">The generated descriptor owner.</param>
     /// <param name="descriptors">The complete table bytes.</param>
     /// <returns>The registration ordinal or minus one.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal readonly int Find(ulong schema, LuminPackVersionMapCache owner, ReadOnlySpan<byte> descriptors)
+    internal int Find(ulong schema, LuminPackVersionMapCache owner, ReadOnlySpan<byte> descriptors)
+    {
+        int last = _lastWriterMatch - 1;
+        if ((uint)last < (uint)_count)
+        {
+            ref var entry = ref _entries![last];
+            if (entry.Schema == schema && ReferenceEquals(entry.Owner, owner))
+                return last;
+        }
+        int ordinal = FindUncached(schema, owner, descriptors);
+        if (ordinal >= 0)
+            _lastWriterMatch = ordinal + 1;
+        return ordinal;
+    }
+
+    /// <summary>Looks up a schema through the active registry's small scan or its index.</summary>
+    /// <param name="schema">The schema identity to find.</param>
+    /// <param name="owner">The generated descriptor owner.</param>
+    /// <param name="descriptors">The complete table bytes.</param>
+    /// <returns>The registration ordinal or minus one.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private readonly int FindUncached(ulong schema, LuminPackVersionMapCache owner, ReadOnlySpan<byte> descriptors)
     {
         if (_count > SmallTable)
             return FindIndexed(schema, owner, descriptors);
@@ -99,6 +134,8 @@ internal struct LuminPackVersionRegistry
         }
         entries[ordinal] = entry;
         _count = ordinal + 1;
+        if (indexBySchema)
+            _lastWriterMatch = _count;
     }
 
     /// <summary>Appends a schema that needs index maintenance or an expanded registration array.</summary>
@@ -133,6 +170,8 @@ internal struct LuminPackVersionRegistry
         }
         _entries![ordinal] = entry;
         _count = ordinal + 1;
+        if (indexBySchema)
+            _lastWriterMatch = _count;
     }
 
     /// <summary>Discards all registrations that followed a previously captured scope boundary.</summary>
@@ -153,6 +192,8 @@ internal struct LuminPackVersionRegistry
         }
         Array.Clear(_entries!, count, _count - count);
         _count = count;
+        if (_lastWriterMatch > count)
+            _lastWriterMatch = 0;
     }
 
     /// <summary>Selects the first open-addressing probe for a schema.</summary>

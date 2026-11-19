@@ -32,10 +32,13 @@ internal static partial class BinaryEmitter
         string profile = VersionProfile(model, w);
         body.Add("writer.WriteVersionRecord<" + profile + ">(" + schema.Schema + ".Schema, " +
             schema.Schema + ".Descriptors, " + schema.Schema + ".Cache);");
-        bool framed = schema.Descriptors.Any(word => word >> 56 == 255);
-        if (framed)
+        bool[] scoped = model.Members.Select((member, index) => schema.Width(index) == 255 && NeedsVersionWriteScope(member)).ToArray();
+        if (schema.Descriptors.Any(word => word >> 56 == 255))
+            body.Add("int length;");
+        bool hasScope = scoped.Any(needsScope => needsScope);
+        if (hasScope)
         {
-            body.Add("int length, scope = -1;");
+            body.Add("int scope = -1;");
             body.Add("try");
             body.Add("{");
         }
@@ -59,19 +62,19 @@ internal static partial class BinaryEmitter
                 continue;
             }
             if (width == 255)
-            {
                 body.Add("length = writer.ReserveVersionLength();");
+            if (scoped[index])
                 body.Add("scope = writer.EnterVersionScope();");
-            }
             body.Add("Write" + VersionMemberName(member) + "(ref writer, value." + member.Name + ");");
-            if (width == 255)
+            if (scoped[index])
             {
                 body.Add("writer.ExitVersionScope(scope);");
                 body.Add("scope = -1;");
-                body.Add("writer.CompleteVersionLength(length);");
             }
+            if (width == 255)
+                body.Add("writer.CompleteVersionLength(length);");
         }
-        if (framed)
+        if (hasScope)
         {
             body.Add("}");
             body.Add("finally");
@@ -126,6 +129,23 @@ internal static partial class BinaryEmitter
             body.Add("");
         }
         return body;
+    }
+
+    /// <summary>Identifies field operations whose body might register a versioned schema.</summary>
+    /// <param name="member">The field operation selected by the renderer.</param>
+    /// <returns>Whether the length prefix must also cover a writer registry scope.</returns>
+    private static bool NeedsVersionWriteScope(RenderMember member)
+    {
+        if (member.Property && !member.Mirrored)
+            return true;
+        // A custom string profile or a forwarded formatter can call another serializer through the same writer.
+        if (member.Dictionary != null)
+            return member.Dictionary.KeyText || member.Dictionary.ValueText;
+        if (member.IsFixed || member.OriginalSpanReservation)
+            return false;
+        if (member.Kind is RenderMemberKind.Array or RenderMemberKind.List && member.Nested == null)
+            return !CheckedRawElement(member.Scalar) && member.Scalar != "global::System.DateTime";
+        return true;
     }
 
     /// <summary>Keeps repeated string codec expansion inside one closed method for larger records.</summary>

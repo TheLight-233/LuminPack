@@ -35,7 +35,39 @@ public ref partial struct LuminPackReader
     /// <param name="cache">The receiving model's descriptor cache.</param>
     /// <returns>The framing decision and any map required for the payload.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LuminPackVersionRecord ReadVersionRecord<TOptions>(ulong schema, scoped ReadOnlySpan<byte> descriptors,
+        LuminPackVersionMapCache cache)
+        where TOptions : struct, ILuminPackStringCodec
+    {
+        if (!IsOutOfRange(Position, 3, _buffer.Length))
+        {
+            ref byte source = ref Current;
+            byte form = Unsafe.Add(ref source, 1);
+            if (source == LuminPackVersionRecord.Marker && (uint)(form - LuminPackVersionRecord.Short) <= 5)
+            {
+                if (form != (byte)(LuminPackVersionRecord.Short | default(TOptions).BinaryProfile))
+                    ThrowVersionHeader();
+                uint ordinal = Unsafe.Add(ref Current, 2);
+                if (ordinal < 128 && _options is { } state && state.VersionRegistry.IsPositional(ordinal, cache))
+                {
+                    AdvanceValidated(3);
+                    return default;
+                }
+                return ReadShortVersionRecord(schema, descriptors, cache);
+            }
+        }
+        return ReadVersionRecordSlow<TOptions>(schema, descriptors, cache);
+    }
+
+    /// <summary>Resolves full, mapped, extended, legacy and invalid versioned headers.</summary>
+    /// <typeparam name="TOptions">The selected binary string profile.</typeparam>
+    /// <param name="schema">The generated identity of the receiving model.</param>
+    /// <param name="descriptors">The complete receiving descriptor table.</param>
+    /// <param name="cache">The receiving model's descriptor cache.</param>
+    /// <returns>The resolved framing decision.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private LuminPackVersionRecord ReadVersionRecordSlow<TOptions>(ulong schema, scoped ReadOnlySpan<byte> descriptors,
         LuminPackVersionMapCache cache)
         where TOptions : struct, ILuminPackStringCodec
     {
@@ -106,7 +138,7 @@ public ref partial struct LuminPackReader
     /// <param name="descriptors">The receiving model's immutable descriptors.</param>
     /// <param name="cache">The receiving model's descriptor cache.</param>
     /// <returns>The positional or mapped framing for the record.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private LuminPackVersionRecord ReadShortVersionRecord(ulong schema, scoped ReadOnlySpan<byte> descriptors,
         LuminPackVersionMapCache cache)
     {

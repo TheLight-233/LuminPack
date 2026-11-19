@@ -64,6 +64,34 @@ public class ReaderFixedBoundsPolicyTest
         CheckVersionDescriptors<LuminPackUtf16VarIntOptions>(5);
     }
 
+    /// <summary>Checks that short-header probing preserves bounds, profile and registry failures without advancing.</summary>
+    /// <param name="shortHeader">The malformed short record after a same-model full registration.</param>
+    /// <param name="message">The expected diagnostic from the framing decoder.</param>
+    [Theory]
+    [InlineData("FB52", "Span out of range with 14.")]
+    [InlineData("FB5100", "Unsupported version-tolerant record header.")]
+    [InlineData("FB5201", "Unknown version-tolerant schema ordinal.")]
+    [InlineData("FB528000", "Invalid version-tolerant schema ordinal.")]
+    public void InvalidShortVersionHeadersLeaveTheCursorUnchanged(string shortHeader, string message)
+    {
+        byte[] buffer = new byte[11 + shortHeader.Length / 2];
+        RegisterEmptyVersion(new LuminPackWriterOptionalState(), buffer.AsSpan(0, 11));
+        Convert.FromHexString(shortHeader).CopyTo(buffer, 11);
+        ReadOnlySpan<byte> input = buffer;
+        using var state = new LuminPackReaderOptionalState();
+        var reader = new LuminPackReader(ref input, state);
+        ulong schema = LuminPackVersionRecord.ComputeSchema(ReadOnlySpan<byte>.Empty);
+        reader.ReadVersionRecord<LuminPackDefaultOptions>(schema, ReadOnlySpan<byte>.Empty, EmptyVersionCache);
+
+        Exception? failure = null;
+        try { reader.ReadVersionRecord<LuminPackDefaultOptions>(schema, ReadOnlySpan<byte>.Empty, EmptyVersionCache); }
+        catch (Exception error) { failure = error; }
+        Assert.NotNull(failure);
+        Assert.Equal(message, failure.Message);
+        Assert.Equal(11, reader.Position);
+        Assert.Equal(1, state.VersionRegistry.Count);
+    }
+
     /// <summary>Checks exact-capacity writes and subsequent reads with one closed profile.</summary>
     /// <typeparam name="TOptions">The actual document profile.</typeparam>
     /// <param name="profile">The expected binary profile tag.</param>
