@@ -111,10 +111,21 @@ public sealed class BufferAppendTest
         LuminPackSerializer.Serialize(versioned, buffer);
         LuminPackSerializer.Serialize((CapacityTierTest.VersionedOrdinary)(versioned), buffer);
         Assert.True(buffer.GetSpan().Slice(start, record.Length).SequenceEqual(record));
-        Assert.True(buffer.GetSpan()[(start + record.Length)..].SequenceEqual(record));
-        var restored = global::LuminPackUnitTest.ConcreteReads.Read<CapacityTierTest.VersionedOrdinary>(buffer.GetSpan()[start..], static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CapacityTierTest.VersionedOrdinary concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
-        Assert.Equal(versioned.Text, restored.Text);
-        Assert.Equal(519, Assert.Single(restored.Values).Id);
+        ReadOnlySpan<byte> appended = buffer.GetSpan()[start..];
+        ReadOnlySpan<byte> shortRecord = appended[record.Length..];
+        Assert.True(shortRecord[..3].SequenceEqual(new byte[] { 251, (byte)(0x50 | (record[1] & 7)), 0 }));
+        int payloadStart = 11 + record[2] * sizeof(ulong);
+        Assert.True(shortRecord[3..].SequenceEqual(record.AsSpan(payloadStart)));
+
+        var reader = new LuminPackReader(ref appended, buffer.ReaderState);
+        CapacityTierTest.VersionedOrdinary first = null!, second = null!;
+        LuminPackSerializer.Deserialize(ref reader, ref first);
+        LuminPackSerializer.Deserialize(ref reader, ref second);
+        Assert.Equal(appended.Length, reader.Position);
+        Assert.Equal(versioned.Text, first.Text);
+        Assert.Equal(versioned.Text, second.Text);
+        Assert.Equal(519, Assert.Single(first.Values).Id);
+        Assert.Equal(519, Assert.Single(second.Values).Id);
     }
 
     /// <summary>Retains one reference table across separately appended generated roots.</summary>
