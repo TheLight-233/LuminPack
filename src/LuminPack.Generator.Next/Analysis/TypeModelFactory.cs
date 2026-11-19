@@ -2365,21 +2365,34 @@ internal static partial class TypeModelFactory
         private static bool HasAutomatic(PortablePlan plan)
             => plan.Fields != null && (plan.Kind == 3 || plan.Children!.Any(HasAutomatic));
 
+        /// <summary>Selects how a modeled platform places automatic-layout aggregates.</summary>
+        private enum AutomaticLayout
+        {
+            DeclarationOrder,
+            Legacy,
+            CoreClr64
+        }
+
         /// <summary>Places the storage under each layout model and keeps the distinct results.</summary>
         /// <param name="plan">The analyzed storage.</param>
-        /// <returns>Natural 64-bit, natural 32-bit and, for automatic layouts, the CoreCLR automatic orders, without duplicates.</returns>
+        /// <returns>The distinct storage models in persisted tag order.</returns>
         private static PortableStorageModel[] BuildModels(PortablePlan plan)
         {
-            var kinds = new List<(bool Is64, bool Auto)> { (true, false), (false, false) };
+            var kinds = new List<(bool Is64, AutomaticLayout Automatic)>
+            {
+                (true, AutomaticLayout.DeclarationOrder), (false, AutomaticLayout.DeclarationOrder)
+            };
             if (HasAutomatic(plan))
             {
-                kinds.Add((true, true));
-                kinds.Add((false, true));
+                kinds.Add((true, AutomaticLayout.Legacy));
+                kinds.Add((false, AutomaticLayout.Legacy));
+                // Append new models so existing tags still name the same offsets and stride.
+                kinds.Add((true, AutomaticLayout.CoreClr64));
             }
             var models = new List<PortableStorageModel>();
-            foreach (var (is64, auto) in kinds)
+            foreach (var (is64, automatic) in kinds)
             {
-                var placed = PlacePortable(plan, is64, auto);
+                var placed = PlacePortable(plan, is64, automatic);
                 if (!models.Any(model => model.Size == placed.Size && model.Offsets.AsSpan().SequenceEqual(placed.Offsets)))
                     models.Add(new PortableStorageModel { Size = placed.Size, Offsets = placed.Offsets });
             }
@@ -2389,9 +2402,9 @@ internal static partial class TypeModelFactory
         /// <summary>Positions every field of an aggregate under one layout model.</summary>
         /// <param name="plan">The analyzed storage.</param>
         /// <param name="is64">Whether eight-byte primitives align to eight bytes.</param>
-        /// <param name="auto">Whether automatic aggregates order fields like CoreCLR.</param>
+        /// <param name="automatic">The rule for automatic-layout aggregates.</param>
         /// <returns>The element size, alignment, and the storage offset of every packed data byte.</returns>
-        private static (int Size, int Alignment, int[] Offsets) PlacePortable(PortablePlan plan, bool is64, bool auto)
+        private static (int Size, int Alignment, int[] Offsets) PlacePortable(PortablePlan plan, bool is64, AutomaticLayout automatic)
         {
             if (plan.Fields == null)
             {
@@ -2403,17 +2416,27 @@ internal static partial class TypeModelFactory
             int count = plan.Children!.Length;
             var places = new (int Size, int Alignment, int[] Offsets)[count];
             for (int index = 0; index < count; index++)
-                places[index] = PlacePortable(plan.Children[index], is64, auto);
+                places[index] = PlacePortable(plan.Children[index], is64, automatic);
             int pack = plan.Pack == 0 ? 8 : plan.Pack;
-            var order = Enumerable.Range(0, count).ToList();
-            if (auto && plan.Kind == 3)
+            var order = Enumerable.Range(0, count);
+            bool coreClrAuto = plan.Kind == 3 && automatic == AutomaticLayout.CoreClr64;
+            if (coreClrAuto)
+                order = order.OrderByDescending(index => CoreClrPrimitiveWidth(plan.Children[index].Type));
+            else if (plan.Kind == 3 && automatic == AutomaticLayout.Legacy)
                 order = order.OrderBy(index => plan.Children[index].Fields == null ? 0 : 1)
-                    .ThenByDescending(index => plan.Children[index].Fields == null ? places[index].Size : 0).ToList();
+                    .ThenByDescending(index => plan.Children[index].Fields == null ? places[index].Size : 0);
             var offsets = new int[count];
             int end = 0, alignment = 1;
             foreach (int index in order)
             {
                 int fieldAlignment = Math.Max(1, Math.Min(pack, places[index].Alignment));
+                if (coreClrAuto)
+                {
+                    int primitiveWidth = CoreClrPrimitiveWidth(plan.Children[index].Type);
+                    fieldAlignment = primitiveWidth == 0 ? places[index].Alignment : primitiveWidth;
+                    if (primitiveWidth != 0)
+                        alignment = Math.Max(alignment, 8);
+                }
                 alignment = Math.Max(alignment, fieldAlignment);
                 int offset = plan.Kind == 2 && plan.Fields[index].Offset >= 0
                     ? plan.Fields[index].Offset
@@ -2421,7 +2444,16 @@ internal static partial class TypeModelFactory
                 offsets[index] = offset;
                 end = Math.Max(end, offset + places[index].Size);
             }
-            int size = (Math.Max(Math.Max(1, plan.DeclaredSize), end) + alignment - 1) / alignment * alignment;
+            // CoreCLR HandleAutoLayout places primitives before embedded value types. Small Auto values round
+            // to a power of two; larger values use the maximum alignment, at least a pointer when they contain a primitive.
+            if (coreClrAuto && end <= 8)
+            {
+                alignment = 1;
+                while (alignment < end)
+                    alignment *= 2;
+            }
+            int declaredSize = coreClrAuto ? 0 : plan.DeclaredSize;
+            int size = (Math.Max(Math.Max(1, declaredSize), end) + alignment - 1) / alignment * alignment;
             var data = new int[plan.WireSize];
             int next = 0;
             for (int index = 0; index < count; index++)
@@ -2429,6 +2461,12 @@ internal static partial class TypeModelFactory
                     data[next++] = offsets[index] + byteOffset;
             return (size, alignment, data);
         }
+
+        /// <summary>Returns the CoreCLR primitive placement width, with embedded value types in the final group.</summary>
+        /// <param name="type">A field in an automatic-layout aggregate.</param>
+        /// <returns>A primitive width, or zero for an embedded value type.</returns>
+        private static int CoreClrPrimitiveWidth(ITypeSymbol type)
+            => type.SpecialType == SpecialType.System_Decimal ? 0 : PortableScalarSize(type);
 
         /// <summary>Obtains fixed scalar widths without consulting the running process's layout.</summary>
         /// <param name="type">A primitive, enum, or nested storage type.</param>

@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using LuminPack;
 using Xunit;
 
@@ -130,6 +132,47 @@ public class LayoutTagScopeTest
             .Concat(new byte[] { 3, 0, 0, 0 }.Take(1).Concat(new byte[3]).Concat(BitConverter.GetBytes(4))).ToArray();
         Assert.Equal(variant, ConcreteReads.Read<(byte, int)[]>(declared, static (b, ref v) => LuminPackSerializer.Deserialize(b, ref v)));
     }
+
+#if LUMINPACK_NEXT_GENERATOR
+    /// <summary>Checks native writes and both reader strides for an automatic tuple with an embedded struct.</summary>
+    [Fact]
+    public void ValueTupleWithEmbeddedStructUsesItsNativeLayoutTag()
+    {
+        var expected = new[] { (1, new ImplicitStable { A = 2, B = 3 }), (4, new ImplicitStable { A = 5, B = 6 }) };
+        // Two elements expose stride errors even when the first element's field offsets coincide.
+        byte[] layout32 = Convert.FromHexString("0200000001010000000200000003000000040000000500000006000000");
+        byte[] layout64 = Convert.FromHexString("02000000020100000002000000030000000000000004000000050000000600000000000000");
+        Assert.Equal(expected, ConcreteReads.Read<(int, ImplicitStable)[]>(layout32, static (b, ref v) => LuminPackSerializer.Deserialize(b, ref v)));
+        Assert.Equal(expected, ConcreteReads.Read<(int, ImplicitStable)[]>(layout64, static (b, ref v) => LuminPackSerializer.Deserialize(b, ref v)));
+
+        int stride = Unsafe.SizeOf<(int, ImplicitStable)>();
+        Span<byte> storage = MemoryMarshal.AsBytes(expected.AsSpan());
+        for (int index = 0; index < expected.Length; index++)
+            storage.Slice(index * stride + 12, stride - 12).Fill(0xA5);
+        byte[] native = LuminPackSerializer.Serialize(expected);
+        Assert.Equal(stride == 16 ? (byte)2 : (byte)1, native[4]);
+        Assert.True(native.AsSpan(5).SequenceEqual(storage));
+        var restored = ConcreteReads.Read<(int, ImplicitStable)[]>(native, static (b, ref v) => LuminPackSerializer.Deserialize(b, ref v));
+        Assert.True(storage.SequenceEqual(MemoryMarshal.AsBytes(restored.AsSpan())));
+    }
+
+    /// <summary>Checks that a newly modeled native tuple retains the existing tags and their stride.</summary>
+    [Fact]
+    public void GuidTupleRetainsEarlierModelTags()
+    {
+        var expected = new[] { (1, new Guid(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)) };
+        byte[] declarationOrder = Convert.FromHexString("01000000010100000001000000020003000405060708090A0B");
+        byte[] guidFirst = Convert.FromHexString("010000000201000000020003000405060708090A0B01000000");
+        byte[] coreClr64 = Convert.FromHexString("01000000030100000001000000020003000405060708090A0B00000000");
+        Assert.Equal(expected, ConcreteReads.Read<(int, Guid)[]>(declarationOrder, static (b, ref v) => LuminPackSerializer.Deserialize(b, ref v)));
+        Assert.Equal(expected, ConcreteReads.Read<(int, Guid)[]>(guidFirst, static (b, ref v) => LuminPackSerializer.Deserialize(b, ref v)));
+        Assert.Equal(expected, ConcreteReads.Read<(int, Guid)[]>(coreClr64, static (b, ref v) => LuminPackSerializer.Deserialize(b, ref v)));
+
+        byte[] native = LuminPackSerializer.Serialize(expected);
+        Assert.Equal(Unsafe.SizeOf<(int, Guid)>() == 24 ? (byte)3 : (byte)1, native[4]);
+        Assert.True(native.AsSpan(5).SequenceEqual(MemoryMarshal.AsBytes(expected.AsSpan())));
+    }
+#endif
 }
 
 /// <summary>A struct without the portable marker whose alignment differs between 32-bit and 64-bit processes.</summary>
