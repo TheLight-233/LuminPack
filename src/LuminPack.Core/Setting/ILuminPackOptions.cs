@@ -65,6 +65,11 @@ public readonly struct LuminPackDefaultOptions : ILuminPackOptions
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue) =>
+        default(LuminPackUtf16LengthStrings).Skip(ref reader, maxStringLength);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
         default(LuminPackUtf16LengthStrings).ReadPair(ref reader, ref first, ref second);
 

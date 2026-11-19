@@ -71,10 +71,6 @@ namespace LuminPack.Core
         /// <summary>Gets the optional growable output owner.</summary>
         public LuminBufferWriter? Owner {[MethodImpl(MethodImplOptions.AggressiveInlining)] readonly get; internal set; }
         private LuminPackWriterOptionalState? _options;
-        /// <summary>Identifies this operation to version schemas, which write their member table once per operation; zero until first needed.</summary>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public int SchemaOperation;
-        [ThreadStatic] private static int t_schemaOperations;
         /// <summary>The explicit or materialized reference context, or null before an implicit scope requests state.</summary>
         /// <remarks>An explicit context wins over the owning buffer's context. Writers constructed from a buffer
         /// resolve the buffer's own context without storing it, so construction leaves this unset.</remarks>
@@ -174,7 +170,6 @@ namespace LuminPack.Core
         public readonly void CopyTo(ref LuminPackWriter destination)
         {
             destination._options = _options;
-            destination.SchemaOperation = SchemaOperation;
 #if NET8_0_OR_GREATER
             destination.Cursor = ref Cursor;
 #else

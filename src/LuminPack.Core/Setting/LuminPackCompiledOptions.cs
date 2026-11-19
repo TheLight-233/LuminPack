@@ -31,6 +31,11 @@ public readonly struct LuminPackDeclaredOptions : ILuminPackOptions
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue) =>
+        default(LuminPackUtf16LengthStrings).Skip(ref reader, maxStringLength);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
         default(LuminPackUtf16LengthStrings).ReadPair(ref reader, ref first, ref second);
 
@@ -189,6 +194,11 @@ public readonly struct LuminPackUtf8LengthOptions : ILuminPackOptions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public string? Read(scoped ref LuminPackReader reader, string? current) =>
         default(LuminPackUtf8LengthStrings).Read(ref reader, current);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue) =>
+        default(LuminPackUtf8LengthStrings).Skip(ref reader, maxStringLength);
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -353,6 +363,11 @@ public readonly struct LuminPackUtf8TokenOptions : ILuminPackOptions
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue) =>
+        default(LuminPackUtf8TokenStrings).Skip(ref reader, maxStringLength);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
         default(LuminPackUtf8TokenStrings).ReadPair(ref reader, ref first, ref second);
 
@@ -511,6 +526,11 @@ public readonly struct LuminPackUtf16LengthOptions : ILuminPackOptions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public string? Read(scoped ref LuminPackReader reader, string? current) =>
         default(LuminPackUtf16LengthStrings).Read(ref reader, current);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue) =>
+        default(LuminPackUtf16LengthStrings).Skip(ref reader, maxStringLength);
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -675,6 +695,11 @@ public readonly struct LuminPackUtf16TokenOptions : ILuminPackOptions
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue) =>
+        default(LuminPackUtf16TokenStrings).Skip(ref reader, maxStringLength);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
         default(LuminPackUtf16TokenStrings).ReadPair(ref reader, ref first, ref second);
 
@@ -836,6 +861,11 @@ public readonly struct LuminPackUtf8VarIntOptions : ILuminPackOptions
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue) =>
+        default(LuminPackUtf8VarIntStrings).Skip(ref reader, maxStringLength);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
         default(LuminPackUtf8VarIntStrings).ReadPair(ref reader, ref first, ref second);
 
@@ -994,6 +1024,11 @@ public readonly struct LuminPackUtf16VarIntOptions : ILuminPackOptions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public string? Read(scoped ref LuminPackReader reader, string? current) =>
         default(LuminPackUtf16VarIntStrings).Read(ref reader, current);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue) =>
+        default(LuminPackUtf16VarIntStrings).Skip(ref reader, maxStringLength);
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1240,6 +1275,11 @@ public readonly struct LuminPackOptions<TStrings, TFormat, TDepth, TValidation> 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public string? Read(scoped ref LuminPackReader reader, string? current) =>
         default(TStrings).Read(ref reader, current);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue) =>
+        default(TStrings).Skip(ref reader, maxStringLength);
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

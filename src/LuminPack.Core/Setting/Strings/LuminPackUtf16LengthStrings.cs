@@ -30,6 +30,11 @@ public readonly struct LuminPackUtf16LengthStrings : ILuminPackStringCodec
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue) =>
+        reader.SkipVersionLengthString<char>(maxStringLength);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
         reader.ReadUtf16LengthPair(ref first, ref second);
 

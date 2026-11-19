@@ -1,18 +1,15 @@
-using System.Collections.Generic;
+using System.ComponentModel;
 using System.Text;
 
 namespace LuminPack.Core;
 
-/// <summary>Owns the immutable metadata for one generated version-tolerant binary member.</summary>
+/// <summary>Owns the type contract and legacy names of one generated version-tolerant member.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class LuminPackVersionField
 {
     internal readonly byte[] Name;
     internal readonly byte[][] Aliases;
     internal readonly byte[] Contract;
-    internal readonly byte[] Prefix;
-
-    /// <summary>Gets the number of bytes in the cached name and type metadata.</summary>
-    public int MetadataLength => Prefix.Length;
 
     /// <summary>Creates metadata once for a generated member, outside steady-state serialization.</summary>
     /// <param name="name">The stable written name.</param>
@@ -29,24 +26,6 @@ public sealed class LuminPackVersionField
         if (!IsDirectPrimitive(representation, type))
             AppendType(contract, type);
         Contract = Encoding.UTF8.GetBytes(contract.ToString());
-        var prefix = new List<byte>(Name.Length + Contract.Length + 10);
-        AppendLength(prefix, Name.Length);
-        prefix.AddRange(Name);
-        AppendLength(prefix, Contract.Length);
-        prefix.AddRange(Contract);
-        Prefix = prefix.ToArray();
-    }
-
-    /// <summary>Encodes a nonnegative metadata length using unsigned base-128 groups.</summary>
-    /// <param name="bytes">The cached metadata under construction.</param>
-    /// <param name="length">The length to encode.</param>
-    private static void AppendLength(List<byte> bytes, int length)
-    {
-        while (length >= 128)
-        {
-            bytes.Add((byte)(length | 128));
-            length >>= 7; }
-        bytes.Add((byte)length);
     }
 
     /// <summary>Appends a stable type identity without assembly versions or nullable annotations.</summary>
@@ -141,65 +120,16 @@ public sealed class LuminPackVersionField
         return expected != null && PrimitiveIdentity(type) == expected;
     }
 
-    /// <summary>Combines a model's immutable name and type table for one contiguous comparison or copy.</summary>
-    /// <param name="fields">The generated members in write order.</param>
-    /// <returns>The complete metadata table, excluding dynamic payload lengths.</returns>
-    public static byte[] CreateMetadata(LuminPackVersionField[] fields)
+    /// <summary>Builds a descriptor for a contract whose closed type is only known at runtime.</summary>
+    /// <param name="nameKey">The generated name or alias key.</param>
+    /// <param name="widthCode">The wire width code for the closed field.</param>
+    /// <returns>The packed wire descriptor.</returns>
+    public ulong Describe(uint nameKey, byte widthCode)
     {
-        int length = 0;
-        foreach (var field in fields)
-            length = checked(length + field.Prefix.Length);
-        var result = new byte[length];
-        int offset = 0;
-        foreach (var field in fields)
-        {
-            field.Prefix.AsSpan().CopyTo(result.AsSpan(offset));
-            offset += field.Prefix.Length;
-        }
-        return result;
-    }
-
-    /// <summary>Caches a complete default-profile prefix for closed generic schemas.</summary>
-    /// <param name="metadata">The complete name and type table.</param>
-    /// <param name="count">The member count.</param>
-    /// <returns>The header followed by its exact metadata bytes.</returns>
-    public static byte[] CreateDefaultPrefix(byte[] metadata, byte count)
-    {
-        var prefix = new byte[checked(metadata.Length + 4)];
-        prefix[0] = 251;
-        prefix[1] = 1;
-        prefix[3] = count;
-        metadata.AsSpan().CopyTo(prefix.AsSpan(4));
-        return prefix;
-    }
-
-    /// <summary>Builds a revision-2 prefix whose member widths depend on runtime layout.</summary>
-    /// <param name="metadata">The complete name and type table.</param>
-    /// <param name="count">The member count.</param>
-    /// <param name="widths">Each raw member's storage width, or minus one for a length-prefixed member.</param>
-    /// <returns>The header with a zero profile byte, the metadata and the width table.</returns>
-    public static byte[] CreatePrefix(ReadOnlySpan<byte> metadata, byte count, int[] widths)
-    {
-        var prefix = new byte[checked(4 + metadata.Length + widths.Length)];
-        prefix[0] = 251;
-        prefix[1] = 2;
-        prefix[3] = count;
-        metadata.CopyTo(prefix.AsSpan(4));
-        for (int i = 0; i < widths.Length; i++)
-            prefix[4 + metadata.Length + i] = (byte)(widths[i] is >= 0 and < 255 ? widths[i] : 255);
-        return prefix;
-    }
-
-    /// <summary>Computes the 64-bit fingerprint of a member table: names, type contracts and widths.</summary>
-    /// <param name="table">The prefix bytes after the four-byte header.</param>
-    /// <returns>The FNV-1a fingerprint that short records carry instead of the table.</returns>
-    /// <remarks>The generator computes the same value at compile time for constant tables.</remarks>
-    public static ulong Fingerprint(ReadOnlySpan<byte> table)
-    {
-        ulong hash = 14695981039346656037UL;
-        foreach (byte value in table)
-            hash = (hash ^ value) * 1099511628211UL;
-        return hash;
+        uint hash = 2166136261u;
+        foreach (byte value in Contract)
+            hash = unchecked((hash ^ value) * 16777619u);
+        return nameKey | ((ulong)(hash & 0xFFFFFF) << 32) | ((ulong)widthCode << 56);
     }
 
     /// <summary>Finds a member using full UTF-8 names, checking the expected position first.</summary>

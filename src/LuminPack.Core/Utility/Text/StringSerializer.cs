@@ -33,9 +33,7 @@ public enum SerializeMode : byte
 /// <remarks>UTF-16 offsets count code units and UTF-8 offsets count bytes.</remarks>
 public static partial class StringSerializer
 {
-#if !NET8_0_OR_GREATER
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
-#endif
 
     /// <summary>Checks a complete UTF-8 token without replacement decoding.</summary>
     /// <param name="source">The complete encoded token.</param>
@@ -54,6 +52,22 @@ public static partial class StringSerializer
             return false; }
 #endif
     }
+    /// <summary>Counts UTF-16 code units while validating a complete UTF-8 payload without decoding to storage.</summary>
+    /// <param name="source">The bounded payload.</param>
+    /// <returns>The exact UTF-16 character count.</returns>
+    internal static int GetStrictUtf8CharacterCount(ReadOnlySpan<byte> source)
+    {
+        try
+        {
+            return StrictUtf8.GetCharCount(source);
+        }
+        catch (DecoderFallbackException)
+        {
+            LuminPackExceptionHelper.ThrowFailedEncoding(OperationStatus.InvalidData);
+            return 0;
+        }
+    }
+
     /// <summary>Materializes validated native UTF-16 code units without a decoder or temporary character buffer.</summary>
     /// <param name = "source">The complete even-length payload.</param>
     /// <returns>The decoded string.</returns>

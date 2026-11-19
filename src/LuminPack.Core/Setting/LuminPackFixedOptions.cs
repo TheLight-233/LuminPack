@@ -31,6 +31,11 @@ public readonly struct LuminPackFixedOptions<TOptions> : ILuminPackOptions where
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue) =>
+        default(TOptions).Skip(ref reader, maxStringLength);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
         default(TOptions).ReadPair(ref reader, ref first, ref second);
 
@@ -198,6 +203,16 @@ public readonly struct LuminPackFallbackOptions<TOptions, TFallback> : ILuminPac
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public string? Read(scoped ref LuminPackReader reader, string? current) =>
         typeof(TOptions) == typeof(LuminPackDeclaredOptions) ? default(TFallback).Read(ref reader, current) : default(TOptions).Read(ref reader, current);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue)
+    {
+        if (typeof(TOptions) == typeof(LuminPackDeclaredOptions))
+            default(TFallback).Skip(ref reader, maxStringLength);
+        else
+            default(TOptions).Skip(ref reader, maxStringLength);
+    }
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

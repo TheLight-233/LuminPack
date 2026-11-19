@@ -30,6 +30,11 @@ public interface ILuminPackStringCodec
     /// <returns>The decoded string, retaining an equal existing instance.</returns>
     string? Read(scoped ref LuminPackReader reader, string? current);
 
+    /// <summary>Validates and skips a complete record without publishing a string.</summary>
+    /// <param name="reader">The reader that owns the input window and cursor.</param>
+    /// <param name="maxStringLength">The maximum permitted UTF-16 character count.</param>
+    void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue);
+
     /// <summary>Reads and publishes two fields in wire order.</summary>
     /// <param name="first">The first destination and its retained string.</param>
     /// <param name="reader">The reader that owns the input window and cursor.</param>
@@ -142,6 +147,6 @@ public interface ILuminPackStringCodec
     /// <summary>Gets the record framing.</summary>
     LuminPackStringRecording Recording { get; }
 
-    /// <summary>Gets the wire profile identifier.</summary>
+    /// <summary>Gets the wire profile identifier, from zero through five for the built-in binary string representations.</summary>
     byte BinaryProfile { get; }
 }

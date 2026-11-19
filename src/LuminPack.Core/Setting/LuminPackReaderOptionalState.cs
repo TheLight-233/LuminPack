@@ -11,12 +11,10 @@ namespace LuminPack.Option
         internal static readonly LuminPackReaderOptionalState NullOption = new LuminPackReaderOptionalState(true);
 
         private LuminCircleReferenceMap<uint, object>? refToObject;
-        // The overflow and version maps are retained after reset. Their flags describe the current operation only.
         [Flags]
         private enum PopulatedTable : byte
         {
             Overflow = 1,
-            Version = 2,
         }
 
         private PopulatedTable _populatedTables;
@@ -33,17 +31,13 @@ namespace LuminPack.Option
         // identifiers that arrive out of that order.
         private ReferenceSlot[] _sequential = Array.Empty<ReferenceSlot>();
         private int _sequentialCount;
-        // Member tables of full version records read through the evolved path, for later short records of the same operation.
-        // The tables are copied into one arena that this state keeps, so a warmed state caches them without allocating.
-        private Dictionary<ulong, (int Start, int Length)>? _versionTables;
-        private byte[] _versionTableBytes = Array.Empty<byte>();
-        private int _versionTableUsed;
+        internal LuminPackVersionRegistry VersionRegistry;
 
         /// <summary>Gets whether this operation holds tracked objects or version tables.</summary>
         internal bool HasOperationState
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => (_sequentialCount | (int)_populatedTables) != 0;
+            get => (_sequentialCount | (int)_populatedTables | VersionRegistry.Count) != 0;
         }
 
         /// <summary>Retains UTF-8 JSON escape decoding storage in the exclusively owned reader context.</summary>
@@ -117,45 +111,11 @@ namespace LuminPack.Option
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ResetOperationState()
         {
-            // No reference can be retained before the first identifier is registered.
-            if ((_populatedTables & PopulatedTable.Version) != 0)
-            {
-                _versionTables!.Clear();
-                _versionTableUsed = 0;
-                _populatedTables &= ~PopulatedTable.Version;
-            }
+            if (VersionRegistry.Count != 0)
+                VersionRegistry.Truncate(0);
             if (_sequentialCount == 0 && !HasOverflow)
                 return;
             ResetReferences();
-        }
-
-        /// <summary>Records the member table of a full version record read in this operation.</summary>
-        /// <param name="fingerprint">The table fingerprint.</param>
-        /// <param name="table">The table bytes after the record header.</param>
-        internal void AddVersionTable(ulong fingerprint, ReadOnlySpan<byte> table)
-        {
-            _versionTables ??= new Dictionary<ulong, (int Start, int Length)>();
-            if (_versionTables.ContainsKey(fingerprint))
-                return;
-            if (_versionTableBytes.Length - _versionTableUsed < table.Length)
-                Array.Resize(ref _versionTableBytes, Math.Max(Math.Max(256, _versionTableBytes.Length * 2), _versionTableUsed + table.Length));
-            table.CopyTo(_versionTableBytes.AsSpan(_versionTableUsed));
-            _versionTables.Add(fingerprint, (_versionTableUsed, table.Length));
-            _versionTableUsed += table.Length;
-            _populatedTables |= PopulatedTable.Version;
-        }
-
-        /// <summary>Finds the member table a short version record names.</summary>
-        /// <param name="fingerprint">The table fingerprint.</param>
-        /// <param name="table">Receives the table bytes.</param>
-        /// <returns>Whether a full record of this operation carried the table.</returns>
-        internal bool TryGetVersionTable(ulong fingerprint, out Span<byte> table)
-        {
-            table = default;
-            if (_versionTables is null || !_versionTables.TryGetValue(fingerprint, out var entry))
-                return false;
-            table = _versionTableBytes.AsSpan(entry.Start, entry.Length);
-            return true;
         }
 
         /// <summary>Clears a nonempty reference table without expanding its cleanup into each entry point.</summary>

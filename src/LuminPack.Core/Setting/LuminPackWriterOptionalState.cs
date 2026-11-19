@@ -18,11 +18,13 @@ namespace LuminPack.Option
         private bool _hashed;
         private LuminIdentityMap? _objectToRef;
 
-        /// <summary>Gets whether this operation holds any tracked objects.</summary>
+        internal LuminPackVersionRegistry VersionRegistry;
+
+        /// <summary>Gets whether this operation holds tracked objects or version schemas.</summary>
         internal bool HasOperationState
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => _nextId != 0;
+            get => _nextId != 0 || VersionRegistry.Count != 0;
         }
 
         /// <summary>Initializes a new instance of <c>LuminPackWriterOptionalState</c>.</summary>
@@ -95,6 +97,8 @@ namespace LuminPack.Option
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ResetOperationState()
         {
+            if (VersionRegistry.Count != 0)
+                VersionRegistry.Truncate(0);
             // No reference can be retained before the first id is assigned.
             if (_nextId == 0)
                 return;

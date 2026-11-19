@@ -34,6 +34,11 @@ public readonly struct LuminPackUtf8LengthStrings : ILuminPackStringCodec
 
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.MaxValue) =>
+        reader.SkipVersionLengthString<byte>(maxStringLength);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ReadPair(scoped ref LuminPackReader reader, scoped ref string? first, scoped ref string? second)
     {
         reader.Read<LuminPackUtf8LengthOptions>(ref first);
