@@ -294,14 +294,6 @@ internal static class SerializerBinaryInliningRegression
         Require(!childRoot.AttributeLists.ToString().Contains("AggressiveInlining", StringComparison.Ordinal) &&
             !childRoot.AttributeLists.ToString().Contains("NoInlining", StringComparison.Ordinal),
             "A call-heavy straight-line binary root must leave native inlining to the runtime.");
-        foreach (string operation in new[] { "Write", "Read" })
-        {
-            var recordBody = output.SyntaxTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
-                .Single(method => method.Identifier.ValueText == operation && method.Body != null && method.ParameterList.Parameters.Count == 2 &&
-                    method.ParameterList.Parameters[1].Type?.ToString().TrimEnd('?') == "global::Envelope");
-            Require(!recordBody.AttributeLists.ToString().Contains("NoInlining", StringComparison.Ordinal),
-                "A nested object alone must not force a non-inlining boundary on its ordinary record.");
-        }
         VerifyJsonIntegerFallback(implementations.Single(method => method.Identifier.ValueText == "RootWriteJson"));
         var sharedJsonCalls = new Dictionary<ISymbol, int>(SymbolEqualityComparer.Default);
         foreach (var method in implementations)

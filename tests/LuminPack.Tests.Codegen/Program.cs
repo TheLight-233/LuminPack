@@ -365,6 +365,7 @@ try
     if (args is ["--verify-inlining"])
     {
         SerializerIssueRegression.RunTraversalBoundaries(references);
+        SerializerBinaryEntryShapeRegression.Run(references);
         SerializerBinaryInliningRegression.Run(references);
         SerializerCollectionInliningRegression.Run(references);
         SerializerUnionInliningRegression.Run(references);
@@ -471,6 +472,7 @@ try
     SerializerWideReadRegression.Run(references);
     SerializerBinaryStringPairRegression.Run(references, olderCore: null);
     SerializerIssueRegression.RunTraversalBoundaries(references);
+    SerializerBinaryEntryShapeRegression.Run(references);
     SerializerBinaryInliningRegression.Run(references);
     SerializerCollectionInliningRegression.Run(references);
     SerializerUnionInliningRegression.Run(references);

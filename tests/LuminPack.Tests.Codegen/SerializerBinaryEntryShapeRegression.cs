@@ -48,6 +48,7 @@ internal static class SerializerBinaryEntryShapeRegression
 
             [LuminPackable] public sealed class PlainGraph { public List<string> Text; public PackedCell? Cell; }
             [LuminPackable] public sealed class ReadBoundaryCell { public int Number; }
+            [LuminPackable] public sealed class NestedRecord { public ReadBoundaryCell Child; }
             [LuminPackable] public sealed class TextReadRoot { public string Text; }
             [LuminPackable] public sealed class WideReadRecord
             {
@@ -127,6 +128,9 @@ internal static class SerializerBinaryEntryShapeRegression
                 public static void Run()
                 {
                     CheckCapturedRecord();
+                    var nested = new NestedRecord { Child = new ReadBoundaryCell { Number = 143 } };
+                    if (LuminPackSerializer.Deserialize<NestedRecord>(LuminPackSerializer.Serialize(nested))?.Child.Number != 143)
+                        throw new Exception("Nested binary record changed its payload.");
                     using var buffer = new LuminBufferWriter(true);
                     CheckTextRoots(buffer);
                     CheckFixedArray(buffer);
@@ -449,6 +453,17 @@ internal static class SerializerBinaryEntryShapeRegression
         }
         var declarations = driver.GetRunResult().GeneratedTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
         VerifyCollectionReadBoundaries(declarations);
+        foreach (var (root, shared, state) in new[] { ("RootWrite", "Write", "LuminPackWriter"), ("RootRead", "Read", "LuminPackReader") })
+        {
+            var bodies = declarations.Where(method => (method.Identifier.ValueText == root || method.Identifier.ValueText == shared) &&
+                method.Body != null && method.ParameterList.Parameters.Count == 2 &&
+                method.ParameterList.Parameters[0].Type?.ToString().EndsWith(state, StringComparison.Ordinal) == true &&
+                method.ParameterList.Parameters[1].Type?.ToString().TrimEnd('?') == "global::NestedRecord").ToArray();
+            if (bodies.Length != 1)
+                throw new InvalidOperationException($"Expected one binary body for NestedRecord.{root}, found {bodies.Length}.");
+            if (bodies[0].AttributeLists.ToString().Contains("NoInlining", StringComparison.Ordinal))
+                throw new InvalidOperationException($"A nested object forced a non-inlining boundary on NestedRecord.{root}.");
+        }
         var managedNullableReader = declarations.Single(method => (method.Identifier.ValueText is "Read" or "RootRead") &&
             method.ParameterList.Parameters.Count == 2 &&
             method.ParameterList.Parameters[1].Type?.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>()
