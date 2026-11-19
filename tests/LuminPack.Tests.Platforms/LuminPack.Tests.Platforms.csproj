@@ -9,9 +9,9 @@
     <Nullable>enable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <LuminPackGenerator Condition="'$(LuminPackGenerator)' == ''">Next</LuminPackGenerator>
-    <LuminPackCorePath Condition="'$(LuminPackCorePath)' == ''">$(MSBuildThisFileDirectory)../../src/LuminPack.Core/bin/Release/net8.0/LuminPack.Core.dll</LuminPackCorePath>
-    <LuminPackGeneratorPath Condition="'$(LuminPackGeneratorPath)' == '' and '$(LuminPackGenerator)' == 'Next'">$(MSBuildThisFileDirectory)../../src/LuminPack.Generator.Next/bin/Release/netstandard2.0/LuminPack.SourceGenerator.dll</LuminPackGeneratorPath>
-    <LuminPackGeneratorPath Condition="'$(LuminPackGeneratorPath)' == ''">$(MSBuildThisFileDirectory)../../src/LuminPack.Generator/bin/Release/netstandard2.0/LuminPack.Generator.dll</LuminPackGeneratorPath>
+    <LuminPackCorePath Condition="'$(LuminPackCorePath)' == ''">$(MSBuildThisFileDirectory)../../src/LuminPack.Core/bin/$(Configuration)/net8.0/LuminPack.Core.dll</LuminPackCorePath>
+    <LuminPackGeneratorPath Condition="'$(LuminPackGeneratorPath)' == '' and '$(LuminPackGenerator)' == 'Next'">$(MSBuildThisFileDirectory)../../src/LuminPack.Generator.Next/bin/$(Configuration)/netstandard2.0/LuminPack.SourceGenerator.dll</LuminPackGeneratorPath>
+    <LuminPackGeneratorPath Condition="'$(LuminPackGeneratorPath)' == ''">$(MSBuildThisFileDirectory)../../src/LuminPack.Generator/bin/$(Configuration)/netstandard2.0/LuminPack.Generator.dll</LuminPackGeneratorPath>
   </PropertyGroup>
   <ItemGroup>
     <SupportedPlatform Include="AspNetCore;Avalonia;Drawing;Maui;MonoGame;SkiaSharp;Wpf" />

@@ -18,10 +18,12 @@
         and $(BundledNETCoreAppPackageVersion.StartsWith('11.'))">true</_LuminPackUseSatoriCompiler>
   </PropertyGroup>
 
+  <!-- The compiler host is outside the solution, which can remove the parent Configuration from project references. -->
   <ItemGroup Condition="'$(_LuminPackUseSatoriCompiler)' == 'true'">
     <ProjectReference Include="$(_LuminPackSatoriCompilerProject)"
                       ReferenceOutputAssembly="false" Private="false" PrivateAssets="all"
                       SkipGetTargetFrameworkProperties="true"
+                      AdditionalProperties="LuminPackSatoriConfiguration=$(Configuration)"
                       GlobalPropertiesToRemove="TargetFramework;RuntimeIdentifier;SelfContained;UseAppHost;PublishAot;PublishSingleFile;PublishReadyToRun;Platform;BaseOutputPath;OutputPath;BaseIntermediateOutputPath;IntermediateOutputPath;ArtifactsPath;UseArtifactsOutput" />
   </ItemGroup>
 
