@@ -340,17 +340,24 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int Write<T>(ref byte reference, in T value1)
         {
-            if (Unsafe.SizeOf<IntPtr>() == 8 || Unsafe.SizeOf<T>() <= 4)
-            {
+            int width = Unsafe.SizeOf<T>();
+            if (Unsafe.SizeOf<IntPtr>() == 8 || width <= 4)
                 Unsafe.WriteUnaligned(ref reference, value1);
-            }
             else
-            {
-                var view = UnmanagedViewModel.Create(value1);
-                LuminPackMarshal.CopyBlockUnaligned(ref reference, ref Unsafe.As<UnmanagedViewModel<T>, byte>(ref view), (uint)Unsafe.SizeOf<UnmanagedViewModel<T>>());
-            }
+                WriteWideStorage32(ref reference, in value1);
 
-            return Unsafe.SizeOf<T>();
+            return width;
+        }
+
+        /// <summary>Writes a wide scalar through packed storage on 32-bit targets.</summary>
+        /// <typeparam name="T">The reference-free storage type.</typeparam>
+        /// <param name="reference">The already reserved destination.</param>
+        /// <param name="value">The complete source value.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void WriteWideStorage32<T>(ref byte reference, in T value)
+        {
+            var view = UnmanagedViewModel.Create(value);
+            LuminPackMarshal.CopyBlockUnaligned(ref reference, ref Unsafe.As<UnmanagedViewModel<T>, byte>(ref view), (uint)Unsafe.SizeOf<UnmanagedViewModel<T>>());
         }
     }
 }

@@ -194,17 +194,12 @@ namespace LuminPack.Core
             // Signed 64-bit distances reject a cursor past the end and every negative or oversized count on all targets.
 #if NET8_0_OR_GREATER
             long room = (long)Unsafe.ByteOffset(ref Cursor, ref _end);
+            int length = _buffer.Length;
+            if (IntPtr.Size == 8 ? !ContainsEndRange(room, count, length) : room < (long)(uint)count || count < 0)
+                LuminPackExceptionHelper.ThrowReaderWindowOutOfRange(room, length, count);
 #else
             long room = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
-#endif
-#if NET8_0_OR_GREATER
-            if (IntPtr.Size == 8 ? !ContainsEndRange(room, count, _buffer.Length) : room < (long)(uint)count || count < 0)
-#else
             if (room < (long)(uint)count || count < 0)
-#endif
-#if NET8_0_OR_GREATER
-                LuminPackExceptionHelper.ThrowReaderSpanOutOfRange(Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref Cursor), count);
-#else
                 LuminPackExceptionHelper.ThrowSpanOutOfRange((long)Position + count);
 #endif
         }

@@ -319,18 +319,18 @@ namespace LuminPack.Core
         private readonly int EnsureReadableByte(scoped ref byte source)
         {
 #if NET8_0_OR_GREATER
-            if (IntPtr.Size == 8)
-            {
-                long room = (long)Unsafe.ByteOffset(ref source, ref _end);
-                if (!ContainsEndRange(room, 1, _buffer.Length))
-                    LuminPackExceptionHelper.ThrowSpanOutOfRange((long)(int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref source) + 1);
-                return _buffer.Length - (int)room;
-            }
-#endif
+            nint remaining = Unsafe.ByteOffset(ref source, ref _end);
+            int length = _buffer.Length;
+            // Only distances in [1, length] let this byte start inside the window on either pointer width.
+            if (unchecked((nuint)(remaining - 1)) >= (uint)length)
+                LuminPackExceptionHelper.ThrowReaderWindowOutOfRange((long)remaining, length, 1);
+            return length - (int)remaining;
+#else
             nint offset = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref source);
             if (unchecked((nuint)offset) >= (uint)_buffer.Length)
                 LuminPackExceptionHelper.ThrowSpanOutOfRange((long)unchecked((int)offset) + 1);
             return (int)offset;
+#endif
         }
 
         /// <summary>Attempts to peek wide union header and reports whether it succeeded.</summary>
@@ -409,16 +409,15 @@ namespace LuminPack.Core
         {
 #if NET8_0_OR_GREATER
             long remaining = (long)Unsafe.ByteOffset(ref Cursor, ref _end);
+            int length = _buffer.Length;
+            if (IntPtr.Size == 8 ? !ContainsEndRange(remaining, size, length) : remaining < size || remaining > length)
+                LuminPackExceptionHelper.ThrowReaderWindowOutOfRange(remaining, length, size);
 #else
             long remaining = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
-#endif
             // A cursor before the buffer has more than its full length remaining.
-#if NET8_0_OR_GREATER
-            if (IntPtr.Size == 8 ? !ContainsEndRange(remaining, size, _buffer.Length) : remaining < size || remaining > _buffer.Length)
-#else
             if (remaining < size || remaining > _buffer.Length)
-#endif
                 LuminPackExceptionHelper.ThrowSpanOutOfRange((long)Position + size);
+#endif
         }
 
 #if NET8_0_OR_GREATER

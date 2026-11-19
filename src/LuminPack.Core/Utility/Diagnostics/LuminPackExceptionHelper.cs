@@ -237,6 +237,18 @@ namespace LuminPack.Code
             long index = (long)position + count;
             throw new LuminPackException($"Span out of range with {index}.");
         }
+
+        /// <summary>Reports an invalid input range from the cursor's distance to the window end.</summary>
+        /// <param name="remaining">The signed distance from the cursor to the window end.</param>
+        /// <param name="length">The size of the active input window.</param>
+        /// <param name="count">The requested byte count.</param>
+        [DoesNotReturn]
+        internal static void ThrowReaderWindowOutOfRange(long remaining, int length, int count)
+        {
+            int position = unchecked((int)(length - remaining));
+            long index = (long)position + count;
+            throw new LuminPackException($"Span out of range with {index}.");
+        }
 #endif
 
         /// <summary>Raises the ordinary bounds exception for a computed position wider than Int32.</summary>
