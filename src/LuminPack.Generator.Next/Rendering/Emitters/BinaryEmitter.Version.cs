@@ -32,23 +32,65 @@ internal static partial class BinaryEmitter
         string profile = VersionProfile(model, w);
         body.Add("writer.WriteVersionRecord<" + profile + ">(" + schema.Schema + ".Schema, " +
             schema.Schema + ".Descriptors, " + schema.Schema + ".Cache);");
-        for (int index = 0; index < model.Members.Length; index++)
+        bool framed = schema.Descriptors.Any(word => word >> 56 == 255);
+        if (framed)
         {
-            RenderMember member = model.Members[index];
-            body.Add("Write" + VersionMemberName(member) + "(ref writer, value." + member.Name + ");");
+            body.Add("int length, scope = -1;");
+            body.Add("try");
+            body.Add("{");
         }
-        if (withNull)
-            ApplyBoundedWrite(model, body);
-
         for (int index = 0; index < model.Members.Length; index++)
         {
             RenderMember member = model.Members[index];
             byte width = schema.Width(index);
-            string writerType = w.A("LuminPackWriter");
-            body.Add("");
+            if (width <= 250 && member.IsFixed)
+            {
+                int end = index + 1;
+                int reservation = width;
+                for (; end < model.Members.Length && schema.Width(end) <= 250 && model.Members[end].IsFixed; end++)
+                    reservation += schema.Width(end);
+                body.Add("writer.EnsureAdditionalCapacity(" + VersionNumber(reservation) + ");");
+                for (; index < end; index++)
+                {
+                    member = model.Members[index];
+                    body.Add("Write" + VersionMemberName(member) + "(ref writer, value." + member.Name + ");");
+                }
+                index--;
+                continue;
+            }
+            if (width == 255)
+            {
+                body.Add("length = writer.ReserveVersionLength();");
+                body.Add("scope = writer.EnterVersionScope();");
+            }
+            body.Add("Write" + VersionMemberName(member) + "(ref writer, value." + member.Name + ");");
+            if (width == 255)
+            {
+                body.Add("writer.ExitVersionScope(scope);");
+                body.Add("scope = -1;");
+                body.Add("writer.CompleteVersionLength(length);");
+            }
+        }
+        if (framed)
+        {
+            body.Add("}");
+            body.Add("finally");
+            body.Add("{");
+            body.Add("if (scope >= 0)");
+            body.Add("\twriter.ExitVersionScope(scope);");
+            body.Add("}");
+        }
+        if (withNull)
+            ApplyBoundedWrite(model, body);
+
+        body.Add("");
+        string writerType = w.A("LuminPackWriter");
+        for (int index = 0; index < model.Members.Length; index++)
+        {
+            RenderMember member = model.Members[index];
+            byte width = schema.Width(index);
             string signature = "static void Write" + VersionMemberName(member) + "(scoped ref " + writerType + " writer, " +
                 schema.TempTypes[index] + " field)";
-            body.Add(w.MethodImpl(width == 255 ? "NoInlining" : "AggressiveInlining"));
             if (width == 254)
             {
                 body.Add(signature + " => writer.WriteVersionString<" + profile + ">(field);");
@@ -56,34 +98,23 @@ internal static partial class BinaryEmitter
             }
             if (width <= 250 && member.IsFixed)
             {
-                body.Add(signature + " => writer.WriteVersionValue(in field);");
+                body.Add(signature + " => writer.Write(in field);");
                 continue;
             }
+            if (index != 0)
+                body.Add("");
+            if (width == 255)
+                body.Add(w.MethodImpl("NoInlining"));
             body.Add(signature);
             body.Add("{");
-            if (width == 255)
-            {
-                body.Add("int length = writer.ReserveVersionLength();");
-                body.Add("int scope = writer.EnterVersionScope();");
-                body.Add("try");
-                body.Add("{");
-            }
             AddMemberWrite(body, model, member, w, "field");
             if (schema.FixedNullable[index])
             {
                 body.Add("if (!field.HasValue)");
                 body.Add("	writer.PadVersionField(" + VersionNumber(width - 1) + ");");
             }
-            if (width == 255)
-            {
-                body.Add("}");
-                body.Add("finally");
-                body.Add("{");
-                body.Add("writer.ExitVersionScope(scope);");
-                body.Add("}");
-                body.Add("writer.CompleteVersionLength(length);");
-            }
             body.Add("}");
+            body.Add("");
         }
         return body;
     }
@@ -147,14 +178,19 @@ internal static partial class BinaryEmitter
             body.Add("{");
             for (int index = 0; index < members.Length; index++)
             {
-                body.Add("Read" + VersionMemberName(members[index]) + "(ref reader, ref fields" +
-                    (schema.Width(index) == 255 || schema.FixedNullable[index] ? ", legacy: false);" : ");"));
+                if (schema.Width(index) == 255)
+                    body.Add("ReadFramed(ref reader, ref fields, " + VersionNumber(index) + ");");
+                else
+                    body.Add("Read" + VersionMemberName(members[index]) + "(ref reader, ref fields" +
+                        (schema.FixedNullable[index] ? ", legacy: false);" : ");"));
             }
             body.Add("}");
         }
         body.Add("");
         AddVersionPublication(model, body, temps, registered: !withNull);
         AppendMappedRead(model, w, body, fieldsType, profile, temps);
+        if (members.Length != 0)
+            body.Add("");
         for (int index = 0; index < members.Length; index++)
             AppendVersionFieldRead(model, w, body, fieldsType, index, temps[index]);
         return body;
@@ -177,38 +213,24 @@ internal static partial class BinaryEmitter
         body.Add("static void ReadMapped(scoped ref " + w.A("LuminPackReader") + " reader, scoped ref " + fieldsType +
             " fields, " + VersionCore + "LuminPackDescriptorMap map, bool legacy)");
         body.Add("{");
+        body.Add("if (legacy)");
+        body.Add("\tReadLegacyFields(ref reader, ref fields, map);");
+        body.Add("else");
+        body.Add("{");
         body.Add("for (int index = 0; index < map.Count; index++)");
         body.Add("{");
         body.Add("int slot = map.GetSlot(index);");
+        body.Add("byte width = map.GetWidth(index);");
         body.Add("if (slot < 0)");
-        body.Add("{");
-        body.Add("if (legacy)");
-        body.Add("	reader.Advance(map.GetLegacyLength(index));");
-        body.Add("else");
-        body.Add("	reader.SkipVersionField<" + profile + ">(map.GetWidth(index)" + stringLimit + ");");
-        body.Add("continue;");
-        body.Add("}");
-        body.Add("var scope = legacy ? reader.EnterLegacyVersionField(map.GetLegacyLength(index)) : default;");
-        body.Add("try");
-        body.Add("{");
-        body.Add("switch (slot)");
-        body.Add("{");
-        for (int index = 0; index < model.Members.Length; index++)
+        body.Add("\treader.SkipVersionField<" + profile + ">(width" + stringLimit + ");");
+        bool framed = schema.Descriptors.Any(word => word >> 56 == 255);
+        if (framed)
         {
-            bool framed = schema.Width(index) == 255 || schema.FixedNullable[index];
-            body.Add("case " + VersionNumber(index) + ":");
-            body.Add("	Read" + VersionMemberName(model.Members[index]) + "(ref reader, ref fields" +
-                (framed ? ", legacy);" : ");"));
-            body.Add("	break;");
+            body.Add("else if (width == 255)");
+            body.Add("\tReadFramed(ref reader, ref fields, slot);");
         }
-        body.Add("}");
-        body.Add("if (legacy)");
-        body.Add("	reader.ValidateVersionFieldEnd(scope);");
-        body.Add("}");
-        body.Add("finally");
-        body.Add("{");
-        body.Add("if (legacy)");
-        body.Add("	reader.ExitVersionField(scope);");
+        body.Add("else");
+        body.Add("\tReadSlot(ref reader, ref fields, slot, legacy: false);");
         body.Add("}");
         body.Add("}");
         for (int index = 0; index < model.Members.Length; index++)
@@ -217,6 +239,55 @@ internal static partial class BinaryEmitter
                 continue;
             body.Add("if (!map.IsPresent(" + VersionNumber(index) + "))");
             body.Add("	" + temps[index] + " = default!;");
+        }
+        body.Add("}");
+        string signature = "(scoped ref " + w.A("LuminPackReader") + " reader, scoped ref " + fieldsType + " fields";
+        body.Add("");
+        body.Add(w.MethodImpl("NoInlining"));
+        body.Add("static void ReadLegacyFields" + signature + ", " + VersionCore + "LuminPackDescriptorMap map)");
+        body.Add("{");
+        body.Add("for (int index = 0; index < map.Count; index++)");
+        body.Add("{");
+        body.Add("int slot = map.GetSlot(index), length = map.GetLegacyLength(index);");
+        body.Add("if (slot < 0)");
+        body.Add("\treader.Advance(length);");
+        body.Add("else");
+        body.Add("\tReadScopedSlot(ref reader, ref fields, slot, reader.EnterLegacyVersionField(length), legacy: true);");
+        body.Add("}");
+        body.Add("}");
+        if (framed)
+        {
+            body.Add("");
+            body.Add("static void ReadFramed" + signature + ", int slot) =>");
+            body.Add("\tReadScopedSlot(ref reader, ref fields, slot, reader.EnterVersionField(), legacy: false);");
+        }
+        body.Add("");
+        body.Add(w.MethodImpl("NoInlining"));
+        body.Add("static void ReadScopedSlot" + signature + ", int slot, " + VersionCore + "LuminPackVersionFieldScope scope, bool legacy)");
+        body.Add("{");
+        body.Add("try");
+        body.Add("{");
+        body.Add("ReadSlot(ref reader, ref fields, slot, legacy);");
+        body.Add("reader.ValidateVersionFieldEnd(scope);");
+        body.Add("}");
+        body.Add("finally");
+        body.Add("{");
+        body.Add("reader.ExitVersionField(scope);");
+        body.Add("}");
+        body.Add("}");
+        body.Add("");
+        body.Add("static void ReadSlot" + signature + ", int slot, bool legacy)");
+        body.Add("{");
+        if (model.Members.Length != 0)
+        {
+            body.Add("switch (slot)");
+            body.Add("{");
+            for (int index = 0; index < model.Members.Length; index++)
+            {
+                body.Add("case " + VersionNumber(index) + ": Read" + VersionMemberName(model.Members[index]) +
+                    "(ref reader, ref fields" + (schema.FixedNullable[index] ? ", legacy); return;" : "); return;"));
+            }
+            body.Add("}");
         }
         body.Add("}");
     }
@@ -234,43 +305,24 @@ internal static partial class BinaryEmitter
         var member = model.Members[index];
         var schema = model.Version;
         byte width = schema.Width(index);
-        bool framed = width == 255;
         bool padded = schema.FixedNullable[index];
-        body.Add("");
-        body.Add(w.MethodImpl(framed ? "NoInlining" : "AggressiveInlining"));
         string signature = "static void Read" + VersionMemberName(member) + "(scoped ref " + w.A("LuminPackReader") +
-            " reader, scoped ref " + fieldsType + " fields" + (framed || padded ? ", bool legacy" : "") + ")";
+            " reader, scoped ref " + fieldsType + " fields" + (padded ? ", bool legacy" : "") + ")";
         var read = new List<string>();
         AddMemberRead(read, model, member, w, "reader", target);
-        if (!framed && !padded && read.Count == 1)
+        if (!padded && read.Count == 1)
         {
             body.Add(signature + " => " + read[0]);
             return;
         }
+        body.Add("");
         body.Add(signature);
         body.Add("{");
-        if (framed)
-        {
-            body.Add("var scope = legacy ? default : reader.EnterVersionField();");
-            body.Add("try");
-            body.Add("{");
-        }
         body.AddRange(read);
         if (padded)
         {
             body.Add("if (!legacy && !" + target + ".HasValue)");
             body.Add("	reader.Advance(" + VersionNumber(width - 1) + ");");
-        }
-        if (framed)
-        {
-            body.Add("if (!legacy)");
-            body.Add("	reader.ValidateVersionFieldEnd(scope);");
-            body.Add("}");
-            body.Add("finally");
-            body.Add("{");
-            body.Add("if (!legacy)");
-            body.Add("	reader.ExitVersionField(scope);");
-            body.Add("}");
         }
         body.Add("}");
     }
@@ -441,29 +493,30 @@ internal static partial class BinaryEmitter
         w.Blank();
         w.Line("private static int SlotOf(uint nameKey, out ulong descriptor)");
         w.Open();
-        if (schema.Descriptors.Length != 0)
+        if (schema.Descriptors.Length == 0)
         {
-            w.Line("switch (nameKey)");
+            w.Line("descriptor = 0;");
+            w.Line("return -1;");
+        }
+        else
+        {
+            w.Line("var (slot, typeWidth) = nameKey switch");
             w.Open();
             for (int index = 0; index < schema.Descriptors.Length; index++)
             {
-                foreach (uint key in schema.NameKeys[index])
-                    w.Line("case " + VersionKey(key) + ":");
                 ulong upper = schema.Descriptors[index] & 0xFFFFFFFF00000000UL;
                 string expected = schema.RuntimeContracts[index]
                     ? "global::System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(Descriptors.Slice(" +
                         VersionNumber(index * 8) + ")) & 0xFFFFFFFF00000000UL"
                     : VersionDescriptor(upper);
-                w.Indented(() =>
-                {
-                    w.Line("descriptor = (" + expected + ") | nameKey;");
-                    w.Line("return " + VersionNumber(index) + ";");
-                });
+                foreach (uint key in schema.NameKeys[index])
+                    w.Line(VersionKey(key) + " => (" + VersionNumber(index) + ", " + expected + "),");
             }
-            w.Close();
+            w.Line("_ => (-1, 0UL),");
+            w.Close(";");
+            w.Line("descriptor = typeWidth | nameKey;");
+            w.Line("return slot;");
         }
-        w.Line("descriptor = 0;");
-        w.Line("return -1;");
         w.Close();
 
         if (reads)
