@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using LuminPack.Utility;
 using Xunit;
 
@@ -12,15 +13,22 @@ public class LuminStorageTagTest
     public void NativeLayoutIsWrittenAsABlock()
     {
         var source = Elements(5);
+        int stride = Unsafe.SizeOf<TagSample>();
+        int secondOffset = (int)Unsafe.ByteOffset(ref source[0].A, ref Unsafe.As<long, byte>(ref source[0].B));
+        Span<byte> native = MemoryMarshal.AsBytes(source.AsSpan());
+        for (int index = 0; index < source.Length; index++)
+            native.Slice(index * stride + 1, secondOffset - 1).Fill(0xA5);
+
         byte[] wire = new byte[5 * LuminStorageTag<TagSample, TagSampleLayout>.MaxWidth];
         LuminStorageTag<TagSample, TagSampleLayout>.Pack(ref source[0], source.Length, ref wire[0]);
         int width = LuminStorageTag<TagSample, TagSampleLayout>.Width;
-        Assert.Equal(Unsafe.SizeOf<TagSample>(), width);
-        // The local layout equals one generated model on every supported process, so no conversion is involved.
+        Assert.Equal(stride, width);
         Assert.True(LuminStorageTag<TagSample, TagSampleLayout>.Tag is 1 or 2);
+        Assert.True(native.SequenceEqual(wire.AsSpan(0, native.Length)));
         var restored = new TagSample[5];
         LuminStorageTag<TagSample, TagSampleLayout>.Unpack(LuminStorageTag<TagSample, TagSampleLayout>.Tag, ref wire[0], 5, ref restored[0]);
         Assert.Equal(source, restored);
+        Assert.True(native.SequenceEqual(MemoryMarshal.AsBytes(restored.AsSpan())));
     }
 
     /// <summary>Checks reading elements written by a process with the other model's alignment.</summary>
@@ -42,6 +50,31 @@ public class LuminStorageTagTest
             LuminStorageTag<TagSample, TagSampleLayout>.Unpack(tag, ref wire[0], 4, ref restored[0]);
             Assert.Equal(source, restored);
         }
+    }
+
+    /// <summary>Checks that a reused destination receives complete values from a shared storage range.</summary>
+    /// <param name="foreign">Whether the source uses the other modeled layout.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OverlappingReadsRetainAllElements(bool foreign)
+    {
+        var expected = Elements(17);
+        byte localTag = LuminStorageTag<TagSample, TagSampleLayout>.Tag;
+        byte tag = foreign ? (byte)(3 - localTag) : localTag;
+        int wireWidth = LuminStorageTag<TagSample, TagSampleLayout>.WidthOf(tag);
+        int nativeWidth = Unsafe.SizeOf<TagSample>();
+        var buffer = new byte[Math.Max(expected.Length * nativeWidth, 1 + expected.Length * wireWidth)];
+        for (int index = 0; index < expected.Length; index++)
+        {
+            int offset = 1 + index * wireWidth;
+            buffer[offset] = expected[index].A;
+            BitConverter.TryWriteBytes(buffer.AsSpan(offset + (tag == 1 ? 8 : 4), 8), expected[index].B);
+        }
+
+        var destination = MemoryMarshal.Cast<byte, TagSample>(buffer.AsSpan(0, expected.Length * nativeWidth));
+        LuminStorageTag<TagSample, TagSampleLayout>.Unpack(tag, ref buffer[1], expected.Length, ref destination[0]);
+        Assert.Equal(expected, destination.ToArray());
     }
 
     /// <summary>Checks that a layout matching no model is converted to the canonical model on write and back on read.</summary>

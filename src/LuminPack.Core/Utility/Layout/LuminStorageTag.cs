@@ -1,6 +1,8 @@
 using System;
+using System.Buffers;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using LuminPack.Code;
 
 namespace LuminPack.Utility;
@@ -152,13 +154,49 @@ public static class LuminStorageTag<T, TLayout>
         if (count == 0)
             return;
         ref byte destination = ref Unsafe.As<T, byte>(ref first);
-        if (tag == Tag && Native)
+        bool native = tag == Tag && Native;
+        long bytes = (long)count * WidthOf(tag);
+        long offset = (long)Unsafe.ByteOffset(ref source, ref destination);
+        if (offset < bytes && offset > -(long)count * LocalSize)
         {
-            LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, checked((uint)count * (uint)LocalSize));
+            UnpackOverlapping(tag, ref source, ref destination, count, checked((int)bytes), native);
+            return;
+        }
+        if (native)
+        {
+            LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, checked((uint)bytes));
             return;
         }
         // Local padding keeps its previous content: only data bytes are meaningful to either side.
-        WidthOf(tag);
         FromModel[tag].Convert(ref source, ref destination, count);
+    }
+
+    /// <summary>Transfers an aliased input while keeping conversion reads disjoint from destination writes.</summary>
+    /// <param name="tag">The validated layout model.</param>
+    /// <param name="source">The first byte of the validated input.</param>
+    /// <param name="destination">The first byte of the full destination storage.</param>
+    /// <param name="count">The element count.</param>
+    /// <param name="bytes">The total input width.</param>
+    /// <param name="native">Whether the wire bytes already match the destination layout.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void UnpackOverlapping(byte tag, ref byte source, ref byte destination, int count, int bytes, bool native)
+    {
+        var input = MemoryMarshal.CreateReadOnlySpan(ref source, bytes);
+        if (native)
+        {
+            input.CopyTo(MemoryMarshal.CreateSpan(ref destination, bytes));
+            return;
+        }
+
+        byte[] scratch = ArrayPool<byte>.Shared.Rent(bytes);
+        try
+        {
+            input.CopyTo(scratch);
+            FromModel[tag].Convert(ref scratch[0], ref destination, count);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(scratch);
+        }
     }
 }

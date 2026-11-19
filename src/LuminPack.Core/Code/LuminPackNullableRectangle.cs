@@ -232,9 +232,14 @@ public static class LuminPackNullableRectangle
     {
         if (values.IsEmpty)
             return;
-        int width = encoding == Tagged ? LuminStorageTag<T?, TLayout>.WidthOf(tag) : Unsafe.SizeOf<T?>();
+        if (encoding == Tagged)
+        {
+            Read<T, TLayout>(ref reader, values, encoding, tag);
+            return;
+        }
+        int width = Unsafe.SizeOf<T?>();
         ref byte target = ref Unsafe.As<T?, byte>(ref MemoryMarshal.GetReference(values));
-        var destination = MemoryMarshal.CreateSpan(ref target, checked(values.Length * Unsafe.SizeOf<T?>()));
+        var destination = MemoryMarshal.CreateSpan(ref target, checked(values.Length * width));
         var source = MemoryMarshal.CreateReadOnlySpan(ref reader.Cursor, checked(values.Length * width));
         if (!source.Overlaps(destination))
         {
@@ -242,34 +247,7 @@ public static class LuminPackNullableRectangle
             return;
         }
         reader.Advance(source.Length);
-        if (encoding == Tagged)
-            ReadAliased<T, TLayout>(source, values, tag);
-        else
-            source.CopyTo(destination);
-    }
-
-    /// <summary>Stages an overlapping tagged payload so layout conversion has disjoint ranges.</summary>
-    /// <typeparam name="T">The reference-free underlying nullable type.</typeparam>
-    /// <typeparam name="TLayout">The generated storage layout descriptor.</typeparam>
-    /// <param name="source">The validated wire payload.</param>
-    /// <param name="values">The existing destination elements.</param>
-    /// <param name="tag">The validated or implicit tagged model.</param>
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void ReadAliased<T, TLayout>(scoped ReadOnlySpan<byte> source, scoped Span<T?> values, byte tag)
-        where T : unmanaged
-        where TLayout : struct, ILuminNullableStorageLayout
-    {
-        byte[] scratch = ArrayPool<byte>.Shared.Rent(source.Length);
-        try
-        {
-            source.CopyTo(scratch);
-            LuminStorageTag<T?, TLayout>.Unpack(tag, ref MemoryMarshal.GetArrayDataReference(scratch), values.Length,
-                ref MemoryMarshal.GetReference(values));
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(scratch);
-        }
+        source.CopyTo(destination);
     }
 
     /// <summary>Rejects noncanonical presence and Boolean payload bytes in the validated payload window.</summary>
