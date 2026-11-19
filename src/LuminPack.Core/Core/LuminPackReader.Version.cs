@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using LuminPack.Code;
 using LuminPack.Option;
 
@@ -182,7 +183,14 @@ public ref partial struct LuminPackReader
     /// <returns>The boundary and extent to restore when this field ends.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public LuminPackVersionFieldScope EnterVersionField() => EnterLegacyVersionField(ReadVersionPayloadLength());
+    public LuminPackVersionFieldScope EnterVersionField()
+    {
+        ReadVersionPayloadLength(out int end);
+        int previousLength = _buffer.Length;
+        // The length reader has already proved the whole field lies inside this input window.
+        Buffer = MemoryMarshal.CreateSpan(ref MemoryMarshal.GetReference(_buffer), end);
+        return new LuminPackVersionFieldScope(end, previousLength, EnterVersionScope());
+    }
 
     /// <summary>Restricts reads to a known payload length from a revision-1 field table.</summary>
     /// <param name="length">The validated number of field bytes.</param>

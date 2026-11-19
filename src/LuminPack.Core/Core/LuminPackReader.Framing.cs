@@ -275,7 +275,13 @@ namespace LuminPack.Core
         /// <summary>Reads the four-byte payload length of a length-prefixed member.</summary>
         /// <returns>The nonnegative length, validated against the remaining input.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int ReadVersionPayloadLength()
+        public int ReadVersionPayloadLength() => ReadVersionPayloadLength(out _);
+
+        /// <summary>Reads a field length and proves its complete range against the active input window.</summary>
+        /// <param name="end">Receives the enclosing-buffer position directly after the validated payload.</param>
+        /// <returns>The nonnegative field length.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private int ReadVersionPayloadLength(out int end)
         {
             ref byte source = ref Current;
             int position = Position;
@@ -283,6 +289,7 @@ namespace LuminPack.Core
             int length = Unsafe.ReadUnaligned<int>(ref source);
             if ((uint)length > (uint)(_buffer.Length - position - sizeof(int)))
                 ThrowVersionPayloadLength(length);
+            end = position + sizeof(int) + length;
             AdvanceValidated(sizeof(int));
             return length;
         }

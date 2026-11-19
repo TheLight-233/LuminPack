@@ -87,7 +87,25 @@ internal struct LuminPackVersionRegistry
     /// <summary>Appends a complete schema to the active operation and optionally indexes it for writing.</summary>
     /// <param name="entry">The validated schema registration.</param>
     /// <param name="indexBySchema">Whether this is the writer registry, which looks up schemas by identity.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void Add(in LuminPackVersionRegistration entry, bool indexBySchema)
+    {
+        var entries = _entries;
+        int ordinal = _count;
+        if (entries is null || (uint)ordinal >= (uint)entries.Length || (indexBySchema && ordinal >= SmallTable))
+        {
+            AddIndexedOrGrow(in entry, indexBySchema);
+            return;
+        }
+        entries[ordinal] = entry;
+        _count = ordinal + 1;
+    }
+
+    /// <summary>Appends a schema that needs index maintenance or an expanded registration array.</summary>
+    /// <param name="entry">The validated schema registration.</param>
+    /// <param name="indexBySchema">Whether to maintain a lookup index for the active writer scope.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void AddIndexedOrGrow(in LuminPackVersionRegistration entry, bool indexBySchema)
     {
         int ordinal = _count;
         int maximumCount = indexBySchema ? MaximumIndexedCount : MaximumSequentialCount;
