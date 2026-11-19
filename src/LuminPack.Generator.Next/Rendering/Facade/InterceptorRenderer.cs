@@ -959,7 +959,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                         {
                             var writer = new LuminPackJsonWriter(writerBuffer);
                             %WRITE%
-                            return default(%PROFILE%).StringEncoding is LuminPackStringEncoding.UTF8
+                            return default(%PROFILE%).JsonByteCount(1) == 1
                                 ? Encoding.UTF8.GetString(writer.GetSpan())
                                 : Encoding.Unicode.GetString(writer.GetSpan());
                         }
@@ -1012,9 +1012,9 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         """ + "\n";
 
     private const string JsonCharacterRead = """
-                        var encoding = default(%PROFILE%).StringEncoding;
-                        LuminPackInputPolicy.CheckCharacters(buffer, (int)encoding, %LIMIT%);
-                        if (encoding is LuminPackStringEncoding.UTF16)
+                        bool utf16 = default(%PROFILE%).JsonByteCount(1) == sizeof(char);
+                        LuminPackInputPolicy.CheckCharacters(buffer, utf16 ? (int)LuminPackStringEncoding.UTF16 : (int)LuminPackStringEncoding.UTF8, %LIMIT%);
+                        if (utf16)
                             return ReadBytes(MemoryMarshal.AsBytes(buffer), ref value);
                         return ReadUtf8(buffer, ref value);
         """ + "\n";

@@ -58,7 +58,7 @@ public ref partial struct LuminPackJsonWriter
 #else
         long room = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
 #endif
-        bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+        bool utf8 = default(TOptions).JsonByteCount(1) == 1;
         int scale = utf8 ? 1 : 2;
         int digits = typeof(T) == typeof(int) ? 11 : 20;
         int maximum = (digits + 1) * scale;
@@ -96,7 +96,7 @@ public ref partial struct LuminPackJsonWriter
     private void WriteIntegerRunCore<TOptions, T>(scoped ReadOnlySpan<T> items, bool readBeforeSeparator)
         where TOptions : struct, ILuminPackOptions where T : unmanaged
     {
-        bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+        bool utf8 = default(TOptions).JsonByteCount(1) == 1;
         int scale = utf8 ? 1 : 2;
         int digits = typeof(T) == typeof(int) ? 11 : 20;
         int maximum = (digits + 1) * scale;

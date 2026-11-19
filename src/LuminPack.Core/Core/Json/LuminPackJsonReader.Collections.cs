@@ -22,7 +22,7 @@ namespace LuminPack.Core
         [MethodImpl(LuminPackJit.Optimized)]
         public int CountArrayElements<TOptions>() where TOptions : struct, ILuminPackOptions
         {
-            if (LuminPackMarshal.ConstantStringProfile<TOptions>() && !default(TOptions).ValidateJsonSyntax)
+            if (LuminPackMarshal.ConstantStringProfile<TOptions>() && !default(TOptions).TracksJsonGrammar())
             {
                 var scan = this;
                 return scan.CountArrayElementsCore<TOptions>();
@@ -43,7 +43,7 @@ namespace LuminPack.Core
             scan.DeepContainerKinds = null;
             try
             {
-                if (default(TOptions).ValidateJsonSyntax && DeepContainerKinds is not null)
+                if (default(TOptions).TracksJsonGrammar() && DeepContainerKinds is not null)
                 {
                     scan.DeepContainerKinds = ArrayPool<byte>.Shared.Rent(DeepContainerKinds.Length);
                     new ReadOnlySpan<byte>(DeepContainerKinds).CopyTo(scan.DeepContainerKinds);

@@ -24,7 +24,7 @@ internal static class JsonSequenceElementWriter
         {
             if (utf8Only)
             {
-                w.Line("if (default(TLuminProfile).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)");
+                w.Line("if (default(TLuminProfile).JsonByteCount(1) == 1)");
                 w.Open();
             }
             string element = item;

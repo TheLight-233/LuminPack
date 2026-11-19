@@ -329,7 +329,7 @@ internal static class GenericOwnerFile
         w.Line("reader.Read<" + profile + ">(ref propertyName);");
         w.Line("isValueProperty = propertyName == \"Value\";");
         w.Close();
-        w.Line("else if (default(" + profile + ").StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)");
+        w.Line("else if (default(" + profile + ").JsonByteCount(1) == 1)");
         w.Open();
         w.Line("var propertyName = reader.ReadStringUtf8<" + profile + ">();");
         w.Line(match);

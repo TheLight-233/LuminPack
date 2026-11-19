@@ -810,7 +810,7 @@ internal static class UnionEmitter
         w.Line("if (reader.CurrentTokenType != " + reader + ".JsonTokenType.String)");
         w.Indented(() => w.Line("continue;"));
         w.Line("int local;");
-        w.Line("if (default(" + Profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8)");
+        w.Line("if (default(" + Profile + ").JsonByteCount(1) == 1)");
         w.Open();
         w.Line("var propertyName = reader.ReadStringUtf8<" + Profile + ">();");
         PropertyMatch(w, "propertyName");
@@ -1214,12 +1214,12 @@ internal static class UnionEmitter
                 w.Line(prefix + operation + model.UnionSuffix + slot.Suffix + SlotArguments(slot) + "(ref " + w.A("LuminPackJsonWriter") + " writer)");
                 w.Open();
                 w.Line("writer.WriteObjectStart<" + profile + ">();");
-                w.Line("if (default(" + profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8)");
+                w.Line("if (default(" + profile + ").JsonByteCount(1) == 1)");
                 w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".TypeU8);"));
                 w.Line("else");
                 w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".TypeU16);"));
                 w.Line("writer.Write<" + profile + ">(" + item.Id.ToString(CultureInfo.InvariantCulture) + ");");
-                w.Line("if (default(" + profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8)");
+                w.Line("if (default(" + profile + ").JsonByteCount(1) == 1)");
                 w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".ValueU8);"));
                 w.Line("else");
                 w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".ValueU16);"));
@@ -1370,12 +1370,12 @@ internal static class UnionEmitter
             return;
         }
         w.Line("writer.WriteObjectStart<" + profile + ">();");
-        w.Line("if (default(" + profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8)");
+        w.Line("if (default(" + profile + ").JsonByteCount(1) == 1)");
         w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".TypeU8);"));
         w.Line("else");
         w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".TypeU16);"));
         w.Line("writer.Write<" + profile + ">(" + id + ");");
-        w.Line("if (default(" + profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8)");
+        w.Line("if (default(" + profile + ").JsonByteCount(1) == 1)");
         w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".ValueU8);"));
         w.Line("else");
         w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".ValueU16);"));

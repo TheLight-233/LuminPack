@@ -154,7 +154,7 @@ public static partial class LuminPackCollectionAccess
         where TOptions : struct, ILuminPackOptions where T : unmanaged
     {
         if (!LuminPackMarshal.ConstantStringProfile<TOptions>() ||
-            (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 &&
+            (default(TOptions).JsonByteCount(1) == sizeof(char) &&
                 CultureInfo.CurrentCulture.GetType() != typeof(CultureInfo)) ||
             (typeof(T) != typeof(int) && typeof(T) != typeof(long)))
             return false;

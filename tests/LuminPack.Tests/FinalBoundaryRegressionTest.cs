@@ -375,6 +375,44 @@ LuminPackSerializer.Deserialize<List<KeyValuePair<string, int>>, LuminPackUtf16L
     public readonly struct StrictUtf16 : ILuminPackOptions
     {
         /// <inheritdoc/>
+        public TResult ReadJsonValue<TOperation, TResult>(scoped ref global::LuminPack.Core.LuminPackJsonReader reader)
+            where TOperation : struct, global::LuminPack.Option.ILuminPackJsonReadOperation<TResult> =>
+            default(global::LuminPack.Option.LuminPackUtf16LengthStrings).ReadJsonValue<TOperation, TResult>(ref reader);
+
+        /// <inheritdoc/>
+        public void WriteJsonValue<TOperation, TValue>(scoped ref global::LuminPack.Core.LuminPackJsonWriter writer, TValue value)
+            where TOperation : struct, global::LuminPack.Option.ILuminPackJsonWriteOperation<TValue> =>
+            default(global::LuminPack.Option.LuminPackUtf16LengthStrings).WriteJsonValue<TOperation, TValue>(ref writer, value);
+
+        /// <inheritdoc/>
+        public int JsonByteCount(int units) =>
+            default(global::LuminPack.Option.LuminPackUtf16LengthStrings).JsonByteCount(units);
+
+        /// <inheritdoc/>
+        public bool TryReadJsonUnit(scoped ref global::LuminPack.Core.LuminPackJsonReader reader, out char value) =>
+            default(global::LuminPack.Option.LuminPackUtf16LengthStrings).TryReadJsonUnit(ref reader, out value);
+
+        /// <inheritdoc/>
+        public void WriteJsonAscii(scoped ref global::LuminPack.Core.LuminPackJsonWriter writer, byte value) =>
+            default(global::LuminPack.Option.LuminPackUtf16LengthStrings).WriteJsonAscii(ref writer, value);
+
+        /// <inheritdoc/>
+        public bool ReadJsonToken<TProfile>(scoped ref global::LuminPack.Core.LuminPackJsonReader reader) where TProfile : struct, global::LuminPack.Option.ILuminPackOptions =>
+            default(global::LuminPack.Option.LuminPackStrictJson).ReadJsonToken<TProfile>(ref reader);
+
+        /// <inheritdoc/>
+        public bool TracksJsonGrammar() =>
+            default(global::LuminPack.Option.LuminPackStrictJson).TracksJsonGrammar();
+
+        /// <inheritdoc/>
+        public void ValidateJsonUtf8(scoped global::System.ReadOnlySpan<byte> text) =>
+            default(global::LuminPack.Option.LuminPackStrictJson).ValidateJsonUtf8(text);
+
+        /// <inheritdoc/>
+        public void CheckJsonDepth(int depth) =>
+            global::LuminPack.Option.LuminPackJsonPolicy.CheckDepth(depth, MaxJsonDepth);
+
+        /// <inheritdoc/>
         public int RecordBound(string? value) =>
             default(global::LuminPack.Option.LuminPackUtf16LengthStrings).RecordBound(value);
 

@@ -10,6 +10,33 @@ public readonly struct LuminPackUtf8TokenStrings : ILuminPackStringCodec
 {
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
+        where TOperation : struct, ILuminPackJsonReadOperation<TResult> =>
+        default(TOperation).Read<byte>(ref reader);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteJsonValue<TOperation, TValue>(scoped ref LuminPackJsonWriter writer, TValue value)
+        where TOperation : struct, ILuminPackJsonWriteOperation<TValue> =>
+        default(TOperation).Write<byte>(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int JsonByteCount(int units) =>
+        units;
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryReadJsonUnit(scoped ref LuminPackJsonReader reader, out char value) =>
+        reader.TryPeekJsonUnit<byte>(out value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteJsonAscii(scoped ref LuminPackJsonWriter writer, byte value) =>
+        writer.WriteJsonAsciiByte(value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int RecordBound(string? value) =>
         checked((value?.Length ?? 0) * 3 + 1);
 

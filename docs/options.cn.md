@@ -95,6 +95,10 @@ public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.Ma
     => default(LuminPackUtf8VarIntStrings).Skip(ref reader, maxStringLength);
 ```
 
+自定义 JSON profile 将标量读写与编码单元操作转发给字符串编解码器，将 token 读取、语法状态跟踪和 UTF-8 字符串校验转发给 LuminPackStrictJson 或 LuminPackTrustedJson。实现 CheckJsonDepth 时调用 LuminPackJsonPolicy.CheckDepth(depth, MaxJsonDepth)。代码修复可以根据已有选项补齐这些实现。元数据应与所选策略一致，供注册的 formatter 和生成代码使用。
+
+仅提供 Value 的深度组件沿用接口提供的标准上限检查。如需指定检查行为，可同时实现 `Value` 和 `CheckJsonDepth(int depth)`。将深度检查转发给 `LuminPackJsonPolicy.CheckDepth(depth, Value)` 即可采用标准上限语义。非正上限允许任意嵌套深度。
+
 ## 紧凑长度头
 
 小字符串集合更重视字节数而不是最高编码速度时，可以选择 `VarInt`：

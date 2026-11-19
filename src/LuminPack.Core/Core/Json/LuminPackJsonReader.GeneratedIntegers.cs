@@ -29,7 +29,7 @@ public ref partial struct LuminPackJsonReader
         remaining = 0;
         if (!LuminPackJsonWriter.HasConstantGeneratedPropertyEncoding<TOptions>())
             return false;
-        if (default(TOptions).ValidateJsonSyntax &&
+        if (default(TOptions).TracksJsonGrammar() &&
             (!IsCurrentContainerObject() || (first ? !IsNameState(GrammarState) : GrammarState != JsonStateAfterValue)))
             return false;
 
@@ -128,7 +128,7 @@ public ref partial struct LuminPackJsonReader
         if (count == 0)
             return;
         Advance(count);
-        if (default(TOptions).ValidateJsonSyntax)
+        if (default(TOptions).TracksJsonGrammar())
             GrammarState = JsonStateAfterValue;
         CompleteValue();
     }

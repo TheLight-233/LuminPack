@@ -11,6 +11,49 @@ namespace LuminPackUnitTest;
 /// <summary>Protects declaration precedence, profile propagation and operation ownership.</summary>
 public partial class CompiledOptionTest
 {
+    /// <summary>Checks that a composed depth operation observes the consumed opening delimiter in both encodings.</summary>
+    [Fact]
+    public void JsonDepthOperationRunsAfterConsumingTheOpeningDelimiter()
+    {
+        var utf8 = System.Text.Encoding.UTF8.GetBytes("[[[");
+        var utf16 = System.Text.Encoding.Unicode.GetBytes("[[[");
+        AssertDepthFailure<LuminPackOptions<LuminPackUtf8VarIntStrings, LuminPackGeneralFormat, TwoLevels, LuminPackTrustedJson>>(utf8);
+        AssertDepthFailure<LuminPackFixedOptions<LuminPackOptions<LuminPackUtf16TokenStrings, LuminPackGeneralFormat, TwoLevels, LuminPackStrictJson>>>(utf16);
+    }
+
+    /// <summary>Checks the reader cursor and depth when the policy rejects the third opening bracket.</summary>
+    /// <typeparam name="TProfile">The document profile under test.</typeparam>
+    /// <param name="bytes">Three opening brackets in the selected encoding.</param>
+    private static void AssertDepthFailure<TProfile>(byte[] bytes) where TProfile : struct, ILuminPackOptions
+    {
+        ReadOnlySpan<byte> input = bytes;
+        using var state = new LuminPackReaderOptionalState();
+        var reader = new LuminPackJsonReader(ref input, state);
+        Assert.True(reader.Read<TProfile>());
+        Assert.True(reader.Read<TProfile>());
+        try
+        {
+            reader.Read<TProfile>();
+            Assert.Fail("The third opening bracket must exceed the document depth limit.");
+        }
+        catch (FormatException exception)
+        {
+            Assert.Equal("JSON nesting depth exceeds the configured maximum", exception.Message);
+            Assert.Equal(bytes.Length, reader.CurrentIndex);
+            Assert.Equal(3, reader.Depth);
+        }
+    }
+
+    /// <summary>Rejects metadata reads so the test detects bypasses of the depth operation.</summary>
+    private readonly struct TwoLevels : ILuminPackDepthOptions
+    {
+        /// <inheritdoc/>
+        public int Value => throw new InvalidOperationException("Tokenization queried depth metadata.");
+
+        /// <inheritdoc/>
+        public void CheckJsonDepth(int depth) => LuminPackJsonPolicy.CheckDepth(depth, 2);
+    }
+
     /// <summary>Checks fixed member scopes, null strings, containers, recursion and exact size evaluation.</summary>
     [Fact]
     public void DeclaredMemberProfilesSurviveContainersAndRecursiveBoundaries()
@@ -219,6 +262,44 @@ LuminPackSerializer.DeserializeJson<string, TOptions>(ref reader, ref text);
     public readonly struct EquivalentUtf16Token : ILuminPackOptions
     {
         /// <inheritdoc/>
+        public TResult ReadJsonValue<TOperation, TResult>(scoped ref global::LuminPack.Core.LuminPackJsonReader reader)
+            where TOperation : struct, global::LuminPack.Option.ILuminPackJsonReadOperation<TResult> =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).ReadJsonValue<TOperation, TResult>(ref reader);
+
+        /// <inheritdoc/>
+        public void WriteJsonValue<TOperation, TValue>(scoped ref global::LuminPack.Core.LuminPackJsonWriter writer, TValue value)
+            where TOperation : struct, global::LuminPack.Option.ILuminPackJsonWriteOperation<TValue> =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteJsonValue<TOperation, TValue>(ref writer, value);
+
+        /// <inheritdoc/>
+        public int JsonByteCount(int units) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).JsonByteCount(units);
+
+        /// <inheritdoc/>
+        public bool TryReadJsonUnit(scoped ref global::LuminPack.Core.LuminPackJsonReader reader, out char value) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).TryReadJsonUnit(ref reader, out value);
+
+        /// <inheritdoc/>
+        public void WriteJsonAscii(scoped ref global::LuminPack.Core.LuminPackJsonWriter writer, byte value) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteJsonAscii(ref writer, value);
+
+        /// <inheritdoc/>
+        public bool ReadJsonToken<TProfile>(scoped ref global::LuminPack.Core.LuminPackJsonReader reader) where TProfile : struct, global::LuminPack.Option.ILuminPackOptions =>
+            default(global::LuminPack.Option.LuminPackTrustedJson).ReadJsonToken<TProfile>(ref reader);
+
+        /// <inheritdoc/>
+        public bool TracksJsonGrammar() =>
+            default(global::LuminPack.Option.LuminPackTrustedJson).TracksJsonGrammar();
+
+        /// <inheritdoc/>
+        public void ValidateJsonUtf8(scoped global::System.ReadOnlySpan<byte> text) =>
+            default(global::LuminPack.Option.LuminPackTrustedJson).ValidateJsonUtf8(text);
+
+        /// <inheritdoc/>
+        public void CheckJsonDepth(int depth) =>
+            global::LuminPack.Option.LuminPackJsonPolicy.CheckDepth(depth, MaxJsonDepth);
+
+        /// <inheritdoc/>
         public int RecordBound(string? value) =>
             default(global::LuminPack.Option.LuminPackUtf16TokenStrings).RecordBound(value);
 
@@ -330,6 +411,44 @@ LuminPackSerializer.DeserializeJson<string, TOptions>(ref reader, ref text);
     /// <summary>Matches the composite profile generated by the host's depth and member's encoding declarations.</summary>
     public readonly struct DeepUtf16Token : ILuminPackOptions
     {
+        /// <inheritdoc/>
+        public TResult ReadJsonValue<TOperation, TResult>(scoped ref global::LuminPack.Core.LuminPackJsonReader reader)
+            where TOperation : struct, global::LuminPack.Option.ILuminPackJsonReadOperation<TResult> =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).ReadJsonValue<TOperation, TResult>(ref reader);
+
+        /// <inheritdoc/>
+        public void WriteJsonValue<TOperation, TValue>(scoped ref global::LuminPack.Core.LuminPackJsonWriter writer, TValue value)
+            where TOperation : struct, global::LuminPack.Option.ILuminPackJsonWriteOperation<TValue> =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteJsonValue<TOperation, TValue>(ref writer, value);
+
+        /// <inheritdoc/>
+        public int JsonByteCount(int units) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).JsonByteCount(units);
+
+        /// <inheritdoc/>
+        public bool TryReadJsonUnit(scoped ref global::LuminPack.Core.LuminPackJsonReader reader, out char value) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).TryReadJsonUnit(ref reader, out value);
+
+        /// <inheritdoc/>
+        public void WriteJsonAscii(scoped ref global::LuminPack.Core.LuminPackJsonWriter writer, byte value) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).WriteJsonAscii(ref writer, value);
+
+        /// <inheritdoc/>
+        public bool ReadJsonToken<TProfile>(scoped ref global::LuminPack.Core.LuminPackJsonReader reader) where TProfile : struct, global::LuminPack.Option.ILuminPackOptions =>
+            default(global::LuminPack.Option.LuminPackTrustedJson).ReadJsonToken<TProfile>(ref reader);
+
+        /// <inheritdoc/>
+        public bool TracksJsonGrammar() =>
+            default(global::LuminPack.Option.LuminPackTrustedJson).TracksJsonGrammar();
+
+        /// <inheritdoc/>
+        public void ValidateJsonUtf8(scoped global::System.ReadOnlySpan<byte> text) =>
+            default(global::LuminPack.Option.LuminPackTrustedJson).ValidateJsonUtf8(text);
+
+        /// <inheritdoc/>
+        public void CheckJsonDepth(int depth) =>
+            global::LuminPack.Option.LuminPackJsonPolicy.CheckDepth(depth, MaxJsonDepth);
+
         /// <inheritdoc/>
         public int RecordBound(string? value) =>
             default(global::LuminPack.Option.LuminPackUtf16TokenStrings).RecordBound(value);

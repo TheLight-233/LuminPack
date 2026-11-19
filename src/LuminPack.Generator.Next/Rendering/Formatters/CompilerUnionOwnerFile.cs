@@ -141,7 +141,7 @@ internal static class CompilerUnionOwnerFile
     private static void JsonProperty(CodeWriter writer, string profile, string name)
     {
         string constants = writer.A("LuminPackConstUtf8");
-        writer.Line("if (default(" + profile + ").StringEncoding == " + writer.A("LuminPackStringEncoding") + ".UTF8)");
+        writer.Line("if (default(" + profile + ").JsonByteCount(1) == 1)");
         writer.Indented(() => writer.Line("writer.WritePropertyName<" + profile + ">(" + constants + "." + name + "U8);"));
         writer.Line("else");
         writer.Indented(() => writer.Line("writer.WritePropertyName<" + profile + ">(" + constants + "." + name + "U16);"));

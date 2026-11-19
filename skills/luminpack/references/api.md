@@ -69,6 +69,10 @@ public partial class Message
 
 Inheritable properties override the enclosing scope when explicitly set. Built-in profiles: `LuminPackDefaultOptions` (UTF-16 length), `LuminPackUtf8LengthOptions`, `LuminPackUtf8TokenOptions`, `LuminPackUtf16LengthOptions`, `LuminPackUtf16TokenOptions`, `LuminPackUtf8VarIntOptions` and `LuminPackUtf16VarIntOptions`. Compose a custom profile as `LuminPackOptions<LuminPackUtf8VarIntStrings, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>`. Direct implementations of `ILuminPackOptions` forward `ILuminPackStringCodec` members, including `Skip(ref reader, maxStringLength)`, to the selected string codec. The compiler code fix generates missing forwarders.
 
+Custom JSON profiles forward scalar and code-unit operations to their string codec. Use the same strict or trusted grammar for token reads, grammar tracking and UTF-8 validation, and call LuminPackJsonPolicy.CheckDepth(depth, MaxJsonDepth) after entering each container. Fixed, declared-fallback and composed profiles select these policies once for the document.
+
+A custom `ILuminPackDepthOptions` can inherit the default bound check from its Value property or implement both `Value` and `CheckJsonDepth(int depth)`.
+
 `StringSerializer.Serialize<TOptions>(ReadOnlySpan<char>, Span<byte>, out int charsRead, out int bytesWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)` and the matching `Deserialize<TOptions>` transcode text without headers and return `OperationStatus`.
 
 ## Buffers

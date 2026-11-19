@@ -93,7 +93,8 @@ internal static class ProfileSource
             if (!components.ContainsKey(name))
                 components.Add(name, "    /// <summary>Provides a declaration-time JSON depth bound.</summary>\n    public readonly struct " + name +
                     " : global::LuminPack.Option.ILuminPackDepthOptions\n    {\n        /// <inheritdoc/>\n        public int Value { " + inline + " get => " +
-                    profile.Depth.ToString(CultureInfo.InvariantCulture) + "; }\n    }\n");
+                    profile.Depth.ToString(CultureInfo.InvariantCulture) + "; }\n        /// <inheritdoc/>\n        " + inline +
+                    "\n        public void CheckJsonDepth(int depth) => global::LuminPack.Option.LuminPackJsonPolicy.CheckDepth(depth, Value);\n    }\n");
         }
     }
 }

@@ -493,7 +493,7 @@ internal static class RectangularArrayOwnerFile
                 position.ToString(CultureInfo.InvariantCulture) + "] == " + ((int)character).ToString(CultureInfo.InvariantCulture))) +
             " ? " + (index + 1).ToString(CultureInfo.InvariantCulture) + " : ")) + "0;";
         w.Line("int property;");
-        w.Line("if (default(" + Profile + ").StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)");
+        w.Line("if (default(" + Profile + ").JsonByteCount(1) == 1)");
         w.Open();
         w.Line("var propertyName = reader.ReadStringUtf8<" + Profile + ">();");
         w.Line("property = " + choice);

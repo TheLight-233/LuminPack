@@ -11,6 +11,53 @@ public readonly struct LuminPackFixedOptions<TOptions> : ILuminPackOptions where
 {
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
+        where TOperation : struct, ILuminPackJsonReadOperation<TResult> =>
+        default(TOptions).ReadJsonValue<TOperation, TResult>(ref reader);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteJsonValue<TOperation, TValue>(scoped ref LuminPackJsonWriter writer, TValue value)
+        where TOperation : struct, ILuminPackJsonWriteOperation<TValue> =>
+        default(TOptions).WriteJsonValue<TOperation, TValue>(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int JsonByteCount(int units) =>
+        default(TOptions).JsonByteCount(units);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryReadJsonUnit(scoped ref LuminPackJsonReader reader, out char value) =>
+        default(TOptions).TryReadJsonUnit(ref reader, out value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteJsonAscii(scoped ref LuminPackJsonWriter writer, byte value) =>
+        default(TOptions).WriteJsonAscii(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool ReadJsonToken<TProfile>(scoped ref LuminPackJsonReader reader) where TProfile : struct, ILuminPackOptions =>
+        default(TOptions).ReadJsonToken<TProfile>(ref reader);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TracksJsonGrammar() =>
+        default(TOptions).TracksJsonGrammar();
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ValidateJsonUtf8(scoped ReadOnlySpan<byte> text) =>
+        default(TOptions).ValidateJsonUtf8(text);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void CheckJsonDepth(int depth) =>
+        default(TOptions).CheckJsonDepth(depth);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int RecordBound(string? value) =>
         default(TOptions).RecordBound(value);
 
@@ -179,6 +226,73 @@ public readonly struct LuminPackFixedOptions<TOptions> : ILuminPackOptions where
 public readonly struct LuminPackFallbackOptions<TOptions, TFallback> : ILuminPackOptions
     where TOptions : struct, ILuminPackOptions where TFallback : struct, ILuminPackOptions
 {
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
+        where TOperation : struct, ILuminPackJsonReadOperation<TResult> =>
+        typeof(TOptions) == typeof(LuminPackDeclaredOptions) ? default(TFallback).ReadJsonValue<TOperation, TResult>(ref reader) : default(TOptions).ReadJsonValue<TOperation, TResult>(ref reader);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteJsonValue<TOperation, TValue>(scoped ref LuminPackJsonWriter writer, TValue value)
+        where TOperation : struct, ILuminPackJsonWriteOperation<TValue>
+    {
+        if (typeof(TOptions) == typeof(LuminPackDeclaredOptions))
+            default(TFallback).WriteJsonValue<TOperation, TValue>(ref writer, value);
+        else
+            default(TOptions).WriteJsonValue<TOperation, TValue>(ref writer, value);
+    }
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int JsonByteCount(int units) =>
+        typeof(TOptions) == typeof(LuminPackDeclaredOptions) ? default(TFallback).JsonByteCount(units) : default(TOptions).JsonByteCount(units);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryReadJsonUnit(scoped ref LuminPackJsonReader reader, out char value) =>
+        typeof(TOptions) == typeof(LuminPackDeclaredOptions) ? default(TFallback).TryReadJsonUnit(ref reader, out value) : default(TOptions).TryReadJsonUnit(ref reader, out value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteJsonAscii(scoped ref LuminPackJsonWriter writer, byte value)
+    {
+        if (typeof(TOptions) == typeof(LuminPackDeclaredOptions))
+            default(TFallback).WriteJsonAscii(ref writer, value);
+        else
+            default(TOptions).WriteJsonAscii(ref writer, value);
+    }
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool ReadJsonToken<TProfile>(scoped ref LuminPackJsonReader reader) where TProfile : struct, ILuminPackOptions =>
+        typeof(TOptions) == typeof(LuminPackDeclaredOptions) ? default(TFallback).ReadJsonToken<TProfile>(ref reader) : default(TOptions).ReadJsonToken<TProfile>(ref reader);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TracksJsonGrammar() =>
+        typeof(TOptions) == typeof(LuminPackDeclaredOptions) ? default(TFallback).TracksJsonGrammar() : default(TOptions).TracksJsonGrammar();
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ValidateJsonUtf8(scoped ReadOnlySpan<byte> text)
+    {
+        if (typeof(TOptions) == typeof(LuminPackDeclaredOptions))
+            default(TFallback).ValidateJsonUtf8(text);
+        else
+            default(TOptions).ValidateJsonUtf8(text);
+    }
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void CheckJsonDepth(int depth)
+    {
+        if (typeof(TOptions) == typeof(LuminPackDeclaredOptions))
+            default(TFallback).CheckJsonDepth(depth);
+        else
+            default(TOptions).CheckJsonDepth(depth);
+    }
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int RecordBound(string? value) =>

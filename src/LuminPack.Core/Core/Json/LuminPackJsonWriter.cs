@@ -462,7 +462,7 @@ namespace LuminPack.Core
         private Span<byte> ReserveGeneratedIntegerPrefix<TOptions>(ulong first, ulong last, int byteCount, int maxDigits)
             where TOptions : struct, ILuminPackOptions
         {
-            if (!(default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if (!(default(TOptions).JsonByteCount(1) == 1))
                 LuminPackExceptionHelper.ThrowInvalidOperationException("Generated integer prefixes require UTF-8");
             if ((uint)(byteCount - 8) > 8)
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(byteCount);

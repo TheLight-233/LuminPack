@@ -1485,7 +1485,7 @@ namespace LuminPack
             }
 
             internal static LuminPackStringEncoding LuminPackJsonEncoding<T, TOptions>() where TOptions : struct, ILuminPackOptions
-                => typeof(TOptions) == typeof(LuminPackDeclaredOptions) ? LuminPackJsonEncoding<T>() : default(TOptions).StringEncoding;
+                => typeof(TOptions) == typeof(LuminPackDeclaredOptions) ? LuminPackJsonEncoding<T>() : default(TOptions).JsonByteCount(1) == 1 ? LuminPackStringEncoding.UTF8 : LuminPackStringEncoding.UTF16;
 
             internal static bool LuminPackJsonReadBoundary<T, TOptions>(
                 ref LuminPackJsonReader reader,

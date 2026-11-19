@@ -255,7 +255,7 @@ internal static class JsonEmitter
                 (model.IsStruct ? ");" : "!);"));
         body.Add("if (!writer.IsFirstElement)");
         body.Add("\twriter.WriteByteRaw<" + Profile + ">((byte)',');");
-        body.Add("bool " + isUtf8 + " = default(" + Profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8;");
+        body.Add("bool " + isUtf8 + " = default(" + Profile + ").JsonByteCount(1) == 1;");
         for (int index = 0; index < model.Members.Length; index++)
         {
             var member = model.Members[index];
@@ -567,7 +567,7 @@ internal static class JsonEmitter
                     (model.IsStruct ? "value" : "value!") + ");");
         }
         body.Add("reader.TryConsumeObjectStart<" + Profile + ">();");
-        body.Add("bool isUtf8 = default(" + Profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8;");
+        body.Add("bool isUtf8 = default(" + Profile + ").JsonByteCount(1) == 1;");
         body.Add("int nextPropertyIndex = 0;");
         AppendRun(body, 0);
         body.Add("while (true)");

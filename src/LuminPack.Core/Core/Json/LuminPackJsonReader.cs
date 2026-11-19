@@ -795,7 +795,7 @@ namespace LuminPack.Core
             nint bytes = Remaining;
             int count = 0;
             ref byte first = ref Current;
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (default(TOptions).JsonByteCount(1) == 1)
             {
                 while (count < bytes)
                 {
@@ -834,7 +834,7 @@ namespace LuminPack.Core
             if (count != 0)
                 Advance(count);
 #else
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).JsonByteCount(1) == 1))
             {
                 while (Remaining > 0)
                 {
@@ -915,9 +915,8 @@ namespace LuminPack.Core
             where TOptions : struct, ILuminPackOptions
         {
             Depth++;
-            if (default(TOptions).MaxJsonDepth > 0 && Depth > default(TOptions).MaxJsonDepth)
-                ThrowMalformedJson("JSON nesting depth exceeds the configured maximum");
-            if (default(TOptions).ValidateJsonSyntax)
+            default(TOptions).CheckJsonDepth(Depth);
+            if (default(TOptions).TracksJsonGrammar())
             {
                 if (Depth <= 64)
                 {
@@ -942,7 +941,7 @@ namespace LuminPack.Core
         private void PopContainer<TOptions>(bool isObject)
             where TOptions : struct, ILuminPackOptions
         {
-            if (default(TOptions).ValidateJsonSyntax && (Depth == 0 || IsCurrentContainerObject() != isObject))
+            if (default(TOptions).TracksJsonGrammar() && (Depth == 0 || IsCurrentContainerObject() != isObject))
                 ThrowMalformedJson("Mismatched JSON closing bracket");
             if (Depth > 0)
                 Depth--;
@@ -957,25 +956,23 @@ namespace LuminPack.Core
         private bool TryReadCurrentChar<TOptions>(out char c)
             where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
-            {
-                if (Remaining <= 0)
-                {
-                    c = default;
-                    return false;
-                }
+            return default(TOptions).TryReadJsonUnit(ref this, out c);
+        }
 
-                c = (char)Current;
-                return true;
-            }
-
-            if (Remaining <= 1)
+        /// <summary>Peeks at the physical code unit only after validating its full byte width.</summary>
+        /// <typeparam name="TCodeUnit">Byte for UTF-8, or char for UTF-16.</typeparam>
+        /// <param name="value">The code unit, or zero for incomplete input.</param>
+        /// <returns>Whether the full code unit was available.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal bool TryPeekJsonUnit<TCodeUnit>(out char value) where TCodeUnit : unmanaged
+        {
+            if (Remaining < Unsafe.SizeOf<TCodeUnit>())
             {
-                c = default;
+                value = default;
                 return false;
             }
 
-            c = LuminPackReader.Read<char>(ref Current);
+            value = typeof(TCodeUnit) == typeof(byte) ? (char)Current : LuminPackReader.Read<char>(ref Current);
             return true;
         }
 
@@ -986,7 +983,7 @@ namespace LuminPack.Core
         private void RequireTokenEndBoundary<TOptions>(int index)
             where TOptions : struct, ILuminPackOptions
         {
-            if (!default(TOptions).ValidateJsonSyntax)
+            if (!default(TOptions).TracksJsonGrammar())
                 return;
             if (!IsValueDelimiterAt<TOptions>(index))
                 ThrowMalformedJson("Invalid JSON token: expected a value delimiter");
@@ -1000,7 +997,7 @@ namespace LuminPack.Core
         private bool IsValueDelimiterAt<TOptions>(int index)
             where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).JsonByteCount(1) == 1))
             {
                 if ((uint)index >= (uint)Buffer.Length)
                     return true;
@@ -1030,7 +1027,7 @@ namespace LuminPack.Core
             where TOptions : struct, ILuminPackOptions
         {
             value = 0;
-            int step = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2;
+            int step = default(TOptions).JsonByteCount(1);
             int i = Position;
             bool negative = false;
             if (!IsNumberAtEnd<TOptions>(i) && NumberCharAt<TOptions>(i) == '-')
@@ -1107,7 +1104,7 @@ namespace LuminPack.Core
                 return false;
             bool comma;
             int end;
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).JsonByteCount(1) == 1))
             {
                 comma = Buffer[index] == ',';
                 if (comma)
@@ -1130,7 +1127,7 @@ namespace LuminPack.Core
                 end = index + (utf16Name.Length + 3 + (comma ? 1 : 0)) * 2;
             }
 
-            if (default(TOptions).ValidateJsonSyntax)
+            if (default(TOptions).TracksJsonGrammar())
             {
                 // Preserve exactly the separator/container checks performed by ReadStrict.
                 if (Depth == 0 || !IsCurrentContainerObject() || (comma ? GrammarState != JsonStateAfterValue : !IsNameState(GrammarState)))
@@ -1139,7 +1136,7 @@ namespace LuminPack.Core
             }
 
             Position = end;
-            bool strict = default(TOptions).ValidateJsonSyntax;
+            bool strict = default(TOptions).TracksJsonGrammar();
             // Fixed strict profiles have already established the value state for this property.
             if ((!strict || LuminPackJsonWriter.HasConstantGeneratedPropertyEncoding<TOptions>()) &&
                 TryReadCurrentChar<TOptions>(out char head))
@@ -1276,14 +1273,14 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private bool IsNumberAtEnd<TOptions>(int index)
-            where TOptions : struct, ILuminPackOptions => (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? index >= Buffer.Length : index + 1 >= Buffer.Length;
+            where TOptions : struct, ILuminPackOptions => (default(TOptions).JsonByteCount(1) == 1) ? index >= Buffer.Length : index + 1 >= Buffer.Length;
         /// <summary>Performs the number char at step for the current operation.</summary>
         /// <param name = "index">The position at which the operation starts.</param>
         /// <returns>The result of the operation.</returns>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private char NumberCharAt<TOptions>(int index)
-            where TOptions : struct, ILuminPackOptions => (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? (char)Buffer[index] : LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(index)));
+            where TOptions : struct, ILuminPackOptions => (default(TOptions).JsonByteCount(1) == 1) ? (char)Buffer[index] : LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(index)));
         /// <summary>Performs the number digit at step for the current operation.</summary>
         /// <param name = "index">The position at which the operation starts.</param>
         /// <returns>The result of the operation.</returns>
@@ -1304,7 +1301,7 @@ namespace LuminPack.Core
         private JsonNumberShape ScanJsonNumber<TOptions>(int start)
             where TOptions : struct, ILuminPackOptions
         {
-            int step = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2;
+            int step = default(TOptions).JsonByteCount(1);
             int i = start;
             bool negative = false;
             if (!IsNumberAtEnd<TOptions>(i) && NumberCharAt<TOptions>(i) == '-')
@@ -1405,7 +1402,7 @@ namespace LuminPack.Core
         private bool TryAccumulateDecimalDigits<TOptions>(in JsonNumberShape shape, out ulong mantissa, out int exponent10)
             where TOptions : struct, ILuminPackOptions
         {
-            int step = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2;
+            int step = default(TOptions).JsonByteCount(1);
             mantissa = 0;
             exponent10 = 0;
             int digits = 0;
@@ -1466,7 +1463,7 @@ namespace LuminPack.Core
         private bool TryScanFloatingPoint<TOptions>(out ulong mantissa, out int exponent10, out bool negative, out int end, out bool exactMantissa)
             where TOptions : struct, ILuminPackOptions
         {
-            int step = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2;
+            int step = default(TOptions).JsonByteCount(1);
             int index = Position;
             negative = !IsNumberAtEnd<TOptions>(index) && NumberCharAt<TOptions>(index) == '-';
             if (negative)

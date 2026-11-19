@@ -171,7 +171,7 @@ namespace LuminPack.Core
         private bool TryReadCompleteEntryCore<TOptions, TKey, TValue>(ref TKey key, ref TValue value)
             where TOptions : struct, ILuminPackOptions
         {
-            if (default(TOptions).ValidateJsonSyntax || default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8)
+            if (default(TOptions).TracksJsonGrammar() || default(TOptions).JsonByteCount(1) != 1)
                 return false;
             if (CurrentTokenType != JsonTokenType.ArrayStart)
             {
@@ -296,7 +296,7 @@ namespace LuminPack.Core
         private bool TryReadEntryCore<TOptions, TKey, TValue>(ref TKey key, ref TValue value)
             where TOptions : struct, ILuminPackOptions
         {
-            if (default(TOptions).ValidateJsonSyntax || default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8 ||
+            if (default(TOptions).TracksJsonGrammar() || default(TOptions).JsonByteCount(1) != 1 ||
                 CurrentTokenType != JsonTokenType.ArrayStart)
                 return false;
             int start = Position;

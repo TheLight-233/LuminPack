@@ -136,7 +136,7 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
         if (entries.TryGetValue(methodTable, out entry))
             return true;
         entry = default;
-        return default(TOptions).StringEncoding == default(LuminPackDefaultOptions).StringEncoding && LuminPackFormatterRegistry.TryGetValue(methodTable, out entry);
+        return default(TOptions).JsonByteCount(1) == sizeof(char) && LuminPackFormatterRegistry.TryGetValue(methodTable, out entry);
     }
 }
 

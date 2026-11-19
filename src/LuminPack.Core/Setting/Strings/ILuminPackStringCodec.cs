@@ -4,9 +4,39 @@ using LuminPack.Core;
 
 namespace LuminPack.Option;
 
-/// <summary>Defines the operations of one stateless binary string representation.</summary>
+/// <summary>Defines a stateless binary string representation and its JSON document encoding.</summary>
 public interface ILuminPackStringCodec
 {
+    /// <summary>Reads a JSON value using the document codec's concrete code unit.</summary>
+    /// <typeparam name="TOperation">The stateless operation.</typeparam>
+    /// <typeparam name="TResult">The value type.</typeparam>
+    /// <param name="reader">The active reader.</param>
+    /// <returns>The decoded value.</returns>
+    TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader) where TOperation : struct, ILuminPackJsonReadOperation<TResult>;
+
+    /// <summary>Writes a JSON value using the document codec's concrete code unit.</summary>
+    /// <typeparam name="TOperation">The stateless operation.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    /// <param name="writer">The active writer.</param>
+    /// <param name="value">The value to write.</param>
+    void WriteJsonValue<TOperation, TValue>(scoped ref LuminPackJsonWriter writer, TValue value) where TOperation : struct, ILuminPackJsonWriteOperation<TValue>;
+
+    /// <summary>Returns the byte count for the given number of JSON code units.</summary>
+    /// <param name="units">The number of code units.</param>
+    /// <returns>The byte count.</returns>
+    int JsonByteCount(int units);
+
+    /// <summary>Peeks at a complete code unit at the current reader position.</summary>
+    /// <param name="reader">The active reader.</param>
+    /// <param name="value">The code unit, or zero for incomplete input.</param>
+    /// <returns>Whether the full code unit is available.</returns>
+    bool TryReadJsonUnit(scoped ref LuminPackJsonReader reader, out char value);
+
+    /// <summary>Writes one ASCII code unit in the document encoding.</summary>
+    /// <param name="writer">The destination writer.</param>
+    /// <param name="value">The ASCII value.</param>
+    void WriteJsonAscii(scoped ref LuminPackJsonWriter writer, byte value);
+
     /// <summary>Returns the reserved upper bound in bytes for a complete record.</summary>
     /// <param name="value">The nullable string to encode.</param>
     /// <returns>The number of bytes sufficient to hold the complete record.</returns>

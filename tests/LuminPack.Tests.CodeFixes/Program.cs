@@ -245,7 +245,7 @@ internal static class CodeFixChecks
         var errors = updated.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
         if (errors.Length != 0)
             throw new InvalidOperationException(string.Join(Environment.NewLine, errors.Select(d => d.ToString())));
-        Console.WriteLine("Passed binary string codec forwarding migration.");
+        Console.WriteLine("Passed binary string and JSON policy forwarding migration.");
     }
 
     /// <summary>Checks symbol-directed edits across files and all containing partial declarations.</summary>

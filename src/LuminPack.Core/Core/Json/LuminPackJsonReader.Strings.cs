@@ -19,8 +19,30 @@ namespace LuminPack.Core
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <returns>The parsed scalar.</returns>
         [EditorBrowsable(EditorBrowsableState.Never)]
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T ReadQuotedScalar<T, TOptions>() where T : struct where TOptions : struct, ILuminPackOptions
+        {
+            return default(TOptions).ReadJsonValue<ReadQuotedScalarOperation<T, TOptions>, T>(ref this);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="T">The requested scalar type.</typeparam>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct ReadQuotedScalarOperation<T, TOptions> : ILuminPackJsonReadOperation<T> where T : struct where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public T Read<TCodeUnit>(scoped ref LuminPackJsonReader reader) where TCodeUnit : unmanaged =>
+                reader.ReadQuotedScalarEncoded<T, TOptions, TCodeUnit>();
+        }
+
+        /// <summary>Reads the value in the selected document representation.</summary>
+        /// <typeparam name="T">The requested scalar type.</typeparam>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <returns>The decoded result.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private T ReadQuotedScalarEncoded<T, TOptions, TCodeUnit>() where T : struct where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
         {
             if (typeof(T) != typeof(DateTime) && typeof(T) != typeof(DateTimeOffset) &&
                 typeof(T) != typeof(TimeSpan) && typeof(T) != typeof(Guid) &&
@@ -33,7 +55,7 @@ namespace LuminPack.Core
             if (CurrentTokenType == JsonTokenType.String && CanReadQuotedScalarToken<TOptions>())
             {
                 const int StackTokenLimit = 128;
-                if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+                if (Unsafe.SizeOf<TCodeUnit>() == 1)
                 {
                     var utf8 = ReadSelectedStringUtf8<TOptions>(true);
                     if (utf8.Length <= StackTokenLimit)
@@ -283,8 +305,28 @@ namespace LuminPack.Core
         /// <summary>Parses the complete decoded string before publishing the integer.</summary>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <returns>The parsed arbitrary-precision integer.</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public System.Numerics.BigInteger ReadBigInteger<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            return default(TOptions).ReadJsonValue<ReadBigIntegerOperation<TOptions>, System.Numerics.BigInteger>(ref this);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct ReadBigIntegerOperation<TOptions> : ILuminPackJsonReadOperation<System.Numerics.BigInteger> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public System.Numerics.BigInteger Read<TCodeUnit>(scoped ref LuminPackJsonReader reader) where TCodeUnit : unmanaged =>
+                reader.ReadBigIntegerEncoded<TOptions, TCodeUnit>();
+        }
+
+        /// <summary>Reads the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <returns>The decoded result.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private System.Numerics.BigInteger ReadBigIntegerEncoded<TOptions, TCodeUnit>() where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
         {
             if (CurrentTokenType is not (JsonTokenType.String or JsonTokenType.Number or JsonTokenType.True or JsonTokenType.False or JsonTokenType.Null or JsonTokenType.PropertyName) && !Read<TOptions>())
                 LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value.");
@@ -294,7 +336,7 @@ namespace LuminPack.Core
                 CompleteValue();
                 return System.Numerics.BigInteger.Parse((string)null!, System.Globalization.CultureInfo.InvariantCulture);
             }
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (Unsafe.SizeOf<TCodeUnit>() == 1)
             {
                 var utf8 = ReadStringUtf8<TOptions>();
                 CompleteValue();
@@ -419,8 +461,28 @@ namespace LuminPack.Core
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <returns>The original cached or newly parsed zone.</returns>
         [EditorBrowsable(EditorBrowsableState.Never)]
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public TimeZoneInfo? ReadTimeZoneInfo<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            return default(TOptions).ReadJsonValue<ReadTimeZoneInfoOperation<TOptions>, TimeZoneInfo?>(ref this);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct ReadTimeZoneInfoOperation<TOptions> : ILuminPackJsonReadOperation<TimeZoneInfo?> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public TimeZoneInfo? Read<TCodeUnit>(scoped ref LuminPackJsonReader reader) where TCodeUnit : unmanaged =>
+                reader.ReadTimeZoneInfoEncoded<TOptions, TCodeUnit>();
+        }
+
+        /// <summary>Reads the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <returns>The decoded result.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private TimeZoneInfo? ReadTimeZoneInfoEncoded<TOptions, TCodeUnit>() where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
         {
             if (CurrentTokenType is not (JsonTokenType.String or JsonTokenType.Number or JsonTokenType.True or JsonTokenType.False or JsonTokenType.Null or JsonTokenType.PropertyName) && !Read<TOptions>())
                 LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value.");
@@ -431,7 +493,7 @@ namespace LuminPack.Core
                 // retains the original Read<string> followed by Parse failure and cursor state.
                 return LuminPackTimeZoneInfoCache.Parse(null!);
             }
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (Unsafe.SizeOf<TCodeUnit>() == 1)
                 return ParseTimeZoneUtf8(ReadStringUtf8<TOptions>());
             var text = ReadStringUtf16<TOptions>();
             CompleteValue();
@@ -475,8 +537,28 @@ namespace LuminPack.Core
         /// <summary>Keeps span decoding and BCL parsing state outside generated callers.</summary>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <returns>The parsed version, or null.</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private Version? ReadVersionValue<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            return default(TOptions).ReadJsonValue<ReadVersionValueOperation<TOptions>, Version?>(ref this);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct ReadVersionValueOperation<TOptions> : ILuminPackJsonReadOperation<Version?> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public Version? Read<TCodeUnit>(scoped ref LuminPackJsonReader reader) where TCodeUnit : unmanaged =>
+                reader.ReadVersionValueEncoded<TOptions, TCodeUnit>();
+        }
+
+        /// <summary>Reads the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <returns>The decoded result.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private Version? ReadVersionValueEncoded<TOptions, TCodeUnit>() where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
         {
 #if NET10_0_OR_GREATER
             if (CurrentTokenType == JsonTokenType.String)
@@ -491,11 +573,11 @@ namespace LuminPack.Core
             }
 #if NET10_0_OR_GREATER
             // The original unselected path decoded characters before parsing, including in its exception messages.
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (Unsafe.SizeOf<TCodeUnit>() == 1)
                 return ParseVersionUtf8(ReadStringUtf8<TOptions>());
         SelectedString:
 #endif
-            if (default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8)
+            if (Unsafe.SizeOf<TCodeUnit>() != 1)
             {
                 var text = ReadStringUtf16<TOptions>();
                 CompleteValue();
@@ -545,7 +627,7 @@ namespace LuminPack.Core
                 return;
             }
         SelectedString:
-            if (default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8)
+            if (default(TOptions).JsonByteCount(1) != 1)
             {
                 var text = ReadStringUtf16<TOptions>();
                 CompleteValue();
@@ -599,7 +681,7 @@ namespace LuminPack.Core
             }
             if (CurrentTokenType != JsonTokenType.String)
                 LuminPackExceptionHelper.ThrowFormatException("Expected string token");
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (default(TOptions).JsonByteCount(1) == 1)
             {
                 var text = ReadStringUtf8<TOptions>();
                 if (value is null || !StringSerializer.MatchesUtf8(text, value))
@@ -1176,7 +1258,7 @@ namespace LuminPack.Core
         {
             // The scalar token switch already selected a string or a property name.
             // Keep the original encoding checks for profiles that can execute customer code.
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (default(TOptions).JsonByteCount(1) == 1)
             {
                 if (LuminPackMarshal.ConstantStringProfile<TOptions>())
                     _ = ReadSelectedStringUtf8<TOptions>(false);
@@ -1205,7 +1287,7 @@ namespace LuminPack.Core
         {
             if (CurrentTokenType != JsonTokenType.String && CurrentTokenType != JsonTokenType.PropertyName)
                 LuminPackExceptionHelper.ThrowInvalidOperationException("Expected string");
-            if (!(default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if (!(default(TOptions).JsonByteCount(1) == 1))
                 LuminPackExceptionHelper.ThrowInvalidOperationException("The reader is configured for UTF-16 JSON");
             return ReadSelectedStringUtf8<TOptions>(unescape);
         }
@@ -1226,8 +1308,7 @@ namespace LuminPack.Core
             int special = remaining.IndexOfAny(NumberCharLookup.StringSpecialBytes);
             if (special >= 0 && remaining[special] == '"')
             {
-                if (default(TOptions).ValidateJsonSyntax && !StringSerializer.IsValidUtf8(remaining.Slice(0, special)))
-                    LuminPackExceptionHelper.ThrowFormatException("Invalid UTF-8 in JSON string");
+                default(TOptions).ValidateJsonUtf8(remaining.Slice(0, special));
                 AdvanceFromPosition(start, special + 1);
                 return remaining.Slice(0, special);
             }
@@ -1276,8 +1357,7 @@ namespace LuminPack.Core
                 if (b == '"')
                 {
                     var raw = Buffer.Slice(start, scan - start);
-                    if (default(TOptions).ValidateJsonSyntax && !StringSerializer.IsValidUtf8(raw))
-                        LuminPackExceptionHelper.ThrowFormatException("Invalid UTF-8 in JSON string");
+                    default(TOptions).ValidateJsonUtf8(raw);
                     Position = scan + 1;
                     if (!hasEscape)
                         return raw;
@@ -1321,11 +1401,31 @@ namespace LuminPack.Core
         /// <summary>Reads string from the current input.</summary>
         /// <returns>The result of the operation.</returns>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private string ReadString<TOptions>()
             where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            return default(TOptions).ReadJsonValue<ReadStringOperation<TOptions>, string>(ref this);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct ReadStringOperation<TOptions> : ILuminPackJsonReadOperation<string> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public string Read<TCodeUnit>(scoped ref LuminPackJsonReader reader) where TCodeUnit : unmanaged =>
+                reader.ReadStringEncoded<TOptions, TCodeUnit>();
+        }
+
+        /// <summary>Reads the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <returns>The decoded result.</returns>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private string ReadStringEncoded<TOptions, TCodeUnit>() where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
+            if ((Unsafe.SizeOf<TCodeUnit>() == 1))
             {
                 var utf8 = ReadStringUtf8<TOptions>();
                 return CreateUtf8String(utf8);
@@ -1383,7 +1483,7 @@ namespace LuminPack.Core
         {
             if (CurrentTokenType != JsonTokenType.String && CurrentTokenType != JsonTokenType.PropertyName)
                 LuminPackExceptionHelper.ThrowInvalidOperationException("Expected string");
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).JsonByteCount(1) == 1))
                 LuminPackExceptionHelper.ThrowInvalidOperationException("The reader is configured for UTF-8 JSON");
             return ReadSelectedStringUtf16<TOptions>(unescape);
         }
@@ -1493,7 +1593,7 @@ namespace LuminPack.Core
         private int FindStringSpecial<TOptions>(int scan) where TOptions : struct, ILuminPackOptions
         {
             // Keep the bounded search setup outside the scalar loop used by dense escapes.
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (default(TOptions).JsonByteCount(1) == 1)
                 return Buffer.Slice(scan).IndexOfAny(NumberCharLookup.StringSpecialBytes);
             int available = (Buffer.Length - scan) & ~1;
             var remaining = MemoryMarshal.Cast<byte, char>(Buffer.Slice(scan, available));
@@ -1532,7 +1632,7 @@ namespace LuminPack.Core
         public int ReadStringChoice<TOptions>(ReadOnlySpan<byte> firstUtf8, ReadOnlySpan<char> firstUtf16, ReadOnlySpan<byte> secondUtf8, ReadOnlySpan<char> secondUtf16)
             where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).JsonByteCount(1) == 1))
             {
                 var value = ReadStringUtf8<TOptions>();
                 if (value.SequenceEqual(firstUtf8))
@@ -1562,7 +1662,7 @@ namespace LuminPack.Core
         private ulong ParseUnsignedDigits<TOptions>(int start, int end, string error)
             where TOptions : struct, ILuminPackOptions
         {
-            int step = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2;
+            int step = default(TOptions).JsonByteCount(1);
             if ((end - start) / step > 20)
                 ThrowMalformedJson(error);
             if (end - start == step)

@@ -418,19 +418,27 @@ namespace LuminPack.Core
         public void WriteByteRaw<TOptions>(byte value)
             where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
-            {
-                EnsureCapacity(1);
-                Current = value;
-                Advance(1);
-            }
-            else
-            {
-                EnsureCapacity(2);
-                ref byte dst = ref Current;
-                LuminPackWriter.Write(ref dst, (char)value);
-                Advance(2);
-            }
+            default(TOptions).WriteJsonAscii(ref this, value);
+        }
+
+        /// <summary>Writes an ASCII byte at the current UTF-8 position.</summary>
+        /// <param name="value">The ASCII code unit.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteJsonAsciiByte(byte value)
+        {
+            EnsureCapacity(1);
+            Current = value;
+            Advance(1);
+        }
+
+        /// <summary>Writes an ASCII character at the current UTF-16 position.</summary>
+        /// <param name="value">The ASCII code unit.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void WriteJsonAsciiChar(byte value)
+        {
+            EnsureCapacity(2);
+            LuminPackWriter.Write(ref Current, (char)value);
+            Advance(2);
         }
 
         /// <summary>Writes a generated native-word UTF-8 property prefix and its integer value.</summary>
@@ -551,7 +559,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryWriteSeparatedArrayStart<TOptions>() where TOptions : struct, ILuminPackOptions
         {
-            bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+            bool utf8 = default(TOptions).JsonByteCount(1) == 1;
             int length = utf8 ? 2 : 4;
             if (!HasEnumerationCapacity(length))
                 return false;
@@ -591,7 +599,7 @@ namespace LuminPack.Core
         {
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(Quote);
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).JsonByteCount(1) == 1))
                 WriteStringContentUtf8Raw<TOptions>(utf8PropertyName);
             else
                 WriteUtf8NameAsUtf16<TOptions>(utf8PropertyName);
@@ -633,7 +641,7 @@ namespace LuminPack.Core
         {
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(Quote);
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).JsonByteCount(1) == 1))
             {
                 WriteStringContentUtf8<TOptions>(utf16PropertyName);
             }
@@ -661,7 +669,7 @@ namespace LuminPack.Core
         {
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(Quote);
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).JsonByteCount(1) == 1))
                 WriteFormattedAscii(text);
             else
                 WriteRaw(text);
@@ -710,8 +718,28 @@ namespace LuminPack.Core
         public void Write<TOptions>(DateTime value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteDateTimeOperation<TOptions>, DateTime>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteDateTimeOperation<TOptions> : ILuminPackJsonWriteOperation<DateTime> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, DateTime value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(DateTime value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
 #if NET8_0_OR_GREATER
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (Unsafe.SizeOf<TCodeUnit>() == 1)
             {
                 Span<byte> utf8 = stackalloc byte[33];
                 if (value.TryFormat(utf8, out int utf8Written, "O"))
@@ -740,8 +768,28 @@ namespace LuminPack.Core
         public void Write<TOptions>(DateTimeOffset value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteDateTimeOffsetOperation<TOptions>, DateTimeOffset>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteDateTimeOffsetOperation<TOptions> : ILuminPackJsonWriteOperation<DateTimeOffset> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, DateTimeOffset value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(DateTimeOffset value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
 #if NET8_0_OR_GREATER
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (Unsafe.SizeOf<TCodeUnit>() == 1)
             {
                 Span<byte> utf8 = stackalloc byte[33];
                 if (value.TryFormat(utf8, out int utf8Written, "O"))
@@ -770,8 +818,28 @@ namespace LuminPack.Core
         public void Write<TOptions>(Guid value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteGuidOperation<TOptions>, Guid>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteGuidOperation<TOptions> : ILuminPackJsonWriteOperation<Guid> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, Guid value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(Guid value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
 #if NET8_0_OR_GREATER
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (Unsafe.SizeOf<TCodeUnit>() == 1)
             {
                 WriteGuidUtf8Destination<TOptions>(value);
                 return;
@@ -812,8 +880,28 @@ namespace LuminPack.Core
         public void Write<TOptions>(TimeSpan value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteTimeSpanOperation<TOptions>, TimeSpan>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteTimeSpanOperation<TOptions> : ILuminPackJsonWriteOperation<TimeSpan> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, TimeSpan value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(TimeSpan value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
 #if NET8_0_OR_GREATER
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (Unsafe.SizeOf<TCodeUnit>() == 1)
             {
                 Span<byte> utf8 = stackalloc byte[32];
                 if (value.TryFormat(utf8, out int utf8Written, "c"))
@@ -1016,12 +1104,32 @@ namespace LuminPack.Core
         /// <summary>Keeps bounded component formatting outside generated callers and null writes.</summary>
         /// <param name="value">The nonnull version.</param>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteVersionValue<TOptions>(Version value) where TOptions : struct, ILuminPackOptions
+        {
+            default(TOptions).WriteJsonValue<WriteVersionValueVersionOperation<TOptions>, Version>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteVersionValueVersionOperation<TOptions> : ILuminPackJsonWriteOperation<Version> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, Version value) where TCodeUnit : unmanaged =>
+                writer.WriteVersionValueEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteVersionValueEncoded<TOptions, TCodeUnit>(Version value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
         {
             // Four nonnegative Int32 components and three separators require at most 43 characters.
 #if NET8_0_OR_GREATER
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (Unsafe.SizeOf<TCodeUnit>() == 1)
             {
                 Span<byte> utf8 = stackalloc byte[43];
                 if (value.TryFormat(utf8, out int written))
@@ -1047,12 +1155,32 @@ namespace LuminPack.Core
         /// <summary>Writes a date in its round-trip JSON string form without an intermediate string.</summary>
         /// <param name="value">The date to write.</param>
         /// <typeparam name="TOptions">The stateless document profile.</typeparam>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(DateOnly value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteDateOnlyOperation<TOptions>, DateOnly>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteDateOnlyOperation<TOptions> : ILuminPackJsonWriteOperation<DateOnly> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, DateOnly value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(DateOnly value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
 #if NET8_0_OR_GREATER
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (Unsafe.SizeOf<TCodeUnit>() == 1)
             {
                 Span<byte> utf8 = stackalloc byte[10];
                 if (value.TryFormat(utf8, out int utf8Written, "O"))
@@ -1073,12 +1201,32 @@ namespace LuminPack.Core
         /// <summary>Writes a time in its round-trip JSON string form without an intermediate string.</summary>
         /// <param name="value">The time to write.</param>
         /// <typeparam name="TOptions">The stateless document profile.</typeparam>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(TimeOnly value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteTimeOnlyOperation<TOptions>, TimeOnly>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteTimeOnlyOperation<TOptions> : ILuminPackJsonWriteOperation<TimeOnly> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, TimeOnly value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(TimeOnly value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
 #if NET8_0_OR_GREATER
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (Unsafe.SizeOf<TCodeUnit>() == 1)
             {
                 Span<byte> utf8 = stackalloc byte[16];
                 if (value.TryFormat(utf8, out int utf8Written, "O"))
@@ -1099,12 +1247,32 @@ namespace LuminPack.Core
         /// <summary>Writes a signed 128-bit integer as an invariant decimal JSON string without an intermediate string.</summary>
         /// <param name="value">The integer to write.</param>
         /// <typeparam name="TOptions">The stateless document profile.</typeparam>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(Int128 value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteInt128Operation<TOptions>, Int128>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteInt128Operation<TOptions> : ILuminPackJsonWriteOperation<Int128> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, Int128 value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(Int128 value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
 #if NET8_0_OR_GREATER
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (Unsafe.SizeOf<TCodeUnit>() == 1)
             {
                 Span<byte> utf8 = stackalloc byte[40];
                 if (value.TryFormat(utf8, out int utf8Written, default, System.Globalization.CultureInfo.InvariantCulture))
@@ -1125,12 +1293,32 @@ namespace LuminPack.Core
         /// <summary>Writes an unsigned 128-bit integer as an invariant decimal JSON string without an intermediate string.</summary>
         /// <param name="value">The integer to write.</param>
         /// <typeparam name="TOptions">The stateless document profile.</typeparam>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(UInt128 value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteUInt128Operation<TOptions>, UInt128>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteUInt128Operation<TOptions> : ILuminPackJsonWriteOperation<UInt128> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, UInt128 value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(UInt128 value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
 #if NET8_0_OR_GREATER
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (Unsafe.SizeOf<TCodeUnit>() == 1)
             {
                 Span<byte> utf8 = stackalloc byte[39];
                 if (value.TryFormat(utf8, out int utf8Written, default, System.Globalization.CultureInfo.InvariantCulture))
@@ -1189,7 +1377,7 @@ namespace LuminPack.Core
         private Span<byte> ReserveFloatingDestination<TOptions>(bool finite, int utf8ByteCount, out bool utf8)
             where TOptions : struct, ILuminPackOptions
         {
-            utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+            utf8 = default(TOptions).JsonByteCount(1) == 1;
             int byteCount = utf8 ? utf8ByteCount : 64;
             if (LuminPackMarshal.ConstantStringProfile<TOptions>())
             {
@@ -1201,7 +1389,7 @@ namespace LuminPack.Core
             EnsureCapacity(byteCount);
             if (!finite)
                 LuminPackExceptionHelper.ThrowFormatException("NaN and Infinity are not valid JSON numbers");
-            utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+            utf8 = default(TOptions).JsonByteCount(1) == 1;
             return Buffer.Slice(Position);
         }
 
@@ -1261,8 +1449,28 @@ namespace LuminPack.Core
         private void WriteIntegerValue<TOptions>(int value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteIntegerValueInt32Operation<TOptions>, int>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteIntegerValueInt32Operation<TOptions> : ILuminPackJsonWriteOperation<int> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, int value) where TCodeUnit : unmanaged =>
+                writer.WriteIntegerValueEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteIntegerValueEncoded<TOptions, TCodeUnit>(int value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((Unsafe.SizeOf<TCodeUnit>() == 1))
             {
                 Advance(LuminPackJsonNumberFormatter.WriteInt32(ReserveCheckedDestination(11, keepTailOnMiss: true), value));
             }
@@ -1277,12 +1485,32 @@ namespace LuminPack.Core
         /// <summary>Writes u int to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(uint value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteUInt32Operation<TOptions>, uint>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteUInt32Operation<TOptions> : ILuminPackJsonWriteOperation<uint> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, uint value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(uint value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((Unsafe.SizeOf<TCodeUnit>() == 1))
             {
                 Advance(LuminPackJsonNumberFormatter.WriteUInt32(ReserveCheckedDestination(10, keepTailOnMiss: true), value));
             }
@@ -1297,12 +1525,32 @@ namespace LuminPack.Core
         /// <summary>Writes byte to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(byte value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteByteOperation<TOptions>, byte>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteByteOperation<TOptions> : ILuminPackJsonWriteOperation<byte> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, byte value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(byte value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((Unsafe.SizeOf<TCodeUnit>() == 1))
             {
                 // The packed formatter writes four bytes, even for shorter numbers.
                 Advance(LuminPackJsonNumberFormatter.WriteByte(ReserveCheckedDestination(4, keepTailOnMiss: true), value));
@@ -1318,12 +1566,32 @@ namespace LuminPack.Core
         /// <summary>Writes s byte to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(sbyte value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteSByteOperation<TOptions>, sbyte>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteSByteOperation<TOptions> : ILuminPackJsonWriteOperation<sbyte> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, sbyte value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(sbyte value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((Unsafe.SizeOf<TCodeUnit>() == 1))
             {
                 // Reserve the sign and the complete four-byte packed store.
                 Advance(LuminPackJsonNumberFormatter.WriteSByte(ReserveCheckedDestination(5, keepTailOnMiss: true), value));
@@ -1339,12 +1607,32 @@ namespace LuminPack.Core
         /// <summary>Writes short to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(short value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteInt16Operation<TOptions>, short>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteInt16Operation<TOptions> : ILuminPackJsonWriteOperation<short> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, short value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(short value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((Unsafe.SizeOf<TCodeUnit>() == 1))
             {
                 EnsureCapacity(6);
                 Advance(LuminPackJsonNumberFormatter.WriteShort(Buffer.Slice(Position), value));
@@ -1360,12 +1648,32 @@ namespace LuminPack.Core
         /// <summary>Writes u short to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(ushort value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteUInt16Operation<TOptions>, ushort>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteUInt16Operation<TOptions> : ILuminPackJsonWriteOperation<ushort> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, ushort value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(ushort value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((Unsafe.SizeOf<TCodeUnit>() == 1))
             {
                 Advance(LuminPackJsonNumberFormatter.WriteUShort(ReserveCheckedDestination(5, keepTailOnMiss: true), value));
             }
@@ -1394,8 +1702,28 @@ namespace LuminPack.Core
         private void WriteIntegerValue<TOptions>(long value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteIntegerValueInt64Operation<TOptions>, long>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteIntegerValueInt64Operation<TOptions> : ILuminPackJsonWriteOperation<long> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, long value) where TCodeUnit : unmanaged =>
+                writer.WriteIntegerValueEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteIntegerValueEncoded<TOptions, TCodeUnit>(long value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((Unsafe.SizeOf<TCodeUnit>() == 1))
             {
                 Advance(LuminPackJsonNumberFormatter.WriteLong(ReserveCheckedDestination(20), value));
             }
@@ -1410,12 +1738,32 @@ namespace LuminPack.Core
         /// <summary>Writes u long to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(ulong value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteUInt64Operation<TOptions>, ulong>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteUInt64Operation<TOptions> : ILuminPackJsonWriteOperation<ulong> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, ulong value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(ulong value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((Unsafe.SizeOf<TCodeUnit>() == 1))
             {
                 Advance(LuminPackJsonNumberFormatter.WriteULong(ReserveCheckedDestination(20), value));
             }
@@ -1430,12 +1778,32 @@ namespace LuminPack.Core
         /// <summary>Writes decimal to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(decimal value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteDecimalOperation<TOptions>, decimal>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteDecimalOperation<TOptions> : ILuminPackJsonWriteOperation<decimal> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, decimal value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(decimal value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((Unsafe.SizeOf<TCodeUnit>() == 1))
             {
                 Advance(LuminPackJsonNumberFormatter.WriteDecimal(ReserveCheckedDestination(31, keepTailOnMiss: true), value));
             }
@@ -1450,9 +1818,29 @@ namespace LuminPack.Core
         /// <summary>Writes char to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(char value)
             where TOptions : struct, ILuminPackOptions
+        {
+            default(TOptions).WriteJsonValue<WriteCharOperation<TOptions>, char>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteCharOperation<TOptions> : ILuminPackJsonWriteOperation<char> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, char value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(char value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
         {
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(Quote);
@@ -1482,7 +1870,7 @@ namespace LuminPack.Core
                 WriteByteRaw<TOptions>(HexChar((value >> 4) & 0xF));
                 WriteByteRaw<TOptions>(HexChar(value & 0xF));
             }
-            else if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            else if ((Unsafe.SizeOf<TCodeUnit>() == 1))
             {
                 if (value <= 0x7F)
                 {
@@ -1510,12 +1898,32 @@ namespace LuminPack.Core
         /// <summary>Writes bool to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(bool value)
             where TOptions : struct, ILuminPackOptions
         {
+            default(TOptions).WriteJsonValue<WriteBooleanOperation<TOptions>, bool>(ref this, value);
+        }
+
+        /// <summary>Runs the scalar kernel with the document codec's concrete code unit.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        private readonly struct WriteBooleanOperation<TOptions> : ILuminPackJsonWriteOperation<bool> where TOptions : struct, ILuminPackOptions
+        {
+            /// <inheritdoc/>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public void Write<TCodeUnit>(scoped ref LuminPackJsonWriter writer, bool value) where TCodeUnit : unmanaged =>
+                writer.WriteEncoded<TOptions, TCodeUnit>(value);
+        }
+
+        /// <summary>Writes the value in the selected document representation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TCodeUnit">The physical code unit.</typeparam>
+        /// <param name="value">The value to encode.</param>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private void WriteEncoded<TOptions, TCodeUnit>(bool value) where TOptions : struct, ILuminPackOptions where TCodeUnit : unmanaged
+        {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((Unsafe.SizeOf<TCodeUnit>() == 1))
             {
                 if (value)
                 {
@@ -1573,7 +1981,7 @@ namespace LuminPack.Core
         private void WriteNullInternal<TOptions>()
             where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).JsonByteCount(1) == 1))
             {
                 EnsureCapacity(4);
                 ref byte dst = ref Current;

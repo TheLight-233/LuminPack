@@ -73,7 +73,7 @@ internal sealed class DictionaryJsonPairWriter
             string memory = w.A("Unsafe");
             if (_utf8Only)
             {
-                w.Line("if (default(TLuminProfile).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)");
+                w.Line("if (default(TLuminProfile).JsonByteCount(1) == 1)");
                 w.Open();
             }
             string pairKey = _utf8Only ? "integerKey" : "key";

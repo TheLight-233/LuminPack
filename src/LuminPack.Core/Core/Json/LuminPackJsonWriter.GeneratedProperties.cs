@@ -31,7 +31,7 @@ namespace LuminPack.Core
             if (Unsafe.SizeOf<IntPtr>() != 8 || !HasConstantGeneratedPropertyEncoding<TOptions>())
                 return false;
 
-            bool useUtf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+            bool useUtf8 = default(TOptions).JsonByteCount(1) == 1;
             ReadOnlySpan<byte> head = useUtf8 ? utf8 : MemoryMarshal.AsBytes(utf16);
             int skip = IsFirstElement ? (useUtf8 ? 1 : 2) : 0;
             int count = head.Length - skip;

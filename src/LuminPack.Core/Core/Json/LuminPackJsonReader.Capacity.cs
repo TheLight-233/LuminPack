@@ -55,7 +55,7 @@ namespace LuminPack.Core
             int position = Position;
             if ((uint)position > (uint)Buffer.Length)
                 return false;
-            int step = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? 1 : 2;
+            int step = default(TOptions).JsonByteCount(1);
             return (uint)minimum <= (uint)(Buffer.Length - position) / (uint)step;
         }
 
@@ -76,10 +76,10 @@ namespace LuminPack.Core
                 return -1;
             var tail = Buffer.Slice(position);
 #if NETSTANDARD2_1
-            if (LuminPackBurst.TryJsonArrayHint(tail, default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8, false, out int nativeCount))
+            if (LuminPackBurst.TryJsonArrayHint(tail, default(TOptions).JsonByteCount(1) == 1, false, out int nativeCount))
                 return nativeCount;
 #endif
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            if (default(TOptions).JsonByteCount(1) == 1)
                 return ScanHintByte(tail);
             if ((tail.Length & 1) != 0)
                 return -1;
@@ -101,7 +101,7 @@ namespace LuminPack.Core
             where TOptions : struct, ILuminPackOptions
         {
             int position = Position;
-            int step = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? 1 : 2;
+            int step = default(TOptions).JsonByteCount(1);
             if (CurrentTokenType != JsonTokenType.ArrayStart || (uint)position > (uint)Buffer.Length || Buffer.Length - position < 24 * step)
                 return 0;
             var tail = Buffer.Slice(position);

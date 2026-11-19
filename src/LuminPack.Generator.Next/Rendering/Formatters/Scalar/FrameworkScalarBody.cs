@@ -110,7 +110,7 @@ internal static class FrameworkScalarBody
         foreach (string method in reads)
             text = text.Replace("reader." + method + "(", "reader." + method + "<TLuminProfile>(");
         text = text.Replace("reader.ReadString()", "reader.Read<string, TLuminProfile>()");
-        text = text.Replace("reader.Option.StringEncoding", "default(TLuminProfile).StringEncoding");
+        text = text.Replace("reader.Option.JsonByteCount(1)", "default(TLuminProfile).JsonByteCount(1)");
         foreach (string line in text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
             if (line.Length != 0)
                 writer.Line(line.TrimStart());
@@ -391,7 +391,7 @@ internal static class FrameworkScalarBody
         sb.AppendLine("                value = global::System.DateOnly.ParseExact(reader.ReadString(), \"O\", global::System.Globalization.CultureInfo.InvariantCulture);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        sb.AppendLine("            if (reader.Option.StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16)");
+        sb.AppendLine("            if (reader.Option.JsonByteCount(1) == sizeof(char))");
         sb.AppendLine("            {");
         sb.AppendLine("                var text = reader.ReadStringUtf16();");
         sb.AppendLine("                reader.CompleteValue();");
@@ -454,7 +454,7 @@ internal static class FrameworkScalarBody
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
         sb.AppendLine("                {");
         sb.AppendLine("                    char propertyName;");
-        sb.AppendLine("                    if (reader.Option.StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)");
+        sb.AppendLine("                    if (reader.Option.JsonByteCount(1) == 1)");
         sb.AppendLine("                    {");
         sb.AppendLine("                        var name = reader.ReadStringUtf8();");
         sb.AppendLine("                        propertyName = name.Length == 1 ? (char)name[0] : default(char);");

@@ -190,7 +190,7 @@ public static class LuminPackKnownFormatters
     {
         if (reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.String)
             return DateOnly.ParseExact(reader.Read<string, TOptions>(), "O", CultureInfo.InvariantCulture);
-        if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16)
+        if (default(TOptions).JsonByteCount(1) == sizeof(char))
         {
             var text = reader.ReadStringUtf16<TOptions>();
             reader.CompleteValue();

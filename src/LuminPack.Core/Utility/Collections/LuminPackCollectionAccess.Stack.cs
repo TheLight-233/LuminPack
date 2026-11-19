@@ -281,7 +281,7 @@ public static partial class LuminPackCollectionAccess
     public static bool TryWriteIntegerStackJson<TOptions, T>(scoped ref LuminPackJsonWriter writer, Stack<T> stack)
         where TOptions : struct, ILuminPackOptions where T : unmanaged
     {
-        if (default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8 ||
+        if (default(TOptions).JsonByteCount(1) != 1 ||
             (typeof(T) != typeof(int) && typeof(T) != typeof(long)))
             return false;
         int count = stack.Count;

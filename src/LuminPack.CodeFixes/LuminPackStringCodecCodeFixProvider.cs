@@ -13,7 +13,7 @@ using Microsoft.CodeAnalysis.Formatting;
 
 namespace LuminPack.CodeFixes;
 
-/// <summary>Completes a stateless profile by forwarding missing binary string operations to a built-in codec.</summary>
+/// <summary>Completes a stateless profile by forwarding missing string and JSON operations to compiled policies.</summary>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(LuminPackStringCodecCodeFixProvider)), Shared]
 public sealed class LuminPackStringCodecCodeFixProvider : CodeFixProvider
 {
@@ -37,9 +37,10 @@ public sealed class LuminPackStringCodecCodeFixProvider : CodeFixProvider
             return;
         var options = model.Compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
         var contract = model.Compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackStringCodec");
-        if (contract == null || !profile.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, options)))
+        if (options == null || contract == null || !profile.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, options)))
             return;
-        var missing = contract.GetMembers().Where(m => (m is IPropertySymbol or IMethodSymbol { MethodKind: MethodKind.Ordinary }) &&
+        var missing = contract.GetMembers().Concat(options.GetMembers().Where(m =>
+            m.Name is "CheckJsonDepth" or "TracksJsonGrammar" or "ReadJsonToken" or "ValidateJsonUtf8")).Where(m => (m is IPropertySymbol or IMethodSymbol { MethodKind: MethodKind.Ordinary }) &&
             profile.FindImplementationForInterfaceMember(m) == null).ToArray();
         if (missing.Length == 0)
             return;
@@ -56,7 +57,7 @@ public sealed class LuminPackStringCodecCodeFixProvider : CodeFixProvider
                 continue;
             context.RegisterCodeFix(CodeAction.Create("Forward string operations to " + name,
                 _ => Task.FromResult(context.Document.WithSyntaxRoot(root!.ReplaceNode(declaration,
-                    declaration.AddMembers(missing.Select(m => Forward(m, codec)).ToArray())))), name), context.Diagnostics);
+                    declaration.AddMembers(missing.Select(m => Forward(m, codec, options)).ToArray())))), name), context.Diagnostics);
         }
     }
 
@@ -83,8 +84,9 @@ public sealed class LuminPackStringCodecCodeFixProvider : CodeFixProvider
     /// <summary>Builds one forwarding member from the compiled interface signature.</summary>
     /// <param name="member">The unimplemented interface operation or metadata property.</param>
     /// <param name="codec">The concrete stateless codec.</param>
+    /// <param name="options">The interface declaring the grammar and depth operations.</param>
     /// <returns>The documented forwarding declaration.</returns>
-    private static MemberDeclarationSyntax Forward(ISymbol member, INamedTypeSymbol codec)
+    private static MemberDeclarationSyntax Forward(ISymbol member, INamedTypeSymbol codec, INamedTypeSymbol options)
     {
         string receiver = "default(" + codec.ToDisplayString(TypeFormat) + ")." + member.Name;
         const string inline = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]";
@@ -97,8 +99,26 @@ public sealed class LuminPackStringCodecCodeFixProvider : CodeFixProvider
             string refReturn = m.ReturnsByRef ? "ref " : "";
             string signature = string.Join(", ", m.Parameters.Select(p => Scope(p) + Passing(p) + p.Type.ToDisplayString(TypeFormat) + " " + p.Name));
             string args = string.Join(", ", m.Parameters.Select(p => Passing(p) + p.Name));
-            source = inline + "\npublic " + refReturn + m.ReturnType.ToDisplayString(TypeFormat) + " " + m.Name +
-                "(" + signature + ") => " + refReturn + receiver + "(" + args + ");";
+            string parameters = m.Arity == 0 ? "" : "<" + string.Join(", ", m.TypeParameters.Select(t => t.Name)) + ">";
+            string constraints = string.Concat(m.TypeParameters.Where(t => t.HasValueTypeConstraint).Select(t =>
+                " where " + t.Name + " : struct" + string.Concat(t.ConstraintTypes.Select(c => ", " + c.ToDisplayString(TypeFormat)))));
+            string call = m.Name + parameters + "(" + args + ")";
+            string expression = refReturn + receiver + parameters + "(" + args + ")";
+            if (SymbolEqualityComparer.Default.Equals(m.ContainingType, options))
+            {
+                const string strict = "default(global::LuminPack.Option.LuminPackStrictJson).";
+                expression = m.Name switch
+                {
+                    "CheckJsonDepth" => "global::LuminPack.Option.LuminPackJsonPolicy.CheckDepth(depth, MaxJsonDepth)",
+                    "TracksJsonGrammar" => "ValidateJsonSyntax",
+                    "ReadJsonToken" => "ValidateJsonSyntax ? " + strict + call +
+                        " : default(global::LuminPack.Option.LuminPackTrustedJson)." + call,
+                    _ => strict + call
+                };
+            }
+            string body = m.Name == "ValidateJsonUtf8" ? " { if (ValidateJsonSyntax) " + expression + "; }" : " => " + expression + ";";
+            source = inline + "\npublic " + refReturn + m.ReturnType.ToDisplayString(TypeFormat) + " " + m.Name + parameters +
+                "(" + signature + ")" + constraints + body;
         }
         return SyntaxFactory.ParseMemberDeclaration("/// <inheritdoc/>\n" + source)!.WithAdditionalAnnotations(Formatter.Annotation);
     }

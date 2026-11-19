@@ -4,10 +4,28 @@ using System.Runtime.CompilerServices;
 
 namespace LuminPack.Option;
 
-/// <summary>Defines stateless string operations and JSON settings for a compiled profile.</summary>
-/// <remarks>Implementations have no instance state. Binary string operations delegate to the selected codec.</remarks>
+/// <summary>Defines stateless string, JSON grammar and depth operations for a compiled profile.</summary>
+/// <remarks>Implementations have no instance state. String operations delegate to the selected codec. JSON policies apply to the whole document.</remarks>
 public interface ILuminPackOptions : ILuminPackStringCodec
 {
+    /// <summary>Advances the document reader with the selected grammar.</summary>
+    /// <typeparam name="TProfile">The complete document profile.</typeparam>
+    /// <param name="reader">The active document reader.</param>
+    /// <returns>Whether a token was selected.</returns>
+    bool ReadJsonToken<TProfile>(scoped ref LuminPackJsonReader reader) where TProfile : struct, ILuminPackOptions;
+
+    /// <summary>Determines whether speculative reads must retain strict grammar state.</summary>
+    /// <returns>Whether strict grammar state is required.</returns>
+    bool TracksJsonGrammar();
+
+    /// <summary>Validates the UTF-8 bytes of a JSON string when required.</summary>
+    /// <param name="text">The bytes between validated token boundaries.</param>
+    void ValidateJsonUtf8(scoped ReadOnlySpan<byte> text);
+
+    /// <summary>Checks the depth after entering a JSON container.</summary>
+    /// <param name="depth">The depth after consuming the opening token.</param>
+    void CheckJsonDepth(int depth);
+
     /// <summary>Gets the selected string encoding.</summary>
     LuminPackStringEncoding StringEncoding
     {
@@ -43,6 +61,53 @@ public interface ILuminPackOptions : ILuminPackStringCodec
 /// <summary>Provides the fixed UTF-16, length-prefixed, trusted-JSON library defaults.</summary>
 public readonly struct LuminPackDefaultOptions : ILuminPackOptions
 {
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
+        where TOperation : struct, ILuminPackJsonReadOperation<TResult> =>
+        default(LuminPackUtf16LengthStrings).ReadJsonValue<TOperation, TResult>(ref reader);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteJsonValue<TOperation, TValue>(scoped ref LuminPackJsonWriter writer, TValue value)
+        where TOperation : struct, ILuminPackJsonWriteOperation<TValue> =>
+        default(LuminPackUtf16LengthStrings).WriteJsonValue<TOperation, TValue>(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int JsonByteCount(int units) =>
+        default(LuminPackUtf16LengthStrings).JsonByteCount(units);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryReadJsonUnit(scoped ref LuminPackJsonReader reader, out char value) =>
+        default(LuminPackUtf16LengthStrings).TryReadJsonUnit(ref reader, out value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteJsonAscii(scoped ref LuminPackJsonWriter writer, byte value) =>
+        default(LuminPackUtf16LengthStrings).WriteJsonAscii(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool ReadJsonToken<TProfile>(scoped ref LuminPackJsonReader reader) where TProfile : struct, ILuminPackOptions =>
+        default(LuminPackTrustedJson).ReadJsonToken<TProfile>(ref reader);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TracksJsonGrammar() =>
+        default(LuminPackTrustedJson).TracksJsonGrammar();
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ValidateJsonUtf8(scoped ReadOnlySpan<byte> text) =>
+        default(LuminPackTrustedJson).ValidateJsonUtf8(text);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void CheckJsonDepth(int depth) =>
+        default(LuminPackDefaultDepth).CheckJsonDepth(depth);
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int RecordBound(string? value) =>

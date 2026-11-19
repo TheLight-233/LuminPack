@@ -10,6 +10,33 @@ public readonly struct LuminPackUtf16VarIntStrings : ILuminPackStringCodec
 {
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
+        where TOperation : struct, ILuminPackJsonReadOperation<TResult> =>
+        default(TOperation).Read<char>(ref reader);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteJsonValue<TOperation, TValue>(scoped ref LuminPackJsonWriter writer, TValue value)
+        where TOperation : struct, ILuminPackJsonWriteOperation<TValue> =>
+        default(TOperation).Write<char>(ref writer, value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int JsonByteCount(int units) =>
+        units * sizeof(char);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryReadJsonUnit(scoped ref LuminPackJsonReader reader, out char value) =>
+        reader.TryPeekJsonUnit<char>(out value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteJsonAscii(scoped ref LuminPackJsonWriter writer, byte value) =>
+        writer.WriteJsonAsciiChar(value);
+
+    /// <inheritdoc/>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int RecordBound(string? value) =>
         checked((value?.Length ?? 0) * sizeof(char) + 5);
 

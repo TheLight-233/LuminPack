@@ -95,6 +95,10 @@ public void Skip(scoped ref LuminPackReader reader, int maxStringLength = int.Ma
     => default(LuminPackUtf8VarIntStrings).Skip(ref reader, maxStringLength);
 ```
 
+For a custom JSON profile, forward scalar reads and writes and the code-unit operations to the string codec. Forward token reads, grammar tracking and UTF-8 string validation to LuminPackStrictJson or LuminPackTrustedJson. Implement CheckJsonDepth by calling LuminPackJsonPolicy.CheckDepth(depth, MaxJsonDepth). The code fix can generate these forwards from the existing options. Keep metadata and the chosen policy consistent so registered formatters and generated calls agree.
+
+A depth component can override the check or inherit the standard bound check from its Value property. To supply a dedicated check, implement both `Value` and `CheckJsonDepth(int depth)`. Forward the latter to `LuminPackJsonPolicy.CheckDepth(depth, Value)` for the standard limit semantics. A nonpositive limit permits unbounded nesting.
+
 ## Compact length headers
 
 Select `VarInt` for collections of small strings when reducing bytes matters more than peak encoding speed:
