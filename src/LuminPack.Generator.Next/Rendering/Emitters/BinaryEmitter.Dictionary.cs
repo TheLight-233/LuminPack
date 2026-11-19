@@ -85,11 +85,11 @@ internal static partial class BinaryEmitter
                 current = true;
             }
             if (header)
-                AddReservedSegment(model, w, body, index, last, header: true, camel: true);
+                AddReservedSegment(model, w, body, names, index, last, header: true, camel: true);
             else if (last == index)
                 AddLoneRecord(model, w, body, member);
             else
-                AddReservedSegment(model, w, body, index, last, header: false, camel: true);
+                AddReservedSegment(model, w, body, names, index, last, header: false, camel: true);
             header = false;
             current = true;
             index = last + 1;

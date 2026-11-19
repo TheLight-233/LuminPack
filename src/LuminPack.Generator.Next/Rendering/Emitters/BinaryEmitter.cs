@@ -834,6 +834,19 @@ internal static partial class BinaryEmitter
         return !(model.CamelSnapshots || camel) ? chosen : char.ToLowerInvariant(chosen[0]) + chosen.Substring(1);
     }
 
+    /// <summary>Reserves a snapshot identifier shared by a record body and its inlined element bodies.</summary>
+    /// <param name="names">The local names already reserved by the generated method.</param>
+    /// <param name="stem">The preferred descriptive snapshot name.</param>
+    /// <returns>An identifier that cannot shadow a snapshot of the containing record.</returns>
+    private static string ReserveSnapshot(Dictionary<string, int> names, string stem)
+    {
+        string name = stem;
+        for (int suffix = 2; names.ContainsKey(name); suffix++)
+            name = stem + suffix.ToString(CultureInfo.InvariantCulture);
+        names.Add(name, 1);
+        return name;
+    }
+
     /// <summary>Builds a root write body, with lines prefixed by a tab for one extra indentation level.</summary>
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
@@ -1333,7 +1346,7 @@ internal static partial class BinaryEmitter
                 body.Add("cursor = ref writer.WriteRecord(ref cursor, (byte)" + members.Length.ToString(CultureInfo.InvariantCulture) + ");");
         }
         else
-            AddProfileSegments(model, w, body, 0, first - 1, header: !union);
+            AddProfileSegments(model, w, body, names, 0, first - 1, header: !union);
         body.Add("writer.Cursor = ref cursor;");
         int index = first;
         while (index < members.Length)
@@ -1418,7 +1431,7 @@ internal static partial class BinaryEmitter
             if (last == index)
                 AddLoneRecord(model, w, body, member);
             else
-                AddProfileSegments(model, w, body, index, last, header: false);
+                AddProfileSegments(model, w, body, names, index, last, header: false);
             body.Add("writer.Cursor = ref cursor;");
             index = last + 1;
         }
@@ -1721,13 +1734,17 @@ internal static partial class BinaryEmitter
         body.Add("ref byte " + elementCursor + " = ref " + state + ".Cursor;");
         body.Add("// Fields: " + string.Join(", ", members.Select(member => member.Name)));
         var terms = new List<string> { "1" };
+        var captures = new string[members.Length];
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            string snapshot = Snapshot(element, index, camel: true);
             if (member.Kind == RenderMemberKind.Fixed)
+            {
                 terms.Add(member.Width);
-            else if (member.Kind == RenderMemberKind.Text)
+                continue;
+            }
+            string snapshot = captures[index] = ReserveSnapshot(names, Snapshot(element, index, camel: true));
+            if (member.Kind == RenderMemberKind.Text)
             {
                 body.Add("string " + snapshot + " = " + owner + "." + member.Name + ";");
                 terms.Add(state + ".RecordBound<" + Profile + ">(" + snapshot + ")");
@@ -1767,16 +1784,16 @@ internal static partial class BinaryEmitter
                 continue;
             }
             body.Add("// Field: " + member.Name);
+            string snapshot = captures[index];
             if (member.Kind == RenderMemberKind.Text)
-                body.Add(elementCursor + " = ref " + state + ".WriteReservedRecordString<" + Profile + ">(ref " + elementCursor + ", " + Snapshot(element, index, camel: true) + ");");
+                body.Add(elementCursor + " = ref " + state + ".WriteReservedRecordString<" + Profile + ">(ref " + elementCursor + ", " + snapshot + ");");
             else if (inlineSpan || member.ReservableSpan)
             {
-                string snapshot = Snapshot(element, index, camel: true);
                 body.Add(elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanInline(ref " + elementCursor +
                     ", " + snapshot + ".IsNull, " + snapshot + ".Elements);");
             }
             else
-                body.Add(elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref " + elementCursor + ", " + Snapshot(element, index, camel: true) + ");");
+                body.Add(elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref " + elementCursor + ", " + snapshot + ");");
         }
         if (body[body.Count - 1].Length != 0)
             body.Add("");
@@ -1887,10 +1904,12 @@ internal static partial class BinaryEmitter
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
     /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="names">The method-wide local identifiers.</param>
     /// <param name="first">The first supplied to <c>AddProfileSegments</c>.</param>
     /// <param name="last">The last supplied to <c>AddProfileSegments</c>.</param>
     /// <param name="header">Whether to enable header for this operation.</param>
-    private static void AddProfileSegments(PayloadRenderModel model, CodeWriter w, List<string> body, int first, int last, bool header)
+    private static void AddProfileSegments(PayloadRenderModel model, CodeWriter w, List<string> body, Dictionary<string, int> names,
+        int first, int last, bool header)
     {
         var members = model.Members;
         int start = first;
@@ -1904,7 +1923,7 @@ internal static partial class BinaryEmitter
             if (start == end && !withHeader)
                 AddLoneRecord(model, w, body, members[start]);
             else
-                AddReservedSegment(model, w, body, start, end, withHeader);
+                AddReservedSegment(model, w, body, names, start, end, withHeader);
             withHeader = false;
             start = end + 1;
         }
@@ -1914,12 +1933,13 @@ internal static partial class BinaryEmitter
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
     /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="locals">The method-wide local identifiers.</param>
     /// <param name="first">The first supplied to <c>AddReservedSegment</c>.</param>
     /// <param name="last">The last supplied to <c>AddReservedSegment</c>.</param>
     /// <param name="header">Whether to enable header for this operation.</param>
     /// <param name="camel">The camel supplied to <c>AddReservedSegment</c>.</param>
-    private static void AddReservedSegment(PayloadRenderModel model, CodeWriter w, List<string> body, int first, int last, bool header,
-        bool? camel = null)
+    private static void AddReservedSegment(PayloadRenderModel model, CodeWriter w, List<string> body, Dictionary<string, int> locals,
+        int first, int last, bool header, bool? camel = null)
     {
         var members = model.Members;
         var names = new List<string>();
@@ -1927,16 +1947,20 @@ internal static partial class BinaryEmitter
             names.Add(members[index].Name);
         body.Add("// Fields: " + string.Join(", ", names));
         var terms = new List<string>();
+        var captures = new string[last - first + 1];
         bool inlineSpans = false;
         if (header)
             terms.Add("1");
         for (int index = first; index <= last; index++)
         {
             var member = members[index];
-            string snapshot = Snapshot(model, index, camel: camel ?? model.InlineObject);
             if (member.Kind == RenderMemberKind.Fixed)
+            {
                 terms.Add(member.Width);
-            else if (member.Kind == RenderMemberKind.Text)
+                continue;
+            }
+            string snapshot = captures[index - first] = ReserveSnapshot(locals, Snapshot(model, index, camel: camel ?? model.InlineObject));
+            if (member.Kind == RenderMemberKind.Text)
             {
                 body.Add("string " + snapshot + " = value." + member.Name + ";");
                 terms.Add("writer.RecordBound<" + WriteProfile(model, w, member) + ">(" + snapshot + ")");
@@ -1981,7 +2005,7 @@ internal static partial class BinaryEmitter
                 continue;
             }
             body.Add("// Field: " + member.Name);
-            string written = Snapshot(model, index, camel: camel ?? model.InlineObject);
+            string written = captures[index - first];
             if (member.Kind == RenderMemberKind.Text)
                 body.Add("cursor = ref writer.WriteReservedRecordString<" + WriteProfile(model, w, member) + ">(ref cursor, " + written + ");");
             else if (member.Kind == RenderMemberKind.Dictionary)
