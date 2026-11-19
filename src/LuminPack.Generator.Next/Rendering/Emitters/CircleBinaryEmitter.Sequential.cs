@@ -11,27 +11,28 @@ internal static partial class CircleBinaryEmitter
     /// <param name="model">The reference-tracked payload.</param>
     /// <param name="w">The source writer.</param>
     /// <returns>The generated operation statements.</returns>
-    private static List<string> SequentialWriteBody(PayloadRenderModel model, CodeWriter w)
+    /// <param name="header">Receives the null and reference exits before the record.</param>
+    private static List<string> SequentialWriteBody(PayloadRenderModel model, CodeWriter w, List<string> header)
     {
         var body = new List<string>();
         if (model.CircleGuarded)
-            body.Add(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
-        body.Add("var value = input;");
-        body.AddRange(model.WriteBefore);
-        body.Add("if (value is null)");
-        body.Add("{");
-        body.Add("writer.WriteNullObjectHeader();");
-        body.Add("return;");
-        body.Add("}");
+            header.Add(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
+        header.Add("var value = input;");
+        header.AddRange(model.WriteBefore);
+        header.Add("if (value is null)");
+        header.Add("{");
+        header.Add("writer.WriteNullObjectHeader();");
+        header.Add("return;");
+        header.Add("}");
+        header.Add("int reference = writer.OptionState.TrackReference(value);");
+        header.Add("if (reference < 0)");
+        header.Add("{");
+        header.Add("writer.WriteObjectReferenceId((uint)~reference);");
+        header.Add("return;");
+        header.Add("}");
         if (model.Members.Any(member => member.Mirrored))
             body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " +
                 w.A("Unsafe") + ".AsRef(in value));");
-        body.Add("int reference = writer.OptionState.TrackReference(value);");
-        body.Add("if (reference < 0)");
-        body.Add("{");
-        body.Add("writer.WriteObjectReferenceId((uint)~reference);");
-        body.Add("return;");
-        body.Add("}");
         int slotCount = model.CircleSlotCount;
         body.Add("writer.EnsureAdditionalCapacity(" + WidthText(slotCount + 6) + ");");
         body.Add("writer.WriteObjectHeader(" + WidthText(slotCount) + ");");

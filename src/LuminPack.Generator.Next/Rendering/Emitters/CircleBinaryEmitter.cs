@@ -31,11 +31,18 @@ internal static partial class CircleBinaryEmitter
         string suffix = model.UniqueEntries ? "_" + readable : string.Empty;
         string polymorphic = "[" + w.Attribute("MethodImpl") + "(MethodImplOptions.AggressiveInlining)]";
 
-        var write = BinaryEmitter.ApplyBoundedWrite(model, WriteBody(model, w));
+        var writeHeader = new List<string>();
+        var write = WriteBody(model, w, writeHeader);
+        bool splitRead = model.Limits?.Bounded != true && model.Redirect == null;
+        string readParameters = "(scoped ref " + reader + " reader, scoped ref " + type + "? value)";
+        string writeParameters = "(scoped ref " + writer + " writer, " + type + "? input)";
         var readChildren = new List<PayloadRenderModel>();
-        var read = BinaryEmitter.InputChecks(model, w, ReadBody(model, w, union: false, readChildren), read: true);
-        var readUnion = BinaryEmitter.InputChecks(model, w, ReadBody(model, w, union: true, readChildren), read: true);
-        bool genericWrite = HasProfile(write);
+        var read = BinaryEmitter.InputChecks(model, w, ReadBody(model, w, union: false, readChildren, splitRead), read: true);
+        var readUnion = BinaryEmitter.InputChecks(model, w, ReadBody(model, w, union: true, readChildren, splitRead), read: true);
+        bool genericWriteBody = HasProfile(write);
+        writeHeader.Add("WriteBody" + (genericWriteBody ? "<" + Profile + ">" : string.Empty) + "(ref writer, value, reference);");
+        writeHeader = BinaryEmitter.ApplyBoundedWrite(model, writeHeader);
+        bool genericWrite = HasProfile(writeHeader);
         bool genericRead = HasProfile(read);
 
         w.Line("namespace LuminPack");
@@ -190,19 +197,41 @@ internal static partial class CircleBinaryEmitter
             w.Line("internal static partial class " + container);
             w.Open();
             w.Suppressed = !writes;
-            Method(write, "RootWrite", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)", w.MethodImpl("NoInlining"));
+            Method(writeHeader, "RootWrite", genericWrite, writeParameters, inline);
             w.Blank();
+            Method(writeHeader, "RootWriteUnion", genericWrite, writeParameters, inline);
+            w.Blank();
+            Method(write, "WriteBody", genericWriteBody, "(scoped ref " + writer + " writer, " + type + " value, int reference)", w.MethodImpl("NoInlining"));
             w.Suppressed = !reads;
-            Method(read, "RootRead", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)", w.MethodImpl("NoInlining"));
-            w.Blank();
-            w.Suppressed = !writes;
-            Method(write, "RootWriteUnion", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)", w.MethodImpl("NoInlining"));
-            w.Blank();
-            w.Suppressed = !reads;
-            Method(readUnion, "RootReadUnion", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
-                w.MethodImpl("NoInlining"));
+            EmitReadRoot("RootRead", read);
+            EmitReadRoot("RootReadUnion", readUnion);
             w.Suppressed = false;
             w.Close();
+        }
+
+        void EmitReadRoot(string name, List<string> body)
+        {
+            w.Blank();
+            if (splitRead)
+            {
+                var header = new List<string>();
+                if (model.CircleGuarded)
+                    header.Add(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
+                header.AddRange(model.ReadBefore);
+                header.Add("reader.EnsureReadable(1);");
+                header.Add("if (reader.PeekInput(1, out _) == " + w.A("LuminPackCode") + ".ReferenceId)");
+                header.Add("{");
+                header.Add("reader.Advance(1);");
+                header.Add("value = " + w.A("LuminPackInputPolicy") + ".ReadReference<" + type + ">(reader.OptionState.GetObjectReference(reader.ReadVarIntUInt32()));");
+                header.Add("return;");
+                header.Add("}");
+                string bodyName = name + "Body";
+                header.Add(bodyName + (genericRead ? "<" + Profile + ">" : string.Empty) + "(ref reader, ref value);");
+                Method(header, name, genericRead, readParameters, inline);
+                name = bodyName;
+                w.Blank();
+            }
+            Method(body, name, genericRead, readParameters, w.MethodImpl("NoInlining"));
         }
 
         void Method(List<string> body, string name, bool generic, string parameters, string attribute)
@@ -260,36 +289,37 @@ internal static partial class CircleBinaryEmitter
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
     /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
-    private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w)
+    /// <param name="header">Receives the null and reference exits before the record.</param>
+    private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, List<string> header)
     {
         var members = model.Members;
         var table = Table(model);
         if (table == null || model.CircleWidths.Any(width => width > 4 && width != 255) ||
             members.SkipWhile(member => member.IsFixed || member.Kind == RenderMemberKind.Text).Any(member => member.Kind != RenderMemberKind.Object))
-            return SequentialWriteBody(model, w);
+            return SequentialWriteBody(model, w, header);
         var body = new List<string>();
         if (model.CircleGuarded)
         {
-            body.Add(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
-            body.Add("writer.CheckBuffer();");
+            header.Add(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
+            header.Add("writer.CheckBuffer();");
         }
-        body.Add("var value = input;");
-        body.AddRange(model.WriteBefore);
-        body.Add("if (value is null)");
-        body.Add("{");
-        body.Add("writer.Cursor = " + w.A("LuminPackCode") + ".NullObject;");
-        body.Add("writer.Advance(1);");
-        body.Add("return;");
-        body.Add("}");
-        body.Add("");
+        header.Add("var value = input;");
+        header.AddRange(model.WriteBefore);
+        header.Add("if (value is null)");
+        header.Add("{");
+        header.Add("writer.Cursor = " + w.A("LuminPackCode") + ".NullObject;");
+        header.Add("writer.Advance(1);");
+        header.Add("return;");
+        header.Add("}");
+        header.Add("");
+        header.Add("int reference = writer.OptionState.TrackReference(value);");
+        header.Add("if (reference < 0)");
+        header.Add("{");
+        header.Add("writer.WriteObjectReferenceId((uint)~reference);");
+        header.Add("return;");
+        header.Add("}");
         if (members.Any(member => member.Mirrored))
             body.Add("ref var local = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref " + w.A("Unsafe") + ".AsRef(in value));");
-        body.Add("int reference = writer.OptionState.TrackReference(value);");
-        body.Add("if (reference < 0)");
-        body.Add("{");
-        body.Add("writer.WriteObjectReferenceId((uint)~reference);");
-        body.Add("return;");
-        body.Add("}");
         body.Add("");
         body.Add("ref byte cursor = ref writer.Cursor;");
         var snapshots = new string[members.Length];
@@ -418,7 +448,8 @@ internal static partial class CircleBinaryEmitter
     /// <param name="union">Whether the Union read is built, which expands the root's own type once.</param>
     /// <param name="expanded">Collects the member operations whose bodies were expanded, in expansion order.</param>
     /// <returns>The body.</returns>
-    internal static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, List<PayloadRenderModel> expanded)
+    /// <param name="headerHandled">Whether the root wrapper owns its stack check and leading callbacks.</param>
+    internal static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, List<PayloadRenderModel> expanded, bool headerHandled = false)
     {
         var state = new ReadState
         {
@@ -430,7 +461,7 @@ internal static partial class CircleBinaryEmitter
         var body = new List<string>();
         if (!union)
             state.Stack.Add(model.GlobalName);
-        BuildRead(state, model, body, "value", "value", top: true);
+        BuildRead(state, model, body, "value", "value", top: true, headerHandled);
         return body;
     }
 
@@ -451,7 +482,8 @@ internal static partial class CircleBinaryEmitter
     /// <param name="target">The assignment target, which has no null-forgiving suffix.</param>
     /// <param name="access">The readable spelling of the target, which a nullable local suffixes with <c>!</c>.</param>
     /// <param name="top">Whether this is the method's own body, whose exits return instead of jumping to an inline label.</param>
-    private static void BuildRead(ReadState state, PayloadRenderModel model, List<string> body, string target, string access, bool top)
+    /// <param name="headerHandled">Whether the root wrapper already emitted its prelude.</param>
+    private static void BuildRead(ReadState state, PayloadRenderModel model, List<string> body, string target, string access, bool top, bool headerHandled = false)
     {
         var w = state.W;
         var names = state.Names;
@@ -462,10 +494,11 @@ internal static partial class CircleBinaryEmitter
         string exitDepth = enterDepth == null ? null : w.A("LuminPackInputPolicy") + ".ExitDepth(ref reader);";
         string Exit() => top ? "return;" : "\u0003GOTO\u0003";
         string Null(string tail) => access.EndsWith("!", StringComparison.Ordinal) ? access + tail : access + " " + tail;
-        if (top && model.CircleGuarded)
+        if (top && model.CircleGuarded && !headerHandled)
             body.Add(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
-        foreach (string callback in model.ReadBefore)
-            body.Add(top ? callback : Rewrite(callback, access, null));
+        if (!headerHandled)
+            foreach (string callback in model.ReadBefore)
+                body.Add(top ? callback : Rewrite(callback, access, null));
 
         var table = Table(model);
         string memory = w.A("Unsafe");

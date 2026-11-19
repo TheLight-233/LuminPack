@@ -187,8 +187,12 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteObjectReferenceId(uint referenceId)
         {
-            Write(LuminPackCode.ReferenceId);
-            this.WriteVarInt(referenceId);
+            int width = referenceId <= VarIntCodes.MaxSingleValue ? 2 : referenceId <= ushort.MaxValue ? 4 : 6;
+            EnsureAdditionalCapacity(width);
+            ref byte destination = ref Current;
+            destination = LuminPackCode.ReferenceId;
+            StoreVarInt(ref Unsafe.Add(ref destination, 1), referenceId);
+            AdvanceProven(width);
         }
 
         /// <summary>Writes contiguous storage with a caller-selected logical count, including bit-oriented containers.</summary>
