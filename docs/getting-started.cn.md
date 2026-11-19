@@ -100,7 +100,7 @@ Person result = await LuminPackSerializer.DeserializeAsync<Person>(stream, cance
 <a id="reusing-a-buffer"></a>
 ## 复用缓冲区
 
-接收 `LuminBufferWriter` 的重载从当前游标追加，并保留当前操作状态。在同一缓冲区中开始写入独立记录前，调用 `Reset()`。
+接收 `LuminBufferWriter` 的重载从当前游标追加，共用引用身份和版本 schema 登记。复用同一缓冲区写入独立记录前，请调用 `Reset()`。可单独读取的版本容忍记录也遵循这一规则。
 
 ```csharp
 using var output = new LuminPack.Utility.LuminBufferWriter(true);
@@ -114,8 +114,8 @@ LuminPackSerializer.Serialize(person, output);
 
 | 方法 | 作用 |
 | --- | --- |
-| `Reset()` | 重置写入计数和当前游标，清除读写操作状态，保留容量。 |
-| `ResetWrittenCount()` | 重置写入计数和当前游标，保留容量和读写操作状态。 |
+| `Reset()` | 重置写入计数和当前游标，清除读写操作状态（包括引用和 schema 登记），保留容量。 |
+| `ResetWrittenCount()` | 重置写入计数和当前游标，保留容量及读写状态中的引用身份和 schema 登记。写出一个数据块后，调用此方法可继续同一次操作。 |
 
 调用 `ResetAndRelease()` 会清除读写操作状态并归还当前数组，writer 仍可继续使用。用完后，自行构造的 writer 应调用 `Dispose()`，从池中租用的 writer 则调用 `LuminBufferWriterPool.Return(writer)`。
 

@@ -65,6 +65,8 @@ Each read or write operation keeps an ordered table of the complete schemas visi
 
 When a reader or writer enters a length-prefixed member (width code 255), outer entries remain visible. Entries added inside the member disappear when it ends. A reader can skip an unknown member in one step, and its later ordinals still have the same meaning as the writer's. Two sibling collections may each contain a full record for the same schema if the enclosing scope has no entry for it. Read a short record with the state that read its preceding full record.
 
+Records appended to a `LuminBufferWriter` share the schema table. After flushing a chunk, `ResetWrittenCount()` retains the table so the next chunk can use its ordinals. Read the chunks in order with the same reader state. Call `Reset()` before writing an independent record so its first occurrence of each schema carries a full table. See [reusing a buffer](getting-started.md#reusing-a-buffer).
+
 ### Reading persisted data
 
 Version-tolerant readers also accept revision 1, whose field lengths are stored before the payloads. Revision 2 and 3 development records and the old reference-tracked slot format require a reader that supports those bytes. To convert a stored record, decode it with that reader and serialize the resulting value using the current format.

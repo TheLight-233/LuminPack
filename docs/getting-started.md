@@ -100,7 +100,7 @@ Person result = await LuminPackSerializer.DeserializeAsync<Person>(stream, cance
 <a id="reusing-a-buffer"></a>
 ## Reusing a buffer
 
-Overloads that take a `LuminBufferWriter` append at its current cursor and keep the current operation state. Call `Reset()` to start an independent record in the same buffer.
+Overloads that take a `LuminBufferWriter` append at its current cursor and share reference identities and version schema registrations. Call `Reset()` before writing an independent record in the same buffer, including a version-tolerant record that will be read on its own.
 
 ```csharp
 using var output = new LuminPack.Utility.LuminBufferWriter(true);
@@ -114,8 +114,8 @@ LuminPackSerializer.Serialize(person, output);
 
 | Method | Effect |
 | --- | --- |
-| `Reset()` | Resets the written count and live cursor, clears the writer and reader operation states, and keeps capacity. |
-| `ResetWrittenCount()` | Resets the written count and live cursor while retaining capacity and both operation states. |
+| `Reset()` | Resets the written count and live cursor, clears both operation states, including reference and schema registrations, and keeps capacity. |
+| `ResetWrittenCount()` | Resets the written count and live cursor while retaining capacity, reference identities and schema registrations in both states. Use it after flushing a chunk to continue the same operation. |
 
 Use `ResetAndRelease()` to clear both states and return the current array while keeping the writer usable. When finished, call `Dispose()` on a directly constructed writer or call `LuminBufferWriterPool.Return(writer)` for a rented one.
 
