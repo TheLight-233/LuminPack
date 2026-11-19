@@ -11,7 +11,7 @@ using LuminPack.Utility;
 namespace LuminPack.WireCompatibility;
 
 /// <summary>Provides wire fixtures functionality.</summary>
-internal static class WireFixtures
+internal static partial class WireFixtures
 {
     private const bool Utf8Length = false;
     private const bool Utf16Length = true;
@@ -255,6 +255,8 @@ internal static class WireFixtures
         Put(directory, "dictionary", new Dictionary<string, int> { ["one"] = 1, ["\u4E2D\u6587"] = 2 });
 #if LUMINPACK_NEXT_WIRE
         File.WriteAllBytes(Path.Combine(directory, "dictionary-string.json"), JsonDictionaryBytes());
+        File.WriteAllText(Path.Combine(directory, "references.json"), ReferenceJson());
+        WriteVersionFixtures(directory);
 #endif
         Put(directory, "queue", CreateQueue());
         Put(directory, "stack", CreateStack());
@@ -274,6 +276,8 @@ internal static class WireFixtures
     {
 #if LUMINPACK_NEXT_WIRE
         VerifyJsonDictionary(directory);
+        VerifyReferenceJson(directory);
+        VerifyVersionFixtures(directory);
 #endif
         VerifyWrittenBytes(directory);
         Check(Get<int>(directory, "int") == -123456789, "int");

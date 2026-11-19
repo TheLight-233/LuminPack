@@ -10,7 +10,7 @@ namespace LuminPackUnitTest
         /// <summary>A revision-1 record written by the previous release: every payload length precedes the payloads.</summary>
         private const string VersionRevision1 = "FB0102040249640140044E616D65014C0656616C75657306522369345B5D054368696C64145040436F6D70617456657273696F6E4368696C640408101E07000000090000006E616D6503000000010000000200000003000000FB01020204466C6167014D055374616D7001460108016300000000000000";
 
-        /// <summary>Reads a revision-1 record, including a nested record, and writes revision 2.</summary>
+        /// <summary>Reads a revision-1 record, including a nested record, and writes the current revision.</summary>
         [Fact]
         public void VersionRecordsReadRevisionOne()
         {
@@ -25,23 +25,32 @@ namespace LuminPackUnitTest
 
             byte[] current = LuminPackSerializer.Serialize(value);
             Assert.Equal(251, current[0]);
+#if LUMINPACK_NEXT_GENERATOR
+            Assert.Equal(0x42, current[1]);
+#else
             Assert.Equal(2, current[1]);
+#endif
             CompatVersion? copy = null;
             Assert.Equal(current.Length, LuminPackSerializer.Deserialize(current, ref copy));
             Assert.Equal(new[] { 1, 2, 3 }, copy!.Values);
             Assert.Equal(99, copy.Child!.Stamp);
         }
 
-        /// <summary>Writes a cycle as width-table records with a back reference and round-trips it.</summary>
+        /// <summary>Writes a cycle with explicit reference ids and round-trips it.</summary>
         [Fact]
-        public void ReferenceRecordsUseWidthTables()
+        public void ReferenceRecordsPreserveIdentity()
         {
             var value = new CompatNode { Id = 1, Text = "a", Next = new CompatNode { Id = 2, Text = "bb" } };
             value.Next.Next = value;
 
             byte[] current = LuminPackSerializer.Serialize(value);
+#if LUMINPACK_NEXT_GENERATOR
+            // The first reference header is followed by a complete version record.
+            Assert.Equal(new byte[] { 3, 0, 251, 0x42, 3 }, current[..5]);
+#else
             // Slot count, one width byte per slot (a raw width or 255 for a length-prefixed value), then reference id zero.
             Assert.Equal(new byte[] { 3, 4, 255, 255, 0 }, current[..5]);
+#endif
             // The cycle closes with a back reference to id zero behind its four-byte length.
             Assert.Equal(new byte[] { 2, 0, 0, 0, 250, 0 }, current[^6..]);
             CompatNode? copy = null;
@@ -54,9 +63,9 @@ namespace LuminPackUnitTest
             Assert.Same(next, copy.Next);
         }
 
-        /// <summary>A reader with fewer slots skips unknown trailing one-pass values.</summary>
+        /// <summary>A receiving model can skip unknown versioned members in a reference-tracked record.</summary>
         [Fact]
-        public void ReferenceRecordsSkipUnknownSlots()
+        public void ReferenceRecordsSkipUnknownMembers()
         {
             var wide = new CompatWideNode { Id = 3, Text = "known", Extra = "unknown", Tail = 17 };
             byte[] bytes = LuminPackSerializer.Serialize(wide);
@@ -76,7 +85,7 @@ public partial class CompatVersion { public int Id; public string Name = ""; pub
 [LuminPackable(GeneratorType.VersionTolerant)]
 public partial class CompatVersionChild { public bool Flag; public long Stamp; }
 
-/// <summary>A reference-tracked model matching the recorded length-table fixture.</summary>
+/// <summary>A reference-tracked model with a self-referential member.</summary>
 [LuminPackable(GeneratorType.CircleReference)]
 public partial class CompatNode { [LuminPackOrder(0)] public int Id; [LuminPackOrder(1)] public string Text = ""; [LuminPackOrder(2)] public CompatNode? Next; }
 

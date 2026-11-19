@@ -313,6 +313,10 @@ public sealed class DictionaryInterfaceReuseTest
             ObservedCodec.ReadPair(ref reader, ref first, ref second);
 
         /// <inheritdoc/>
+        public void Skip(scoped ref global::LuminPack.Core.LuminPackReader reader, int maxStringLength) =>
+            ObservedCodec.Skip(ref reader, maxStringLength);
+
+        /// <inheritdoc/>
         public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>
             ObservedCodec.ReadSlots(ref reader, slots);
 

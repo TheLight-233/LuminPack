@@ -54,14 +54,14 @@ internal static class BufferWriterOperationContextTest
         var marker = new object();
         buffer.WriterState.GetOrAddReference(marker);
         buffer.ReaderState.AddObjectReference(999, marker);
-        buffer.ReaderState.AddVersionTable(31, [7]);
+        ReaderFixedBoundsPolicyTest.RegisterEmptyVersion(buffer.ReaderState);
         LuminBufferWriterPool.Return(buffer);
         var reused = LuminBufferWriterPool.Rent();
         try
         {
             Assert(!reused.WriterState.GetOrAddReference(marker).existsReference, "Return retained writer references.");
             AssertThrows(() => reused.ReaderState.GetObjectReference(999), "Return retained reader references.");
-            Assert(!reused.ReaderState.TryGetVersionTable(31, out _), "Return retained a version table.");
+            Assert(reused.ReaderState.VersionRegistry.Count == 0, "Return retained a version table.");
             LuminPackSerializer.Serialize("default", reused);
             Assert(global::LuminPackUnitTest.ConcreteReads.Read<string>(reused, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == "default", "A reused buffer inherited a compiled profile.");
         }

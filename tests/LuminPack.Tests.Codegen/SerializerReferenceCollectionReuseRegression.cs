@@ -1,8 +1,10 @@
+extern alias ModelBasedAnalyzer;
+
 using System.Reflection;
-using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 /// <summary>Checks exact reference-container reuse, unchanged exclusions and incremental formatter selection.</summary>
 internal static class SerializerReferenceCollectionReuseRegression
@@ -206,7 +208,7 @@ internal static class SerializerReferenceCollectionReuseRegression
     private static (GeneratorDriver Driver, Compilation Output) Generate(CSharpCompilation compilation, CSharpParseOptions parse)
     {
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
-            [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
+            [new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
         Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
         return (driver, output);

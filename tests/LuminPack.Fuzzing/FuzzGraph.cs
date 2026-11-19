@@ -11,9 +11,10 @@ public partial class FuzzGraph
     public FuzzVersioned? Versioned;
     public FuzzNode? Nodes;
     public List<FuzzShape?>? Shapes = [];
+    public FuzzVersionLeaf? Tail;
 }
 
-/// <summary>Exercises version-tolerant prefixes, member widths, strings, arrays and a recursive member.</summary>
+/// <summary>Exercises version descriptors, string encodings, scope boundaries and recursive members.</summary>
 [LuminPackable(GeneratorType.VersionTolerant)]
 public partial class FuzzVersioned
 {
@@ -22,10 +23,18 @@ public partial class FuzzVersioned
     public string? Name;
     public int[]? Values;
     public FuzzVersioned? Next;
+    public FuzzVersionLeaf[]? Items;
 }
 
-/// <summary>Exercises reference-tracked slot tables, back references and cycles.</summary>
-[LuminPackable(GeneratorType.CircleReference)]
+/// <summary>Provides a second schema that can be registered inside and outside a member scope.</summary>
+[LuminPackable(GeneratorType.VersionTolerant)]
+public sealed partial class FuzzVersionLeaf
+{
+    public int Value;
+}
+
+/// <summary>Exercises reference headers, positional records, back references and cycles.</summary>
+[LuminPackable, LuminPackOption(TrackReferences = true)]
 public partial class FuzzNode
 {
     [LuminPackOrder(0)] public int Id;

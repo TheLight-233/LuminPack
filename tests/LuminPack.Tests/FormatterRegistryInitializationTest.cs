@@ -209,6 +209,10 @@ public sealed class FormatterRegistryInitializationTest
             default(global::LuminPack.Option.LuminPackUtf8LengthStrings).ReadPair(ref reader, ref first, ref second);
 
         /// <inheritdoc/>
+        public void Skip(scoped ref global::LuminPack.Core.LuminPackReader reader, int maxStringLength) =>
+            default(global::LuminPack.Option.LuminPackUtf8LengthStrings).Skip(ref reader, maxStringLength);
+
+        /// <inheritdoc/>
         public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>
             default(global::LuminPack.Option.LuminPackUtf8LengthStrings).ReadSlots(ref reader, slots);
 
@@ -315,6 +319,10 @@ public sealed class FormatterRegistryInitializationTest
         /// <inheritdoc/>
         public void ReadPair(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
             default(global::LuminPack.Option.LuminPackUtf8LengthStrings).ReadPair(ref reader, ref first, ref second);
+
+        /// <inheritdoc/>
+        public void Skip(scoped ref global::LuminPack.Core.LuminPackReader reader, int maxStringLength) =>
+            default(global::LuminPack.Option.LuminPackUtf8LengthStrings).Skip(ref reader, maxStringLength);
 
         /// <inheritdoc/>
         public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>
@@ -431,6 +439,10 @@ public sealed class FormatterRegistryInitializationTest
         /// <inheritdoc/>
         public void ReadPair(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
             default(global::LuminPack.Option.LuminPackUtf8LengthStrings).ReadPair(ref reader, ref first, ref second);
+
+        /// <inheritdoc/>
+        public void Skip(scoped ref global::LuminPack.Core.LuminPackReader reader, int maxStringLength) =>
+            default(global::LuminPack.Option.LuminPackUtf8LengthStrings).Skip(ref reader, maxStringLength);
 
         /// <inheritdoc/>
         public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>

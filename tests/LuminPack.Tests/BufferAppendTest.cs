@@ -232,6 +232,43 @@ public sealed class BufferAppendTest
         Assert.Equal(456, global::LuminPackUnitTest.ConcreteReads.Read<int>(buffer, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref int concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
+#if LUMINPACK_NEXT_GENERATOR
+    /// <summary>Checks appended version records and both buffer reset operations preserve their schema context contract.</summary>
+    [Fact]
+    public void VersionRecordsContinueUntilTheOperationResets()
+    {
+        using var buffer = new LuminBufferWriter(true);
+        var value = new CompatVersionChild { Flag = true, Stamp = 83 };
+        LuminPackSerializer.Serialize(value, buffer);
+        int firstLength = buffer.CurrentIndex;
+        LuminPackSerializer.Serialize(value, buffer);
+        Assert.Equal(0x42, buffer.GetSpan()[1]);
+        Assert.Equal(0x52, buffer.GetSpan()[firstLength + 1]);
+
+        var reader = new LuminPackReader(buffer);
+        CompatVersionChild? copy = null;
+        LuminPackSerializer.Deserialize(ref reader, ref copy);
+        var original = copy;
+        LuminPackSerializer.Deserialize(ref reader, ref copy);
+        Assert.Equal(buffer.CurrentIndex, reader.Position);
+        Assert.Same(original, copy);
+        Assert.Equal(83, copy!.Stamp);
+
+        buffer.ResetWrittenCount();
+        LuminPackSerializer.Serialize(value, buffer);
+        Assert.Equal(0x52, buffer.GetSpan()[1]);
+        reader = new LuminPackReader(buffer);
+        LuminPackSerializer.Deserialize(ref reader, ref copy);
+        Assert.Equal(buffer.CurrentIndex, reader.Position);
+        Assert.Same(original, copy);
+
+        buffer.Reset();
+        LuminPackSerializer.Serialize(value, buffer);
+        Assert.Equal(0x42, buffer.GetSpan()[1]);
+        Assert.Equal(firstLength, buffer.CurrentIndex);
+    }
+#endif
+
     /// <summary>Preserves the storage and operation state when only the written count is reset.</summary>
     [Fact]
     public void ResetWrittenCountPreservesOperationState()
@@ -243,7 +280,7 @@ public sealed class BufferAppendTest
         buffer.WriterState.GetOrAddReference(marker);
         buffer.ReaderState.AddObjectReference(0, marker);
         buffer.ReaderState.AddObjectReference(17, marker);
-        buffer.ReaderState.AddVersionTable(31, [7, 19]);
+        ReaderFixedBoundsPolicyTest.RegisterEmptyVersion(buffer.ReaderState);
 
         buffer.ResetWrittenCount();
         Assert.True(buffer.GetSpan().IsEmpty);
@@ -251,8 +288,7 @@ public sealed class BufferAppendTest
         Assert.True(buffer.WriterState.GetOrAddReference(marker).existsReference);
         Assert.Same(marker, buffer.ReaderState.GetObjectReference(0));
         Assert.Same(marker, buffer.ReaderState.GetObjectReference(17));
-        Assert.True(buffer.ReaderState.TryGetVersionTable(31, out var table));
-        Assert.True(table.SequenceEqual(new byte[] { 7, 19 }));
+        Assert.Equal(1, buffer.ReaderState.VersionRegistry.Count);
     }
 
     /// <summary>Clears reader and writer state even when the payload has no published bytes.</summary>
@@ -265,14 +301,14 @@ public sealed class BufferAppendTest
         buffer.WriterState.GetOrAddReference(marker);
         buffer.ReaderState.AddObjectReference(0, marker);
         buffer.ReaderState.AddObjectReference(17, marker);
-        buffer.ReaderState.AddVersionTable(31, [7]);
+        ReaderFixedBoundsPolicyTest.RegisterEmptyVersion(buffer.ReaderState);
 
         buffer.Reset();
         Assert.Equal(capacity, buffer.TotalLength);
         Assert.False(buffer.WriterState.GetOrAddReference(marker).existsReference);
         Assert.ThrowsAny<Exception>(() => buffer.ReaderState.GetObjectReference(0));
         Assert.ThrowsAny<Exception>(() => buffer.ReaderState.GetObjectReference(17));
-        Assert.False(buffer.ReaderState.TryGetVersionTable(31, out _));
+        Assert.Equal(0, buffer.ReaderState.VersionRegistry.Count);
     }
 
     /// <summary>Clears a version table without requiring either reference map to be active.</summary>
@@ -280,9 +316,9 @@ public sealed class BufferAppendTest
     public void ResetClearsVersionOnlyState()
     {
         using var buffer = new LuminBufferWriter(true);
-        buffer.ReaderState.AddVersionTable(31, [7]);
+        ReaderFixedBoundsPolicyTest.RegisterEmptyVersion(buffer.ReaderState);
         buffer.Reset();
-        Assert.False(buffer.ReaderState.TryGetVersionTable(31, out _));
+        Assert.Equal(0, buffer.ReaderState.VersionRegistry.Count);
     }
 
     /// <summary>Clears state and releases storage when an owned buffer is disposed.</summary>
@@ -294,7 +330,7 @@ public sealed class BufferAppendTest
         var marker = new object();
         buffer.WriterState.GetOrAddReference(marker);
         buffer.ReaderState.AddObjectReference(0, marker);
-        buffer.ReaderState.AddVersionTable(31, [7]);
+        ReaderFixedBoundsPolicyTest.RegisterEmptyVersion(buffer.ReaderState);
         int cursor = 3;
         buffer.SetCurrentIndexPtr(ref cursor);
 

@@ -73,6 +73,9 @@ internal static partial class SerializerIssueRegression
                 public void ReadPair(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
                     ObservedCodec.ReadPair(ref reader, ref first, ref second);
 
+                public void Skip(scoped ref global::LuminPack.Core.LuminPackReader reader, int maxStringLength) =>
+                    ObservedCodec.Skip(ref reader, maxStringLength);
+
                 public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>
                     ObservedCodec.ReadSlots(ref reader, slots);
 
@@ -125,7 +128,7 @@ internal static partial class SerializerIssueRegression
 
                 public global::LuminPack.Option.LuminPackStringRecording Recording => default(global::LuminPack.Option.LuminPackUtf16LengthStrings).Recording;
 
-                public byte BinaryProfile => default(global::LuminPack.Option.LuminPackUtf16LengthStrings).BinaryProfile;
+                public byte BinaryProfile => ObservedCodec.BinaryProfile;
 
                 public static Action Observe;
                 public LuminPackStringEncoding StringEncoding
@@ -205,22 +208,25 @@ internal static partial class SerializerIssueRegression
                     };
                     version.Pairs.Remove(13);
                     bytes = LuminPackSerializer.Serialize(version);
-                    int tagStart = bytes.AsSpan().IndexOf(tag.ToByteArray());
-                    if (tagStart < 4 || BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(tagStart - 4)) != 16 ||
-                        BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(tagStart + 16)) != 8 ||
-                        BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(tagStart + 28)) != 16 ||
-                        BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(tagStart + 48)) != 20)
-                        throw new Exception("Revision-2 member length prefixes changed.");
+                    const int descriptors = 11;
+                    const int payload = descriptors + 5 * 8;
+                    if (bytes[0] != 251 || bytes[1] != 0x42 || bytes[2] != 5 ||
+                        bytes[descriptors + 7] != 16 || bytes[descriptors + 15] != 8 ||
+                        bytes[descriptors + 23] != 255 || bytes[descriptors + 31] != 255 || bytes[descriptors + 39] != 255 ||
+                        !bytes.AsSpan(payload, 16).SequenceEqual(tag.ToByteArray()) ||
+                        BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(payload + 24)) != 16 ||
+                        BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(payload + 44)) != 20)
+                        throw new Exception("Versioned fixed or scoped member framing changed.");
                     var versionCopy = LuminPackSerializer.Deserialize<VersionRecord>(bytes);
                     if (versionCopy.Tag != tag || versionCopy.Time.ToBinary() != version.Time.ToBinary() ||
                         !versionCopy.Numbers.AsSpan().SequenceEqual(version.Numbers) || versionCopy.Pairs.Count != 2 ||
                         versionCopy.Pairs[19] != 23 || versionCopy.Text[29] != "Cat")
                         throw new Exception("Named raw or variable payload changed.");
-                    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(tagStart - 4), 17);
+                    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(payload + 24), 17);
                     try
                     {
                         _ = LuminPackSerializer.Deserialize<VersionRecord>(bytes);
-                        throw new Exception("A mismatched fixed-size payload was accepted.");
+                        throw new Exception("A mismatched scoped payload length was accepted.");
                     }
                     catch (FormatException) { }
 
@@ -250,16 +256,10 @@ internal static partial class SerializerIssueRegression
                 !files.Any(text => text.Contains("struct FixedRecordArrayFormatter", StringComparison.Ordinal) &&
                     text.Contains("RecordRoom(ref cursor)", StringComparison.Ordinal)))
                 throw new InvalidOperationException("The fixed object or array lost its shared capacity check.");
-            string version = files.Single(text => text.Contains("struct VersionRecordFormatter", StringComparison.Ordinal) &&
-                text.Contains(".CompleteVersionLength(", StringComparison.Ordinal));
-            string reserved = version[..version.IndexOf("static void WriteWithProfile(", StringComparison.Ordinal)];
-            if (!reserved.Contains(".WriteReserved<global::System.Guid>", StringComparison.Ordinal) ||
-                !reserved.Contains(".WriteReservedSpanRecord(", StringComparison.Ordinal) ||
-                !reserved.Contains(".WriteReserved(ref cursor, pairsSnapshot)", StringComparison.Ordinal) ||
-                reserved.IndexOf(".CompleteVersionLength(", StringComparison.Ordinal) !=
-                reserved.LastIndexOf(".CompleteVersionLength(", StringComparison.Ordinal))
-                throw new InvalidOperationException("A known-width named payload took the variable field write path.");
+            if (!files.Any(text => text.Contains("struct VersionRecordFormatter", StringComparison.Ordinal) &&
+                    text.Contains("WriteVersionRecord", StringComparison.Ordinal)))
+                throw new InvalidOperationException("The versioned formatter lost its descriptor record header.");
         });
-        Console.WriteLine("Passed fixed class and array reservations, callbacks, profile observation order, and revision-2 field lengths.");
+        Console.WriteLine("Passed fixed class and array reservations, callbacks, profile observation order, and version descriptor widths and scoped lengths.");
     }
 }

@@ -36,7 +36,7 @@ public sealed class LinkedListJsonReuseTest
 
         Assert.Same(original, target);
         Assert.Equal(expected, target);
-        Assert.Equal(expected.Reverse(), target.Reverse());
+        Assert.Equal(Enumerable.Reverse(expected), target.Reverse());
         Assert.Throws<InvalidOperationException>(() => enumerator.MoveNext());
         var node = target.First;
         for (int index = 0; index < Math.Min(oldNodes.Length, count); index++, node = node!.Next)
@@ -259,6 +259,10 @@ internal readonly struct LinkedListJsonObserverProfile : ILuminPackOptions
     /// <inheritdoc/>
     public void ReadPair(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
         default(global::LuminPack.Option.LuminPackUtf16LengthStrings).ReadPair(ref reader, ref first, ref second);
+
+    /// <inheritdoc/>
+    public void Skip(scoped ref global::LuminPack.Core.LuminPackReader reader, int maxStringLength) =>
+        default(global::LuminPack.Option.LuminPackUtf16LengthStrings).Skip(ref reader, maxStringLength);
 
     /// <inheritdoc/>
     public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>

@@ -1,8 +1,10 @@
+extern alias ModelBasedAnalyzer;
+
 using System.Reflection;
-using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 /// <summary>Checks independent model versions and generator diagnostics for named binary contracts.</summary>
 internal static class SerializerNamedVersionRegression
@@ -14,7 +16,6 @@ internal static class SerializerNamedVersionRegression
     /// <param name="references">Runtime and platform references.</param>
     internal static void Run(MetadataReference[] references)
     {
-        VerifyLengthTableBoundaries();
         const string template = """
             using System;
             using System.Collections.Generic;
@@ -37,13 +38,14 @@ internal static class SerializerNamedVersionRegression
                 public static byte[] WriteShapes() => LuminPackSerializer.Serialize(new TypeShapes());
                 public static byte[] Write() => LuminPackSerializer.Serialize(new Envelope<Root> { Value = new Root
                 {
+                    UNKNOWN
                     Id = 17, Child = new Child { Number = 19, TEXT = "nested" },
-                    Children = new List<Child> { new Child { Number = 23, TEXT = "list" } }
+                    Children = new List<Child> { new Child { Number = 23, TEXT = "list" }, new Child { Number = 29, TEXT = "short" } }
                 }});
                 public static string Read(byte[] bytes)
                 {
                     var value = global::LuminPackUnitTest.ConcreteReads.Read<Envelope<Root>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Envelope<Root> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Value;
-                    return value.Id + ":" + value.Child.Number + ":" + value.Child.TEXT + ":" + value.Children[0].Number + ":" + value.Children[0].TEXT;
+                    return value.Id + ":" + value.Child.Number + ":" + value.Child.TEXT + ":" + value.Children[0].Number + ":" + value.Children[0].TEXT + ":" + value.Children[1].Number + ":" + value.Children[1].TEXT;
                 }
             }
             """;
@@ -51,81 +53,56 @@ internal static class SerializerNamedVersionRegression
         {
             string oldSource = template.Replace("MODE", mode)
                 .Replace("CHILD", "public int Number; public string Name; public string Removed;")
-                .Replace("ROOT", "public int Id; public string Removed; public Child Child; public List<Child> Children;")
+                .Replace("ROOT", "public List<Child> Removed; public int Id; public Child Child; public List<Child> Children;")
+                .Replace("UNKNOWN", "Removed = new List<Child> { new Child { Number = -1 } },")
                 .Replace("TEXT", "Name");
             string newSource = template.Replace("MODE", mode)
                 .Replace("CHILD", "public bool Added; [LuminPackOldName(\"Name\")] public string Display; public int Number;")
-                .Replace("ROOT", "public List<Child> Children; public long Added; public Child Child; public int Id;")
+                .Replace("ROOT", "public List<Child> Added; public List<Child> Children; public Child Child; public int Id;")
+                .Replace("UNKNOWN", "Added = new List<Child> { new Child { Number = -2 } },")
                 .Replace("TEXT", "Display");
             var oldEntry = Compile(oldSource, "NamedOld" + mode, references).GetType("VersionModels.Entry")!;
             var newEntry = Compile(newSource, "NamedNew" + mode, references).GetType("VersionModels.Entry")!;
             byte[] oldBytes = (byte[])oldEntry.GetMethod("Write")!.Invoke(null, null)!;
             byte[] newBytes = (byte[])newEntry.GetMethod("Write")!.Invoke(null, null)!;
-            const string expected = "17:19:nested:23:list";
+            const string expected = "17:19:nested:23:list:29:short";
             Require((string)newEntry.GetMethod("Read")!.Invoke(null, [oldBytes])! == expected, "Nested forward evolution failed in " + mode);
             Require((string)oldEntry.GetMethod("Read")!.Invoke(null, [newBytes])! == expected, "Nested backward evolution failed in " + mode);
         }
+        VerifyVersionDiagnostics(references);
+        Console.WriteLine("Passed scoped nested evolution across independent Full/Minimal assemblies and descriptor diagnostics.");
+    }
+
+    /// <summary>Checks invalid aliases, distinct names with equal keys and excessive member counts.</summary>
+    /// <param name="references">Runtime and platform references.</param>
+    private static void VerifyVersionDiagnostics(MetadataReference[] references)
+    {
+        const string model = "using LuminPack.Attribute; [LuminPackable(GeneratorType.VersionTolerant)] public class Invalid ";
         foreach (string members in new[]
         {
             "[LuminPackOldName(\"\")] public int A;",
             "[LuminPackOldName(null)] public int A;",
             "[LuminPackOldName(\"A\")] public int A;",
             "[LuminPackOldName(\"B\")] public int A; public int B;",
-            "[LuminPackOldName(\"old\")] public int A; [LuminPackOldName(\"old\")] public int B;"
+            "[LuminPackOldName(\"old\")] public int A; [LuminPackOldName(\"old\")] public int B;",
+            "public int costarring; public int liquid;",
+            "[LuminPackOldName(\"costarring\")] public int A; public int liquid;"
         })
+            Check(model + "{ " + members + " }", "LuminPack062");
+
+        Check(model + ": Base { [LuminPackOldName(\"liquid\")] public int Value; } public class Base { public int costarring; }",
+            "LuminPack062");
+        string fields = string.Join(" ", Enumerable.Range(0, 250).Select(i => "public int Field" + i + ";"));
+        Check(model + "{ " + fields + " }", "LuminPack018");
+
+        void Check(string source, string diagnostic)
         {
-            string source = "using LuminPack.Attribute; [LuminPackable(GeneratorType.VersionTolerant)] public class Invalid { " + members + " }";
-            var input = TestCompilation.Create("InvalidNames", [CSharpSyntaxTree.ParseText(source, Parse)], references,
+            var input = TestCompilation.Create("InvalidVersionDescriptor", [CSharpSyntaxTree.ParseText(source, Parse)], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
             var result = NewDriver().RunGenerators(input).GetRunResult();
-            Require(result.Results.All(item => item.Exception == null) && result.Diagnostics.Any(item => item.Id == "LuminPack062"),
-                "Missing alias diagnostic for " + members);
+            Require(result.Results.All(item => item.Exception == null) && result.Diagnostics.Any(item => item.Id == diagnostic),
+                "Missing descriptor diagnostic " + diagnostic + " for " + source);
         }
-        Console.WriteLine("Passed named nested evolution across independent Full/Minimal assemblies and invalid alias diagnostics.");
-    }
-
-    /// <summary>Checks bulk table validation rechecks remaining entries after an extended VarInt.</summary>
-    private static void VerifyLengthTableBoundaries()
-    {
-        var bytes = new byte[512];
-        Span<byte> output = bytes;
-        var writer = new LuminPack.Core.LuminPackWriter(ref output);
-        writer.WriteVarInt(300);
-        int firstEnd = writer.Position;
-        writer.WriteVarInt(4);
-        int tableEnd = writer.Position;
-        Span<byte> input = bytes.AsSpan(0, tableEnd + 304);
-        var reader = new LuminPack.Core.LuminPackReader(ref input);
-        Span<int> lengths = stackalloc int[2];
-        reader.ReadVersionLengths(lengths);
-        Require(lengths[0] == 300 && lengths[1] == 4 && reader.Position == tableEnd,
-            "Extended length entries or their combined payload boundary changed.");
-        var known = new LuminPack.Core.LuminPackReader(ref input);
-        known.ValidateVersionPayloadSize(2);
-        int first = known.ReadVersionLength(1);
-        int second = known.ReadVersionLength(0);
-        known.ValidateVersionPayloadSize((long)first + second);
-        Require(first == 300 && second == 4 && known.Position == tableEnd,
-            "Generated scalar lengths differ from the mapped length table.");
-        bool rejected = false;
-        try
-        {
-            Span<byte> truncated = bytes.AsSpan(0, firstEnd);
-            var incomplete = new LuminPack.Core.LuminPackReader(ref truncated);
-            incomplete.ReadVersionLengths(lengths);
-        }
-        catch (Exception) { rejected = true; }
-        Require(rejected, "An extended length consumed the bytes required by a subsequent table entry.");
-        rejected = false;
-        try
-        {
-            Span<byte> truncated = bytes.AsSpan(0, firstEnd);
-            var incomplete = new LuminPack.Core.LuminPackReader(ref truncated);
-            incomplete.ValidateVersionPayloadSize(2);
-            incomplete.ReadVersionLength(1);
-        }
-        catch (Exception) { rejected = true; }
-        Require(rejected, "A generated extended length consumed a subsequent table entry.");
     }
 
     /// <summary>Generates, compiles and loads a single independent model version.</summary>
@@ -144,40 +121,40 @@ internal static class SerializerNamedVersionRegression
         using var image = new MemoryStream();
         var emit = output.Emit(image);
         Require(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics));
-        var assembly = Assembly.Load(image.ToArray());
-        VerifyMetadataConstants(driver, assembly);
-        return assembly;
+        VerifyGeneratedDescriptors(driver);
+        return Assembly.Load(image.ToArray());
     }
 
-    /// <summary>Checks compile-time metadata against the runtime encoder for complete names and closed type shapes.</summary>
+    /// <summary>Checks the descriptor representation and ordinary tiered source shape of versioned readers.</summary>
     /// <param name="driver">The completed model generation.</param>
-    /// <param name="assembly">The independently emitted models and caches.</param>
-    private static void VerifyMetadataConstants(GeneratorDriver driver, Assembly assembly)
+    private static void VerifyGeneratedDescriptors(GeneratorDriver driver)
     {
-        int checkedTables = 0;
-        foreach (var source in driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources))
+        var sources = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
+        string[] versioned = sources.SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+            .Select(method => method.ToString()).Where(method => method.Contains("ReadVersionRecord", StringComparison.Ordinal) ||
+                method.Contains("WriteVersionRecord", StringComparison.Ordinal)).ToArray();
+        Require(versioned.Length != 0, "No versioned reader or writer was generated.");
+        foreach (string method in versioned)
         {
-            foreach (var helper in source.SyntaxTree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>()
-                .Where(type => type.Identifier.ValueText.StartsWith("Version_", StringComparison.Ordinal)))
-            {
-                var property = helper.Members.OfType<PropertyDeclarationSyntax>().FirstOrDefault(member => member.Identifier.ValueText == "Metadata");
-                if (property?.ExpressionBody?.Expression is not CollectionExpressionSyntax collection) continue;
-                var type = assembly.GetTypes().FirstOrDefault(candidate => candidate.Name == helper.Identifier.ValueText && !candidate.ContainsGenericParameters);
-                if (type == null) continue;
-                var fields = (LuminPack.Core.LuminPackVersionField[])type.GetField("Fields", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
-                byte[] expected = LuminPack.Core.LuminPackVersionField.CreateMetadata(fields);
-                byte[] actual = collection.Elements.Cast<ExpressionElementSyntax>().Select(element => (byte)(int)((LiteralExpressionSyntax)element.Expression).Token.Value!).ToArray();
-                Require(actual.SequenceEqual(expected), "Constant and runtime type metadata differ for " + type.FullName);
-                checkedTables++;
-            }
+            string[] prohibited = method.Split('\n').Where(line => line.Contains("stackalloc", StringComparison.Ordinal) ||
+                line.Contains("ThreadStatic", StringComparison.Ordinal) ||
+                line.Contains("ReadEvolvedFields", StringComparison.Ordinal) ||
+                System.Text.RegularExpressions.Regex.IsMatch(line, @"SizeOf<(global::System.IntPtr|nint)>\(\)\s*(==|!=)\s*(4|8)"))
+                .Select(line => line.Trim()).ToArray();
+            Require(prohibited.Length == 0, "A versioned binary method contains legacy staging or platform selection: " +
+                string.Join(" | ", prohibited));
         }
-        Require(checkedTables >= 3, "Closed metadata constants were not checked.");
+        string generated = string.Join(Environment.NewLine, sources.Select(source => source.SourceText.ToString()));
+        Require(generated.Contains("SlotOf", StringComparison.Ordinal) &&
+            generated.Contains("ReadMapped", StringComparison.Ordinal) &&
+            generated.Contains("SkipVersionField", StringComparison.Ordinal),
+            "The mapped version loop, slot lookup or unknown member skip was lost.");
     }
 
     /// <summary>Creates an isolated driver for one compilation.</summary>
     /// <returns>The current serialization and mapping generators.</returns>
     private static GeneratorDriver NewDriver() => CSharpGeneratorDriver.Create(
-        [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: Parse);
+        [new ModelBasedGenerator().AsSourceGenerator()], parseOptions: Parse);
 
     /// <summary>Reports an evolution or generator regression.</summary>
     /// <param name="condition">The expected invariant.</param>

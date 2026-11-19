@@ -204,7 +204,7 @@ internal static class BufferWriterSerializationTest
         var marker = new object();
         writer.WriterState.GetOrAddReference(marker);
         writer.ReaderState.AddObjectReference(17, marker);
-        writer.ReaderState.AddVersionTable(31, [7]);
+        ReaderFixedBoundsPolicyTest.RegisterEmptyVersion(writer.ReaderState);
         int cursor = writer.CurrentIndex;
         writer.SetCurrentIndexPtr(ref cursor);
 

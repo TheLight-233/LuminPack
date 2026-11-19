@@ -1,12 +1,14 @@
+extern alias ModelBasedAnalyzer;
+
 using System.Reflection;
-using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
-/// <summary>Protects length-table boundaries shared by version-tolerant and reference-tracked objects.</summary>
+/// <summary>Protects versioned member boundaries and reference tracking across both object formats.</summary>
 internal static class SerializerSpecialModeBoundaryRegression
 {
-    /// <summary>Checks trailing schema changes, exact consumed lengths, gap sizes, and empty schemas.</summary>
+    /// <summary>Checks schema evolution and reference identity under the selected format and declaration scope.</summary>
     /// <param name="references">Runtime and platform references.</param>
     internal static void Run(MetadataReference[] references)
     {
@@ -21,13 +23,22 @@ internal static class SerializerSpecialModeBoundaryRegression
                 [LuminPackOrder(2)] public string Last;
             }
             [LuminPackable(GeneratorType.VersionTolerant)] public class VersionEmpty { }
-            [LuminPackable(GeneratorType.CircleReference)] public class CircleShort { [LuminPackOrder(0)] public int First; }
+            [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]
+            public class CircleShort { public int First; }
             [LuminPackable(GeneratorType.CircleReference)] public class CircleLong
             {
                 [LuminPackOrder(0)] public int First;
                 [LuminPackOrder(2)] public string Last;
             }
             [LuminPackable(GeneratorType.CircleReference)] public class CircleEmpty { }
+            [LuminPackable, LuminPackOption(TrackReferences = true)]
+            public class TrackedPositional
+            {
+                public int Value;
+                public TrackedPositional Next;
+                [LuminPackable] public sealed class Nested { public int Value; }
+            }
+            [LuminPackable] public sealed class UntrackedDerived : TrackedPositional { public byte Tail; }
             public static class SpecialModeEntry
             {
                 public static void Check()
@@ -46,6 +57,19 @@ internal static class SerializerSpecialModeBoundaryRegression
                         throw new Exception("CircleReference did not skip the complete unknown tail.");
                     var restoredCircle = global::LuminPackUnitTest.ConcreteReads.Read<CircleLong>(LuminPackSerializer.Serialize(new CircleShort { First = 29 }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CircleLong concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (restoredCircle.First != 29 || restoredCircle.Last != null) throw new Exception("CircleReference missing tail did not receive defaults.");
+                    var positional = new TrackedPositional { Value = 37 };
+                    positional.Next = positional;
+                    byte[] positionalBytes = LuminPackSerializer.Serialize(positional);
+                    TrackedPositional positionalCopy = null;
+                    if (LuminPackSerializer.Deserialize(positionalBytes, ref positionalCopy) != positionalBytes.Length ||
+                        positionalCopy.Value != positional.Value || !ReferenceEquals(positionalCopy, positionalCopy.Next))
+                        throw new Exception("The positional record did not retain its cycle.");
+                    if (!LuminPackSerializer.Serialize(new TrackedPositional.Nested { Value = 41 }).AsSpan()
+                        .SequenceEqual(new byte[] { 1, 41, 0, 0, 0 }))
+                        throw new Exception("A containing class passed its tracking declaration to a nested class.");
+                    if (LuminPackSerializer.Serialize(new UntrackedDerived { Value = 43, Tail = 47 }).Length != 7)
+                        throw new Exception("A base class passed its tracking declaration to its derived class.");
+
                     var versionEmpty = new VersionEmpty();
                     var circleEmpty = new CircleEmpty();
                     if (global::LuminPackUnitTest.ConcreteReads.Read<VersionEmpty>(LuminPackSerializer.Serialize(versionEmpty), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref VersionEmpty concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == null ||
@@ -58,7 +82,7 @@ internal static class SerializerSpecialModeBoundaryRegression
             preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]);
         var input = TestCompilation.Create("SpecialModeBoundaries", [CSharpSyntaxTree.ParseText(source, parse, "SpecialModes.cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
-        GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
         var errors = output.GetDiagnostics().Concat(diagnostics).Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
         Require(driver.GetRunResult().Results.All(result => result.Exception == null) && errors.Length == 0,
@@ -67,7 +91,33 @@ internal static class SerializerSpecialModeBoundaryRegression
         var emit = output.Emit(image);
         Require(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics));
         Assembly.Load(image.ToArray()).GetType("SpecialModeEntry")!.GetMethod("Check")!.Invoke(null, null);
-        Console.WriteLine("Passed VersionTolerant/CircleReference trailing additions/removals, consumed bytes, gap size evaluation, and empty schemas.");
+        VerifyTrackingOptionScope(references, parse);
+        Console.WriteLine("Passed versioned evolution, reference-tracked Object and VersionTolerant records, and tracking option scope.");
+    }
+
+    /// <summary>Requires the tracking option to appear only on a class declaration.</summary>
+    /// <param name="references">The platform and runtime references.</param>
+    /// <param name="parse">The consumer's parser settings.</param>
+    private static void VerifyTrackingOptionScope(MetadataReference[] references, CSharpParseOptions parse)
+    {
+        const string source = """
+            using LuminPack.Attribute;
+            [assembly: LuminPackOption(TrackReferences = true)]
+            [LuminPackable, LuminPackOption(TrackReferences = true)] public struct Value { }
+            [LuminPackable, LuminPackOption(TrackReferences = true)] public partial interface IValue { }
+            [LuminPackable] public class Members
+            {
+                [LuminPackOption(TrackReferences = true)] public int Field;
+                [LuminPackOption(TrackReferences = true)] public int Property { get; set; }
+            }
+            """;
+        var input = TestCompilation.Create("TrackingOptionScope", [CSharpSyntaxTree.ParseText(source, parse)], references);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse);
+        var result = driver.RunGenerators(input).GetRunResult();
+        var locations = result.Diagnostics.Where(diagnostic => diagnostic.Id == "LuminPack110")
+            .Select(diagnostic => diagnostic.Location.SourceSpan).Distinct().ToArray();
+        Require(result.Results.All(item => item.Exception is null) && locations.Length == 5,
+            "The tracking option was not rejected at every unsupported declaration scope.");
     }
 
     /// <summary>Reports a specialized-mode protocol regression.</summary>

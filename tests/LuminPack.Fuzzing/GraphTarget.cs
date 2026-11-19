@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using LuminPack;
 using LuminPack.Fuzzing;
 
@@ -90,10 +91,54 @@ internal sealed class GraphTarget : IFuzzTarget
     {
         yield return ("invalid", [250, 255, 255, 255, 127]);
         // A back reference to an id that was never registered.
-        yield return ("unknown-reference", [3, 255, 250, 9, 255]);
+        yield return ("unknown-reference", [4, 255, 250, 9, 255, 255]);
         // An undeclared Union tag.
-        yield return ("unknown-tag", [3, 255, 255, 1, 0, 0, 0, 7]);
+        yield return ("unknown-tag", [4, 255, 255, 1, 0, 0, 0, 7, 255]);
+        // Placement: root member count, versioned first member, then the remaining three members.
+        yield return ("unknown-schema", [4, 251, 0x52, 0, 255, 0, 0, 0, 0, 255]);
+
+        byte[] bytes = LuminPackSerializer.Serialize(new FuzzGraph { Versioned = new FuzzVersioned() });
+        const int descriptors = 12;
+        int descriptorEnd = descriptors + bytes[3] * 8;
+        yield return ("truncated-descriptors", bytes[..(descriptorEnd - 1)]);
+
+        var duplicate = (byte[])bytes.Clone();
+        Array.Copy(duplicate, descriptors, duplicate, descriptors + 8, 4);
+        StampSchema(duplicate, descriptorEnd);
+        yield return ("duplicate-descriptor-key", duplicate);
+
+        var width = (byte[])bytes.Clone();
+        width[descriptors + 7] = 251;
+        StampSchema(width, descriptorEnd);
+        yield return ("invalid-descriptor-width", width);
+
+        // The leaf was registered inside Items, so its full table must appear again at the outer Tail.
+        byte[] scoped = LuminPackSerializer.Serialize(Scoped());
+        byte[] tail = LuminPackSerializer.Serialize(new FuzzVersionLeaf { Value = 17 });
+        FuzzTarget.Require(scoped.AsSpan().EndsWith(tail), "The outer leaf lacks a complete descriptor table.");
+        yield return ("escaped-schema-scope", [.. scoped[..^tail.Length], 251, 0x52, 1, 17, 0, 0, 0]);
     }
+
+    /// <summary>Updates the valid schema digest after changing the descriptor bytes.</summary>
+    /// <param name="record">The outer record holding the mutated first member.</param>
+    /// <param name="descriptorEnd">The position after the mutated descriptor table.</param>
+    private static void StampSchema(byte[] record, int descriptorEnd)
+    {
+        const ulong offset = 14695981039346656037;
+        const ulong prime = 1099511628211;
+        ulong digest = unchecked((offset ^ record[3]) * prime);
+        foreach (byte octet in record.AsSpan(12, descriptorEnd - 12))
+            digest = unchecked((digest ^ octet) * prime);
+        BinaryPrimitives.WriteUInt64LittleEndian(record.AsSpan(4), digest);
+    }
+
+    /// <summary>Creates scoped full and short records followed by a full record outside their scope.</summary>
+    /// <returns>The graph used by the positive seed and the forged ordinal test.</returns>
+    private static FuzzGraph Scoped() => new()
+    {
+        Versioned = new FuzzVersioned { Items = [new FuzzVersionLeaf { Value = 11 }, new FuzzVersionLeaf { Value = 13 }] },
+        Tail = new FuzzVersionLeaf { Value = 17 }
+    };
 
     /// <summary>Builds representative graphs, including a cycle and a recursive Union case.</summary>
     /// <returns>The named positive seed graphs.</returns>
@@ -101,6 +146,7 @@ internal sealed class GraphTarget : IFuzzTarget
     {
         yield return ("null", null);
         yield return ("empty", new FuzzGraph());
+        yield return ("schema-scopes", Scoped());
         var first = new FuzzNode { Id = 1, Flag = true, Text = "first" };
         var second = new FuzzNode { Id = 2, Text = "second é", Next = first };
         first.Next = second;

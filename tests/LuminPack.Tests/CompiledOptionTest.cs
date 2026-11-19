@@ -239,6 +239,10 @@ LuminPackSerializer.DeserializeJson<string, TOptions>(ref reader, ref text);
             default(global::LuminPack.Option.LuminPackUtf16TokenStrings).ReadPair(ref reader, ref first, ref second);
 
         /// <inheritdoc/>
+        public void Skip(scoped ref global::LuminPack.Core.LuminPackReader reader, int maxStringLength) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Skip(ref reader, maxStringLength);
+
+        /// <inheritdoc/>
         public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>
             default(global::LuminPack.Option.LuminPackUtf16TokenStrings).ReadSlots(ref reader, slots);
 
@@ -345,6 +349,10 @@ LuminPackSerializer.DeserializeJson<string, TOptions>(ref reader, ref text);
         /// <inheritdoc/>
         public void ReadPair(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
             default(global::LuminPack.Option.LuminPackUtf16TokenStrings).ReadPair(ref reader, ref first, ref second);
+
+        /// <inheritdoc/>
+        public void Skip(scoped ref global::LuminPack.Core.LuminPackReader reader, int maxStringLength) =>
+            default(global::LuminPack.Option.LuminPackUtf16TokenStrings).Skip(ref reader, maxStringLength);
 
         /// <inheritdoc/>
         public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>

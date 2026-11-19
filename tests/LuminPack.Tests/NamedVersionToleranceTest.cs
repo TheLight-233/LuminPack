@@ -1,3 +1,5 @@
+#if LUMINPACK_NEXT_GENERATOR
+using System.Buffers.Binary;
 using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Core;
@@ -32,6 +34,8 @@ LuminPackSerializer.Deserialize(bytes, ref target.Next);
         CheckFixedTable<LuminPackUtf8TokenOptions>();
         CheckFixedTable<LuminPackUtf16LengthOptions>();
         CheckFixedTable<LuminPackUtf16TokenOptions>();
+        CheckFixedTable<LuminPackUtf8VarIntOptions>();
+        CheckFixedTable<LuminPackUtf16VarIntOptions>();
     }
 
     /// <summary>Exercises the constant-length prefix and the mapped fallback for one profile.</summary>
@@ -56,6 +60,29 @@ LuminPackSerializer.Deserialize<FixedRecord, TOptions>(bytes, ref target);
         Assert.Equal(0, restored.Number);
     }
 
+    /// <summary>Checks nullable presence and both BCL values fit their declared fixed-width descriptors.</summary>
+    [Fact]
+    public void NullableFixedFieldsRetainTheirWidth()
+    {
+        var source = new NullableRecord { Amount = 2.5m };
+        byte[] absent = LuminPackSerializer.Serialize(source);
+        var value = new DateTime(638990000000000000, DateTimeKind.Utc);
+        source.Timestamp = value;
+        byte[] present = LuminPackSerializer.Serialize(source);
+        Assert.Equal(9, absent[18]);
+        Assert.Equal(16, absent[26]);
+        Assert.Equal(absent.Length, present.Length);
+
+        NullableRecord? target = null;
+        Assert.Equal(present.Length, LuminPackSerializer.Deserialize(present, ref target));
+        Assert.Equal(value.ToBinary(), target!.Timestamp!.Value.ToBinary());
+        Assert.Equal(source.Amount, target.Amount);
+        var reused = target;
+        Assert.Equal(absent.Length, LuminPackSerializer.Deserialize(absent, ref target));
+        Assert.Same(reused, target);
+        Assert.Null(target!.Timestamp);
+    }
+
     /// <summary>Checks arbitrary insertion, deletion, reordering and renaming in both directions.</summary>
     [Fact]
     public void FieldsEvolveWithoutOrderSlots()
@@ -75,7 +102,7 @@ LuminPackSerializer.Deserialize<FixedRecord, TOptions>(bytes, ref target);
         Assert.Equal(original.Tail, restored.Tail);
         Assert.Null(restored.Removed);
         Assert.Equal(251, bytes[0]);
-        Assert.Equal(2, bytes[1]);
+        Assert.Equal(0x42, bytes[1]);
     }
 
     /// <summary>Checks aliases from multiple intermediate names and stable oldest-name writes.</summary>
@@ -264,35 +291,89 @@ LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Generic<string>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Generic<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
-    /// <summary>Checks new-format framing rejects the old slot marker, invalid revisions and truncation.</summary>
+    /// <summary>Rejects invalid forms, ordinals, widths and duplicate keys before publishing a fresh root.</summary>
     [Fact]
     public void MalformedRecordsAreRejected()
     {
         byte[] bytes = LuminPackSerializer.Serialize(new Earliest { A = 5 });
-        Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(new byte[] { 1, 4, 5, 0, 0, 0 }, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
-        var revision = bytes.ToArray();
-        revision[1] = 3;
-        Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(revision, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+        foreach (byte form in new byte[] { 0x02, 0x03, 0x46, 0x4A, 0x62 })
+        {
+            var invalid = bytes.ToArray();
+            invalid[1] = form;
+            Earliest? target = null;
+            Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize(invalid, ref target));
+            Assert.Null(target);
+        }
+
+        Earliest? missingSchema = null;
+        Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize(new byte[] { 251, 0x52, 0, 5, 0, 0, 0 }, ref missingSchema));
+        Assert.Null(missingSchema);
+
         for (int length = 0; length < bytes.Length; length++)
         {
             byte[] truncated = bytes.AsSpan(0, length).ToArray();
-            Assert.ThrowsAny<Exception>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(truncated, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+            Earliest? target = null;
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(truncated, ref target));
+            Assert.Null(target);
         }
-        // Revision 2 stores the raw member's width byte just before its payload.
-        int payloadLengthIndex = bytes.Length - sizeof(int) - 1;
-        var shortField = bytes.ToArray();
-        shortField[payloadLengthIndex] = 3;
-        Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(shortField, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
-        var longField = bytes.ToArray();
-        longField[payloadLengthIndex] = 5;
-        Assert.ThrowsAny<Exception>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(longField, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+
+        const int tableStart = 11;
+        foreach (byte width in new byte[] { 3, 5, 251, 252, 253 })
+        {
+            var invalid = bytes.ToArray();
+            invalid[tableStart + 7] = width;
+            ulong schema = LuminPackVersionRecord.ComputeSchema(invalid.AsSpan(tableStart, 8));
+            BinaryPrimitives.WriteUInt64LittleEndian(invalid.AsSpan(3), schema);
+            Earliest? target = null;
+            Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize(invalid, ref target));
+            Assert.Null(target);
+        }
+
+        byte[] duplicate = LuminPackSerializer.Serialize(new TwoInts { A = 11, B = 13 });
+        Array.Copy(duplicate, tableStart, duplicate, tableStart + 8, 4);
+        ulong duplicateSchema = LuminPackVersionRecord.ComputeSchema(duplicate.AsSpan(tableStart, 16));
+        BinaryPrimitives.WriteUInt64LittleEndian(duplicate.AsSpan(3), duplicateSchema);
+        TwoInts? duplicateTarget = null;
+        Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize(duplicate, ref duplicateTarget));
+        Assert.Null(duplicateTarget);
+    }
+
+    /// <summary>Skips a string with each compiled codec and validates its full payload before publishing.</summary>
+    [Fact]
+    public void UnknownStringsUseTheirCompiledProfile()
+    {
+        CheckUnknownString<LuminPackUtf8LengthOptions>();
+        CheckUnknownString<LuminPackUtf8TokenOptions>();
+        CheckUnknownString<LuminPackUtf16LengthOptions>();
+        CheckUnknownString<LuminPackUtf16TokenOptions>();
+        CheckUnknownString<LuminPackUtf8VarIntOptions>();
+        CheckUnknownString<LuminPackUtf16VarIntOptions>();
+    }
+
+    /// <summary>Reads a following fixed-width member after skipping the string record.</summary>
+    /// <typeparam name="TOptions">The compiled binary string profile.</typeparam>
+    private static void CheckUnknownString<TOptions>() where TOptions : struct, ILuminPackOptions
+    {
+        foreach (string? text in new[] { null, "", "\u00E9\u4E2D\U0001F680" })
+        {
+            byte[] bytes = LuminPackSerializer.Serialize<RemovedString, TOptions>(new RemovedString { Text = text, A = 17 });
+            Earliest? target = null;
+            Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<Earliest, TOptions>(bytes, ref target));
+            Assert.Equal(17, target!.A);
+        }
+
+        byte[] malicious = LuminPackSerializer.Serialize<RemovedString, TOptions>(new RemovedString { Text = new string('x', 17) });
+        Earliest? failed = null;
+        byte[] truncated = malicious[..^5];
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<Earliest, TOptions>(truncated, ref failed));
+        Assert.Null(failed);
     }
 
     /// <summary>Checks null and empty schemas have exact sizes and reset supplied reference storage.</summary>
     [Fact]
     public void EmptyAndNullRecordsRemainDistinct()
     {
-        Assert.Equal(4, LuminPackSerializer.Serialize(new Empty()).Length);
+        Assert.Equal(11, LuminPackSerializer.Serialize(new Empty()).Length);
         Empty? target = new();
         byte[] bytes = LuminPackSerializer.Serialize((Empty)null);
         Assert.Equal(new byte[] { 255 }, bytes);
@@ -315,6 +396,8 @@ LuminPackSerializer.Deserialize(bytes, ref target);
         public int Id;
     }
     [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Earliest { public int A; }
+    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class NullableRecord { public DateTime? Timestamp; public decimal Amount; }
+    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class RemovedString { public string? Text; public int A; }
     [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Intermediate { public int B; }
     [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Latest
     {
@@ -440,3 +523,4 @@ LuminPackSerializer.Deserialize(bytes, ref target);
     }
     [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Generic<T> { public T Value = default!; }
 }
+#endif

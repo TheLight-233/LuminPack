@@ -42,38 +42,149 @@ public class ReaderFixedBoundsPolicyTest
     }
 
 
-    /// <summary>Compares fused version prefixes with the established header and metadata operations.</summary>
-    [Fact]
-    public void FixedVersionPrefixesKeepEveryCompiledProfile()
+    private static readonly LuminPackVersionMapCache EmptyVersionCache = CreateVersionCache();
+
+    /// <summary>Creates the owner of an immutable descriptor table for positional framing tests.</summary>
+    /// <returns>A cache with no mapped receiving slots.</returns>
+    private static LuminPackVersionMapCache CreateVersionCache() => new(static (uint _, out ulong expected) =>
     {
-        CheckVersionPrefix<LuminPackDefaultOptions>();
-        CheckVersionPrefix<LuminPackUtf8LengthOptions>();
-        CheckVersionPrefix<LuminPackUtf8TokenOptions>();
-        CheckVersionPrefix<LuminPackUtf16TokenOptions>();
-        CheckVersionPrefix<LuminPackUtf8VarIntOptions>();
-        CheckVersionPrefix<LuminPackUtf16VarIntOptions>();
+        expected = 0;
+        return -1;
+    });
+
+    /// <summary>Checks full and short record framing under every compiled profile.</summary>
+    [Fact]
+    public void VersionDescriptorsKeepEveryCompiledProfile()
+    {
+        CheckVersionDescriptors<LuminPackUtf8LengthOptions>(0);
+        CheckVersionDescriptors<LuminPackUtf8TokenOptions>(1);
+        CheckVersionDescriptors<LuminPackUtf16LengthOptions>(2);
+        CheckVersionDescriptors<LuminPackUtf16TokenOptions>(3);
+        CheckVersionDescriptors<LuminPackUtf8VarIntOptions>(4);
+        CheckVersionDescriptors<LuminPackUtf16VarIntOptions>(5);
     }
 
-    /// <summary>Checks exact-capacity prefix writes and surrounding guards with one closed profile.</summary>
+    /// <summary>Checks exact-capacity writes and subsequent reads with one closed profile.</summary>
     /// <typeparam name="TOptions">The actual document profile.</typeparam>
-    private static void CheckVersionPrefix<TOptions>() where TOptions : struct, ILuminPackOptions
+    /// <param name="profile">The expected binary profile tag.</param>
+    private static void CheckVersionDescriptors<TOptions>(byte profile) where TOptions : struct, ILuminPackOptions
     {
-        foreach (int length in new[] { 0, 1, 3, 4, 15, 16, 31, 32, 127, 128 })
+        foreach (int count in new[] { 0, 1, 3, 8, 16, 17, 249 })
         {
-            byte[] metadata = Enumerable.Range(0, length).Select(index => (byte)(index * 17)).ToArray();
-            byte[] prefix = LuminPackVersionField.CreateDefaultPrefix(metadata, 8);
-            byte[] actual = Enumerable.Repeat((byte)0xCC, prefix.Length + 16).ToArray();
-            byte[] expected = (byte[])actual.Clone();
-            Span<byte> target = actual.AsSpan(8, prefix.Length);
-            Span<byte> reference = expected.AsSpan(8, prefix.Length);
-            var writer = new LuminPackWriter(ref target);
-            var original = new LuminPackWriter(ref reference);
-            writer.WriteVersionPrefix<TOptions>(prefix);
-            original.WriteVersionHeader<TOptions>(8);
-            original.WriteVersionMetadata(metadata, 0);
-            Assert.Equal(expected, actual);
-            Assert.Equal(prefix.Length, writer.Position);
+            byte[] descriptors = new byte[count * 8];
+            for (int i = 0; i < count; i++)
+                BinaryPrimitives.WriteUInt32LittleEndian(descriptors.AsSpan(i * 8), (uint)i);
+            ulong schema = LuminPackVersionRecord.ComputeSchema(descriptors);
+            var cache = CreateVersionCache();
+            int completeWidth = 11 + descriptors.Length;
+            byte[] storage = Enumerable.Repeat((byte)0xCC, completeWidth + 5).ToArray();
+            Span<byte> output = storage.AsSpan(1, completeWidth + 3);
+            var writer = new LuminPackWriter(ref output, new LuminPackWriterOptionalState());
+            writer.WriteVersionRecord<TOptions>(schema, descriptors, cache);
+            Assert.Equal(completeWidth, writer.Position);
+            writer.WriteVersionRecord<TOptions>(schema, descriptors, cache);
+            Assert.Equal(output.Length, writer.Position);
+            Assert.Equal(0xCC, storage[0]);
+            Assert.Equal(0xCC, storage[^1]);
+            Assert.True(output[..3].SequenceEqual(new byte[] { 251, (byte)(0x40 | profile), (byte)count }));
+            Assert.Equal(schema, BinaryPrimitives.ReadUInt64LittleEndian(output[3..]));
+            Assert.True(output[11..completeWidth].SequenceEqual(descriptors));
+            Assert.True(output[completeWidth..].SequenceEqual(new byte[] { 251, (byte)(0x50 | profile), 0 }));
+
+            ReadOnlySpan<byte> input = output;
+            var reader = new LuminPackReader(ref input, new LuminPackReaderOptionalState());
+            var full = reader.ReadVersionRecord<TOptions>(schema, descriptors, cache);
+            Assert.False(full.IsNull);
+            Assert.False(full.IsLegacy);
+            Assert.Null(full.Map);
+            Assert.Equal(completeWidth, reader.Position);
+            var registered = reader.ReadVersionRecord<TOptions>(schema, descriptors, cache);
+            Assert.False(registered.IsNull);
+            Assert.Null(registered.Map);
+            Assert.Equal(input.Length, reader.Position);
         }
+    }
+
+    /// <summary>Checks the hashed registry, multibyte ordinals and rollback below the small-table boundary.</summary>
+    [Fact]
+    public void VersionScopesRollBackHashedRegistrations()
+    {
+        var models = Enumerable.Range(0, 129).Select(index =>
+        {
+            byte[] descriptors = new byte[8];
+            BinaryPrimitives.WriteUInt32LittleEndian(descriptors, (uint)index);
+            return (Schema: LuminPackVersionRecord.ComputeSchema(descriptors), Descriptors: descriptors, Cache: CreateVersionCache());
+        }).ToArray();
+        Span<byte> output = new byte[3000];
+        var writer = new LuminPackWriter(ref output, new LuminPackWriterOptionalState());
+        foreach (var model in models.AsSpan(0, 8))
+            writer.WriteVersionRecord<LuminPackDefaultOptions>(model.Schema, model.Descriptors, model.Cache);
+
+        int lengthPosition = writer.ReserveVersionLength();
+        int scope = writer.EnterVersionScope();
+        foreach (var model in models.AsSpan(8))
+            writer.WriteVersionRecord<LuminPackDefaultOptions>(model.Schema, model.Descriptors, model.Cache);
+        var last = models[^1];
+        int extendedPosition = writer.Position;
+        writer.WriteVersionRecord<LuminPackDefaultOptions>(last.Schema, last.Descriptors, last.Cache);
+        Assert.True(output.Slice(extendedPosition, 4).SequenceEqual(new byte[] { 251, 0x52, 0x80, 0x01 }));
+        writer.ExitVersionScope(scope);
+        writer.CompleteVersionLength(lengthPosition);
+
+        var retained = models[7];
+        int outsidePosition = writer.Position;
+        writer.WriteVersionRecord<LuminPackDefaultOptions>(retained.Schema, retained.Descriptors, retained.Cache);
+        Assert.True(output.Slice(outsidePosition, 3).SequenceEqual(new byte[] { 251, 0x52, 7 }));
+        outsidePosition = writer.Position;
+        writer.WriteVersionRecord<LuminPackDefaultOptions>(last.Schema, last.Descriptors, last.Cache);
+        Assert.Equal(0x42, output[outsidePosition + 1]);
+        outsidePosition = writer.Position;
+        writer.WriteVersionRecord<LuminPackDefaultOptions>(last.Schema, last.Descriptors, last.Cache);
+        Assert.True(output.Slice(outsidePosition, 3).SequenceEqual(new byte[] { 251, 0x52, 8 }));
+
+        ReadOnlySpan<byte> input = output[..writer.Position];
+        using var state = new LuminPackReaderOptionalState();
+        var reader = new LuminPackReader(ref input, state);
+        foreach (var model in models.AsSpan(0, 8))
+            Assert.Null(reader.ReadVersionRecord<LuminPackDefaultOptions>(model.Schema, model.Descriptors, model.Cache).Map);
+
+        var field = reader.EnterVersionField();
+        foreach (var model in models.AsSpan(8))
+            Assert.Null(reader.ReadVersionRecord<LuminPackDefaultOptions>(model.Schema, model.Descriptors, model.Cache).Map);
+        Assert.Null(reader.ReadVersionRecord<LuminPackDefaultOptions>(last.Schema, last.Descriptors, last.Cache).Map);
+        reader.ValidateVersionFieldEnd(field);
+        reader.ExitVersionField(field);
+        Assert.Equal(8, state.VersionRegistry.Count);
+
+        Assert.Null(reader.ReadVersionRecord<LuminPackDefaultOptions>(retained.Schema, retained.Descriptors, retained.Cache).Map);
+        Assert.Null(reader.ReadVersionRecord<LuminPackDefaultOptions>(last.Schema, last.Descriptors, last.Cache).Map);
+        Assert.Null(reader.ReadVersionRecord<LuminPackDefaultOptions>(last.Schema, last.Descriptors, last.Cache).Map);
+        Assert.Equal(input.Length, reader.Position);
+        Assert.Equal(9, state.VersionRegistry.Count);
+    }
+
+    /// <summary>Records an empty model in the caller-owned state without a reference table or payload.</summary>
+    /// <param name="state">The reader state whose operation lifetime is under test.</param>
+    internal static void RegisterEmptyVersion(LuminPackReaderOptionalState state)
+    {
+        Span<byte> buffer = stackalloc byte[11];
+        RegisterEmptyVersion(new LuminPackWriterOptionalState(), buffer);
+        ulong schema = LuminPackVersionRecord.ComputeSchema(ReadOnlySpan<byte>.Empty);
+        ReadOnlySpan<byte> input = buffer;
+        var reader = new LuminPackReader(ref input, state);
+        reader.ReadVersionRecord<LuminPackDefaultOptions>(schema, ReadOnlySpan<byte>.Empty, EmptyVersionCache);
+    }
+
+    /// <summary>Records an empty model in the operation state using independent framing storage.</summary>
+    /// <param name="state">The writer state whose operation lifetime is under test.</param>
+    /// <param name="payload">An optional writable window for a subsequent read.</param>
+    internal static void RegisterEmptyVersion(LuminPackWriterOptionalState state, scoped Span<byte> payload = default)
+    {
+        if (payload.IsEmpty)
+            payload = stackalloc byte[11];
+        ulong schema = LuminPackVersionRecord.ComputeSchema(ReadOnlySpan<byte>.Empty);
+        var writer = new LuminPackWriter(ref payload, state);
+        writer.WriteVersionRecord<LuminPackDefaultOptions>(schema, ReadOnlySpan<byte>.Empty, EmptyVersionCache);
     }
 
     /// <summary>Retains every tagged integer representation, checked conversion and truncated-payload failure.</summary>

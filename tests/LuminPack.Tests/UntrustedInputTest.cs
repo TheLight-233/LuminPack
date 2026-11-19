@@ -255,7 +255,7 @@ public class UntrustedInputTest
         Assert.Throws<InvalidDataException>(() => LuminPackSerializer.Deserialize(record, ref versioned));
     }
 
-    /// <summary>Reference-tracked records reject back references of another type and raw slots of another width.</summary>
+    /// <summary>Reference-tracked records reject back references of another type and invalid member framing.</summary>
     [Fact]
     public void ReferenceTrackedReadsAreChecked()
     {
@@ -268,10 +268,15 @@ public class UntrustedInputTest
         Assert.Equal(new byte[] { 1, 0, 0, 0, 255 }, bytes[^5..]);
         byte[] forged = [.. bytes[..^5], 2, 0, 0, 0, 250, 0];
         Assert.Throws<InvalidDataException>(() => LuminPackSerializer.Deserialize(forged, ref copy));
-        // A raw slot records its exact width.
         byte[] leaf = LuminPackSerializer.Serialize(new SafeLeaf { Value = 9 });
+#if LUMINPACK_NEXT_GENERATOR
+        // The two-byte reference header precedes the version descriptor's width byte.
+        Assert.Equal(4, leaf[20]);
+        leaf[20] = 2;
+#else
         Assert.Equal(4, leaf[1]);
         leaf[1] = 2;
+#endif
         SafeLeaf? leafCopy = null;
         Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize(leaf, ref leafCopy));
     }

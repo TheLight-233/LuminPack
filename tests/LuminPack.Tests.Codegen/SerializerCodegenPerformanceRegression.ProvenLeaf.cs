@@ -173,6 +173,9 @@ internal static partial class SerializerCodegenPerformanceRegression
             public void ReadPair(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
                 ObservedCodec.ReadPair(ref reader, ref first, ref second);
 
+            public void Skip(scoped ref global::LuminPack.Core.LuminPackReader reader, int maxStringLength) =>
+                ObservedCodec.Skip(ref reader, maxStringLength);
+
             public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>
                 ObservedCodec.ReadSlots(ref reader, slots);
 

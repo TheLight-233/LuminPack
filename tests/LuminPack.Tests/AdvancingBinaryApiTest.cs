@@ -17,13 +17,14 @@ public class AdvancingBinaryApiTest
     {
         using var owner = new LuminBufferWriter(true);
         var state = new LuminPackWriterOptionalState();
-        var writer = new LuminPackWriter(owner, state) { SchemaOperation = 37 };
+        ReaderFixedBoundsPolicyTest.RegisterEmptyVersion(state);
+        var writer = new LuminPackWriter(owner, state);
         writer.Write(123);
         var copy = new LuminPackWriter(option: null);
         writer.CopyTo(ref copy);
         Assert.Same(owner, copy.Owner);
         Assert.Same(state, copy.Options);
-        Assert.Equal(37, copy.SchemaOperation);
+        Assert.Equal(1, copy.Options!.VersionRegistry.Count);
         Assert.Equal(writer.Position, copy.Position);
         Assert.Equal(writer.RecordRoom(ref writer.Cursor), copy.RecordRoom(ref copy.Cursor));
         CheckCachedRecordRoom(ref copy);
@@ -36,7 +37,7 @@ public class AdvancingBinaryApiTest
         Assert.Equal(123, System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(writer.Buffer));
         Assert.Equal(456, System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(writer.Buffer[4..]));
         Assert.Same(state, writer.Options);
-        Assert.Equal(37, writer.SchemaOperation);
+        Assert.Equal(1, writer.Options!.VersionRegistry.Count);
     }
 
     /// <summary>Checks the public record-room view after all explicit window and owner operations.</summary>

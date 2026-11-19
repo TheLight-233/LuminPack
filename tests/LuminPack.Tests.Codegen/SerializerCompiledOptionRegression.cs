@@ -1,7 +1,10 @@
+extern alias ModelBasedAnalyzer;
+
 using System.Reflection;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 /// <summary>Checks compiled profiles on constrained generic definitions and consumer partial helpers.</summary>
 internal static partial class SerializerCompiledOptionRegression
@@ -45,7 +48,7 @@ internal static partial class SerializerCompiledOptionRegression
         Console.WriteLine("Passed constrained generic compiled profiles, partial-helper API selection, registered assembly defaults and option diagnostics.");
     }
 
-    /// <summary>Checks generated variable-length string scopes, lists, Union slots, named versions and bounded reads.</summary>
+    /// <summary>Checks generated variable-length string scopes, lists, Union slots, versioned records and bounded reads.</summary>
     /// <param name="parse">The consuming language and framework symbols.</param>
     /// <param name="references">The platform and runtime references.</param>
     private static void VerifyVarIntProfiles(CSharpParseOptions parse, MetadataReference[] references)
@@ -69,8 +72,6 @@ internal static partial class SerializerCompiledOptionRegression
             }
             [LuminPackable, LuminPackUnion(1, typeof(Case))] public abstract partial class Root { public string Name; }
             [LuminPackable] public partial class Case : Root { public List<string> Names = new(); }
-            [LuminPackable(GeneratorType.VersionTolerant)] public class Named { public List<string> Names = new(); }
-            [LuminPackable(GeneratorType.CircleReference)] public class Circle { [LuminPackOrder(0)] public string Text; [LuminPackOrder(1)] public Circle Next; }
             [LuminPackable, LuminPackOption(UntrustedData = true, MaxStringLength = 32)] public class Bounded { public List<string> Names = new(); public Dictionary<string,string> Map = new(); }
             [LuminPackable, LuminPackOption(UntrustedData = true, MaxStringLength = 32, StringEncoding = LuminPackStringEncoding.UTF8)] public class BoundedUtf8 { public List<string> Names = new(); public Dictionary<string,string> Map = new(); }
             [LuminPackable, LuminPackOption(UntrustedData = true, MaxStringLength = 32, StringEncoding = LuminPackStringEncoding.UTF8)] public class BoundedImmutable { public ImmutableArray<string> Names = ImmutableArray<string>.Empty; }
@@ -96,12 +97,6 @@ internal static partial class SerializerCompiledOptionRegression
                     if(((Case)global::LuminPackUnitTest.ConcreteReads.Read<Root>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Root concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))).Names.Count!=16)throw new Exception("Union profile.");
                     bytes=LuminPackSerializer.Serialize<Root, LuminPackUtf8VarIntOptions>(root);
                     if(((Case)global::LuminPackUnitTest.ConcreteReads.Read<Root>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Root concreteReadTarget) => LuminPackSerializer.Deserialize<Root, LuminPackUtf8VarIntOptions>(concreteReadInput, ref concreteReadTarget))).Name!="root")throw new Exception("UTF-8 Union profile.");
-                    var named=new Named{Names=list};bytes=LuminPackSerializer.Serialize(named);
-                    if(bytes[2]!=5 || global::LuminPackUnitTest.ConcreteReads.Read<Named>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Named concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Names.Count!=16)throw new Exception("Named profile.");
-                    bytes=LuminPackSerializer.Serialize<Named, LuminPackUtf8VarIntOptions>(named);
-                    if(bytes[2]!=4 || global::LuminPackUnitTest.ConcreteReads.Read<Named>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Named concreteReadTarget) => LuminPackSerializer.Deserialize<Named, LuminPackUtf8VarIntOptions>(concreteReadInput, ref concreteReadTarget)).Names.Count!=16)throw new Exception("Named UTF-8 profile.");
-                    var circle=new Circle{Text="circle"};circle.Next=circle;bytes=LuminPackSerializer.Serialize(circle);var restored=global::LuminPackUnitTest.ConcreteReads.Read<Circle>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Circle concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
-                    if(!ReferenceEquals(restored,restored.Next)||restored.Text!="circle")throw new Exception("Reference profile.");
                     var bounded=new Bounded{Names=list,Map=new Dictionary<string,string>{{"a","b"}}};bytes=LuminPackSerializer.Serialize(bounded);
                     if(global::LuminPackUnitTest.ConcreteReads.Read<Bounded>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Bounded concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Map["a"]!="b")throw new Exception("Bounded profile.");
                     var boundedUtf8=new BoundedUtf8{Names=new List<string>{null,"","\u4E2D","\uD83D\uDE00"},Map=new Dictionary<string,string>{{"\u4E2D","\u00E9"}}};bytes=LuminPackSerializer.Serialize(boundedUtf8);
@@ -147,6 +142,45 @@ internal static partial class SerializerCompiledOptionRegression
             """;
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
             Execute("CompiledVarInt" + mode, source.Replace("MODE", mode), parse, references);
+
+        const string specialModes = """
+            using System;
+            using System.Collections.Generic;
+            using System.Linq;
+            using LuminPack;
+            using LuminPack.Attribute;
+            using LuminPack.Option;
+            [assembly: LuminPackOption(StringRecording = LuminPackStringRecording.VarInt)]
+            [LuminPackable(GeneratorType.VersionTolerant)] public class Named { public List<string> Names = new(); }
+            [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]
+            public class Circle { public string Text; public Circle Next; }
+            public static class Entry
+            {
+                public static void Check()
+                {
+                    var named = new Named { Names = Enumerable.Repeat("a", 16).ToList() };
+                    byte[] bytes = LuminPackSerializer.Serialize(named);
+                    Named copy = null;
+                    LuminPackSerializer.Deserialize(bytes, ref copy);
+                    if (bytes[1] != 0x45 || !copy.Names.SequenceEqual(named.Names))
+                        throw new Exception("Declared VarInt profile was lost in a full version record.");
+                    bytes = LuminPackSerializer.Serialize<Named, LuminPackUtf8VarIntOptions>(named);
+                    copy = null;
+                    LuminPackSerializer.Deserialize<Named, LuminPackUtf8VarIntOptions>(bytes, ref copy);
+                    if (bytes[1] != 0x45 || !copy.Names.SequenceEqual(named.Names))
+                        throw new Exception("The full version record did not retain its effective assembly-declared codec.");
+
+                    var circle = new Circle { Text = "circle" };
+                    circle.Next = circle;
+                    bytes = LuminPackSerializer.Serialize(circle);
+                    Circle restored = null;
+                    LuminPackSerializer.Deserialize(bytes, ref restored);
+                    if (bytes[3] != 0x45 || !ReferenceEquals(restored, restored.Next) || restored.Text != circle.Text)
+                        throw new Exception("The tracked version record lost its profile or identity.");
+                }
+            }
+            """;
+        Execute("CompiledVarIntSpecialModes", specialModes, parse, references, next: true);
     }
 
     /// <summary>Checks that editing string recording invalidates retained output exactly like a fresh driver.</summary>
@@ -229,6 +263,9 @@ internal static partial class SerializerCompiledOptionRegression
 
                 public void ReadPair(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref string? first, scoped ref string? second) =>
                     default(global::LuminPack.Option.LuminPackUtf16LengthStrings).ReadPair(ref reader, ref first, ref second);
+
+                public void Skip(scoped ref global::LuminPack.Core.LuminPackReader reader, int maxStringLength) =>
+                    default(global::LuminPack.Option.LuminPackUtf16LengthStrings).Skip(ref reader, maxStringLength);
 
                 public void ReadSlots(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped global::System.Span<string?> slots) =>
                     default(global::LuminPack.Option.LuminPackUtf16LengthStrings).ReadSlots(ref reader, slots);
@@ -335,18 +372,25 @@ internal static partial class SerializerCompiledOptionRegression
     /// <param name="parse">The consuming language and framework symbols.</param>
     /// <param name="references">The platform and runtime references.</param>
     /// <param name="execute">Whether the fixture also contains an executable Entry.Check assertion.</param>
-    private static void Execute(string name, string source, CSharpParseOptions parse, MetadataReference[] references, bool execute = true)
+    /// <param name="next">Whether the fixture uses the shipped generator.</param>
+    private static void Execute(string name, string source, CSharpParseOptions parse, MetadataReference[] references, bool execute = true, bool next = false)
     {
         var input = TestCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, parse)], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
-        GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
+        ISourceGenerator[] generators = next
+            ? [new ModelBasedGenerator().AsSourceGenerator()]
+            : [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()];
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generators, parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
         if (Environment.GetEnvironmentVariable("LUMINPACK_INPUT_CAPTURE") is { Length: > 0 } capture)
         {
             string directory = Path.Combine(capture, name);
-            Directory.CreateDirectory(directory);
             foreach (var file in driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources))
-                File.WriteAllText(Path.Combine(directory, file.HintName), file.SourceText.ToString());
+            {
+                string destination = Path.Combine(directory, file.HintName);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                File.WriteAllText(destination, file.SourceText.ToString());
+            }
         }
         var errors = output.GetDiagnostics().Concat(diagnostics).Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
         if (errors.Length != 0) throw new InvalidOperationException(string.Join("\n", errors.Select(error => error + "\n" +
