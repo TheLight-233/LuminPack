@@ -40,6 +40,46 @@ public class AuditSafetyRegressionTest
         Assert.True(owner.TotalLength >= initialCapacity * 4);
     }
 
+    /// <summary>Preserves the cursor and published prefix across each owned writer threshold check.</summary>
+    /// <param name="entry">The current-cursor check, explicit-index check or safe advance.</param>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void OwnedWriterThresholdGrowthRefreshesTheWindow(int entry)
+    {
+        using var owner = new LuminBufferWriter(useFirstBuffer: true);
+        byte[] prefix = [11, 17, 23];
+        owner.LoadSpan(prefix);
+        var writer = new LuminPackWriter(owner);
+        int initialCapacity = writer.Buffer.Length;
+        int threshold = checked((int)writer.BufferCheckLimit);
+
+        switch (entry)
+        {
+            case 0:
+                writer.Position = threshold;
+                writer.CheckBuffer();
+                break;
+            case 1:
+                Assert.Equal(threshold, writer.CheckBuffer(threshold));
+                break;
+            default:
+                writer.AdvanceSafe(threshold - writer.Position);
+                break;
+        }
+
+        int position = entry == 1 ? prefix.Length : threshold;
+        Assert.Equal(position, writer.Position);
+        Assert.True(writer.Buffer.Length > initialCapacity);
+        Assert.True(writer.BufferCheckLimit > (uint)threshold);
+        Assert.Equal(prefix, writer.Buffer[..prefix.Length].ToArray());
+
+        writer.Write((byte)0xA5);
+        Assert.Equal(position + 1, writer.Position);
+        Assert.Equal((byte)0xA5, owner.DangerousGetBuffer()[position]);
+    }
+
     /// <summary>Rejects incomplete dynamic payload destinations before copying or resetting the source.</summary>
     /// <param name="capacity">The destination's logical capacity.</param>
     [Theory]

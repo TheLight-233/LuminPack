@@ -246,6 +246,13 @@ namespace LuminPack.Core
             Apply(GrowForCapacity(Owner, Position, index, count));
         }
 
+        /// <summary>Grows a writer that reached its owner threshold and refreshes its storage fields.</summary>
+        /// <param name="writer">The owned writer that crossed its growth threshold.</param>
+        /// <param name="index">The absolute position that reached the threshold.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void GrowThresholdInPlace(scoped ref LuminPackWriter writer, int index)
+            => writer.Apply(GrowForThreshold(writer.Owner!, writer.Position, index));
+
         /// <summary>Grows the owning buffer for a capacity request outside the hot comparison.</summary>
         /// <param name = "owner">The owning output buffer.</param>
         /// <param name = "position">The current absolute output position.</param>
@@ -488,7 +495,7 @@ namespace LuminPack.Core
         {
             // Position >= threshold exactly when the cursor is past the cached limit; a limit at the storage end never is.
             if (Owner is not null && RecordDistance() < 0)
-                Apply(GrowForThreshold(Owner, Position, Position));
+                GrowThresholdInPlace(ref this, Position);
         }
 
         /// <summary>Checks a shared or completed position without introducing a returned-cursor merge.</summary>
@@ -497,7 +504,7 @@ namespace LuminPack.Core
         private void CheckBufferPosition(int index)
         {
             if (Owner is not null && (uint)index >= BufferCheckLimit)
-                Apply(GrowForThreshold(Owner, Position, index));
+                GrowThresholdInPlace(ref this, index);
         }
 
         /// <summary>Checks a collection's actual cursor before writing its next element.</summary>
@@ -507,7 +514,7 @@ namespace LuminPack.Core
         public int CheckBuffer(int index)
         {
             if ((uint)index >= BufferCheckLimit && Owner is not null)
-                Apply(GrowForThreshold(Owner, Position, index));
+                GrowThresholdInPlace(ref this, index);
             return index;
         }
 
