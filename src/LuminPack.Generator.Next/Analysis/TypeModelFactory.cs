@@ -132,6 +132,12 @@ internal static partial class TypeModelFactory
         return session.HasTargetedOption(symbol) ? CustomRegistration(symbol, options, session.SelectedGeneration(symbol), out json) : null;
     }
 
+    /// <summary>Finds the operations a type contributes for its selected Custom contract.</summary>
+    /// <param name="symbol">The declaration supplying the operations.</param>
+    /// <param name="options">The consuming project's registration settings.</param>
+    /// <param name="generation">The selected generation mode.</param>
+    /// <param name="json">Whether the declaration supplies both JSON operations.</param>
+    /// <returns>The qualified name to register, or null when registration is unavailable.</returns>
     private static string? CustomRegistration(INamedTypeSymbol symbol, GeneratorOptions options, PayloadGeneration generation, out bool json)
     {
         json = false;

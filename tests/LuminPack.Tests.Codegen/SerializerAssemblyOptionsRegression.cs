@@ -72,7 +72,7 @@ internal static class SerializerAssemblyOptionsRegression
                 { if (!actual.AsSpan().SequenceEqual(expected)) throw new Exception(reason); }
                 public static void Check()
                 {
-                    const string text = "ascii and é漢";
+                    const string text = "ascii and \u00E9\u6F22";
                     var exact = new Box<int> { Text = text, Value = 18 };
                     var exactBytes = LuminPackSerializer.Serialize(exact);
                     Same(exactBytes, LuminPackSerializer.Serialize(new ExactTwin { Text = text, Value = 18 }), "Exact type lost Version or its open profile.");
@@ -150,15 +150,28 @@ internal static class SerializerAssemblyOptionsRegression
         Console.WriteLine("Passed targeted assembly profiles, mode and layout selection, registration, incremental edits and option target diagnostics.");
     }
 
+    /// <summary>Captures generated file identities and text in stable order.</summary>
+    /// <param name="driver">The completed driver.</param>
+    /// <returns>The generated files used for incremental comparison.</returns>
     private static string[] Files(GeneratorDriver driver) => driver.GetRunResult().Results.SelectMany(item => item.GeneratedSources)
         .Select(file => file.HintName + "\n" + file.SourceText).Order(StringComparer.Ordinal).ToArray();
 
+    /// <summary>Creates a Next driver for the fixture's language and target settings.</summary>
+    /// <returns>A fresh generator driver.</returns>
     private static GeneratorDriver Driver() => CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: Parse);
 
+    /// <summary>Creates a fixture compilation with the supplied runtime and library references.</summary>
+    /// <param name="name">The assembly and source file name.</param>
+    /// <param name="source">The consumer or library declarations.</param>
+    /// <param name="references">The metadata references available to the compilation.</param>
+    /// <returns>The fixture compilation.</returns>
     private static CSharpCompilation Create(string name, string source, MetadataReference[] references) => CSharpCompilation.Create(name,
         [CSharpSyntaxTree.ParseText(source, Parse, name + ".cs")], references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
 
+    /// <summary>Emits a compiled fixture and reports any compile errors.</summary>
+    /// <param name="compilation">The library or generated consumer to emit.</param>
+    /// <returns>The emitted assembly image.</returns>
     private static byte[] Emit(Compilation compilation)
     {
         using var image = new MemoryStream();
@@ -167,6 +180,9 @@ internal static class SerializerAssemblyOptionsRegression
         return image.ToArray();
     }
 
+    /// <summary>Fails the contract check when the expected condition does not hold.</summary>
+    /// <param name="condition">The condition asserted by the check.</param>
+    /// <param name="message">The failure that explains the violated contract.</param>
     private static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
