@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -48,6 +49,26 @@ internal static class PayloadEmitter
     {
         string trimmed = name.TrimStart('_');
         return trimmed.Length == 0 ? name : char.ToLowerInvariant(trimmed[0]) + trimmed.Substring(1);
+    }
+
+    /// <summary>Allocates distinct local stems when serialized member names share a lowercase spelling.</summary>
+    /// <param name="members">The serialized members in wire order.</param>
+    /// <returns>The local stem for each member name.</returns>
+    internal static Dictionary<string, string> MemberLocals(RenderMember[] members)
+    {
+        var names = new Dictionary<string, string>(members.Length, StringComparer.Ordinal);
+        var used = new HashSet<string>(StringComparer.Ordinal);
+        foreach (RenderMember member in members)
+        {
+            if (names.ContainsKey(member.Name))
+                continue;
+            string stem = LocalName(member.Name);
+            string candidate = stem;
+            for (int suffix = 2; !used.Add(candidate); suffix++)
+                candidate = stem + suffix.ToString(CultureInfo.InvariantCulture);
+            names.Add(member.Name, candidate);
+        }
+        return names;
     }
 }
 

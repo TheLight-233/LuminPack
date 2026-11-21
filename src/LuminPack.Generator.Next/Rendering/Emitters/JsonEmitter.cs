@@ -507,6 +507,7 @@ internal static class JsonEmitter
     private static void ReadBody(PayloadRenderModel model, CodeWriter w, string helper)
     {
         var members = model.Members;
+        var locals = PayloadEmitter.MemberLocals(members);
         string jsonReader = w.A("LuminPackJsonReader");
         bool fresh = model.FreshResult;
         bool packed = members.Length is >= 4 and <= 32;
@@ -556,19 +557,19 @@ internal static class JsonEmitter
             {
                 body.Add("// Temp vars");
                 foreach (var member in mirroredMembers)
-                    body.Add(member.TypeName + (NullableTemp(member) ? "?" : string.Empty) + " " + Camel(member.Name) + "Temp = default;");
+                    body.Add(member.TypeName + (NullableTemp(member) ? "?" : string.Empty) + " " + locals[member.Name] + "Temp = default;");
             }
             if (packed)
                 body.Add("uint seenFields = 0;");
             else
                 foreach (var member in members.Where(member => !member.Mirrored))
-                    body.Add("bool " + Camel(member.Name) + "Seen = false;");
+                    body.Add("bool " + locals[member.Name] + "Seen = false;");
         }
         else
         {
             body.Add("// Temp vars");
             foreach (var member in members)
-                body.Add(member.TypeName + (NullableTemp(member) ? "?" : string.Empty) + " " + Camel(member.Name) + "Temp = default;");
+                body.Add(member.TypeName + (NullableTemp(member) ? "?" : string.Empty) + " " + locals[member.Name] + "Temp = default;");
             if (model.Mirror != null && members.Any(member => member.Mirrored))
                 body.Add("ref var reuseLocal = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " +
                     (model.IsStruct ? "value" : "value!") + ");");
@@ -613,7 +614,7 @@ internal static class JsonEmitter
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            string target = fresh ? (member.Mirrored ? Camel(member.Name) + "Temp" : "result." + member.Name) : Camel(member.Name) + "Temp";
+            string target = fresh && !member.Mirrored ? "result." + member.Name : locals[member.Name] + "Temp";
             caseLines.Add("case " + index.ToString(CultureInfo.InvariantCulture) + ":");
             caseLines.Add("{");
             if (fresh)
@@ -692,7 +693,7 @@ internal static class JsonEmitter
             {
                 if (members[index].Mirrored)
                     continue;
-                body.Add("if (" + (packed ? "(seenFields & " + (1u << index).ToString(CultureInfo.InvariantCulture) + "u) == 0" : "!" + Camel(members[index].Name) + "Seen") + ")");
+                body.Add("if (" + (packed ? "(seenFields & " + (1u << index).ToString(CultureInfo.InvariantCulture) + "u) == 0" : "!" + locals[members[index].Name] + "Seen") + ")");
                 body.Add("\tresult." + members[index].Name + " = default !;");
             }
             body.Add("value = result;");
@@ -700,7 +701,7 @@ internal static class JsonEmitter
             {
                 body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value);");
                 foreach (var member in mirroredMembers)
-                    body.Add("local." + member.Name + " = " + Camel(member.Name) + "Temp!;");
+                    body.Add("local." + member.Name + " = " + locals[member.Name] + "Temp!;");
             }
         }
         else
@@ -708,7 +709,7 @@ internal static class JsonEmitter
             body.Add("if (!reuseExisting)");
             body.Add("{");
             // Public fields are set by the selected constructor or the object initializer, mirrored members through the layout mirror afterwards.
-            string construction = "value = new " + model.GlobalName + "(" + (model.ConstructorArguments == null ? string.Empty : string.Join(", ", model.ConstructorArguments.Select(name => name == null ? "default" : Camel(name) + "Temp!"))) + ")";
+            string construction = "value = new " + model.GlobalName + "(" + (model.ConstructorArguments == null ? string.Empty : string.Join(", ", model.ConstructorArguments.Select(name => name == null ? "default" : locals[name] + "Temp!"))) + ")";
             var initialized = members.Where(member => !member.Mirrored && (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
             if (model.Rent != null)
             {
@@ -720,7 +721,7 @@ internal static class JsonEmitter
                     body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " +
                         (model.IsStruct ? "value" : "value!") + ");");
                 foreach (var member in members)
-                    body.Add((mirroredStorage && member.Mirrored ? "local." : Value(model)) + member.Name + " = " + Camel(member.Name) + "Temp!;");
+                    body.Add((mirroredStorage && member.Mirrored ? "local." : Value(model)) + member.Name + " = " + locals[member.Name] + "Temp!;");
             }
             else if (initialized.Length == 0)
                 body.Add(construction + ";");
@@ -729,7 +730,7 @@ internal static class JsonEmitter
                 body.Add(construction);
                 body.Add("{");
                 foreach (var member in initialized)
-                    body.Add(member.Name + " = " + Camel(member.Name) + "Temp!,");
+                    body.Add(member.Name + " = " + locals[member.Name] + "Temp!,");
                 body.Add("};");
             }
             if (model.Rent == null && model.Mirror != null && members.Any(member => member.Mirrored))
@@ -743,14 +744,14 @@ internal static class JsonEmitter
                     body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " +
                         (model.IsStruct ? "value" : "value!") + ");");
                     foreach (var member in mirrored)
-                        body.Add("local." + member.Name + " = " + Camel(member.Name) + "Temp!;");
+                        body.Add("local." + member.Name + " = " + locals[member.Name] + "Temp!;");
                 }
             }
             body.Add("}");
             body.Add("else");
             body.Add("{");
             foreach (var member in members)
-                body.Add((model.Mirror == null || !members.Any(member => member.Mirrored) ? Value(model) : "reuseLocal.") + member.Name + " = " + Camel(member.Name) + "Temp!;");
+                body.Add((model.Mirror == null || !members.Any(member => member.Mirrored) ? Value(model) : "reuseLocal.") + member.Name + " = " + locals[member.Name] + "Temp!;");
             body.Add("}");
         }
 
@@ -801,7 +802,7 @@ internal static class JsonEmitter
             body.Add(w.MethodImpl("NoInlining"));
             body.Add("static " + scalar + " " + name + "(ref " + jsonReaderType + " " + state + ") => " + state + ".Read<" + scalar + ", " + Profile + ">();");
         }
-        string Mark(int index) => packed ? "seenFields |= " + (1u << index).ToString(CultureInfo.InvariantCulture) + "u;" : Camel(members[index].Name) + "Seen = true;";
+        string Mark(int index) => packed ? "seenFields |= " + (1u << index).ToString(CultureInfo.InvariantCulture) + "u;" : locals[members[index].Name] + "Seen = true;";
 
         void AppendRun(List<string> lines, int first)
         {
@@ -811,11 +812,6 @@ internal static class JsonEmitter
         }
         Lines(w, body);
     }
-
-    /// <summary>Lower-cases the first character, as role-named generated locals are spelled.</summary>
-    /// <param name="name">The name to look up or emit.</param>
-    /// <returns>The resulting text.</returns>
-    private static string Camel(string name) => PayloadEmitter.LocalName(name);
 
     /// <summary>Writes body lines: an empty string is a blank line, braces open and close blocks, and a tab indents one line.</summary>
     /// <param name="w">The generated source writer.</param>

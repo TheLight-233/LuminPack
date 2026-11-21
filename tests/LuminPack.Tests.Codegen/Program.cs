@@ -39,6 +39,12 @@ try
         SerializerIssueRegression.RunFixedRecordReservations(references);
         return 0;
     }
+    if (args is ["--verify-declaration-boundaries"])
+    {
+        SerializerDeclarationBoundaryRegression.Run(references);
+        SerializerIssueRegression.RunMemberLocals(references);
+        return 0;
+    }
     if (args is ["--verify-frozen-collections"])
     {
         SerializerImmutableListWriteRegression.RunFrozen(references);
@@ -458,6 +464,8 @@ try
     SerializerIssueRegression.RunUnionBytePayload(references);
     SerializerIssueRegression.RunFrameworkCollections(references);
     SerializerIssueRegression.RunFixedRecordReservations(references);
+    SerializerDeclarationBoundaryRegression.Run(references);
+    SerializerIssueRegression.RunMemberLocals(references);
     SerializerImportedLayoutRegression.Run(references);
     SerializerDocumentationRegression.Run(references);
     SerializerRootApiRegression.Run(references);

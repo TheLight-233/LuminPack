@@ -7,6 +7,7 @@ using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator.Next.Analysis;
 
@@ -42,13 +43,20 @@ internal static partial class TypeModelFactory
         private void ValidateDeclaration(INamedTypeSymbol type, ref DeclarationDiagnosticBag diagnostics)
         {
             ValidateCompiledOptions(type, ref diagnostics);
+            INamedTypeSymbol outermost = type;
             foreach (INamedTypeSymbol scope in ContainingTypes(type))
+            {
                 ValidateCompiledOptions(scope, ref diagnostics);
+                outermost = scope;
+            }
             if (type.ContainingType != null && type.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
             {
                 diagnostics.Add(DiagnosticDescriptors.NestedClassMustBePublicOrInternal, type, type.Name);
                 diagnostics.Add(DiagnosticDescriptors.NestedClassAccessibilityError, type, type.Name, type.DeclaredAccessibility.ToString());
             }
+            else if (IsFileLocal(outermost) || type.ContainingType is { } container &&
+                !_compilation.IsSymbolAccessibleWithin(container, _compilation.Assembly))
+                diagnostics.Add(DiagnosticDescriptors.InaccessiblePayloadScope, type, type.ToDisplayString());
             if (HasAttribute(type, BoundedAttribute) && !ValidBound(type))
                 diagnostics.Add(DiagnosticDescriptors.InvalidBoundedSize, type, type.ToDisplayString());
             string mode = GenerationMode(type);
@@ -126,6 +134,14 @@ internal static partial class TypeModelFactory
             for (INamedTypeSymbol? scope = type.ContainingType; scope != null; scope = scope.ContainingType)
                 yield return scope;
         }
+
+        /// <summary>Identifies a file-local outer declaration on Roslyn versions that lack a symbol property.</summary>
+        /// <param name="type">The namespace-level declaration.</param>
+        /// <returns>Whether the declaration is inaccessible from a generated syntax tree.</returns>
+        private static bool IsFileLocal(INamedTypeSymbol type) =>
+            type.DeclaredAccessibility != Accessibility.Public &&
+            type.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is TypeDeclarationSyntax declaration &&
+                declaration.Modifiers.Any(modifier => modifier.ValueText == "file"));
 
         /// <summary>Gets the storage type of a serialized field or property.</summary>
         /// <param name="member">The storage declaration.</param>

@@ -847,6 +847,20 @@ internal static partial class BinaryEmitter
         return name;
     }
 
+    /// <summary>Reserves the variable-field snapshot names used by the record and its proven writer.</summary>
+    /// <param name="model">The record whose fields are captured.</param>
+    /// <returns>The snapshot names indexed by member, with fixed members left empty.</returns>
+    private static string[] ReservedRecordSnapshots(PayloadRenderModel model)
+    {
+        var names = new Dictionary<string, int>(StringComparer.Ordinal);
+        var snapshots = new string[model.Members.Length];
+        bool camel = model.HasCallbacks || model.Bounded != null;
+        for (int index = 0; index < snapshots.Length; index++)
+            if (model.Members[index].Kind != RenderMemberKind.Fixed)
+                snapshots[index] = ReserveSnapshot(names, Snapshot(model, index, camel));
+        return snapshots;
+    }
+
     /// <summary>Builds a root write body, with lines prefixed by a tab for one extra indentation level.</summary>
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
@@ -972,6 +986,7 @@ internal static partial class BinaryEmitter
         }
         var terms = new List<string>();
         var exactTerms = nullableRecord ? new List<string>() : null;
+        string[] snapshots = ReservedRecordSnapshots(model);
         if (!union)
         {
             terms.Add("1");
@@ -980,7 +995,7 @@ internal static partial class BinaryEmitter
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            string snapshot = Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null);
+            string snapshot = snapshots[index];
             if (member.Kind == RenderMemberKind.Fixed)
             {
                 terms.Add(member.Width);
@@ -1043,11 +1058,11 @@ internal static partial class BinaryEmitter
             }
             body.Add("// Field: " + member.Name);
             if (member.Kind == RenderMemberKind.Text)
-                body.Add("cursor = ref writer.WriteReservedRecordString<" + WriteProfile(model, w, member) + ">(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null) + ");");
+                body.Add("cursor = ref writer.WriteReservedRecordString<" + WriteProfile(model, w, member) + ">(ref cursor, " + snapshots[index] + ");");
             else if (member.NativeNullablePayload != null)
-                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedNullable<" + member.NativeNullablePayload + ">(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null) + ");");
+                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedNullable<" + member.NativeNullablePayload + ">(ref cursor, " + snapshots[index] + ");");
             else
-                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null) + ");");
+                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + snapshots[index] + ");");
         }
         if (body[body.Count - 1].Length != 0)
             body.Add("");
@@ -2620,10 +2635,11 @@ internal static partial class BinaryEmitter
             comment = original[captureStart++];
         var captures = original.GetRange(captureStart, reserve - captureStart);
         var record = original.GetRange(reserve + 1, original.Count - reserve - 1);
+        string[] snapshots = ReservedRecordSnapshots(model);
         var names = new List<string>();
         for (int index = 0; index < model.Members.Length; index++)
             if (model.Members[index].Kind == RenderMemberKind.Text)
-                names.Add(Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null));
+                names.Add(snapshots[index]);
         string type = model.GlobalName + "?";
         string arguments = string.Join(", ", new[] { "ref writer", "value" }.Concat(names));
         string unsafeName = w.A("Unsafe"), standard = w.A("LuminPackUtf16LengthOptions"), fallback = w.A("LuminPackDefaultOptions");
@@ -2755,6 +2771,7 @@ internal static partial class BinaryEmitter
     private static List<string> ConstructedReadBody(PayloadRenderModel model, CodeWriter w, bool union)
     {
         var members = model.Members;
+        var locals = PayloadEmitter.MemberLocals(members);
         string policy = w.A("LuminPackInputPolicy");
         var body = new List<string> { "// Declare locals to hold the field values." };
         // The constructed read declares its temporaries in declaration order, while the wire order drives the decodes.
@@ -2762,7 +2779,7 @@ internal static partial class BinaryEmitter
             .Select(name => System.Array.Find(members, member => member.Name == name)).Where(member => member != null).ToArray();
         if (!model.TrackReferences)
             foreach (var member in declared)
-                body.Add(TempType(member) + " " + Camel(member.Name) + "Temp = default !;");
+                body.Add(TempType(member) + " " + locals[member.Name] + "Temp = default !;");
         if (!union)
         {
             body.Add(model.Trusted ? "if (reader.Read<byte>() == 255)" :
@@ -2797,10 +2814,10 @@ internal static partial class BinaryEmitter
             return body;
         body.Add("");
         foreach (var member in members)
-            AddMemberRead(body, model, member, w, "reader", Camel(member.Name) + "Temp", fresh: true);
+            AddMemberRead(body, model, member, w, "reader", locals[member.Name] + "Temp", fresh: true);
         body.Add("// Construct the object and populate its members.");
         string arguments = string.Join(", ", model.ConstructorArguments.Select(name =>
-            name == null ? "default" : Camel(name) + "Temp!"));
+            name == null ? "default" : locals[name] + "Temp!"));
         string construction = "value = new " + model.GlobalName + "(" + arguments + ")";
         var initialized = members.Where(member => !member.Mirrored &&
             (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
@@ -2811,7 +2828,7 @@ internal static partial class BinaryEmitter
             body.Add(construction);
             body.Add("{");
             foreach (var member in initialized)
-                body.Add(member.Name + " = " + Camel(member.Name) + "Temp!,");
+                body.Add(member.Name + " = " + locals[member.Name] + "Temp!,");
             body.Add("};");
         }
         var mirrored = model.Mirror == null ? Array.Empty<RenderMember>() : members.Where(member => member.Mirrored &&
@@ -2821,7 +2838,7 @@ internal static partial class BinaryEmitter
             body.Add("// Assign private fields.");
             body.Add("ref var local = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
             foreach (var member in mirrored)
-                body.Add("local." + member.Name + " = " + Camel(member.Name) + "Temp!;");
+                body.Add("local." + member.Name + " = " + locals[member.Name] + "Temp!;");
         }
         body.AddRange(model.ReadAfter);
         if (model.ReadBefore.Length != 0)
@@ -2876,11 +2893,6 @@ internal static partial class BinaryEmitter
     /// <returns>The resulting text.</returns>
     private static string TempType(RenderMember member) => member.Kind == RenderMemberKind.Text ? "string?" :
         member.Kind == RenderMemberKind.Parameter && member.ReferencePayload ? member.TypeName + "?" : member.TypeName;
-
-    /// <summary>Spells a member's temporary local with the leading letter in lower case.</summary>
-    /// <param name="name">The name to look up or emit.</param>
-    /// <returns>The resulting text.</returns>
-    private static string Camel(string name) => PayloadEmitter.LocalName(name);
 
     /// <summary>Whether a record without callbacks or pooled rentals has a fixed run that its payload body can read into a new
     /// instance through the proven checked batch.</summary>

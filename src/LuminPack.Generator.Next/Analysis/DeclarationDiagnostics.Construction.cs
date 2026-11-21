@@ -34,11 +34,11 @@ internal static partial class TypeModelFactory
             return ambiguous ? null : marked ?? single;
         }
 
-        /// <summary>Checks constructor selection and case-insensitive serialized-member matching.</summary>
+        /// <summary>Checks constructor selection and whether each parameter can receive its matching serialized member.</summary>
         /// <param name="type">The payload declaration.</param>
         /// <param name="members">The filtered serialized storage.</param>
         /// <param name="diagnostics">Receives constructor diagnostics.</param>
-        private static void ValidateConstructors(INamedTypeSymbol type, List<ISymbol> members, ref DeclarationDiagnosticBag diagnostics)
+        private void ValidateConstructors(INamedTypeSymbol type, List<ISymbol> members, ref DeclarationDiagnosticBag diagnostics)
         {
             IMethodSymbol? selected = SelectConstructor(type, out bool ambiguous);
             if (ambiguous)
@@ -54,8 +54,14 @@ internal static partial class TypeModelFactory
                 return;
             }
             foreach (IParameterSymbol parameter in selected.Parameters)
-                if (!members.Any(member => string.Equals(member.Name, parameter.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                ISymbol? member = members.FirstOrDefault(item => string.Equals(item.Name, parameter.Name, StringComparison.OrdinalIgnoreCase));
+                if (member == null)
                     diagnostics.Add(DiagnosticDescriptors.ConstructorParameterNameMismatch, type, parameter.Name, type.Name);
+                else if (parameter.RefKind is RefKind.Ref or RefKind.Out ||
+                    !_compilation.ClassifyCommonConversion(StorageType(member), parameter.Type).IsImplicit)
+                    diagnostics.Add(DiagnosticDescriptors.ConstructorParameterCannotReceiveMember, parameter, parameter.Name, type.Name, member.Name);
+            }
         }
 
         /// <summary>Checks each callback using the legacy rule precedence.</summary>
@@ -74,15 +80,15 @@ internal static partial class TypeModelFactory
                     diagnostics.Add(DiagnosticDescriptors.OnMethodInUnmanagedType, method, type.Name, method.Name);
                 else if (method.DeclaredAccessibility is Accessibility.NotApplicable or Accessibility.Private or Accessibility.Protected or Accessibility.ProtectedAndInternal)
                     diagnostics.Add(DiagnosticDescriptors.OnMethodIsPrivate, method, type.Name, method.Name);
-                else if (method.Parameters.Length != 0)
+                else if (method.Parameters.Length != 0 || method.IsGenericMethod)
                     diagnostics.Add(DiagnosticDescriptors.OnMethodHasParameter, method, type.Name, method.Name);
             }
         }
 
-        /// <summary>Checks pool method count, static declaration, arguments and exact return identity.</summary>
+        /// <summary>Checks pool method count, declaration, accessibility, arguments and exact return identity.</summary>
         /// <param name="type">The attributed payload.</param>
         /// <param name="diagnostics">Receives rental diagnostics.</param>
-        private static void ValidatePoolRent(INamedTypeSymbol type, ref DeclarationDiagnosticBag diagnostics)
+        private void ValidatePoolRent(INamedTypeSymbol type, ref DeclarationDiagnosticBag diagnostics)
         {
             IMethodSymbol? selected = null;
             foreach (IMethodSymbol method in type.GetMembers().OfType<IMethodSymbol>())
@@ -100,11 +106,13 @@ internal static partial class TypeModelFactory
                 return;
             if (!selected.IsStatic)
                 diagnostics.Add(DiagnosticDescriptors.RentPoolMethodMustBeStatic, selected, selected.Name, type.Name);
-            else if (selected.Parameters.Length != 0)
+            else if (selected.Parameters.Length != 0 || selected.IsGenericMethod)
                 diagnostics.Add(DiagnosticDescriptors.RentPoolMethodHasParameters, selected, selected.Name, type.Name);
             else if (!SymbolEqualityComparer.Default.Equals(selected.ReturnType, type))
                 diagnostics.Add(DiagnosticDescriptors.RentPoolMethodReturnTypeMismatch, selected, selected.Name, type.Name,
                     type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
+            else if (!_compilation.IsSymbolAccessibleWithin(selected, _compilation.Assembly))
+                diagnostics.Add(DiagnosticDescriptors.InaccessiblePoolRent, selected, selected.Name, type.Name);
         }
 
         /// <summary>Checks the required binary pair and optional complete JSON pair on a Custom declaration.</summary>

@@ -247,6 +247,7 @@ internal static partial class BinaryEmitter
     private static List<string> StructReadBody(PayloadRenderModel model, CodeWriter w, bool union, string freshRead = null)
     {
         var members = model.Members;
+        var locals = PayloadEmitter.MemberLocals(members);
         var body = new List<string>();
         bool constructed = model.ConstructorArguments != null || model.Rent != null;
         var referenced = members.Where(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.Object or
@@ -260,7 +261,7 @@ internal static partial class BinaryEmitter
             var declared = model.DeclaredOrder == null ? temps : model.DeclaredOrder
                 .Select(name => Array.Find(temps, member => member.Name == name)).Where(member => member != null).ToArray();
             foreach (var member in declared)
-                body.Add(TempType(member) + " " + Camel(member.Name) + "Temp = default !;");
+                body.Add(TempType(member) + " " + locals[member.Name] + "Temp = default !;");
         }
         if (!union)
         {
@@ -297,10 +298,10 @@ internal static partial class BinaryEmitter
         if (constructed)
         {
             foreach (var member in members)
-                AddMemberRead(body, model, member, w, "reader", Camel(member.Name) + "Temp");
+                AddMemberRead(body, model, member, w, "reader", locals[member.Name] + "Temp");
             body.Add("// Construct the object and populate its members.");
             string arguments = string.Join(", ", (model.ConstructorArguments ?? Array.Empty<string>()).Select(name =>
-                name == null ? "default" : Camel(name) + "Temp!"));
+                name == null ? "default" : locals[name] + "Temp!"));
             string construction = "value = new " + model.GlobalName + "(" + arguments + ")";
             var initialized = members.Where(member => !member.Mirrored &&
                 (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
@@ -308,7 +309,7 @@ internal static partial class BinaryEmitter
             {
                 body.Add("value = " + (model.RentByRef ? "ref " : string.Empty) + model.Rent + ";");
                 foreach (RenderMember member in members.Where(item => !item.Mirrored))
-                    body.Add("value." + member.Name + " = " + Camel(member.Name) + "Temp!;");
+                    body.Add("value." + member.Name + " = " + locals[member.Name] + "Temp!;");
             }
             else if (initialized.Length == 0)
                 body.Add(construction + ";");
@@ -317,10 +318,10 @@ internal static partial class BinaryEmitter
                 body.Add(construction);
                 body.Add("{");
                 foreach (var member in initialized)
-                    body.Add(member.Name + " = " + Camel(member.Name) + "Temp!,");
+                    body.Add(member.Name + " = " + locals[member.Name] + "Temp!,");
                 body.Add("};");
             }
-            AddStructMirrorAssignments(body, model, w, mirrored.Where(member => model.ConstructorMembers == null ||
+            AddStructMirrorAssignments(body, model, w, locals, mirrored.Where(member => model.ConstructorMembers == null ||
                 !model.ConstructorMembers.Contains(member.Name)).ToArray());
         }
         else if (freshRead != null)
@@ -329,10 +330,10 @@ internal static partial class BinaryEmitter
         }
         else
         {
-            AddFreshStructFields(body, model, w, seedExisting: true);
+            AddFreshStructFields(body, model, w, seedExisting: true, locals: locals);
             body.Add("// Construct the object and populate its members.");
             body.Add("value = result;");
-            AddStructMirrorAssignments(body, model, w, mirrored);
+            AddStructMirrorAssignments(body, model, w, locals, mirrored);
         }
         return body;
     }
@@ -353,7 +354,9 @@ internal static partial class BinaryEmitter
     /// <param name="model">The managed struct's payload render.</param>
     /// <param name="w">The source writer.</param>
     /// <param name="seedExisting">Whether existing nested members can supply values for reuse.</param>
-    private static void AddFreshStructFields(List<string> body, PayloadRenderModel model, CodeWriter w, bool seedExisting)
+    /// <param name="locals">The temporary names for mirrored members, if the model has any.</param>
+    private static void AddFreshStructFields(List<string> body, PayloadRenderModel model, CodeWriter w, bool seedExisting,
+        IReadOnlyDictionary<string, string> locals = null)
     {
         body.Add("var result = new " + model.GlobalName + "();");
         if (seedExisting)
@@ -362,7 +365,7 @@ internal static partial class BinaryEmitter
                 body.Add("result." + member.Name + " = value." + member.Name + ";");
         }
         foreach (var member in model.Members)
-            AddMemberRead(body, model, member, w, "reader", member.Mirrored ? Camel(member.Name) + "Temp" : "result." + member.Name);
+            AddMemberRead(body, model, member, w, "reader", member.Mirrored ? locals[member.Name] + "Temp" : "result." + member.Name);
     }
 
     /// <summary>Reads one member in place for a managed struct's existing-instance path.</summary>
@@ -402,14 +405,16 @@ internal static partial class BinaryEmitter
     /// <param name="body">The statements in the generated operation body.</param>
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
+    /// <param name="locals">The temporary names for mirrored members.</param>
     /// <param name="members">The members supplied to <c>AddStructMirrorAssignments</c>.</param>
-    private static void AddStructMirrorAssignments(List<string> body, PayloadRenderModel model, CodeWriter w, RenderMember[] members)
+    private static void AddStructMirrorAssignments(List<string> body, PayloadRenderModel model, CodeWriter w,
+        IReadOnlyDictionary<string, string> locals, RenderMember[] members)
     {
         if (model.Mirror == null || members.Length == 0)
             return;
         body.Add("ref var local = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value);");
         foreach (var member in members)
-            body.Add("local." + member.Name + " = " + Camel(member.Name) + "Temp!;");
+            body.Add("local." + member.Name + " = " + locals[member.Name] + "Temp!;");
     }
 
     /// <summary>Reaches a mirrored struct's storage through its layout mirror.</summary>

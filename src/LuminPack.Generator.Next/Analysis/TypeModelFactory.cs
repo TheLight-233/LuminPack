@@ -2943,7 +2943,7 @@ internal static partial class TypeModelFactory
         /// <param name="globalName">The fully qualified payload spelling.</param>
         /// <param name="issues">The owning analysis issue collection.</param>
         /// <returns>The static rent call, or null when the payload declares no usable rent method.</returns>
-        private static string? PoolRent(INamedTypeSymbol type, string globalName, List<string> issues)
+        private string? PoolRent(INamedTypeSymbol type, string globalName, List<string> issues)
         {
             var methods = type.GetMembers().OfType<IMethodSymbol>()
                 .Where(method => method.GetAttributes().Any(attribute =>
@@ -2952,10 +2952,11 @@ internal static partial class TypeModelFactory
             if (methods.Count != 1)
                 return null;
             IMethodSymbol method = methods[0];
-            if (!method.IsStatic || method.Parameters.Length != 0 ||
+            if (!method.IsStatic || method.Parameters.Length != 0 || method.IsGenericMethod ||
+                !_compilation.IsSymbolAccessibleWithin(method, _compilation.Assembly) ||
                 !SymbolEqualityComparer.Default.Equals(method.ReturnType, type))
                 return null;
-            return globalName + "." + method.Name + "()";
+            return globalName + "." + Identifier(method.Name) + "()";
         }
 
         /// <summary>Models the serialization callbacks as the statements a record's write and read roots run.</summary>
@@ -3032,7 +3033,7 @@ internal static partial class TypeModelFactory
                 or Microsoft.CodeAnalysis.Accessibility.Protected
                 or Microsoft.CodeAnalysis.Accessibility.ProtectedAndInternal)
                 return false;
-            return method.Parameters.Length == 0;
+            return method.Parameters.Length == 0 && !method.IsGenericMethod;
         }
 
         /// <summary>Whether every serialized member sits at its declared wire position.</summary>

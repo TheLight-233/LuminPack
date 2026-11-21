@@ -13,6 +13,21 @@ internal static class DiagnosticDescriptors
     private const string Category = "LuminPack.SourceGeneration";
     private const string UnionCategory = "LuminPack.SourceGeneration.Union";
 
+    /// <summary>Rejects payloads hidden by file scope or by an inaccessible containing type.</summary>
+    public static readonly DiagnosticDescriptor InaccessiblePayloadScope = Error(
+        "LuminPack120", "Payload scope is inaccessible to generated code",
+        "Type '{0}' and its containing types must be accessible from another file in the assembly.");
+
+    /// <summary>Rejects pool factories the separately generated formatter cannot call.</summary>
+    public static readonly DiagnosticDescriptor InaccessiblePoolRent = Error(
+        "LuminPack121", "Pool-rent method is inaccessible",
+        "Pool-rent method '{0}' on '{1}' must be accessible from another type in the assembly.");
+
+    /// <summary>Rejects constructor parameters that cannot receive their decoded member values.</summary>
+    public static readonly DiagnosticDescriptor ConstructorParameterCannotReceiveMember = Error(
+        "LuminPack122", "Constructor parameter cannot receive the serialized member",
+        "Constructor parameter '{0}' on '{1}' must accept the value of serialized member '{2}' by implicit conversion and cannot be ref or out.");
+
     /// <summary>Rejects reference metadata that cannot prove an imported automatic property's storage contract.</summary>
     public static readonly DiagnosticDescriptor IncompleteReferencedPropertyStorage = Error(
         "LuminPack112", "Imported automatic-property storage is missing",
@@ -55,7 +70,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor OnMethodHasParameter = Error(
         "LuminPack004",
         "Serialization callback has parameters",
-        "Serialization callback '{1}' on '{0}' must not declare parameters.");
+        "Serialization callback '{1}' on '{0}' must not declare value or type parameters.");
 
     /// <summary>Stores the on method is private.</summary>
     public static readonly DiagnosticDescriptor OnMethodIsPrivate = Error(
@@ -219,7 +234,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor RentPoolMethodHasParameters = Error(
         "LuminPack031",
         "Pool-rent method has parameters",
-        "Pool-rent method '{0}' on '{1}' must not declare parameters.");
+        "Pool-rent method '{0}' on '{1}' must not declare value or type parameters.");
 
     /// <summary>Stores the rent pool method return type mismatch.</summary>
     public static readonly DiagnosticDescriptor RentPoolMethodReturnTypeMismatch = Error(
@@ -341,6 +356,9 @@ internal static class DiagnosticDescriptors
 
     private static readonly Dictionary<string, DiagnosticDescriptor> Catalog = new Dictionary<string, DiagnosticDescriptor>(StringComparer.Ordinal)
     {
+        [InaccessiblePayloadScope.Id] = InaccessiblePayloadScope,
+        [InaccessiblePoolRent.Id] = InaccessiblePoolRent,
+        [ConstructorParameterCannotReceiveMember.Id] = ConstructorParameterCannotReceiveMember,
         [IncompleteReferencedPropertyStorage.Id] = IncompleteReferencedPropertyStorage,
         [UnsupportedPortableStorage.Id] = UnsupportedPortableStorage,
         [InvalidCompiledOption.Id] = InvalidCompiledOption,
