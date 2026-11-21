@@ -297,7 +297,7 @@ internal static class JsonEmitter
             {
                 string temp = names.Next("temp");
                 body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
-                body.Add(w.A("LuminPackSerializer") + ".SerializeJson<" + member.Scalar + ", " + Profile + ">(ref writer, in " + temp + ");");
+                body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.SerializeJson<" + member.Scalar + ", " + Profile + ">(ref writer, in " + temp + ");");
                 body.Add("");
                 continue;
             }
@@ -635,7 +635,7 @@ internal static class JsonEmitter
             if (member.Kind == RenderMemberKind.Parameter)
             {
                 // A type-parameter member is read by the generic serializer, which owns its null handling.
-                caseLines.Add(w.A("LuminPackSerializer") + ".DeserializeJson<" + member.Scalar + ", " + Profile + ">(ref reader, ref " + target + ");");
+                caseLines.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.DeserializeJson<" + member.Scalar + ", " + Profile + ">(ref reader, ref " + target + ");");
             }
             else if (member.Raw)
             {

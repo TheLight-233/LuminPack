@@ -47,9 +47,45 @@ internal static partial class SerializerIssueRegression
                     if (!nullable.AsSpan().SequenceEqual(LuminPackSerializer.Serialize(new NullableInt())) ||
                         LuminPackSerializer.Deserialize<NullableValue<int>>(nullable) is not { Item: null })
                         throw new Exception("A struct-constrained parameter lost its nullable value framing.");
+
                 }
             }
             """;
         Execute(references, source, "ClosedGenericMemberAnnotations");
+        VerifyOpenGenericMemberDispatch(references);
+    }
+
+    /// <summary>Checks open members of a two-parameter payload through generated overloads without a static backend.</summary>
+    /// <param name="references">Platform and runtime references.</param>
+    private static void VerifyOpenGenericMemberDispatch(MetadataReference[] references)
+    {
+        const string source = """
+            #nullable enable
+            using System;
+            using LuminPack;
+            using LuminPack.Attribute;
+
+            public class Outer<TValue> where TValue : unmanaged
+            {
+                [LuminPackable]
+                public sealed class Inner<TText> where TText : class
+                {
+                    public TValue Value;
+                    public TText? Text;
+                }
+            }
+
+            public static class Entry
+            {
+                public static void Check()
+                {
+                    var value = new Outer<int>.Inner<string> { Value = 41, Text = "value" };
+                    if (LuminPackSerializer.Deserialize<Outer<int>.Inner<string>>(LuminPackSerializer.Serialize(value)) is not { Value: 41, Text: "value" } ||
+                        LuminPackSerializer.DeserializeJson<Outer<int>.Inner<string>>(LuminPackSerializer.SerializeJson(value)) is not { Value: 41, Text: "value" })
+                        throw new Exception("The generic formatter did not dispatch each member through its own contract.");
+                }
+            }
+            """;
+        Execute(references, source, "OpenGenericMemberDispatch");
     }
 }

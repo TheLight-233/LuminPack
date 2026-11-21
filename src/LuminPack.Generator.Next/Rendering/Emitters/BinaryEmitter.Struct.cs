@@ -384,7 +384,7 @@ internal static partial class BinaryEmitter
         if (member.Kind == RenderMemberKind.Parameter)
         {
             AddParameterReset(body, member, w, "reader2", owner + "." + member.Name);
-            body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, StructProfile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
+            body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.Deserialize" + MemberArguments(member, StructProfile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
             return;
         }
         AddMemberRead(body, model, member, w, "reader2", owner + "." + member.Name);

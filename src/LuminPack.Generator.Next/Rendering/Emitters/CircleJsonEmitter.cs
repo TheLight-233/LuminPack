@@ -183,7 +183,7 @@ internal static class CircleJsonEmitter
             {
                 string parameter = "parameter" + (++tempCount).ToString(CultureInfo.InvariantCulture);
                 body.Add("var " + parameter + " = " + access + ";");
-                body.Add(w.A("LuminPackSerializer") + ".SerializeJson<" + member.Scalar + ", " + Profile +
+                body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.SerializeJson<" + member.Scalar + ", " + Profile +
                     ">(ref writer, in " + parameter + ");");
                 continue;
             }
@@ -331,7 +331,7 @@ internal static class CircleJsonEmitter
             body.Add("\t" + temps[index] + " = " + Reuse(member) + ";");
             if (member.Kind == RenderMemberKind.Parameter)
             {
-                body.Add(w.A("LuminPackSerializer") + ".DeserializeJson<" + member.Scalar + ", " + Profile +
+                body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.DeserializeJson<" + member.Scalar + ", " + Profile +
                     ">(ref reader, ref " + temps[index] + ");");
             }
             else if (member.Raw || member.Kind is RenderMemberKind.Special or RenderMemberKind.ForwardedCollection or RenderMemberKind.Sequence or RenderMemberKind.CultureInfo)

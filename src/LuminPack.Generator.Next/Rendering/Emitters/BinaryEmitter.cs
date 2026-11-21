@@ -1495,7 +1495,8 @@ internal static partial class BinaryEmitter
             // A type-parameter member is written in place by the generic serializer itself.
             if (member.Kind == RenderMemberKind.Parameter)
             {
-                body.Add(w.A("LuminPackSerializer") + ".Serialize" + MemberArguments(member, Profile) + "(ref writer, value." + member.Name + ");");
+                // Use the member's registered dispatch directly so publication cannot bind a payload-specific adapter.
+                body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.Serialize" + MemberArguments(member, Profile) + "(ref writer, value." + member.Name + ");");
                 index++;
                 continue;
             }
@@ -2183,7 +2184,7 @@ internal static partial class BinaryEmitter
             // A type-parameter member is written by the generic serializer itself.
             if (member.Kind == RenderMemberKind.Parameter)
             {
-                body.Add(w.A("LuminPackSerializer") + ".Serialize" + MemberArguments(member, Profile) + "(ref writer, " + owner + "." + member.Name + ");");
+                body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.Serialize" + MemberArguments(member, Profile) + "(ref writer, " + owner + "." + member.Name + ");");
                 continue;
             }
             if (member.Kind == RenderMemberKind.Object)
@@ -2898,7 +2899,7 @@ internal static partial class BinaryEmitter
         if (member.Kind == RenderMemberKind.Parameter)
         {
             AddParameterReset(body, member, w, "reader2", owner + "." + member.Name);
-            body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
+            body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.Deserialize" + MemberArguments(member, Profile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
             return;
         }
         AddMemberRead(body, model, member, w, "reader2", owner + "." + member.Name);
@@ -3283,7 +3284,7 @@ internal static partial class BinaryEmitter
             if (member.Kind == RenderMemberKind.Parameter)
             {
                 AddParameterReset(body, member, w, "reader", owner + "." + member.Name);
-                body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader, ref " + owner + "." + member.Name + "!);");
+                body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.Deserialize" + MemberArguments(member, Profile) + "(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
             // A fused dictionary reads through its generated formatter, which keeps its own entry framing and profile.
