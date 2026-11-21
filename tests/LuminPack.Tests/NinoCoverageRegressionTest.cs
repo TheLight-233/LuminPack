@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 using LuminPack;
 using LuminPack.Attribute;
 using Xunit;
@@ -132,12 +133,13 @@ public sealed class NinoCoverageRegressionTest
     /// <param name="half">The binary16 bits.</param>
     /// <param name="single">The binary32 bits.</param>
     /// <param name="wide">The binary64 bits.</param>
+    /// <param name="signalingNaNs">Whether the values use signaling NaN encodings.</param>
     [Theory]
-    [InlineData((ushort)0x8000, 0x80000000u, 0x8000000000000000ul)]
-    [InlineData((ushort)0x03ff, 0x007fffffu, 0x000ffffffffffffful)]
-    [InlineData((ushort)0x7e01, 0xffc00001u, 0x7ff8deadbeef0001ul)]
-    [InlineData((ushort)0x7c01, 0x7f800001u, 0x7ff0000000000001ul)]
-    public void BinaryFloatingPointRoundTripsExactBits(ushort half, uint single, ulong wide)
+    [InlineData((ushort)0x8000, 0x80000000u, 0x8000000000000000ul, false)]
+    [InlineData((ushort)0x03ff, 0x007fffffu, 0x000ffffffffffffful, false)]
+    [InlineData((ushort)0x7e01, 0xffc00001u, 0x7ff8deadbeef0001ul, false)]
+    [InlineData((ushort)0x7c01, 0x7f800001u, 0x7ff0000000000001ul, true)]
+    public void BinaryFloatingPointRoundTripsExactBits(ushort half, uint single, ulong wide, bool signalingNaNs)
     {
         byte[] halfBytes = new byte[sizeof(ushort)];
         byte[] singleBytes = new byte[sizeof(uint)];
@@ -147,8 +149,23 @@ public sealed class NinoCoverageRegressionTest
         BinaryPrimitives.WriteUInt64LittleEndian(wideBytes, wide);
 
         Assert.Equal(halfBytes, LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<Half>(halfBytes)));
-        Assert.Equal(singleBytes, LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<float>(singleBytes)));
-        Assert.Equal(wideBytes, LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<double>(wideBytes)));
+        float singleValue = default;
+        double wideValue = default;
+        Assert.Equal(singleBytes.Length, LuminPackSerializer.Deserialize(singleBytes, ref singleValue));
+        Assert.Equal(wideBytes.Length, LuminPackSerializer.Deserialize(wideBytes, ref wideValue));
+        Assert.Equal(singleBytes, LuminPackSerializer.Serialize(in singleValue));
+        Assert.Equal(wideBytes, LuminPackSerializer.Serialize(in wideValue));
+
+        byte[] singleReturn = LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<float>(singleBytes));
+        byte[] wideReturn = LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<double>(wideBytes));
+        if (signalingNaNs && RuntimeInformation.ProcessArchitecture == Architecture.X86)
+        {
+            // The x86 CLR uses the x87 return register for by-value floating-point results.
+            BinaryPrimitives.WriteUInt32LittleEndian(singleBytes, single | 0x00400000u);
+            BinaryPrimitives.WriteUInt64LittleEndian(wideBytes, wide | 0x0008000000000000ul);
+        }
+        Assert.Equal(singleBytes, singleReturn);
+        Assert.Equal(wideBytes, wideReturn);
     }
 
     /// <summary>Checks versioned sequence records and preserves a previously borrowed read-only memory slice.</summary>
