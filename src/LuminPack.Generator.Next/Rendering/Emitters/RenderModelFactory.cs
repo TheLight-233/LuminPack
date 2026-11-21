@@ -118,7 +118,8 @@ internal static class RenderModelFactory
             trackReferences: model.Policy.TrackReferences, referenceConstruction: record?.ReferenceConstruction!,
             generatedPropertyHeads: model.Policy.TrackReferences && options.GeneratedJsonPropertyWriter && options.CSharpVersion >= 1100,
             sequenceBase: record?.SequenceBase!, sequenceElement: record?.SequenceElement!, scalarHeader: record?.ScalarHeader ?? false,
-            stringPairs: !json && record?.StringPairs == true, collectionBase: record?.CollectionBase?.Type!);
+            stringPairs: !json && record?.StringPairs == true, collectionBase: record?.CollectionBase?.Type!,
+            requiredConstruction: model.RequiredConstruction);
     }
 
     /// <summary>Maps a Union root when its declared profile, slots, cases and framing are the ones the direct Union emitters

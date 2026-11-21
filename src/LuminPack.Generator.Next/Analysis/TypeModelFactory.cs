@@ -329,7 +329,8 @@ internal static partial class TypeModelFactory
                 rent: managed && Rent(symbol), constructors: managed && Constructors(symbol),
                 callbacks: managed && Callbacks(symbol), storagePlan: unmanaged && generatorType == PayloadGeneration.Default ? FormatterStorage(symbol) : null,
                 mirror: mirror, mirrorFields: mirrorFields, mirrorOffsets: mirrorOffsets, mirrorLayout: mirrorLayout,
-                construction: construction, serializationCallbacks: callbacks, version: version, rentCall: rentCall, rentByRef: rentByRef);
+                construction: construction, serializationCallbacks: callbacks, version: version, rentCall: rentCall, rentByRef: rentByRef,
+                requiredConstruction: RequiredInitialization(symbol, members, generatorType, rentCall != null, issues));
         }
 
         /// <summary>Classifies one payload and builds the model shared by every payload kind.</summary>
@@ -504,7 +505,8 @@ internal static partial class TypeModelFactory
                             !symbol.GetMembers().OfType<IFieldSymbol>().Any(field => field.IsVolatile),
                         rentByRef: rentByRef, referenceConstruction: rent == null && (policy.TrackReferences ||
                             versioned && constructor == null && callbacks is { ReadBefore.Length: > 0 })
-                            ? ReferenceConstruction(symbol, identity.GlobalName) : null);
+                            ? ReferenceConstruction(symbol, identity.GlobalName) : null,
+                        requiredConstruction: RequiredInitialization(symbol, members, generatorType, rent != null, issues));
                 }
             }
         }
@@ -2910,17 +2912,17 @@ internal static partial class TypeModelFactory
         /// <param name="type">The class declaration whose instance must exist before its members are read.</param>
         /// <param name="name">The generated spelling of the class.</param>
         /// <returns>The constructor and any required initializer assignments.</returns>
-        private static string ReferenceConstruction(INamedTypeSymbol type, string name)
+        private string ReferenceConstruction(INamedTypeSymbol type, string name)
         {
             IMethodSymbol? constructor = SelectConstructor(type, out _);
             string arguments = constructor == null ? string.Empty : string.Join(", ", constructor.Parameters.Select(parameter =>
                 "default(" + parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ")!"));
             string expression = "new " + name + "(" + arguments + ")";
-            if (constructor != null && HasAttribute(constructor, "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute"))
+            if (SetsRequired(constructor))
                 return expression;
-            string[] required = Levels(type).SelectMany(level => level.GetMembers()).Where(IsRequiredMember)
-                .Select(member => "@" + member.Name + " = default!").Distinct(StringComparer.Ordinal).ToArray();
-            return required.Length == 0 ? expression : expression + " { " + string.Join(", ", required) + " }";
+            return RequiredMembers(type) is { Length: > 0 } required
+                ? expression + " { " + string.Join(", ", required.Select(member => "@" + member.Name + " = default!")) + " }"
+                : expression;
         }
 
         /// <summary>Recognizes required members without depending on a newer Roslyn symbol API.</summary>
@@ -2930,7 +2932,7 @@ internal static partial class TypeModelFactory
         {
             if (member is not (IFieldSymbol or IPropertySymbol))
                 return false;
-            if (HasAttribute(member, "System.Runtime.CompilerServices.RequiredMemberAttribute"))
+            if (HasAttribute(member, RequiredMemberAttribute))
                 return true;
             foreach (SyntaxReference reference in member.DeclaringSyntaxReferences)
             {

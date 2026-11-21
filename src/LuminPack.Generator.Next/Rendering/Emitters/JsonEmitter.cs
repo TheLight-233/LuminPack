@@ -480,7 +480,7 @@ internal static class JsonEmitter
         w.Line("return;");
         w.Close();
         w.Line("reader.TryConsumeArrayStart<" + Profile + ">();");
-        w.Line("value ??= new " + model.GlobalName + "();");
+        w.Line("value ??= " + PayloadEmitter.ParameterlessConstruction(model) + ";");
         w.Line("int count = 0;");
         w.Line("while (reader.Read<" + Profile + ">())");
         w.Open();
@@ -551,7 +551,7 @@ internal static class JsonEmitter
         var mirroredMembers = members.Where(member => member.Mirrored).ToArray();
         if (fresh)
         {
-            body.Add("var result = reuseExisting ? value! : new " + model.GlobalName + "();");
+            body.Add("var result = reuseExisting ? value! : " + PayloadEmitter.ParameterlessConstruction(model) + ";");
             // A mirrored member decodes into a temporary and reaches the result through the layout mirror afterwards.
             if (mirroredMembers.Length != 0)
             {
@@ -708,9 +708,6 @@ internal static class JsonEmitter
         {
             body.Add("if (!reuseExisting)");
             body.Add("{");
-            // Public fields are set by the selected constructor or the object initializer, mirrored members through the layout mirror afterwards.
-            string construction = "value = new " + model.GlobalName + "(" + (model.ConstructorArguments == null ? string.Empty : string.Join(", ", model.ConstructorArguments.Select(name => name == null ? "default" : locals[name] + "Temp!"))) + ")";
-            var initialized = members.Where(member => !member.Mirrored && (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
             if (model.Rent != null)
             {
                 // A pooled type populates the rented instance field by field, mirrored members through the layout mirror.
@@ -723,15 +720,11 @@ internal static class JsonEmitter
                 foreach (var member in members)
                     body.Add((mirroredStorage && member.Mirrored ? "local." : Value(model)) + member.Name + " = " + locals[member.Name] + "Temp!;");
             }
-            else if (initialized.Length == 0)
-                body.Add(construction + ";");
             else
             {
-                body.Add(construction);
-                body.Add("{");
-                foreach (var member in initialized)
-                    body.Add(member.Name + " = " + locals[member.Name] + "Temp!,");
-                body.Add("};");
+                string arguments = model.ConstructorArguments == null ? string.Empty : string.Join(", ",
+                    model.ConstructorArguments.Select(name => name == null ? "default" : locals[name] + "Temp!"));
+                PayloadEmitter.AddStagedConstruction(body, model, arguments, member => locals[member.Name] + "Temp!");
             }
             if (model.Rent == null && model.Mirror != null && members.Any(member => member.Mirrored))
             {

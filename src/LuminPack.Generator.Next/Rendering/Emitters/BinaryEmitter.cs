@@ -1157,7 +1157,7 @@ internal static partial class BinaryEmitter
     /// <summary>Spells instance creation for a read: the pool rent call of a pooled type, or its parameterless constructor.</summary>
     /// <param name="model">The normalized model for this contract.</param>
     /// <returns>The resulting text.</returns>
-    private static string NewInstance(PayloadRenderModel model) => model.Rent ?? "new " + model.GlobalName + "()";
+    private static string NewInstance(PayloadRenderModel model) => model.Rent ?? PayloadEmitter.ParameterlessConstruction(model);
 
     /// <summary>Binds ordinary object storage and calls the instance hooks on a newly selected receiver.</summary>
     /// <param name="body">The statements preceding member reads.</param>
@@ -1170,7 +1170,7 @@ internal static partial class BinaryEmitter
             body.Add("var instance = value!;");
             return;
         }
-        string construction = bindLocal ? NewInstance(model) : "new " + model.GlobalName + "()";
+        string construction = bindLocal ? NewInstance(model) : PayloadEmitter.ParameterlessConstruction(model);
         if (!Array.Exists(model.ReadBefore, IsInstanceCallback))
         {
             body.Add((bindLocal ? "var instance = " : string.Empty) + "value ??= " + construction + ";");
@@ -2855,19 +2855,7 @@ internal static partial class BinaryEmitter
         body.Add("// Construct the object and populate its members.");
         string arguments = string.Join(", ", model.ConstructorArguments.Select(name =>
             name == null ? "default" : locals[name] + "Temp!"));
-        string construction = "value = new " + model.GlobalName + "(" + arguments + ")";
-        var initialized = members.Where(member => !member.Mirrored &&
-            (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
-        if (initialized.Length == 0)
-            body.Add(construction + ";");
-        else
-        {
-            body.Add(construction);
-            body.Add("{");
-            foreach (var member in initialized)
-                body.Add(member.Name + " = " + locals[member.Name] + "Temp!,");
-            body.Add("};");
-        }
+        PayloadEmitter.AddStagedConstruction(body, model, arguments, member => locals[member.Name] + "Temp!");
         var mirrored = model.Mirror == null ? Array.Empty<RenderMember>() : members.Where(member => member.Mirrored &&
             (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
         if (mirrored.Length != 0)

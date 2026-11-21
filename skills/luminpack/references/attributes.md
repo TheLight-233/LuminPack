@@ -44,6 +44,8 @@ Delegate targets use the formatter signature of the member type, for example `st
 | `[LuminPackOnSerializing]`, `[LuminPackOnSerialized]` | instance or static method | Before / after a binary write. |
 | `[LuminPackOnDeserializing]`, `[LuminPackOnDeserialized]` | instance or static method | Before / after a binary read. |
 
+Next initializes C# `required` fields and auto-properties from serialized storage when safe. If construction owns a required value or the value must be available before member decoding, initialize all required members in the selected constructor and mark it with `[SetsRequiredMembers]`. `LuminPack124` identifies the member that needs this guarantee.
+
 At each phase, static callbacks run before instance callbacks, and each group runs from base to derived. For a new instance whose constructor needs decoded members, only static before-read callbacks can run before those members are read. Reference tracking runs callbacks on the first full record for each object.
 
 ## `[LuminPackOption]` properties

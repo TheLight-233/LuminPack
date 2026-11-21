@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -11,6 +12,41 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 /// analysis object or old generator service participates.</remarks>
 internal static class PayloadEmitter
 {
+    /// <summary>Spells the payload's existing parameterless construction with any required initializers.</summary>
+    /// <param name="model">The payload to construct before decoding its fields.</param>
+    /// <returns>The generated construction expression.</returns>
+    internal static string ParameterlessConstruction(PayloadRenderModel model)
+    {
+        string expression = "new " + model.GlobalName + "()";
+        return model.RequiredConstruction?.Defaults is { Length: > 0 } required
+            ? expression + " { " + string.Join(", ", required.Select(name => "@" + name + " = default!")) + " }"
+            : expression;
+    }
+
+    /// <summary>Creates a fresh payload from decoded members using the selected constructor and its initializer.</summary>
+    /// <param name="body">The receiving operation.</param>
+    /// <param name="model">The payload to construct.</param>
+    /// <param name="arguments">The selected constructor's staged arguments.</param>
+    /// <param name="decoded">The staged expression for each initialized member.</param>
+    internal static void AddStagedConstruction(List<string> body, PayloadRenderModel model, string arguments, Func<RenderMember, string> decoded)
+    {
+        string construction = "value = new " + model.GlobalName + "(" + arguments + ")";
+        string[] required = model.RequiredConstruction?.Decoded;
+        var initialized = model.Members.Where(member =>
+            (!member.Mirrored || required != null && Array.IndexOf(required, member.Name.TrimStart('@')) >= 0) &&
+            (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
+        if (initialized.Length == 0)
+        {
+            body.Add(construction + ";");
+            return;
+        }
+        body.Add(construction);
+        body.Add("{");
+        foreach (RenderMember member in initialized)
+            body.Add(member.Name + " = " + decoded(member) + ",");
+        body.Add("};");
+    }
+
     /// <summary>Renders one format of a covered payload.</summary>
     /// <param name="model">The render model.</param>
     /// <param name="json">Whether the JSON file is rendered, otherwise the binary file.</param>
