@@ -624,7 +624,8 @@ internal static class UnionEmitter
     /// <returns>The original statement layout with only the generated identifiers changed.</returns>
     private static List<string> RenameLocals(List<string> body, int member, int instance, ref int cursorCount, string reader)
     {
-        string source = "{\n" + string.Join("\n", body) + "\n}";
+        const string opening = "{\n";
+        string source = opening + string.Join("\n", body) + "\n}";
         var block = SyntaxFactory.ParseStatement(source);
         var names = new Dictionary<string, string>(StringComparer.Ordinal) { ["value"] = "member" + Number(member) };
         if (instance >= 0)
@@ -645,8 +646,37 @@ internal static class UnionEmitter
         }
         if (changes.Count == 0)
             return body;
-        return SourceText.From(source).WithChanges(changes).Lines.Skip(1).Take(body.Count).Select(line => line.ToString()).ToList();
+        // Token spans are in physical source order. Keep Roslyn's line mapping when any input entry spans multiple lines.
+        if (body.Any(static line => line.IndexOfAny(PhysicalLineBreaks) >= 0))
+            return SourceText.From(source).WithChanges(changes).Lines.Skip(1).Take(body.Count).Select(line => line.ToString()).ToList();
+
+        var result = new List<string>(body);
+        using var buffer = new PooledTextBuffer(128);
+        int lineStart = opening.Length, changeIndex = 0;
+        for (int lineIndex = 0; lineIndex < body.Count && changeIndex < changes.Count; lineIndex++)
+        {
+            string line = body[lineIndex];
+            int lineEnd = lineStart + line.Length;
+            if (changes[changeIndex].Span.Start < lineEnd)
+            {
+                int copied = 0;
+                buffer.Length = 0;
+                do
+                {
+                    TextChange edit = changes[changeIndex++];
+                    int start = edit.Span.Start - lineStart;
+                    buffer.Append(line, copied, start - copied).Append(edit.NewText);
+                    copied = edit.Span.End - lineStart;
+                }
+                while (changeIndex < changes.Count && changes[changeIndex].Span.Start < lineEnd);
+                result[lineIndex] = buffer.Append(line, copied, line.Length - copied).ToString();
+            }
+            lineStart = lineEnd + 1;
+        }
+        return result;
     }
+
+    private static readonly char[] PhysicalLineBreaks = { '\n', '\r', '\u0085', '\u2028', '\u2029' };
 
     /// <summary>Distinguishes a local declaration or use from a member, named argument, or type name.</summary>
     /// <param name="token">An identifier matching one of the generated local names.</param>
