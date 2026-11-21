@@ -160,6 +160,7 @@ internal static partial class TypeModelFactory
     {
         private readonly Compilation _compilation;
         private readonly WirePolicy _assemblyPolicy;
+        private readonly bool _versionDenseRawDictionary;
         private readonly Dictionary<AnalysisKey, ModelResult> _completed = new Dictionary<AnalysisKey, ModelResult>();
         private readonly Dictionary<ITypeSymbol, MemberModel?> _roots = new Dictionary<ITypeSymbol, MemberModel?>(SymbolEqualityComparer.Default);
         private readonly Dictionary<INamedTypeSymbol, bool> _packedFields = new Dictionary<INamedTypeSymbol, bool>(SymbolEqualityComparer.Default);
@@ -174,6 +175,7 @@ internal static partial class TypeModelFactory
             Options = options;
             _compilation = compilation;
             _assemblyPolicy = Apply(WirePolicy.Default, compilation.Assembly);
+            _versionDenseRawDictionary = options.Net8 && !options.Unity && FormatterConcurrentTraits.HasVersionDenseRawDictionaryWriter(compilation);
         }
 
         /// <summary>The project facts this session analyzes under.</summary>
@@ -543,6 +545,9 @@ internal static partial class TypeModelFactory
                 MemberModel? model = Classify(MemberSite.Of(member), storage, policy, symbol, depth, issues, path, ownFormatter);
                 if (model == null)
                     continue;
+                if (_versionDenseRawDictionary && !ownFormatter && member is IFieldSymbol { IsVolatile: false } && storage == MemberStorage.Field &&
+                    model is Model.DictionaryMember or SpecialMember { Formatter.Definition: "System.Collections.Generic.Dictionary" })
+                    model.DirectDictionaryField = true;
                 if (HasAttribute(member, CompressAttribute) && CompressibleCollection(StorageType(member), ownFormatter))
                     model = model.WithCompression();
                 if (!names.Add(model.Name))

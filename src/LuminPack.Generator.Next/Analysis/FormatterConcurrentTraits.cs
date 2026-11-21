@@ -177,6 +177,26 @@ internal static class FormatterConcurrentTraits
                 method.Parameters[2].RefKind == RefKind.Out && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32);
     }
 
+    /// <summary>Checks the optional runtime writer for a complete Version-framed dense dictionary.</summary>
+    /// <param name="compilation">The consuming compilation and its actual runtime references.</param>
+    /// <returns>Whether the generated member can call the bounded writer.</returns>
+    internal static bool HasVersionDenseRawDictionaryWriter(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackMarshal");
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        var dictionary = compilation.GetTypeByMetadataName("System.Collections.Generic.Dictionary`2");
+        return owner != null && writer != null && dictionary != null &&
+            owner.GetMembers("TryWriteVersionDenseRawDictionary").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1,
+                    ReturnsByRef: false, ReturnsByRefReadonly: false, ReturnType.SpecialType: SpecialType.System_Boolean } &&
+                method.TypeParameters[0].HasUnmanagedTypeConstraint && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+                method.Parameters.Length == 2 && method.Parameters[0].RefKind == RefKind.Ref &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, writer) &&
+                method.Parameters[1].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type,
+                    dictionary.Construct(compilation.GetSpecialType(SpecialType.System_Int32), method.TypeParameters[0])));
+    }
+
     /// <summary>Checks the runtime's optional complete record writer for small dense Int32 dictionaries.</summary>
     /// <param name="compilation">The consuming compilation and its runtime references.</param>
     /// <returns>Whether the consumer can call the bounded operation.</returns>

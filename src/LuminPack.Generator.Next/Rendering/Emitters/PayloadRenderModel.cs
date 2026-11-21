@@ -167,6 +167,8 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     internal readonly bool Property;
     /// <summary>The entry shape of a dictionary member, or null.</summary>
     internal readonly RenderDictionary Dictionary;
+    /// <summary>Whether the member has the statically selected raw dictionary framing.</summary>
+    internal bool VersionDenseDictionary { get; set; }
     /// <summary>The entry shape of a sorted, paired or nested collection member, or null.</summary>
     internal readonly RenderCollection Collection;
     /// <summary>Whether a type-parameter member's parameter is constrained to a value type, whose read assigns no reset guard.</summary>
@@ -322,7 +324,7 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <inheritdoc/>
     public bool Equals(RenderMember other) => other != null && Name == other.Name && Kind == other.Kind && Scalar == other.Scalar &&
         TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter &&
-        FieldType == other.FieldType && Mirrored == other.Mirrored &&
+        FieldType == other.FieldType && Mirrored == other.Mirrored && VersionDenseDictionary == other.VersionDenseDictionary &&
         Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin && FormatterCall == other.FormatterCall &&
         Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Collection, other.Collection) &&
         ValueTypeParameter == other.ValueTypeParameter && BareParameter == other.BareParameter &&

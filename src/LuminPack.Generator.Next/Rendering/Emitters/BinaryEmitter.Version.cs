@@ -61,11 +61,21 @@ internal static partial class BinaryEmitter
                 index--;
                 continue;
             }
+            string field = "value." + member.Name;
+            bool tryDenseDictionary = width == 255 && member.VersionDenseDictionary && !scoped[index] && !model.HasCallbacks;
+            if (tryDenseDictionary)
+            {
+                string captured = "versionDictionary" + VersionNumber(index);
+                body.Add("var " + captured + " = " + field + ";");
+                body.Add("if (!global::LuminPack.Code.LuminPackMarshal.TryWriteVersionDenseRawDictionary(ref writer, " + captured + "))");
+                body.Add("{");
+                field = captured;
+            }
             if (width == 255)
                 body.Add("length = writer.ReserveVersionLength();");
             if (scoped[index])
                 body.Add("scope = writer.EnterVersionScope();");
-            body.Add("Write" + VersionMemberName(member) + "(ref writer, value." + member.Name + ");");
+            body.Add("Write" + VersionMemberName(member) + "(ref writer, " + field + ");");
             if (scoped[index])
             {
                 body.Add("writer.ExitVersionScope(scope);");
@@ -73,6 +83,8 @@ internal static partial class BinaryEmitter
             }
             if (width == 255)
                 body.Add("writer.CompleteVersionLength(length);");
+            if (tryDenseDictionary)
+                body.Add("}");
         }
         if (hasScope)
         {

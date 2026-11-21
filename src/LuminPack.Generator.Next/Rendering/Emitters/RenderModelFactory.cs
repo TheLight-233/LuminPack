@@ -217,6 +217,9 @@ internal static class RenderModelFactory
         RenderMember? rendered = MemberCore(member, extension, options, reserveRawSpans);
         if (rendered != null && member.Compressed)
             rendered = rendered.Compressed("global::LuminPack." + GeneratedNames.Owner(extension, rendered.TypeName));
+        if (rendered is { Dictionary: { Pair: true, KeyType: "int", ValueType: "byte" or "double" or "long" } } &&
+            member.DirectDictionaryField && !member.Policy.Declared)
+            rendered.VersionDenseDictionary = true;
         return rendered == null || !member.Policy.Declared ? rendered : rendered.WithScope(ProfileNames.Type(member.Policy.Strings));
     }
 

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using LuminPack;
+using LuminPack.Attribute;
 using LuminPack.Code;
 using LuminPack.Core;
 using LuminPack.Option;
@@ -84,6 +85,42 @@ public sealed class SmallDenseDictionaryWriteTest
         Assert.Equal(offset, writer.Position);
         Assert.All(bytes, value => Assert.Equal(0xA5, value));
     }
+
+#if LUMINPACK_NEXT_GENERATOR
+    /// <summary>Checks dense and sparse dictionary fields publish the same Version frame and following value.</summary>
+    [Fact]
+    public void DenseRawDictionaryKeepsTheVersionMemberBoundary()
+    {
+        var dense = new Dictionary<int, long> { [7] = 0x100000003L, [2] = -11, [9] = long.MinValue };
+        var sparse = new Dictionary<int, long>(dense) { [0] = 1 };
+        Assert.True(sparse.Remove(0));
+
+        var record = new DictionaryRecord { Pairs = dense, Tail = 123 };
+        byte[] bytes = LuminPackSerializer.Serialize(record);
+        record.Pairs = sparse;
+        Assert.Equal(bytes, LuminPackSerializer.Serialize(record));
+
+        const int header = 3 + sizeof(ulong) + 2 * sizeof(ulong);
+        int payload = sizeof(int) + dense.Count * (sizeof(int) + sizeof(long));
+        Assert.Equal(payload, BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(header)));
+        Assert.Equal(dense.Count, BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(header + sizeof(int))));
+        Assert.Equal(123, BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(header + sizeof(int) + payload)));
+
+        DictionaryRecord? decoded = null;
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref decoded));
+        Assert.Equal(dense.Count, decoded!.Pairs.Count);
+        foreach (var pair in dense)
+            Assert.Equal(pair.Value, decoded.Pairs[pair.Key]);
+        Assert.Equal(123, decoded.Tail);
+    }
+
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
+    public sealed class DictionaryRecord
+    {
+        [LuminPackOrder(0)] public Dictionary<int, long> Pairs = new();
+        [LuminPackOrder(1)] public int Tail;
+    }
+#endif
 
     /// <summary>Creates integer pairs whose enumeration order differs from sorted order.</summary>
     /// <param name="count">The final number of pairs.</param>
