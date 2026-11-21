@@ -178,6 +178,13 @@ internal struct LuminPackVersionRegistry
     /// <param name="count">The number of earlier entries to retain.</param>
     internal void Truncate(int count)
     {
+        if (count == 0 && _count == 1)
+        {
+            _entries![0] = default;
+            _count = 0;
+            _lastWriterMatch = 0;
+            return;
+        }
         if (count == _count)
             return;
         if ((uint)count > (uint)_count)

@@ -337,10 +337,33 @@ namespace LuminPack.Core
         public int ReserveVersionLength()
         {
             int position = Position;
+#if NET8_0_OR_GREATER
+            // The original capacity check also accepts a prefix inside the physical window past its growth threshold.
+            if (IntPtr.Size == 8 && (ulong)(uint)position + sizeof(int) <= (uint)_buffer.Length)
+            {
+                Advance(sizeof(int));
+                return position;
+            }
+            if (IntPtr.Size == 8)
+                return ReserveVersionLengthSlow(position);
+#endif
             EnsureAdditionalCapacity(sizeof(int));
             Advance(sizeof(int));
             return position;
         }
+
+#if NET8_0_OR_GREATER
+        /// <summary>Reserves the pending length through the existing capacity and growth path.</summary>
+        /// <param name="position">The absolute position of the prefix.</param>
+        /// <returns>The absolute position after any output growth.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private int ReserveVersionLengthSlow(int position)
+        {
+            EnsureAdditionalCapacity(sizeof(int));
+            Advance(sizeof(int));
+            return position;
+        }
+#endif
 
         /// <summary>Patches a reserved member length after its payload has been written.</summary>
         /// <param name="position">The position returned by <see cref="ReserveVersionLength"/>.</param>
