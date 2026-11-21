@@ -97,6 +97,19 @@ public ref partial struct LuminPackWriter
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void WriteVersionString<TOptions>(string? value) where TOptions : struct, ILuminPackStringCodec
     {
+#if NET8_0_OR_GREATER
+        if (IntPtr.Size == 8 &&
+            (typeof(TOptions) == typeof(LuminPackDefaultOptions) ||
+             typeof(TOptions) == typeof(LuminPackUtf16LengthOptions) ||
+             typeof(TOptions) == typeof(LuminPackUtf16LengthStrings)))
+        {
+            if (FitsRecord(Utf16RecordBound(value)))
+                AdvanceProven(WriteReservedUtf16Record(ref Current, value));
+            else
+                WriteVersionUtf16StringSlow(value);
+            return;
+        }
+#endif
         var codec = default(TOptions);
         int bound = codec.RecordBound(value);
         if (FitsRecord(bound))
@@ -110,6 +123,13 @@ public ref partial struct LuminPackWriter
             codec.Write(ref this, value);
         }
     }
+
+#if NET8_0_OR_GREATER
+    /// <summary>Continues through the ordinary UTF-16 length writer after a short version record window.</summary>
+    /// <param name="value">The nullable string field value.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void WriteVersionUtf16StringSlow(string? value) => WriteUtf16LengthString(value);
+#endif
 
     /// <summary>Reserves and writes one fixed-width version-tolerant field.</summary>
     /// <typeparam name="T">The unmanaged field storage type.</typeparam>
