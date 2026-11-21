@@ -132,6 +132,7 @@ internal static partial class SerializerIssueRegression
         foreach (string mode in new[] { "Full", "Minimal" })
             Execute(references, source.Replace("MODE", mode, StringComparison.Ordinal), "IncludeDerivedTypes" + mode, InspectDerivedTypeInclusion);
         VerifyDerivedInclusionInvalidation(references);
+        VerifyClosedGenericMemberAnnotations(references);
         Console.WriteLine("Passed inferred records, transitive Union cases, default opt-out, declaration-owned options and incremental invalidation.");
     }
 

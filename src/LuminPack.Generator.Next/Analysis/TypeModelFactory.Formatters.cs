@@ -26,8 +26,7 @@ internal static partial class TypeModelFactory
         {
             ITypeSymbol type = member.Type;
             // A closed unconstrained T? can carry an annotation even when substituted with a non-nullable value type.
-            if (policy.TrackReferences && type.IsValueType && type.NullableAnnotation == NullableAnnotation.Annotated &&
-                type is INamedTypeSymbol namedValue && namedValue.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T)
+            if (type.IsValueType && type.NullableAnnotation == NullableAnnotation.Annotated && !IsNullableValueType(type))
             {
                 type = type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
                 member = new MemberSite(member.Name, type, member.Volatile, member.Containing);
