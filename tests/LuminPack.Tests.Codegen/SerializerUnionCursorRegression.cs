@@ -187,10 +187,32 @@ internal static class SerializerUnionCursorRegression
             public abstract partial class CollectionRoot { public int Id; }
             [LuminPackable] public sealed partial class First : CollectionRoot { public long Value; }
             [LuminPackable] public sealed partial class Second : CollectionRoot { public int Value; }
+            [LuminPackable, LuminPackUnion(1, typeof(reader.NamedFields)), LuminPackUnion(2, typeof(reader.OtherFields))]
+            public partial interface INamedStorage { }
+            namespace reader
+            {
+                [LuminPackable]
+                public sealed partial class NamedFields : INamedStorage
+                {
+                    public int value;
+                    public int reader;
+                    public int instance;
+                    public int cursor;
+                }
+                [LuminPackable]
+                public sealed partial class OtherFields : INamedStorage
+                {
+                    public int cursor2;
+                    public int A;
+                    public int B;
+                    public int C;
+                }
+            }
             public static class Entry
             {
                 public static void Check()
                 {
+                    CheckNamedStorage();
                     foreach (int count in new[] { 64, 600 })
                     {
                         var random = new Random(197);
@@ -213,6 +235,32 @@ internal static class SerializerUnionCursorRegression
                             if (!LuminPackSerializer.Serialize(copy).AsSpan().SequenceEqual(array))
                                 throw new Exception("Union collection order or payload changed.");
                     }
+                }
+
+                private static void CheckNamedStorage()
+                {
+                    INamedStorage first = new reader.NamedFields { value = 1, reader = 2, instance = 3, cursor = 4 };
+                    INamedStorage second = new reader.OtherFields { cursor2 = 5, A = 6, B = 7, C = 8 };
+                    byte[] direct = LuminPackSerializer.Serialize(first);
+                    INamedStorage reused = new reader.NamedFields();
+                    var original = reused;
+                    LuminPackSerializer.Deserialize(direct.AsSpan(), ref reused);
+                    if (!ReferenceEquals(reused, original) || reused is not reader.NamedFields { value: 1, reader: 2, instance: 3, cursor: 4 })
+                        throw new Exception("The Union root changed a user field name or failed to refill the case.");
+
+                    byte[] list = LuminPackSerializer.Serialize(new List<INamedStorage> { first, second });
+                    var listCopy = global::LuminPackUnitTest.ConcreteReads.Read<List<INamedStorage>>(list,
+                        static (global::System.ReadOnlySpan<byte> input, ref List<INamedStorage> target) => LuminPackSerializer.Deserialize(input, ref target));
+                    if (listCopy[0] is not reader.NamedFields { value: 1, reader: 2, instance: 3, cursor: 4 } ||
+                        listCopy[1] is not reader.OtherFields { cursor2: 5, A: 6, B: 7, C: 8 })
+                        throw new Exception("The fresh Union list changed a user field name.");
+
+                    byte[] dictionary = LuminPackSerializer.Serialize(new Dictionary<int, INamedStorage> { [1] = first, [2] = second });
+                    var dictionaryCopy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, INamedStorage>>(dictionary,
+                        static (global::System.ReadOnlySpan<byte> input, ref Dictionary<int, INamedStorage> target) => LuminPackSerializer.Deserialize(input, ref target));
+                    if (dictionaryCopy[1] is not reader.NamedFields { value: 1, reader: 2, instance: 3, cursor: 4 } ||
+                        dictionaryCopy[2] is not reader.OtherFields { cursor2: 5, A: 6, B: 7, C: 8 })
+                        throw new Exception("The fresh Union dictionary changed a user field or namespace name.");
                 }
             }
             """;

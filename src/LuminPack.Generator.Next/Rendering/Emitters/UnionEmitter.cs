@@ -3,8 +3,11 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Text.RegularExpressions;
 using LuminPack.SourceGenerator.Next.Model;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
@@ -16,10 +19,6 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 internal static class UnionEmitter
 {
     private const string Profile = "TLuminProfile";
-    private static readonly Regex ValueWord = new(@"\bvalue\b", RegexOptions.CultureInvariant);
-    private static readonly Regex ReaderWord = new(@"\breader\b", RegexOptions.CultureInvariant);
-    private static readonly Regex InstanceWord = new(@"\binstance\b", RegexOptions.CultureInvariant);
-    private static readonly Regex CursorWord = new(@"\bcursor([0-9]*)\b", RegexOptions.CultureInvariant);
 
     /// <summary>Emits the binary file.</summary>
     /// <param name="model">The covered Union root.</param>
@@ -439,8 +438,7 @@ internal static class UnionEmitter
             int instance = counters.Instances;
             if (hasInstance)
                 counters.Instances++;
-            int cursors = counters.Cursors;
-            body = Rename(body, member, hasInstance ? instance : -1, cursors, ref counters.Cursors, reader, reuse);
+            body = RenameLocals(body, member, hasInstance ? instance : -1, ref counters.Cursors, reader);
             if (blocks != null)
                 body = blocks.Redirect(body, reader, reuse ? null : target, "member" + Number(member));
             foreach (string line in body)
@@ -663,46 +661,52 @@ internal static class UnionEmitter
             w.Line(BinaryEmitter.RejectUnsupported(model.Rejection));
     }
 
-    /// <summary>Handles rename for <c>UnionEmitter</c>.</summary>
-    /// <param name="body">The statements in the generated operation body.</param>
-    /// <param name="member">The member being analyzed or emitted.</param>
-    /// <param name="instance">The instance supplied to <c>Rename</c>.</param>
-    /// <param name="cursors">The cursors supplied to <c>Rename</c>.</param>
-    /// <param name="cursorCount">The cursor count supplied to <c>Rename</c>.</param>
-    /// <param name="reader">The reader positioned at the input value.</param>
-    /// <param name="reuse">Whether to reuse the existing destination.</param>
-    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
-    private static List<string> Rename(List<string> body, int member, int instance, int cursors, ref int cursorCount, string reader, bool reuse)
+    /// <summary>Spells the fixed read's locals for this arm without renaming user names in its operands.</summary>
+    /// <param name="body">The fixed case statements, before arm-local substitution.</param>
+    /// <param name="member">The case value local's index.</param>
+    /// <param name="instance">The instance local's index, or a negative value if no instance is declared.</param>
+    /// <param name="cursorCount">The number of cursor locals emitted before this arm, updated for the following arm.</param>
+    /// <param name="reader">The reader variable in the receiving operation.</param>
+    /// <returns>The original statement layout with only the generated identifiers changed.</returns>
+    private static List<string> RenameLocals(List<string> body, int member, int instance, ref int cursorCount, string reader)
     {
-        string memberName = "member" + Number(member);
-        string instanceName = instance < 0 ? null : "instance" + Number(instance);
-        var result = new List<string>(body.Count);
-        int localCursors = 0;
-        foreach (string original in body)
+        string source = "{\n" + string.Join("\n", body) + "\n}";
+        var block = SyntaxFactory.ParseStatement(source);
+        var names = new Dictionary<string, string>(StringComparer.Ordinal) { ["value"] = "member" + Number(member) };
+        if (instance >= 0)
+            names.Add("instance", "instance" + Number(instance));
+        if (reader != "reader")
+            names.Add("reader", reader);
+        foreach (var local in block.DescendantNodes().OfType<VariableDeclaratorSyntax>())
         {
-            foreach (Match match in CursorWord.Matches(original))
-            {
-                int local = match.Groups[1].Value.Length == 0 ? 1 : int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-                localCursors = Math.Max(localCursors, local);
-            }
+            string name = local.Identifier.Text;
+            if (local.Parent is VariableDeclarationSyntax { Type: RefTypeSyntax } && name.StartsWith("cursor", StringComparison.Ordinal))
+                names.Add(name, "cursor" + Number(cursorCount++));
         }
-        foreach (string original in body)
+        var changes = new List<TextChange>();
+        foreach (var token in block.DescendantTokens())
         {
-            string line = ValueWord.Replace(original, memberName);
-            if (instanceName != null)
-                line = InstanceWord.Replace(line, instanceName);
-            string shifted = CursorWord.Replace(line, match =>
-            {
-                int local = match.Groups[1].Value.Length == 0 ? 0 : int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) - 1;
-                int index = cursors + local;
-                return "cursor" + (index == 0 ? string.Empty : (index + 1).ToString(CultureInfo.InvariantCulture));
-            });
-            if (reader != "reader")
-                shifted = ReaderWord.Replace(shifted, reader);
-            result.Add(shifted);
+            if (names.TryGetValue(token.Text, out string replacement) && replacement != token.Text && IsLocalIdentifier(token))
+                changes.Add(new TextChange(token.Span, replacement));
         }
-        cursorCount = cursors + localCursors;
-        return result;
+        if (changes.Count == 0)
+            return body;
+        return SourceText.From(source).WithChanges(changes).Lines.Skip(1).Take(body.Count).Select(line => line.ToString()).ToList();
+    }
+
+    /// <summary>Distinguishes a local declaration or use from a member, named argument, or type name.</summary>
+    /// <param name="token">An identifier matching one of the generated local names.</param>
+    /// <returns>Whether the identifier can refer to the generated local.</returns>
+    private static bool IsLocalIdentifier(SyntaxToken token)
+    {
+        if (token.Parent is VariableDeclaratorSyntax local)
+            return local.Identifier == token;
+        return token.Parent is IdentifierNameSyntax name && !SyntaxFacts.IsInNamespaceOrTypeContext(name) && (name.Parent switch
+        {
+            MemberAccessExpressionSyntax member => member.Expression == name,
+            MemberBindingExpressionSyntax or NameColonSyntax => false,
+            _ => true
+        });
     }
 
     /// <summary>Spells a local's occurrence number, which the first occurrence leaves off.</summary>
