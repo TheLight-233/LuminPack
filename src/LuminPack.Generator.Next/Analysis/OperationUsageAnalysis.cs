@@ -19,7 +19,6 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 internal static class OperationUsageAnalysis
 {
     private const string SerializerName = "LuminPack.LuminPackSerializer";
-    private const string PackableAttribute = "LuminPack.Attribute.LuminPackableAttribute";
 
     private static readonly ConditionalWeakTable<Compilation, StrongBox<GeneratedOperations>> FixedCache = new();
 
@@ -267,17 +266,6 @@ internal static class OperationUsageAnalysis
         return receiver?.ToDisplayString() == SerializerName;
     }
 
-    /// <summary>Checks whether packable.</summary>
-    /// <param name="type">The type being analyzed or emitted.</param>
-    /// <returns>Whether the input is packable.</returns>
-    private static bool IsPackable(INamedTypeSymbol type)
-    {
-        foreach (AttributeData attribute in type.GetAttributes())
-            if (attribute.AttributeClass?.ToDisplayString() == PackableAttribute)
-                return true;
-        return false;
-    }
-
     /// <summary>Handles in source for <c>OperationUsageAnalysis</c>.</summary>
     /// <param name="type">The type being analyzed or emitted.</param>
     /// <returns>Whether the input satisfies the in source check.</returns>
@@ -359,7 +347,7 @@ internal static class OperationUsageAnalysis
             Add(TypeModelFactory.ReachKey(named));
             if (!named.IsDefinition)
                 Add(TypeModelFactory.ReachKey(definition));
-            if (!IsPackable(definition) || CompilerUnion.IsUnion(definition, _compilation))
+            if (!TypeModelFactory.IsPackable(definition) || CompilerUnion.IsUnion(definition, _compilation))
                 Members(named);
         }
 

@@ -329,7 +329,8 @@ public enum LuminPackRegisterMode : byte
 /// Unspecified properties inherit the enclosing declaration's options. Assembly options override the library defaults;
 /// type and member declarations override the corresponding enclosing scope. Binary string settings can vary by member.
 /// JSON encoding, depth and syntax policy describe a complete document and are selected at its root.
-/// GeneratorType, WideTag, SingleImplementation, TrackReferences and ReuseRectangularArraySlots are declaration-only contracts and do not inherit enclosing options.
+/// GeneratorType, IncludeDerivedTypes, WideTag, SingleImplementation, TrackReferences and ReuseRectangularArraySlots
+/// apply to individual types and do not inherit enclosing options.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Struct |
     AttributeTargets.Interface | AttributeTargets.Field | AttributeTargets.Property, Inherited = false)]
@@ -338,6 +339,10 @@ public sealed class LuminPackOptionAttribute : System.Attribute
     /// <summary>Gets or sets the source-generated serialization mode of a LuminPackable type.</summary>
     /// <remarks>Applies only to the annotated type and is independent of operation profiles.</remarks>
     public GeneratorType GeneratorType { get; set; } = GeneratorType.Default;
+
+    /// <summary>Gets or sets whether classes derived from this LuminPackable class are also eligible for generation.</summary>
+    /// <remarks>Applies transitively to class inheritance. Each derived class selects its own serialization options.</remarks>
+    public bool IncludeDerivedTypes { get; set; }
 
     /// <summary>Gets or sets whether this class or interface accepts the wide Union tag form.</summary>
     /// <remarks>Applies only to this declaration, not enclosing scopes or explicit operation profiles. The legacy wide-tag attribute also enables it.</remarks>

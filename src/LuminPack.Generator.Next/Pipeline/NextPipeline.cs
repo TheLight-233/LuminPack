@@ -42,42 +42,15 @@ internal static partial class NextPipeline
 
         var models = context.SyntaxProvider.ForAttributeWithMetadataName(PackableAttribute,
             static (node, _) => node is TypeDeclarationSyntax,
-            static (attributeContext, cancellationToken) =>
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                GeneratorOptions options = GeneratorOptionsFactory.From(attributeContext.SemanticModel.Compilation);
-                var symbol = (INamedTypeSymbol)attributeContext.TargetSymbol;
-                Compilation compilation = attributeContext.SemanticModel.Compilation;
-                // Union case and formatter names captured by the model spell ambiguous simple names with their namespace.
-                using var names = ReadableTypeName.Use(options.AmbiguousNames);
-                try
-                {
-                    DiagnosticInfo[] diagnostics = TypeModelFactory.Diagnose(symbol, compilation, options);
-                    bool declarationErrors = DiagnosticDescriptors.HasErrors(diagnostics);
-                    bool errors = declarationErrors ||
-                        DiagnosticDescriptors.HasErrors(TypeModelFactory.DiagnoseAssembly(compilation, options));
-                    cancellationToken.ThrowIfCancellationRequested();
-                    bool compilerUnion = CompilerUnion.IsUnion(symbol, compilation);
-                    MemberModel? formatterRoot = !errors && compilerUnion ? TypeModelFactory.TryCreateRoot(symbol, compilation, options) : null;
-                    ModelResult result = errors ? ModelResult.Unsupported("invalid serialization declaration") :
-                        compilerUnion ? ModelResult.Unsupported("compiler Union uses a shared formatter owner") :
-                        TypeModelFactory.TryCreate(symbol, compilation, options);
-                    // A valid Custom declaration registers its own static operations.
-                    string? custom = declarationErrors ? null :
-                        TypeModelFactory.CustomRegistration(symbol, options, out bool customJson) is { } customType
-                            ? CustomRegistrationSource.Block(customType, customJson) : null;
-                    return new ModeledPayload(result, options, diagnostics, custom,
-                        result.IsComplete ? OperationUsageAnalysis.Declaration(symbol, compilation) : OperationReach.Empty,
-                        formatterRoot, formatterRoot != null ? TypeModelFactory.ReachKey(symbol) : null);
-                }
-                catch (Exception error) when (error is not OperationCanceledException)
-                {
-                    DiagnosticInfo diagnostic = DiagnosticInfo.Capture(DiagnosticDescriptors.GeneratorFailure.Id,
-                        symbol.Locations.Length == 0 ? null : symbol.Locations[0], new[] { error.GetType().FullName + ": " + error.Message });
-                    return new ModeledPayload(ModelResult.Unsupported("declaration analysis failed"), options, new[] { diagnostic });
-                }
-            })
+            static (attributeContext, token) => AnalyzeDeclaration((INamedTypeSymbol)attributeContext.TargetSymbol,
+                attributeContext.SemanticModel.Compilation, token))
             .WithTrackingName("LuminPack.Next.PayloadModels");
+        var derived = context.SyntaxProvider.CreateSyntaxProvider(
+                static (node, _) => node is ClassDeclarationSyntax { BaseList: not null } or RecordDeclarationSyntax { BaseList: not null },
+                static (syntax, token) => AnalyzeDerivedDeclaration(syntax, token))
+            .Where(static payload => payload.HasValue).Select(static (payload, _) => payload.GetValueOrDefault())
+            .WithTrackingName("LuminPack.Next.DerivedPayloadModels")
+            .Collect().WithComparer(FactArrayComparer<ModeledPayload>.Instance);
         var facts = context.CompilationProvider.Select(static (compilation, _) => new ProjectFacts(compilation));
         var calls = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => SerializerCallAnalysis.IsCandidate(node) && ConsumerTree(node.SyntaxTree),
@@ -100,7 +73,9 @@ internal static partial class NextPipeline
         // Referenced types the assembly marks with [assembly: LuminPackable(typeof(T))] are payloads of this compilation.
         var external = context.CompilationProvider.Select(static (compilation, token) => ExternalPayloads(compilation, token))
             .WithComparer(FactArrayComparer<ModeledPayload>.Instance).WithTrackingName("LuminPack.Next.ExternalPayloads");
-        var declared = models.Collect().WithComparer(FactArrayComparer<ModeledPayload>.Instance).Combine(external)
+        var declared = models.Collect().WithComparer(FactArrayComparer<ModeledPayload>.Instance).Combine(derived)
+            .Select(static (input, _) => input.Right.IsEmpty ? input.Left : input.Left.AddRange(input.Right))
+            .WithComparer(FactArrayComparer<ModeledPayload>.Instance).Combine(external)
             .Select(static (input, _) => input.Right.IsEmpty ? input.Left : input.Left.AddRange(input.Right))
             .WithComparer(FactArrayComparer<ModeledPayload>.Instance);
         var report = context.AnalyzerConfigOptionsProvider.Select(static (options, _) =>
@@ -148,6 +123,44 @@ internal static partial class NextPipeline
         InitializePublication(context, requests, report);
     }
 
+    /// <summary>Models a declared payload after checking its source and assembly contracts.</summary>
+    /// <param name="symbol">The payload declaration.</param>
+    /// <param name="compilation">The compilation that contains the declaration.</param>
+    /// <param name="cancellationToken">Cancels declaration analysis.</param>
+    /// <returns>The normalized payload, registration and diagnostic facts.</returns>
+    private static ModeledPayload AnalyzeDeclaration(INamedTypeSymbol symbol, Compilation compilation, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        GeneratorOptions options = GeneratorOptionsFactory.From(compilation);
+        // Union case and formatter names captured by the model spell ambiguous simple names with their namespace.
+        using var names = ReadableTypeName.Use(options.AmbiguousNames);
+        try
+        {
+            DiagnosticInfo[] diagnostics = TypeModelFactory.Diagnose(symbol, compilation, options);
+            bool declarationErrors = DiagnosticDescriptors.HasErrors(diagnostics);
+            bool errors = declarationErrors || DiagnosticDescriptors.HasErrors(TypeModelFactory.DiagnoseAssembly(compilation, options));
+            cancellationToken.ThrowIfCancellationRequested();
+            bool compilerUnion = CompilerUnion.IsUnion(symbol, compilation);
+            MemberModel? formatterRoot = !errors && compilerUnion ? TypeModelFactory.TryCreateRoot(symbol, compilation, options) : null;
+            ModelResult result = errors ? ModelResult.Unsupported("invalid serialization declaration") :
+                compilerUnion ? ModelResult.Unsupported("compiler Union uses a shared formatter owner") :
+                TypeModelFactory.TryCreate(symbol, compilation, options);
+            // A valid Custom declaration registers its own static operations.
+            string? custom = declarationErrors ? null :
+                TypeModelFactory.CustomRegistration(symbol, options, out bool customJson) is { } customType
+                    ? CustomRegistrationSource.Block(customType, customJson) : null;
+            return new ModeledPayload(result, options, diagnostics, custom,
+                result.IsComplete ? OperationUsageAnalysis.Declaration(symbol, compilation) : OperationReach.Empty,
+                formatterRoot, formatterRoot != null ? TypeModelFactory.ReachKey(symbol) : null);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            DiagnosticInfo diagnostic = DiagnosticInfo.Capture(DiagnosticDescriptors.GeneratorFailure.Id,
+                symbol.Locations.Length == 0 ? null : symbol.Locations[0], new[] { error.GetType().FullName + ": " + error.Message });
+            return new ModeledPayload(ModelResult.Unsupported("declaration analysis failed"), options, new[] { diagnostic });
+        }
+    }
+
     /// <summary>Reports invalid declaration-owned generation and reference options.</summary>
     /// <param name="context">The bound option attribute and its target.</param>
     /// <returns>The declaration option diagnostics.</returns>
@@ -162,6 +175,7 @@ internal static partial class NextPipeline
                     "TrackReferences" when context.TargetSymbol is not INamedTypeSymbol { TypeKind: TypeKind.Class } =>
                         "TrackReferences applies only to class declarations.",
                     "GeneratorType" => TypeModelFactory.GenerationOptionError(context.TargetSymbol, argument.Value),
+                    "IncludeDerivedTypes" => TypeModelFactory.DerivedInclusionOptionError(context.TargetSymbol, argument.Value),
                     _ => null,
                 };
                 if (error != null)

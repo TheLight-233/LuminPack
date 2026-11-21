@@ -14,6 +14,11 @@ try
         SerializerIssueRegression.RunUnion(references);
         return 0;
     }
+    if (args is ["--verify-derived-type-inclusion"])
+    {
+        SerializerIssueRegression.RunDerivedTypeInclusion(references);
+        return 0;
+    }
     if (args is ["--verify-rectangular-nullable-wire"])
     {
         SerializerIssueRegression.RunRectangularNullableWire(references);
@@ -459,6 +464,7 @@ try
         return 0;
     }
     SerializerIssueRegression.RunUnion(references);
+    SerializerIssueRegression.RunDerivedTypeInclusion(references);
     SerializerIssueRegression.RunRectangularNullableWire(references);
     SerializerIssueRegression.RunNullableCollectionLayouts(references);
     SerializerIssueRegression.RunUnionBytePayload(references);

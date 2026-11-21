@@ -22,6 +22,16 @@ Shape copy = null!;
 LuminPackSerializer.Deserialize(bytes, ref copy);   // copy 是 Circle
 ```
 
+在带标记的类上启用 `IncludeDerivedTypes = true` 后，生成器会纳入源码中的派生类，无需为每个派生类重复添加 `[LuminPackable]`。发现范围沿类继承链穿过中间类型。各派生类使用自己的选项，仍遵循通常的构造和 Union 规则。
+
+```csharp
+[LuminPackable, LuminPackOption(IncludeDerivedTypes = true)]
+public abstract partial class Message { }
+
+public abstract partial class NetworkMessage : Message { }
+public sealed partial class Ping : NetworkMessage { public int Sequence; }
+```
+
 - 在 Next 中，生成 case 数超过 32 时，根类型、各 case 及其外层包含类型必须声明为 `partial`，以生成虚方法。较小的 Union 使用精确类型比较，也适用于泛型 case。
 - 数字标签范围为 0 到 65535。在 Next 中，它们标识 JSON 和显式注册的 case。
 - 支持泛型 case：开放泛型 case（`typeof(Case<>)`）覆盖实际用到的闭合类型，闭合 case（`typeof(Case<int>)`）优先于它。

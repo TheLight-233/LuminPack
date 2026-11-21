@@ -28,6 +28,7 @@ public partial class Message
 | 属性 | 默认值 | 含义 |
 | --- | --- | --- |
 | `GeneratorType` | `Default` | 为单个 `[LuminPackable]` 类型选择 `Default`、`Version` 或 `Custom`。见[定义类型](defining-types.cn.md)。 |
+| `IncludeDerivedTypes` | `false` | 在带标记的类上启用，让源码中的派生类自动进入生成范围。见 [Union 根类型](polymorphism.cn.md#union-根类型)。 |
 | `StringEncoding` | `UTF16` | 二进制字符串编码，可按成员设置。对 JSON 而言是整份文档的编码，由根类型决定。 |
 | `StringRecording` | `Length` | 固定宽度长度头、可选的 `VarInt` 长度头，或 `Token`（以终止符结束；`null` 和 `""` 读回来都是 `""`）。 |
 | `FramedGroupings` | `false` | Next 程序集选项，为二进制 `IGrouping<TKey, TElement>` 提供明确的分组帧，也适用于 `ILookup<TKey, TElement>` 内的分组。 |

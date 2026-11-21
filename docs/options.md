@@ -28,6 +28,7 @@ public partial class Message
 | Property | Default | Meaning |
 | --- | --- | --- |
 | `GeneratorType` | `Default` | Selects `Default`, `Version` or `Custom` on an individual `[LuminPackable]` type. See [defining types](defining-types.md). |
+| `IncludeDerivedTypes` | `false` | A marked class opts its source-derived classes into generation. See [Union roots](polymorphism.md#union-roots). |
 | `StringEncoding` | `UTF16` | Binary string encoding, per member. For JSON, the encoding of the whole document, chosen by its root type. |
 | `StringRecording` | `Length` | Fixed-width length headers, opt-in `VarInt` headers, or `Token` (terminated; `null` and `""` both read back as `""`). |
 | `FramedGroupings` | `false` | Next assembly option for unambiguous binary `IGrouping<TKey, TElement>` records, including groups in an `ILookup<TKey, TElement>`. |

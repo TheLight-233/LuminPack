@@ -22,6 +22,16 @@ Shape copy = null!;
 LuminPackSerializer.Deserialize(bytes, ref copy);   // copy is Circle
 ```
 
+Set `IncludeDerivedTypes = true` on a marked class to include its source-derived classes without repeating `[LuminPackable]` on each one. Discovery follows the class inheritance chain through intermediate types. Each derived type uses its own options and remains subject to the ordinary construction and Union rules.
+
+```csharp
+[LuminPackable, LuminPackOption(IncludeDerivedTypes = true)]
+public abstract partial class Message { }
+
+public abstract partial class NetworkMessage : Message { }
+public sealed partial class Ping : NetworkMessage { public int Sequence; }
+```
+
 - In Next, if the root has more than 32 generated cases, the root, the cases and their containing types must be `partial` for virtual dispatch. Smaller roots use exact type comparisons, including for generic cases.
 - Numeric tags range from 0 to 65535. They identify JSON and explicitly registered cases in Next.
 - Generic cases are supported: an open case (`typeof(Case<>)`) covers the closed types actually used, and a closed case (`typeof(Case<int>)`) has priority over it.

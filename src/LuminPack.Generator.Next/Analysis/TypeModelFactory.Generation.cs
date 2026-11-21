@@ -15,10 +15,10 @@ internal static partial class TypeModelFactory
         Custom = 4,
     }
 
-    /// <summary>Checks for a LuminPackable marker directly on the type.</summary>
+    /// <summary>Checks for a declared or inherited LuminPackable marker.</summary>
     /// <param name="symbol">The candidate declaration.</param>
     /// <returns>Whether the declaration has the marker.</returns>
-    internal static bool IsPackable(INamedTypeSymbol symbol) => HasAttribute(symbol, PackableAttribute);
+    internal static bool IsPackable(INamedTypeSymbol symbol) => HasDirectPackableMarker(symbol) || InheritsPackableMarker(symbol);
 
     /// <summary>Identifies metadata whose original serialization selection the compiler cannot decode.</summary>
     /// <param name="symbol">The declaration that may carry a marker compiled against an earlier runtime.</param>

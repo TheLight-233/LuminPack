@@ -97,6 +97,7 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 | Allocation-free repeated reads | `Deserialize(bytes, ref existing)` |
 | Reuse an existing JSON graph | `DeserializeJson(json, ref existing)`; UTF-8/UTF-16, concrete/generic and text/span/buffer entries |
 | Polymorphism | `[LuminPackable]` interface/abstract root; cases collected automatically or `[LuminPackUnion(tag, typeof(Case))]` |
+| Opt in derived classes | `[LuminPackable, LuminPackOption(IncludeDerivedTypes = true)]` on the base class |
 | Type from another assembly | `[assembly: LuminPackable(typeof(Lib.Model))]` (also open generics, also Union roots) |
 | Schema evolution | `[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]` |
 | Shared objects or cycles | `[LuminPackOption(TrackReferences = true)]` on the class, with `[LuminPackable]` or `[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]` |
