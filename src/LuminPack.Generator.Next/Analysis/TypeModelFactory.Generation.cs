@@ -35,14 +35,15 @@ internal static partial class TypeModelFactory
 
     /// <summary>Reads the generation mode declared by the type itself.</summary>
     /// <param name="symbol">The declaration whose contract is being analyzed.</param>
+    /// <param name="fallback">The mode inherited from a consuming-assembly option, when present.</param>
     /// <returns>The current option, the bound legacy mode, or the default representation.</returns>
-    internal static PayloadGeneration GenerationMode(INamedTypeSymbol symbol)
+    internal static PayloadGeneration GenerationMode(INamedTypeSymbol symbol, PayloadGeneration fallback = PayloadGeneration.Default)
     {
-        PayloadGeneration legacy = PayloadGeneration.Default;
+        PayloadGeneration legacy = fallback;
         foreach (AttributeData attribute in symbol.GetAttributes())
         {
             string? name = attribute.AttributeClass?.ToDisplayString();
-            if (name == OptionAttribute)
+            if (name == OptionAttribute && IsUntargetedOption(attribute))
             {
                 foreach (var argument in attribute.NamedArguments)
                     if (argument.Key == "GeneratorType" && argument.Value.Value is byte value && IsCurrentGenerationMode(value))
@@ -61,10 +62,11 @@ internal static partial class TypeModelFactory
     /// <summary>Validates the target and selected generation mode for a declaration option.</summary>
     /// <param name="symbol">The option's target.</param>
     /// <param name="argument">The declared enum constant.</param>
+    /// <param name="assemblyMarker">Whether an assembly marker declares the referenced payload.</param>
     /// <returns>The diagnostic reason for an invalid option, or null.</returns>
-    internal static string? GenerationOptionError(ISymbol symbol, TypedConstant argument)
+    internal static string? GenerationOptionError(ISymbol symbol, TypedConstant argument, bool assemblyMarker = false)
     {
-        if (symbol is not INamedTypeSymbol type || !IsPackable(type))
+        if (symbol is not INamedTypeSymbol type || !assemblyMarker && !IsPackable(type))
             return "GeneratorType applies only to LuminPackable type declarations.";
         if (argument.Value is not byte value || !IsCurrentGenerationMode(value))
             return "Select GeneratorType.Default, GeneratorType.Version or GeneratorType.Custom.";

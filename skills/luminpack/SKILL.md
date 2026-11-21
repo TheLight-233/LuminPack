@@ -99,6 +99,7 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 | Polymorphism | `[LuminPackable]` interface/abstract root; cases collected automatically or `[LuminPackUnion(tag, typeof(Case))]` |
 | Opt in derived classes | `[LuminPackable, LuminPackOption(IncludeDerivedTypes = true)]` on the base class |
 | Type from another assembly | `[assembly: LuminPackable(typeof(Lib.Model))]` (also open generics, also Union roots) |
+| Options for an imported type | `[assembly: LuminPackOption(typeof(Lib.Model), ...)]` alongside the assembly marker for that type |
 | Schema evolution | `[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]` |
 | Shared objects or cycles | `[LuminPackOption(TrackReferences = true)]` on the class, with `[LuminPackable]` or `[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]` |
 | Same bytes on 32-bit and 64-bit | `[LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]` on the struct or assembly |

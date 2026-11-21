@@ -335,7 +335,7 @@ internal static partial class TypeModelFactory
         /// <returns>Whether the operation can use unmanaged serialization.</returns>
         private bool CanUseUnmanagedSerialization(ITypeSymbol type) => type.IsUnmanagedType && !ContainsOpenParameter(type) &&
             (type is not INamedTypeSymbol named || TryPortableLayout(named) == null && !IsUnsupportedPackedStorage(named)) &&
-            !ContainsCustomContract(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
+            !ContainsNonRawContract(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
 
         /// <summary>Checks whether known scalar.</summary>
         /// <param name="type">The type being analyzed or emitted.</param>
@@ -385,13 +385,13 @@ internal static partial class TypeModelFactory
         /// <summary>The original fixed-record rule: an object or named-version record of fixed-width primitive members only.</summary>
         /// <param name="type">The type being analyzed or emitted.</param>
         /// <returns>Whether the input is fixed record.</returns>
-        private static bool IsFixedRecord(ITypeSymbol type)
+        private bool IsFixedRecord(ITypeSymbol type)
         {
-            if (type is not INamedTypeSymbol named || TracksReferences(named) ||
+            if (type is not INamedTypeSymbol named || TracksTypeReferences(named) ||
                 named.TypeKind is not (TypeKind.Class or TypeKind.Struct) || named.IsAbstract ||
                 named.IsStatic || named.IsRefLikeType || ContainsOpenParameter(named))
                 return false;
-            if (!IsPackable(named) || GenerationMode(named) is not (PayloadGeneration.Default or PayloadGeneration.Version))
+            if (!IsPackable(named) || SelectedGeneration(named) is not (PayloadGeneration.Default or PayloadGeneration.Version))
                 return false;
             for (INamedTypeSymbol? current = named; current is not null && current.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType);
                  current = current.BaseType)
@@ -403,10 +403,10 @@ internal static partial class TypeModelFactory
                         "LuminPack.Attribute.LuminPackCompressAttribute" or "LuminPack.Attribute.LuminPackWideTagAttribute" or
                         "LuminPack.Attribute.LuminPackSingleImplementationAttribute")
                         return false;
-                if (OptionSwitch(current, "WideTag") || OptionSwitch(current, "SingleImplementation"))
+                if (TypeSwitch(current, "WideTag") || TypeSwitch(current, "SingleImplementation"))
                     return false;
                 if (!SymbolEqualityComparer.Default.Equals(current, named) && IsPackable(current) &&
-                    GenerationMode(current) != PayloadGeneration.Default)
+                    SelectedGeneration(current) != PayloadGeneration.Default)
                     return false;
                 foreach (ISymbol member in current.GetMembers())
                 {

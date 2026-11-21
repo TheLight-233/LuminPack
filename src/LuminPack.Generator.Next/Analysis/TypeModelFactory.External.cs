@@ -58,6 +58,21 @@ internal static partial class TypeModelFactory
     /// <returns>Whether the type declares a Union contract.</returns>
     internal static bool IsUnion(INamedTypeSymbol type) => HasAttribute(type, UnionAttribute);
 
+    /// <summary>Identifies the constructor shared by untargeted options at assembly, type and member scope.</summary>
+    /// <param name="attribute">The candidate option.</param>
+    /// <returns>Whether the attribute supplies untargeted options.</returns>
+    internal static bool IsUntargetedOption(AttributeData attribute) =>
+        attribute.AttributeClass?.ToDisplayString() == OptionAttribute && attribute.ConstructorArguments.Length == 0;
+
+    /// <summary>Decodes a referenced type specified by an assembly marker or option.</summary>
+    /// <param name="attribute">The bound attribute.</param>
+    /// <returns>The exact referenced type or the normalized open generic definition.</returns>
+    private static INamedTypeSymbol? AssemblyTarget(AttributeData attribute) =>
+        attribute.ConstructorArguments.Length == 1 && attribute.ConstructorArguments[0].Kind == TypedConstantKind.Type &&
+        attribute.ConstructorArguments[0].Value is INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Struct or TypeKind.Interface } type
+            ? type.IsUnboundGenericType ? type.OriginalDefinition : type
+            : null;
+
     /// <summary>Finds omitted storage in marked generic constructions reached by a serializer call.</summary>
     /// <param name="type">The closed payload or formatter container.</param>
     /// <param name="compilation">The consuming compilation.</param>
@@ -169,6 +184,76 @@ internal static partial class TypeModelFactory
     private sealed partial class Session
     {
         private HashSet<INamedTypeSymbol>? _marked;
+        private Dictionary<INamedTypeSymbol, AttributeData>? _targetedOptions;
+
+        /// <summary>Finds an option targeted at one exact reference type or open definition.</summary>
+        /// <param name="type">The normalized option target.</param>
+        /// <returns>The option explicitly addressed to this symbol.</returns>
+        private AttributeData? TargetedOption(INamedTypeSymbol type)
+        {
+            if (SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly))
+                return null;
+
+            Dictionary<INamedTypeSymbol, AttributeData>? options = System.Threading.Volatile.Read(ref _targetedOptions);
+            if (options == null)
+            {
+                options = new Dictionary<INamedTypeSymbol, AttributeData>(SymbolEqualityComparer.Default);
+                foreach (AttributeData attribute in _compilation.Assembly.GetAttributes())
+                    if (attribute.AttributeClass?.ToDisplayString() == OptionAttribute && AssemblyTarget(attribute) is { } target &&
+                        !options.ContainsKey(target))
+                        options.Add(target, attribute);
+                options = System.Threading.Interlocked.CompareExchange(ref _targetedOptions, options, null) ?? options;
+            }
+
+            return options.TryGetValue(type, out AttributeData? option) ? option : null;
+        }
+
+        /// <summary>Whether this compilation declares an exact or open option for the type.</summary>
+        /// <param name="type">The external type.</param>
+        /// <returns>Whether the consuming assembly configures this contract.</returns>
+        internal bool HasTargetedOption(INamedTypeSymbol type) =>
+            TargetedOption(type) != null || !type.IsDefinition && TargetedOption(type.OriginalDefinition) != null;
+
+        /// <summary>Resolves a single named option, preserving any explicit value declared on the type.</summary>
+        /// <param name="type">The target type.</param>
+        /// <param name="name">The named option.</param>
+        /// <returns>The exact or open assembly option, if declared.</returns>
+        private object? TargetedOptionValue(INamedTypeSymbol type, string name)
+        {
+            if (Find(TargetedOption(type), name) is { } exact)
+                return exact;
+            return type.IsDefinition ? null : Find(TargetedOption(type.OriginalDefinition), name);
+
+            static object? Find(AttributeData? attribute, string name)
+            {
+                if (attribute != null)
+                    foreach (var argument in attribute.NamedArguments)
+                        if (argument.Key == name)
+                            return argument.Value.Value;
+                return null;
+            }
+        }
+
+        /// <summary>Resolves the type's generation mode over any consuming assembly option for it.</summary>
+        /// <param name="type">The payload type.</param>
+        /// <returns>The effective mode.</returns>
+        internal PayloadGeneration SelectedGeneration(INamedTypeSymbol type) => GenerationMode(type,
+            TargetedOptionValue(type, "GeneratorType") is byte value && IsCurrentGenerationMode(value)
+                ? (PayloadGeneration)value : PayloadGeneration.Default);
+
+        /// <summary>Resolves a declaration switch over any consuming assembly option for the type.</summary>
+        /// <param name="type">The payload type.</param>
+        /// <param name="name">The switch name.</param>
+        /// <param name="fallback">The default when neither scope sets the switch.</param>
+        /// <returns>The effective switch value.</returns>
+        private bool TypeSwitch(INamedTypeSymbol type, string name, bool fallback = false) =>
+            OptionSwitch(type, name, TargetedOptionValue(type, name) as bool? ?? fallback);
+
+        /// <summary>Checks for reference framing in the selected consuming-assembly contract.</summary>
+        /// <param name="type">The payload type.</param>
+        /// <returns>Whether the selected record carries reference identities.</returns>
+        private bool TracksTypeReferences(INamedTypeSymbol type) => type is { TypeKind: TypeKind.Class, IsAbstract: false } &&
+            (TypeSwitch(type, "TrackReferences") || SelectedGeneration(type) == PayloadGeneration.LegacyTrackedVersion);
 
         /// <summary>Requires the generated dispatch of an imported Union root: the public compiled binary and JSON slots its own
         /// assembly declares. The defining assembly retains ownership of the virtual and generic case slots.</summary>

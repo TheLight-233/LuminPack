@@ -60,7 +60,7 @@ internal static partial class TypeModelFactory
             // Generic members are analyzed on the definition; their arguments were checked above.
             INamedTypeSymbol definition = named.IsGenericType ? named.OriginalDefinition : named;
             // Custom formats are user code, which stays trusted like a manually registered formatter.
-            if (GenerationMode(definition) is not (PayloadGeneration.Default or PayloadGeneration.Version or PayloadGeneration.LegacyTrackedVersion))
+            if (SelectedGeneration(named) is not (PayloadGeneration.Default or PayloadGeneration.Version or PayloadGeneration.LegacyTrackedVersion))
                 return null;
             if (HasAttribute(definition, UnionAttribute))
             {

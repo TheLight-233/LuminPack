@@ -40,12 +40,72 @@ internal static partial class TypeModelFactory
                 if (_assemblyDiagnostics != null)
                     return _assemblyDiagnostics;
                 var diagnostics = new DeclarationDiagnosticBag();
-                ValidateCompiledOptions(_compilation.Assembly, ref diagnostics);
                 ValidatePackableMarkers(_compilation.Assembly, ref diagnostics);
+                ValidateAssemblyOptions(ref diagnostics);
                 _assemblyDiagnostics = diagnostics.ToArray();
                 return _assemblyDiagnostics;
             }
         }
+
+        /// <summary>Checks each assembly option against its declared target and matching external marker.</summary>
+        /// <param name="diagnostics">Receives errors at the affected assembly option.</param>
+        private void ValidateAssemblyOptions(ref DeclarationDiagnosticBag diagnostics)
+        {
+            var assembly = _compilation.Assembly;
+            var markers = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            var targeted = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            foreach (AttributeData attribute in assembly.GetAttributes())
+                if (attribute.AttributeClass?.ToDisplayString() == PackableAttribute && AssemblyTarget(attribute) is { } marker)
+                    markers.Add(marker);
+
+            bool untargeted = false;
+            foreach (AttributeData attribute in assembly.GetAttributes())
+            {
+                if (attribute.AttributeClass?.ToDisplayString() != OptionAttribute || attribute.AttributeConstructor == null)
+                    continue;
+
+                if (IsUntargetedOption(attribute))
+                {
+                    if (untargeted)
+                        ReportTargetError(attribute, "Apply the default assembly LuminPackOption only once.", ref diagnostics);
+                    untargeted = true;
+                    ValidateCompiledOption(attribute, assembly, ref diagnostics);
+                    continue;
+                }
+
+                if (AssemblyTarget(attribute) is not { } target || SymbolEqualityComparer.Default.Equals(target.ContainingAssembly, assembly))
+                {
+                    ReportTargetError(attribute, "Use [assembly: LuminPackOption(typeof(T))] to configure a class, struct or interface from a referenced assembly.", ref diagnostics);
+                    continue;
+                }
+
+                if (!targeted.Add(target))
+                {
+                    ReportTargetError(attribute, $"Apply the assembly LuminPackOption for '{target.ToDisplayString()}' only once.", ref diagnostics);
+                    continue;
+                }
+
+                if (!markers.Contains(target) && (target.IsDefinition || !markers.Contains(target.OriginalDefinition)))
+                {
+                    ReportTargetError(attribute, $"Add a matching assembly LuminPackable marker for '{target.ToDisplayString()}'.", ref diagnostics);
+                    continue;
+                }
+
+                ValidateCompiledOption(attribute, target, ref diagnostics, assemblyMarker: true);
+                if (SelectedGeneration(target) == PayloadGeneration.Custom)
+                    ValidateCustom(target, ref diagnostics);
+                else
+                    ValidatePortableStorage(target, ref diagnostics, attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation());
+            }
+        }
+
+        /// <summary>Reports an assembly option whose target cannot supply a contract.</summary>
+        /// <param name="attribute">The invalid option.</param>
+        /// <param name="message">The reason the target is invalid.</param>
+        /// <param name="diagnostics">The assembly diagnostic bag.</param>
+        private static void ReportTargetError(AttributeData attribute, string message, ref DeclarationDiagnosticBag diagnostics) =>
+            diagnostics.Add(DiagnosticInfo.Capture(DiagnosticDescriptors.InvalidOptionTarget.Id,
+                attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation(), new[] { message }));
 
         /// <summary>Checks that type declarations and external assembly markers use their respective constructors.</summary>
         /// <param name="symbol">The marked type or consuming assembly declaration.</param>
@@ -88,47 +148,66 @@ internal static partial class TypeModelFactory
         /// <param name="diagnostics">Receives errors at the original attribute syntax.</param>
         private void ValidateCompiledOptions(ISymbol symbol, ref DeclarationDiagnosticBag diagnostics)
         {
-            foreach (var attribute in symbol.GetAttributes().Where(attribute => attribute.AttributeClass?.ToDisplayString() == OptionAttribute))
-                foreach (var argument in attribute.NamedArguments)
+            foreach (var attribute in symbol.GetAttributes())
+                if (IsUntargetedOption(attribute))
+                    ValidateCompiledOption(attribute, symbol, ref diagnostics);
+        }
+
+        /// <summary>Validates option values against the effective declaration receiving them.</summary>
+        /// <param name="attribute">The declared option.</param>
+        /// <param name="symbol">The assembly, type or member that receives the option.</param>
+        /// <param name="diagnostics">Receives errors at the option syntax.</param>
+        /// <param name="assemblyMarker">Whether the target is marked by the consuming assembly.</param>
+        private void ValidateCompiledOption(AttributeData attribute, ISymbol symbol, ref DeclarationDiagnosticBag diagnostics,
+            bool assemblyMarker = false)
+        {
+            foreach (var argument in attribute.NamedArguments)
+            {
+                string? error = null;
+                if (argument.Key is "StringEncoding" or "StringRecording")
                 {
-                    string? error = null;
-                    if (argument.Key is "StringEncoding" or "StringRecording")
-                    {
-                        int value = Convert.ToInt32(argument.Value.Value, CultureInfo.InvariantCulture);
-                        if (value < 0 || value > (argument.Key == "StringRecording" ? 2 : 1))
-                            error = "the value must be one of the declared encoding or recording enum members.";
-                    }
-                    if (argument.Key == "StandardFormat")
-                    {
-                        string? value = argument.Value.Value as string;
-                        if (string.IsNullOrEmpty(value) || value.Length > 3 || value[0] > 127 || value.Length > 1 &&
-                            (!byte.TryParse(value.Substring(1), NumberStyles.None, CultureInfo.InvariantCulture, out byte precision) || precision > 99))
-                            error = "use one ASCII format symbol followed by an optional precision from 0 through 99.";
-                    }
-                    if (argument.Key == "StructLayout" && Convert.ToInt32(argument.Value.Value, CultureInfo.InvariantCulture) is < 0 or > 2)
-                        error = "the value must be a declared LuminPackStructLayout member.";
-                    if (argument.Key == "StructLayout" && symbol is not (IAssemblySymbol or INamedTypeSymbol { TypeKind: TypeKind.Struct }))
-                        error = "StructLayout applies only to assembly and struct declarations.";
-                    if (argument.Key is "FramedGroupings" or "RequireCompleteBinaryInput" && symbol is not IAssemblySymbol)
-                        error = argument.Key + " applies only to assembly declarations.";
-                    if (argument.Key == "IncludeCollectionBase" && (symbol is not INamedTypeSymbol declaration || !CanIncludeCollectionBase(declaration)))
-                        error = "IncludeCollectionBase applies to a concrete LuminPackable class in Default mode with a closed List<T> base and no reference tracking.";
-                    if (argument.Key is "WideTag" or "SingleImplementation" && symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Interface })
-                        error = "Union contract switches apply only to class and interface declarations.";
-                    if (argument.Key == "ReuseRectangularArraySlots" && symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class })
-                        error = "ReuseRectangularArraySlots applies only to the element class declaration.";
-                    bool inputLimit = argument.Key is "MaxInputBytes" or "MaxDecompressedBytes" or "MaxAllocationBytes" or
-                        "MaxCollectionLength" or "MaxStringLength" or "MaxObjectCount" or "MaxReadWork" or "MaxDepth";
-                    if (inputLimit && Convert.ToInt64(argument.Value.Value, CultureInfo.InvariantCulture) < 0)
-                        error = "input resource limits must be nonnegative.";
-                    if (argument.Key == "MaxDepth" && Convert.ToInt64(argument.Value.Value, CultureInfo.InvariantCulture) < 1)
-                        error = "external-input nesting depth must be at least one.";
-                    if ((inputLimit || argument.Key == "UntrustedData") && symbol is not (IAssemblySymbol or INamedTypeSymbol))
-                        error = "input policy applies to assembly and type declarations; nested values share their root budget.";
-                    if (error != null)
-                        diagnostics.Add(DiagnosticInfo.Capture(DiagnosticDescriptors.InvalidCompiledOption.Id,
-                            attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? symbol.Locations.FirstOrDefault(), new[] { argument.Key, error }));
+                    int value = Convert.ToInt32(argument.Value.Value, CultureInfo.InvariantCulture);
+                    if (value < 0 || value > (argument.Key == "StringRecording" ? 2 : 1))
+                        error = "the value must be one of the declared encoding or recording enum members.";
                 }
+                if (argument.Key == "StandardFormat")
+                {
+                    string? value = argument.Value.Value as string;
+                    if (value == null || value.Length == 0 || value.Length > 3 || value[0] > 127 || value.Length > 1 &&
+                        (!byte.TryParse(value.Substring(1), NumberStyles.None, CultureInfo.InvariantCulture, out byte precision) || precision > 99))
+                        error = "use one ASCII format symbol followed by an optional precision from 0 through 99.";
+                }
+                if (argument.Key == "StructLayout" && Convert.ToInt32(argument.Value.Value, CultureInfo.InvariantCulture) is < 0 or > 2)
+                    error = "the value must be a declared LuminPackStructLayout member.";
+                if (argument.Key == "StructLayout" && symbol is not (IAssemblySymbol or INamedTypeSymbol { TypeKind: TypeKind.Struct }))
+                    error = "StructLayout applies only to assembly and struct declarations.";
+                if (argument.Key is "FramedGroupings" or "RequireCompleteBinaryInput" && symbol is not IAssemblySymbol)
+                    error = argument.Key + " applies only to assembly declarations.";
+                if (argument.Key == "IncludeCollectionBase" && (symbol is not INamedTypeSymbol declaration || !CanIncludeCollectionBase(declaration)))
+                    error = "IncludeCollectionBase applies to a concrete LuminPackable class in Default mode with a closed List<T> base and no reference tracking.";
+                if (argument.Key is "WideTag" or "SingleImplementation" && symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Interface })
+                    error = "Union contract switches apply only to class and interface declarations.";
+                if (argument.Key == "ReuseRectangularArraySlots" && symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class })
+                    error = "ReuseRectangularArraySlots applies only to the element class declaration.";
+                bool inputLimit = argument.Key is "MaxInputBytes" or "MaxDecompressedBytes" or "MaxAllocationBytes" or
+                    "MaxCollectionLength" or "MaxStringLength" or "MaxObjectCount" or "MaxReadWork" or "MaxDepth";
+                if (inputLimit && Convert.ToInt64(argument.Value.Value, CultureInfo.InvariantCulture) < 0)
+                    error = "input resource limits must be nonnegative.";
+                if (argument.Key == "MaxDepth" && Convert.ToInt64(argument.Value.Value, CultureInfo.InvariantCulture) < 1)
+                    error = "external-input nesting depth must be at least one.";
+                if ((inputLimit || argument.Key == "UntrustedData") && symbol is not (IAssemblySymbol or INamedTypeSymbol))
+                    error = "input policy applies to assembly and type declarations; nested values share their root budget.";
+                if ((assemblyMarker || symbol is IAssemblySymbol) && argument.Key == "GeneratorType")
+                    error = GenerationOptionError(symbol, argument.Value, assemblyMarker);
+                if ((assemblyMarker || symbol is IAssemblySymbol) && argument.Key == "TrackReferences" &&
+                    symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class })
+                    error = "TrackReferences applies only to class declarations.";
+                if (argument.Key == "IncludeDerivedTypes" && (assemblyMarker || symbol is IAssemblySymbol))
+                    error = "IncludeDerivedTypes applies only to LuminPackable class declarations.";
+                if (error != null)
+                    diagnostics.Add(DiagnosticInfo.Capture(DiagnosticDescriptors.InvalidCompiledOption.Id,
+                        attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? symbol.Locations.FirstOrDefault(), new[] { argument.Key, error }));
+            }
         }
 
 
@@ -146,12 +225,14 @@ internal static partial class TypeModelFactory
         /// <summary>Checks packed storage before an unsupported field can fall back to raw bytes.</summary>
         /// <param name="type">The payload declaration.</param>
         /// <param name="diagnostics">Receives unsupported portable storage.</param>
-        private void ValidatePortableStorage(INamedTypeSymbol type, ref DeclarationDiagnosticBag diagnostics)
+        /// <param name="location">The explicit option location for an imported declaration.</param>
+        private void ValidatePortableStorage(INamedTypeSymbol type, ref DeclarationDiagnosticBag diagnostics, Location? location = null)
         {
-            bool packed = type.TypeKind == TypeKind.Struct && (type.IsUnmanagedType || ReadStructLayoutOption(type.GetAttributes()) == 1) &&
+            bool packed = type.TypeKind == TypeKind.Struct && (type.IsUnmanagedType || DeclaredStructLayout(type) == 1) &&
                 LayoutStrategy(type) == 1;
-            if (packed && (GenerationMode(type) != PayloadGeneration.Default || !SupportedPortableStorage(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default))))
-                diagnostics.Add(DiagnosticDescriptors.UnsupportedPortableStorage, type, type.ToDisplayString());
+            if (packed && (SelectedGeneration(type) != PayloadGeneration.Default || !SupportedPortableStorage(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default))))
+                diagnostics.Add(DiagnosticInfo.Capture(DiagnosticDescriptors.UnsupportedPortableStorage.Id,
+                    location ?? type.Locations.FirstOrDefault(item => item.IsInSource), new[] { type.ToDisplayString() }));
         }
 
         /// <summary>Finds unsupported Packed payloads among closed array and framework formatter arguments.</summary>
@@ -178,7 +259,7 @@ internal static partial class TypeModelFactory
         /// <param name="type">The field storage type.</param>
         /// <param name="visited">Storage nodes already checked in this declaration.</param>
         /// <returns>Whether every storage node has the legacy portable representation.</returns>
-        private static bool SupportedPortableStorage(ITypeSymbol type, HashSet<ITypeSymbol> visited)
+        private bool SupportedPortableStorage(ITypeSymbol type, HashSet<ITypeSymbol> visited)
         {
             if (!visited.Add(type) || PortableScalarSize(type) != 0 || type is INamedTypeSymbol leaf && Opaque(leaf) != null)
                 return true;
@@ -186,7 +267,7 @@ internal static partial class TypeModelFactory
                 return parameter.HasUnmanagedTypeConstraint;
             if (type is not INamedTypeSymbol { IsUnmanagedType: true, TypeKind: TypeKind.Struct } named ||
                 named.SpecialType is SpecialType.System_IntPtr or SpecialType.System_UIntPtr || IsRuntimeSizedVector(named) ||
-                GenerationMode(named) == PayloadGeneration.Custom || HasAttribute(named, "System.Runtime.CompilerServices.InlineArrayAttribute"))
+                SelectedGeneration(named) == PayloadGeneration.Custom || HasAttribute(named, "System.Runtime.CompilerServices.InlineArrayAttribute"))
                 return false;
             PortablePlanField[]? fields = PlanFields(named, strict: true);
             return fields != null && fields.All(field => SupportedPortableStorage(field.Type, visited));

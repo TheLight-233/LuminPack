@@ -42,7 +42,7 @@ internal static class GeneratorOptionsFactory
     private static bool AssemblySwitch(Compilation compilation, string option)
     {
         foreach (AttributeData attribute in compilation.Assembly.GetAttributes())
-            if (attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOptionAttribute")
+            if (TypeModelFactory.IsUntargetedOption(attribute))
                 foreach (var argument in attribute.NamedArguments)
                     if (argument.Key == option && argument.Value.Value is true)
                         return true;

@@ -8,6 +8,7 @@ All attributes and `GeneratorType` are in `LuminPack.Attribute`. String option e
 | --- | --- | --- |
 | `[LuminPackable]` | class, struct, record, interface | Mark a type for generation. |
 | `[assembly: LuminPackable(typeof(T))]` | assembly | Generate a type from a referenced assembly; repeatable; open generics (`typeof(G<>)`) cover the closed types used; works for Union roots. |
+| `[assembly: LuminPackOption(typeof(T), ...)]` | assembly | Configure a marked import. Type-owned settings take precedence, then exact and open target settings, then consumer assembly defaults. |
 | `[LuminPackOption(GeneratorType = ...)]` | `[LuminPackable]` type | `Default` uses the default representation. `Version` gives record members name keys. `Custom` registers the type's own static methods. |
 | `[LuminPackOption(IncludeDerivedTypes = true)]` | `[LuminPackable]` class | Generate source-derived classes through the inheritance chain. Each derived class selects its own options. |
 | `[LuminPackUnion(tag, typeof(Case))]` | interface, abstract class | Declare a Union case explicitly (tags 0..65535; below 250 is one byte). Cases marked `[LuminPackable]` are also collected automatically. |

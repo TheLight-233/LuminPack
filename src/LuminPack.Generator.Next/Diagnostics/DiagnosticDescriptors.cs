@@ -32,6 +32,10 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor InvalidPackableMarker = Error(
         "LuminPack113", "Invalid LuminPackable marker", "{0}");
 
+    /// <summary>Rejects misplaced or duplicate serialization options on one target.</summary>
+    public static readonly DiagnosticDescriptor InvalidOptionTarget = Error(
+        "LuminPack123", "Invalid LuminPackOption target", "{0}");
+
     /// <summary>Rejects reference metadata that cannot prove an imported automatic property's storage contract.</summary>
     public static readonly DiagnosticDescriptor IncompleteReferencedPropertyStorage = Error(
         "LuminPack112", "Imported automatic-property storage is missing",
@@ -364,6 +368,7 @@ internal static class DiagnosticDescriptors
         [InaccessiblePoolRent.Id] = InaccessiblePoolRent,
         [ConstructorParameterCannotReceiveMember.Id] = ConstructorParameterCannotReceiveMember,
         [InvalidPackableMarker.Id] = InvalidPackableMarker,
+        [InvalidOptionTarget.Id] = InvalidOptionTarget,
         [IncompleteReferencedPropertyStorage.Id] = IncompleteReferencedPropertyStorage,
         [UnsupportedPortableStorage.Id] = UnsupportedPortableStorage,
         [InvalidCompiledOption.Id] = InvalidCompiledOption,

@@ -47,6 +47,17 @@ public partial class Message
 
 JSON 属性名使用针对各编码生成的[名称查找](json-name-lookup.cn.md)，哈希不会代替完整名称比较。
 
+## 引用程序集类型的专属选项
+
+对已用程序集级 `LuminPackable` 标记的外部类型，可在同一程序集上用 `LuminPackOption(typeof(T), ...)` 指定生成选项。
+
+```csharp
+[assembly: LuminPackable(typeof(Vendor.Message))]
+[assembly: LuminPackOption(typeof(Vendor.Message), StringEncoding = LuminPackStringEncoding.UTF8)]
+```
+
+每个目标可声明一个专属选项。对泛型导入，`typeof(Vendor.Message<>)` 这样的开放目标为闭合用法提供选项，也可用精确目标配置某个闭合类型。类型声明上的显式选项优先于专属选项，专属选项优先于消费程序集的默认设置。二进制读写端应采用相同的 wire 相关选项。
+
 ## 完整二进制输入
 
 使用 `[assembly: LuminPackOption(RequireCompleteBinaryInput = true)]` 后，每次返回值的 `Deserialize<T>` 或 `DeserializeAsync<T>` 调用都必须消费一条完整的二进制记录。该选项适用于 span、序列、可复用缓冲区和流，也适用于显式指定操作配置的调用。解码成功后若仍有尾随字节，将抛出 `InvalidDataException`。`ref` 重载仍返回单条记录消费的字节数，推进式读取仍将游标停在该记录之后。

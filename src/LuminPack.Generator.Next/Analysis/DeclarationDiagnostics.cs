@@ -60,7 +60,7 @@ internal static partial class TypeModelFactory
                 diagnostics.Add(DiagnosticDescriptors.InaccessiblePayloadScope, type, type.ToDisplayString());
             if (HasAttribute(type, BoundedAttribute) && !ValidBound(type))
                 diagnostics.Add(DiagnosticDescriptors.InvalidBoundedSize, type, type.ToDisplayString());
-            PayloadGeneration mode = GenerationMode(type);
+            PayloadGeneration mode = SelectedGeneration(type);
             if (mode == PayloadGeneration.Custom)
             {
                 ValidateCustom(type, ref diagnostics);
@@ -119,7 +119,7 @@ internal static partial class TypeModelFactory
             if (members.Count > 249)
                 diagnostics.Add(DiagnosticDescriptors.MembersCountOver250, type, type.Name, members.Count.ToString(CultureInfo.InvariantCulture));
             ValidateVersionNames(type, members, mode == PayloadGeneration.LegacyTrackedVersion ? PayloadGeneration.Version : mode, ref diagnostics);
-            if (TracksReferences(type))
+            if (TracksTypeReferences(type))
                 ValidateReferenceJsonNames(type, members, ref diagnostics);
             ValidateCallbacks(type, ref diagnostics);
             if (!union && !type.IsStatic)
@@ -292,9 +292,9 @@ internal static partial class TypeModelFactory
         /// <param name="type">The imported payload.</param>
         /// <param name="member">The consuming storage declaration.</param>
         /// <param name="diagnostics">Receives storage reconstruction errors.</param>
-        private static void ValidateImportedStorage(INamedTypeSymbol type, ISymbol member, ref DeclarationDiagnosticBag diagnostics)
+        private void ValidateImportedStorage(INamedTypeSymbol type, ISymbol member, ref DeclarationDiagnosticBag diagnostics)
         {
-            if (type.TypeKind != TypeKind.Class || type.IsAbstract || type.DeclaringSyntaxReferences.Length != 0 || GenerationMode(type) == PayloadGeneration.Custom)
+            if (type.TypeKind != TypeKind.Class || type.IsAbstract || type.DeclaringSyntaxReferences.Length != 0 || SelectedGeneration(type) == PayloadGeneration.Custom)
                 return;
             foreach (INamedTypeSymbol level in Levels(type))
             {

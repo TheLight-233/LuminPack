@@ -166,8 +166,28 @@ internal static partial class NextPipeline
     /// <returns>The declaration option diagnostics.</returns>
     private static ImmutableArray<DiagnosticInfo> InvalidOptionScopes(GeneratorAttributeSyntaxContext context)
     {
+        if (context.TargetSymbol is IAssemblySymbol)
+            return ImmutableArray<DiagnosticInfo>.Empty;
+
         ImmutableArray<DiagnosticInfo>.Builder? diagnostics = null;
+        bool seen = false;
+        foreach (AttributeData option in context.TargetSymbol.GetAttributes())
+        {
+            if (!TypeModelFactory.IsUntargetedOption(option) || option.AttributeConstructor == null)
+                continue;
+            if (seen)
+                Report(DiagnosticDescriptors.InvalidOptionTarget.Id, option, new[] { "Apply LuminPackOption only once per type, field or property." });
+            seen = true;
+        }
         foreach (AttributeData attribute in context.Attributes)
+        {
+            if (attribute.AttributeConstructor == null)
+                continue;
+            if (!TypeModelFactory.IsUntargetedOption(attribute))
+            {
+                Report(DiagnosticDescriptors.InvalidOptionTarget.Id, attribute, new[] { "Use the typeof argument only on an assembly LuminPackOption." });
+                continue;
+            }
             foreach (var argument in attribute.NamedArguments)
             {
                 string? error = argument.Key switch
@@ -179,11 +199,14 @@ internal static partial class NextPipeline
                     _ => null,
                 };
                 if (error != null)
-                    (diagnostics ??= ImmutableArray.CreateBuilder<DiagnosticInfo>()).Add(DiagnosticInfo.Capture(
-                        DiagnosticDescriptors.InvalidCompiledOption.Id, attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
-                        new[] { argument.Key, error }));
+                    Report(DiagnosticDescriptors.InvalidCompiledOption.Id, attribute, new[] { argument.Key, error });
             }
+        }
         return diagnostics?.ToImmutable() ?? ImmutableArray<DiagnosticInfo>.Empty;
+
+        void Report(string id, AttributeData option, string[] arguments) =>
+            (diagnostics ??= ImmutableArray.CreateBuilder<DiagnosticInfo>()).Add(DiagnosticInfo.Capture(
+                id, option.ApplicationSyntaxReference?.GetSyntax().GetLocation(), arguments));
     }
 
     /// <summary>Models the referenced types the consuming assembly marks as external roots.</summary>
@@ -199,6 +222,8 @@ internal static partial class NextPipeline
         if (marked.Count == 0)
             return ImmutableArray<ModeledPayload>.Empty;
         GeneratorOptions options = GeneratorOptionsFactory.From(compilation);
+        if (DiagnosticDescriptors.HasErrors(TypeModelFactory.DiagnoseAssembly(compilation, options)))
+            return ImmutableArray<ModeledPayload>.Empty;
         Compilation view = TypeModelFactory.Complete(compilation);
         using var names = ReadableTypeName.Use(options.AmbiguousNames);
         var payloads = ImmutableArray.CreateBuilder<ModeledPayload>(marked.Count);
@@ -207,6 +232,12 @@ internal static partial class NextPipeline
             cancellationToken.ThrowIfCancellationRequested();
             if (type.IsGenericType && type.IsDefinition && !TypeModelFactory.IsUnion(type))
                 continue;
+            if (TypeModelFactory.ExternalCustomRegistration(type, compilation, options, out bool customJson) is { } customType)
+            {
+                payloads.Add(new ModeledPayload(ModelResult.Unsupported("Custom owns its formatter"), options,
+                    Array.Empty<DiagnosticInfo>(), CustomRegistrationSource.Block(customType, customJson)));
+                continue;
+            }
             INamedTypeSymbol complete = TypeModelFactory.InView(type, view);
             DiagnosticInfo[] missing = TypeModelFactory.MissingStorage(complete);
             ModelResult result = missing.Length != 0 ? ModelResult.Unsupported("imported storage is incomplete") :

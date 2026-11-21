@@ -152,7 +152,7 @@ internal static partial class TypeModelFactory
                     reuseArraySlots |= Options.Net8 && element is
                         { OrdinaryObject: true, Definition: FormatterDefinitions.PayloadReference,
                             Payload: RecordModel { Versioned: false, Derived: false, Constructor: null, Callbacks: null, Rent: null, Rejection: null } } &&
-                        array.ElementType is INamedTypeSymbol declaration && OptionSwitch(declaration, "ReuseRectangularArraySlots", true);
+                        array.ElementType is INamedTypeSymbol declaration && TypeSwitch(declaration, "ReuseRectangularArraySlots", true);
                 }
                 return new FormatterModel(spelling, FormatterDefinitions.Array, new[] { element }, rank: array.Rank,
                     reuseArraySlots: reuseArraySlots);
@@ -160,7 +160,7 @@ internal static partial class TypeModelFactory
 
             if (type is not INamedTypeSymbol named)
                 return null;
-            if (GenerationMode(named) is PayloadGeneration.Custom or PayloadGeneration.LegacyManual)
+            if (SelectedGeneration(named) is PayloadGeneration.Custom or PayloadGeneration.LegacyManual)
                 return new FormatterModel(spelling, FormatterDefinitions.Registered);
             if (IsUnsupportedPackedStorage(named))
                 return null;
@@ -172,7 +172,7 @@ internal static partial class TypeModelFactory
             bool isNullable = named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
             FormatterStorageModel? layout = isNullable ? null : FormatterStorage(named);
             bool rawCollection = named.IsUnmanagedType && !isNullable && layout == null &&
-                !ContainsCustomContract(named, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
+                !ContainsNonRawContract(named, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
             if (FormatterDefinitions.HasGeneric(definition) || FormatterRegistry.FindSequence(definition) != null || FormatterRegistry.FindDictionary(spelling) != null)
             {
                 var arguments = new FormatterModel[named.Arity];
@@ -194,7 +194,7 @@ internal static partial class TypeModelFactory
                 return new FormatterModel(spelling, definition, arguments, raw, rawCollection, layout);
             }
 
-            bool ordinary = named.TypeKind == TypeKind.Class && !TracksReferences(named) && GenerationMode(named) == PayloadGeneration.Default &&
+            bool ordinary = named.TypeKind == TypeKind.Class && !TracksTypeReferences(named) && SelectedGeneration(named) == PayloadGeneration.Default &&
                 !HasAttribute(named, UnionAttribute) && !HasAttribute(named, "System.Runtime.CompilerServices.UnionAttribute");
             if (path.Active.Contains(named))
                 return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, ordinaryObject: ordinary);
@@ -300,17 +300,22 @@ internal static partial class TypeModelFactory
         /// <param name = "model">The normalized formatter or storage contract.</param>
         /// <returns>Whether the requested contract or capability is available.</returns>
         private bool CanPublish(TypeModel model) => (model is StructModel { StoragePlan: not null } || RenderModelFactory.Create(model, Options) != null) && (model is UnionModel || RenderModelFactory.Create(model, Options, json: true) != null);
-        /// <summary>Checks complete unmanaged storage for explicit custom contracts.</summary>
+        /// <summary>Checks whether any nested value uses a formatter instead of direct unmanaged storage.</summary>
         /// <param name = "type">The declared type or its source-ready spelling.</param>
         /// <param name = "visited">The visited used by this operation.</param>
         /// <returns>Whether the requested contract or capability is available.</returns>
-        private static bool ContainsCustomContract(ITypeSymbol type, HashSet<ITypeSymbol> visited)
+        private bool ContainsNonRawContract(ITypeSymbol type, HashSet<ITypeSymbol> visited)
         {
             if (!visited.Add(type))
                 return false;
             if (type is not INamedTypeSymbol named)
                 return false;
-            return GenerationMode(named) is PayloadGeneration.Custom or PayloadGeneration.LegacyManual || named.TypeArguments.Any(item => ContainsCustomContract(item, visited)) || named.TypeKind == TypeKind.Struct && named.GetMembers().OfType<IFieldSymbol>().Any(field => !field.IsStatic && ContainsCustomContract(field.Type, visited));
+            PayloadGeneration generation = SelectedGeneration(named);
+            return generation is PayloadGeneration.Custom or PayloadGeneration.LegacyManual ||
+                generation == PayloadGeneration.Version && TargetedOptionValue(named, "GeneratorType") != null ||
+                named.TypeArguments.Any(item => ContainsNonRawContract(item, visited)) ||
+                named.TypeKind == TypeKind.Struct && named.GetMembers().OfType<IFieldSymbol>()
+                    .Any(field => !field.IsStatic && ContainsNonRawContract(field.Type, visited));
         }
 
         /// <summary>Normalizes the established Packed, Native and Tagged layout selection.</summary>
@@ -318,7 +323,7 @@ internal static partial class TypeModelFactory
         /// <returns>The normalized result of the operation.</returns>
         private FormatterStorageModel? FormatterStorage(INamedTypeSymbol type)
         {
-            if (!type.IsUnmanagedType || GenerationMode(type) != PayloadGeneration.Default)
+            if (!type.IsUnmanagedType || SelectedGeneration(type) != PayloadGeneration.Default)
                 return null;
             int strategy = LayoutStrategy(type);
             PortablePlan? plan;
@@ -344,7 +349,7 @@ internal static partial class TypeModelFactory
             if (!(value.Raw && value.RawStorage && value.Layout == null) &&
                 (value.Layout is not { Tagged: true, Volatile: false } ||
                  !(value.Definition == GenericIdentity.ValueTuple || value.Payload is StructModel { Versioned: false }) ||
-                 ContainsCustomContract(payload, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default))))
+                 ContainsNonRawContract(payload, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default))))
                 return default;
 
             int strategy = LayoutStrategy(payload);

@@ -305,6 +305,11 @@ try
         SerializerAssemblyPackableRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-targeted-assembly-options"])
+    {
+        SerializerAssemblyOptionsRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-external-union"])
     {
         SerializerExternalUnionRegression.Run(references);
@@ -477,6 +482,7 @@ try
     SerializerRootApiRegression.Run(references);
     SerializerAdvancingApiRegression.Run(references);
     SerializerAssemblyPackableRegression.Run(references);
+    SerializerAssemblyOptionsRegression.Run(references);
     SerializerGenericOverloadRegression.Run(references);
     SerializerFormatterDispatchRegression.Run(references);
     SerializerReviewRegression.Run(references);

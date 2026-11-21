@@ -151,7 +151,7 @@ internal static partial class TypeModelFactory
         /// <param name="passing">The payload passing convention.</param>
         /// <param name="required">Whether a missing operation is an error.</param>
         /// <param name="diagnostics">Receives signature diagnostics.</param>
-        private static void ValidateCustomMethod(INamedTypeSymbol type, string name, string state, RefKind passing, bool required,
+        private void ValidateCustomMethod(INamedTypeSymbol type, string name, string state, RefKind passing, bool required,
             ref DeclarationDiagnosticBag diagnostics)
         {
             IMethodSymbol? method = CustomMethod(type, name);
@@ -168,7 +168,8 @@ internal static partial class TypeModelFactory
             }
             if (!method.IsStatic)
                 diagnostics.Add(DiagnosticDescriptors.CustomMethodMustBeStatic, method, display, name);
-            if (method.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
+            if (method.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal) ||
+                !_compilation.IsSymbolAccessibleWithin(method, _compilation.Assembly))
                 diagnostics.Add(DiagnosticDescriptors.CustomMethodMustBeAccessible, method, display, name);
             if (method.IsGenericMethod || !method.ReturnsVoid || method.Parameters.Length != 2 ||
                 method.Parameters[0].RefKind != RefKind.Ref ||

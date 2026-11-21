@@ -328,14 +328,30 @@ public enum LuminPackRegisterMode : byte
 /// <remarks>
 /// Unspecified properties inherit the enclosing declaration's options. Assembly options override the library defaults;
 /// type and member declarations override the corresponding enclosing scope. Binary string settings can vary by member.
+/// An assembly can supply options for a specific referenced type with the type-taking constructor.
 /// JSON encoding, depth and syntax policy describe a complete document and are selected at its root.
 /// GeneratorType, IncludeDerivedTypes, WideTag, SingleImplementation, TrackReferences and ReuseRectangularArraySlots
 /// apply to individual types and do not inherit enclosing options.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Struct |
-    AttributeTargets.Interface | AttributeTargets.Field | AttributeTargets.Property, Inherited = false)]
+    AttributeTargets.Interface | AttributeTargets.Field | AttributeTargets.Property, Inherited = false, AllowMultiple = true)]
 public sealed class LuminPackOptionAttribute : System.Attribute
 {
+    /// <summary>Gets the referenced type selected by a targeted assembly option.</summary>
+    public System.Type? TargetType { get; }
+
+    /// <summary>Declares serialization options for the assembly, type or member carrying this attribute.</summary>
+    public LuminPackOptionAttribute()
+    {
+    }
+
+    /// <summary>Declares options for a referenced type marked for generation in the current assembly.</summary>
+    /// <param name="targetType">The external type or open generic definition to configure.</param>
+    public LuminPackOptionAttribute(System.Type targetType)
+    {
+        TargetType = targetType ?? LuminPackExceptionHelper.ThrowArgumentNullException<System.Type>(nameof(targetType));
+    }
+
     /// <summary>Gets or sets the source-generated serialization mode of a LuminPackable type.</summary>
     /// <remarks>Applies only to the annotated type and is independent of operation profiles.</remarks>
     public GeneratorType GeneratorType { get; set; } = GeneratorType.Default;

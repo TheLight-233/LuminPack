@@ -47,6 +47,17 @@ Binary data may mix encodings member by member, but the writer and reader must u
 
 JSON property names use encoding-specific, generated [name lookups](json-name-lookup.md); hashes never replace exact name comparison.
 
+## Options for types from referenced assemblies
+
+Use `LuminPackOption(typeof(T), ...)` at assembly scope to configure a type selected by an assembly-level `LuminPackable` marker.
+
+```csharp
+[assembly: LuminPackable(typeof(Vendor.Message))]
+[assembly: LuminPackOption(typeof(Vendor.Message), StringEncoding = LuminPackStringEncoding.UTF8)]
+```
+
+Each target takes one option attribute. For generic imports, an open target such as `typeof(Vendor.Message<>)` supplies options to its closed uses, and an exact target can customize a particular construction. Explicit options on the type's declaration take precedence over the targeted settings, which in turn take precedence over the consuming assembly's defaults. Match wire-related options at both binary endpoints.
+
 ## Complete binary input
 
 Use `[assembly: LuminPackOption(RequireCompleteBinaryInput = true)]` to require one complete binary record in each `Deserialize<T>` or `DeserializeAsync<T>` call that returns a value. This applies to spans, sequences, reusable buffers and streams, including calls with an explicit operation profile. A successful decode followed by trailing bytes throws `InvalidDataException`. The `ref` overloads still return the bytes consumed by one record, and advancing readers still leave the cursor after that record.

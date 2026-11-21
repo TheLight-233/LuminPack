@@ -61,6 +61,8 @@ The generator only sees the source of the current assembly. To generate a type d
 
 Their private fields and auto-properties are serialized just like those of local types. The type and the constructor used for reading must be accessible.
 
+Use a [targeted assembly option](options.md#options-for-types-from-referenced-assemblies) to configure generation for one imported type.
+
 A Union root from a referenced assembly can be listed the same way. Local `partial` cases then plug into the root automatically, so no manual registration is needed. The generated members that make this work are hidden from IntelliSense.
 
 ## Manual registration
