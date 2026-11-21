@@ -10,7 +10,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering;
 internal static class GeneratedText
 {
     private static readonly Regex Classes = new(@"(?m)^\s*(?:(?:public|internal|private|protected|static|sealed|abstract|partial|readonly)\s+)*(?:class|struct|interface)\s+(\w+)", RegexOptions.Compiled);
-    private static readonly Regex Methods = new(@"(?m)^(?<indent>[ \t]*)(?:public|internal|private|protected)\s+static\s+(?:unsafe\s+)?(?:ref\s+)?[\w.:<>?,\[\]]+\s+(?<name>\w+)\s*(?=<|\()", RegexOptions.Compiled);
+    private static readonly Regex Methods = new(@"(?m)^(?<indent>[ \t]*)(?:public|internal|private|protected)\s+static\s+(?:unsafe\s+)?(?:ref\s+)?[\w@.:<>?,\[\]]+\s+(?<name>\w+)\s*(?=<|\()", RegexOptions.Compiled);
     internal static readonly Regex Calls = new(@"(?<![\w@])(?<target>(?:global::)?[A-Za-z_@][\w@]*(?:\.[A-Za-z_@][\w@]*)*)\s*(?=<|\()", RegexOptions.Compiled);
     internal static readonly Regex Words = new(@"(?<![\w@.:])[A-Za-z_@][\w@]*", RegexOptions.Compiled);
 
