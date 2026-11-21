@@ -96,6 +96,36 @@ public sealed unsafe class JsonDeepLookaheadTest
         }
     }
 
+    /// <summary>Checks UTF-16 lookahead with quotes and invalid characters at the vector boundary.</summary>
+    [Fact]
+    public void Utf16StringLookaheadValidatesThePrefixBeforeAQuote()
+    {
+        for (int length = 0; length <= 8; length++)
+        {
+            string prefix = new string('a', length);
+            Check("[\"" + prefix + "\",\"following\"]", 2);
+            Check("[\"" + prefix + "\\\"b\",\"following\"]", 2);
+            Check("[\"" + prefix + "\\q\",\"following\"]", null);
+            Check("[\"" + prefix + "\u001f\",\"following\"]", null);
+        }
+        Check("[\"a\"]", 1);
+        Check("[\"unterminated", null);
+
+        static void Check(string text, int? expected)
+        {
+            ReadOnlySpan<byte> input = Encoding.Unicode.GetBytes(text);
+            var reader = new LuminPackJsonReader(ref input, null!);
+            Assert.True(reader.Read<LuminPackUtf16LengthOptions>());
+            int position = reader.Position;
+            int? count = null;
+            try { count = reader.CountArrayElements<LuminPackUtf16LengthOptions>(); }
+            catch (FormatException) { }
+            Assert.Equal(expected, count);
+            Assert.Equal(position, reader.Position);
+            Assert.Equal(LuminPackJsonReader.JsonTokenType.ArrayStart, reader.CurrentTokenType);
+        }
+    }
+
     /// <summary>Checks ordinary deep grammar state stays inline through the supported depth window.</summary>
     /// <param name="depth">The nesting depth to exercise.</param>
     /// <param name="utf16">Whether the complete input contains UTF-16 code units.</param>

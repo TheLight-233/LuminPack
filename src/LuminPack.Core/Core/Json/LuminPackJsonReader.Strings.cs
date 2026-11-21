@@ -8,6 +8,10 @@ using System.Text;
 using LuminPack.Code;
 using LuminPack.Option;
 using LuminPack.Utility;
+#if NET8_0_OR_GREATER
+using System.Numerics;
+using System.Runtime.Intrinsics;
+#endif
 
 namespace LuminPack.Core
 {
@@ -1504,7 +1508,9 @@ namespace LuminPack.Core
             int available = (int)((uint)(Buffer.Length - start) >> 1);
             ref char first = ref Unsafe.As<byte, char>(ref Current);
             var charSpan = LuminPackMarshal.CreateReadOnlySpan(ref first, available);
-            int special = charSpan.IndexOfAny(NumberCharLookup.StringSpecialChars);
+            int special = unescape ? -1 : FindPlainUtf16Quote<TOptions>(charSpan);
+            if (special < 0)
+                special = charSpan.IndexOfAny(NumberCharLookup.StringSpecialChars);
             if (special >= 0 && charSpan[special] == '"')
             {
                 AdvanceFromPosition(start, (special + 1) * sizeof(char));
@@ -1585,6 +1591,33 @@ namespace LuminPack.Core
         }
 
 #if NET8_0_OR_GREATER
+        /// <summary>Finds a closing quote in the first vector when no preceding character needs validation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <param name="characters">The complete UTF-16 code units inside the current input window.</param>
+        /// <returns>The quote index, or minus one to use the full character search.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int FindPlainUtf16Quote<TOptions>(ReadOnlySpan<char> characters) where TOptions : struct, ILuminPackOptions
+        {
+            if (Unsafe.SizeOf<IntPtr>() != 8 || !Vector128.IsHardwareAccelerated ||
+                !LuminPackMarshal.ConstantStringProfile<TOptions>() || characters.Length < Vector128<ushort>.Count)
+                return -1;
+
+            ref ushort first = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(characters));
+            var block = Vector128.LoadUnsafe(ref first);
+            var quote = Vector128.Equals(block, Vector128.Create((ushort)'"'));
+            uint quotes = Vector128.ExtractMostSignificantBits(quote.AsByte());
+            if (quotes == 0)
+                return -1;
+
+            var slash = Vector128.Equals(block, Vector128.Create((ushort)'\\'));
+            var upper = block & Vector128.Create((ushort)0xffe0);
+            var control = Vector128.Equals(upper, Vector128<ushort>.Zero);
+            uint invalid = Vector128.ExtractMostSignificantBits((slash | control).AsByte());
+            int firstQuote = BitOperations.TrailingZeroCount(quotes);
+            // Each UTF-16 lane contributes two bits. Only the lanes before the first quote belong to this token.
+            return (invalid & ((1u << firstQuote) - 1)) == 0 ? firstQuote >> 1 : -1;
+        }
+
         /// <summary>Finds the next string delimiter, escape or control within the remaining input window.</summary>
         /// <typeparam name="TOptions">The compiled document encoding.</typeparam>
         /// <param name="scan">The first unscanned byte offset.</param>
