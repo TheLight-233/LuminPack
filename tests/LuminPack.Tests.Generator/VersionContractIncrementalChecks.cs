@@ -25,7 +25,8 @@ internal static class VersionContractIncrementalChecks
         var renamed = CSharpSyntaxTree.ParseText(
             model.Replace("FirstName", "SecondName", StringComparison.Ordinal), parse, original.FilePath);
         var tracked = CSharpSyntaxTree.ParseText(
-            renamed.ToString().Replace("public sealed class", "[LuminPackOption(TrackReferences = true)]\npublic sealed class", StringComparison.Ordinal),
+            renamed.ToString().Replace("GeneratorType = GeneratorType.Version", "GeneratorType = GeneratorType.Version, TrackReferences = true",
+                StringComparison.Ordinal),
             parse, original.FilePath);
         var neighbor = CSharpSyntaxTree.ParseText(
             "[LuminPack.Attribute.LuminPackable] public sealed class UnchangedModel { public long Value; }",
