@@ -23,6 +23,32 @@ public struct LuminPackFormatter
     public Delegate? WriteValueJson;
     /// <summary>Stores the read value json.</summary>
     public Delegate? ReadValueJson;
+
+    /// <summary>Validates explicit registration arguments and captures the complete delegate entry.</summary>
+    /// <param name="type">The registration's lifetime owner.</param>
+    /// <param name="writeValue">The required binary writer delegate.</param>
+    /// <param name="readValue">The required binary reader delegate.</param>
+    /// <param name="writeValueJson">The optional JSON writer delegate.</param>
+    /// <param name="readValueJson">The optional JSON reader delegate.</param>
+    /// <returns>The validated formatter entry.</returns>
+    internal static LuminPackFormatter CreateRegistration(Type type, Delegate writeValue, Delegate readValue,
+        Delegate? writeValueJson, Delegate? readValueJson)
+    {
+        if (type is null)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(type));
+        if (writeValue is null)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(writeValue));
+        if (readValue is null)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(readValue));
+
+        return new LuminPackFormatter
+        {
+            WriteValue = writeValue,
+            ReadValue = readValue,
+            WriteValueJson = writeValueJson,
+            ReadValueJson = readValueJson
+        };
+    }
 }
 
 /// <summary>
@@ -51,24 +77,8 @@ public static class LuminPackFormatterRegistry
         Delegate? writeValueJson = null,
         Delegate? readValueJson = null)
     {
-        if (type is null)
-            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(type));
-        if (writeValue is null)
-            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(writeValue));
-        if (readValue is null)
-            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(readValue));
-
-        var entry = new LuminPackFormatter
-        {
-            WriteValue = writeValue,
-            ReadValue = readValue,
-            WriteValueJson = writeValueJson,
-            ReadValueJson = readValueJson
-        };
-
-        if (!s_entries.TryAdd(type, entry))
-            LuminPackExceptionHelper.ThrowArgumentException("A formatter for this type is already registered.");
-        Interlocked.Increment(ref LuminPackCompiledFormatterTables.Revision);
+        var entry = LuminPackFormatter.CreateRegistration(type, writeValue, readValue, writeValueJson, readValueJson);
+        s_entries.PublishExplicit(type, entry, "A formatter for this type is already registered.");
     }
 
     /// <summary>Looks up the registered entry for a MethodTable key.</summary>
@@ -98,19 +108,8 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
         Delegate? writeValueJson = null,
         Delegate? readValueJson = null)
     {
-        if (type is null)
-            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(type));
-        if (writeValue is null)
-            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(writeValue));
-        if (readValue is null)
-            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(readValue));
-        var entry = new LuminPackFormatter { WriteValue = writeValue, ReadValue = readValue, WriteValueJson = writeValueJson,
-            ReadValueJson = readValueJson };
-        // Resolve the closed profile before publishing its immutable entry.
-        var entries = s_entries;
-        if (!entries.TryAdd(type, entry))
-            LuminPackExceptionHelper.ThrowArgumentException("A formatter for this type and compiled profile is already registered.");
-        Interlocked.Increment(ref LuminPackCompiledFormatterTables.Revision);
+        var entry = LuminPackFormatter.CreateRegistration(type, writeValue, readValue, writeValueJson, readValueJson);
+        s_entries.PublishExplicit(type, entry, "A formatter for this type and compiled profile is already registered.");
     }
 
     /// <summary>Looks up a closed-profile formatter, then the original declaration-owned registration.</summary>

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace LuminPack.Code;
 
@@ -27,6 +28,17 @@ public sealed class LuminPackFormatterTable
             WriteValueJson = writeJson,
             ReadValueJson = readJson
         });
+    }
+
+    /// <summary>Publishes an explicit entry and then invalidates cached lookups.</summary>
+    /// <param name="type">The registration's lifetime owner.</param>
+    /// <param name="formatter">The validated formatter entry.</param>
+    /// <param name="duplicateMessage">The diagnostic for an entry already in this table.</param>
+    internal void PublishExplicit(Type type, LuminPackFormatter formatter, string duplicateMessage)
+    {
+        if (!TryAdd(type, formatter))
+            LuminPackExceptionHelper.ThrowArgumentException(duplicateMessage);
+        Interlocked.Increment(ref LuminPackCompiledFormatterTables.Revision);
     }
 
     /// <summary>Publishes one complete registration for a payload type.</summary>
