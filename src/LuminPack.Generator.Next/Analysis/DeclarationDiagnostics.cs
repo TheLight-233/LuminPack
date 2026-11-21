@@ -43,6 +43,7 @@ internal static partial class TypeModelFactory
         private void ValidateDeclaration(INamedTypeSymbol type, ref DeclarationDiagnosticBag diagnostics)
         {
             ValidateCompiledOptions(type, ref diagnostics);
+            ValidatePackableMarkers(type, ref diagnostics);
             INamedTypeSymbol outermost = type;
             foreach (INamedTypeSymbol scope in ContainingTypes(type))
             {
@@ -59,8 +60,8 @@ internal static partial class TypeModelFactory
                 diagnostics.Add(DiagnosticDescriptors.InaccessiblePayloadScope, type, type.ToDisplayString());
             if (HasAttribute(type, BoundedAttribute) && !ValidBound(type))
                 diagnostics.Add(DiagnosticDescriptors.InvalidBoundedSize, type, type.ToDisplayString());
-            string mode = GenerationMode(type);
-            if (mode == "Custom")
+            PayloadGeneration mode = GenerationMode(type);
+            if (mode == PayloadGeneration.Custom)
             {
                 ValidateCustom(type, ref diagnostics);
                 return;
@@ -117,7 +118,7 @@ internal static partial class TypeModelFactory
             }
             if (members.Count > 249)
                 diagnostics.Add(DiagnosticDescriptors.MembersCountOver250, type, type.Name, members.Count.ToString(CultureInfo.InvariantCulture));
-            ValidateVersionNames(type, members, mode == "CircleReference" ? "VersionTolerant" : mode, ref diagnostics);
+            ValidateVersionNames(type, members, mode == PayloadGeneration.LegacyTrackedVersion ? PayloadGeneration.Version : mode, ref diagnostics);
             if (TracksReferences(type))
                 ValidateReferenceJsonNames(type, members, ref diagnostics);
             ValidateCallbacks(type, ref diagnostics);
@@ -217,10 +218,10 @@ internal static partial class TypeModelFactory
         /// <param name="members">The complete filtered storage.</param>
         /// <param name="mode">The declared generator mode.</param>
         /// <param name="diagnostics">Receives invalid names.</param>
-        private static void ValidateVersionNames(INamedTypeSymbol type, List<ISymbol> members, string mode,
+        private static void ValidateVersionNames(INamedTypeSymbol type, List<ISymbol> members, PayloadGeneration mode,
             ref DeclarationDiagnosticBag diagnostics)
         {
-            Dictionary<uint, string>? names = mode == "VersionTolerant" ? new Dictionary<uint, string>() : null;
+            Dictionary<uint, string>? names = mode == PayloadGeneration.Version ? new Dictionary<uint, string>() : null;
             foreach (ISymbol member in members)
             {
                 bool hasAliases = HasAttribute(member, "LuminPack.Attribute.LuminPackOldNameAttribute");
@@ -228,7 +229,7 @@ internal static partial class TypeModelFactory
                 {
                     if (hasAliases)
                         diagnostics.Add(DiagnosticDescriptors.InvalidVersionMemberName, type, type.Name,
-                            "[LuminPackOldName] requires VersionTolerant mode.");
+                            "[LuminPackOldName] requires version-tolerant mode.");
                     continue;
                 }
                 ValidateVersionName(type, member.Name, names, ref diagnostics);
@@ -293,7 +294,7 @@ internal static partial class TypeModelFactory
         /// <param name="diagnostics">Receives storage reconstruction errors.</param>
         private static void ValidateImportedStorage(INamedTypeSymbol type, ISymbol member, ref DeclarationDiagnosticBag diagnostics)
         {
-            if (type.TypeKind != TypeKind.Class || type.IsAbstract || type.DeclaringSyntaxReferences.Length != 0 || GenerationMode(type) == "Custom")
+            if (type.TypeKind != TypeKind.Class || type.IsAbstract || type.DeclaringSyntaxReferences.Length != 0 || GenerationMode(type) == PayloadGeneration.Custom)
                 return;
             foreach (INamedTypeSymbol level in Levels(type))
             {

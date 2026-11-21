@@ -856,14 +856,14 @@ LuminPackSerializer.Deserialize(bytes, ref target);
     }
 
     /// <summary>Provides a stable length-table slot containing an object.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public sealed class VersionedNode
     {
         [LuminPackOrder(0)] public ReuseNode Child = new();
     }
 
     /// <summary>Provides a tracked recursive object.</summary>
-    [LuminPackable(GeneratorType.CircleReference)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
     public sealed class TrackedNode
     {
         [LuminPackOrder(0)] public int Number;
@@ -975,14 +975,14 @@ LuminPackSerializer.Deserialize(bytes, ref target);
     }
 
     /// <summary>Provides a generic reference slot behind a version table.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public sealed class GenericVersioned<T>
     {
         [LuminPackOrder(0)] public T Child = default!;
     }
 
     /// <summary>Provides a generic reference slot behind identity tracking.</summary>
-    [LuminPackable(GeneratorType.CircleReference)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
     public sealed class GenericTracked<T> where T : class
     {
         [LuminPackOrder(0)] public T Child = default!;
@@ -1028,7 +1028,7 @@ LuminPackSerializer.Deserialize(bytes, ref target);
     }
 
     /// <summary>Retains the same commit boundary inside named version framing.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public sealed class VersionedFailureRoot
     {
         public int Number;

@@ -320,7 +320,7 @@ public sealed partial class ThrowingRecord
 }
 
 /// <summary>A reference-tracked node whose callbacks can run nested reference-tracked operations.</summary>
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
 public sealed partial class ReentrantNode
 {
     /// <summary>Whether the callbacks reenter the serializer.</summary>

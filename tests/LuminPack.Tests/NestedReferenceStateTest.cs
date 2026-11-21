@@ -114,7 +114,7 @@ public class NestedReferenceStateTest
 }
 
 /// <summary>Provides a tracked graph whose aliases survive nested facade operations.</summary>
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
 public sealed class NestedReferenceRoot
 {
     [LuminPackOrder(0)] public NestedReferenceLeaf First = null!;
@@ -123,7 +123,7 @@ public sealed class NestedReferenceRoot
 }
 
 /// <summary>Starts independent operations after the outer graph has registered references.</summary>
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
 public sealed class NestedReferenceLeaf
 {
     internal static bool WriteNested;

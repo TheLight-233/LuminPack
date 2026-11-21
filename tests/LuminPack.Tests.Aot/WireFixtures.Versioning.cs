@@ -130,11 +130,11 @@ namespace LuminPack.WireCompatibility
     }
 
     /// <summary>Stores the same element schema in two independent length-prefixed scopes.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public sealed class WireVersionScopes { public VersionOne[] First = []; public VersionOne[] Second = []; }
 
     /// <summary>Replaces the sender's Int32 member with a Single of equal width.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public sealed class WireVersionConflict { public float Id; }
 
     /// <summary>Uses positional records inside the reference framing.</summary>
@@ -142,15 +142,15 @@ namespace LuminPack.WireCompatibility
     public sealed class WireTrackedObject { public int Value; public WireTrackedObject? Next; }
 
     /// <summary>Uses version records inside the reference framing.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
     public sealed class WireTrackedVersion { public int Value; public WireTrackedVersion? Next; }
 }
 
 /// <summary>Provides the exact global type names stored in the release revision-1 fixture.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public sealed class CompatVersion { public int Id; public string Name = ""; public int[] Values = []; public CompatVersionChild? Child; }
 
 /// <summary>Provides the nested revision-1 fixture type.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public sealed class CompatVersionChild { public bool Flag; public long Stamp; }
 #endif

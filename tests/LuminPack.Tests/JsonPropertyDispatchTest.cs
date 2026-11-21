@@ -64,7 +64,7 @@ public partial class JsonLargeDispatchModel
 }
 
 /// <summary>Combines hashed canonical names and version-tolerant aliases in one metadata table.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial class JsonAliasDispatchModel
 {
     /// <summary>Accepts its canonical name and the historical name.</summary>

@@ -391,9 +391,7 @@ internal static partial class TypeModelFactory
                 named.TypeKind is not (TypeKind.Class or TypeKind.Struct) || named.IsAbstract ||
                 named.IsStatic || named.IsRefLikeType || ContainsOpenParameter(named))
                 return false;
-            AttributeData? packable = named.GetAttributes().FirstOrDefault(attribute => attribute.AttributeClass?.ToDisplayString() == PackableAttribute);
-            if (packable is null || packable.ConstructorArguments.Length == 1 &&
-                !(packable.ConstructorArguments[0].Kind == TypedConstantKind.Enum && Convert.ToInt32(packable.ConstructorArguments[0].Value) is 0 or 1))
+            if (!IsPackable(named) || GenerationMode(named) is not (PayloadGeneration.Default or PayloadGeneration.Version))
                 return false;
             for (INamedTypeSymbol? current = named; current is not null && current.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType);
                  current = current.BaseType)
@@ -407,9 +405,8 @@ internal static partial class TypeModelFactory
                         return false;
                 if (OptionSwitch(current, "WideTag") || OptionSwitch(current, "SingleImplementation"))
                     return false;
-                if (!SymbolEqualityComparer.Default.Equals(current, named) && current.GetAttributes().Any(attribute =>
-                        attribute.AttributeClass?.ToDisplayString() == PackableAttribute && attribute.ConstructorArguments.Length == 1 &&
-                        !(attribute.ConstructorArguments[0].Kind == TypedConstantKind.Enum && Convert.ToInt32(attribute.ConstructorArguments[0].Value) == 0)))
+                if (!SymbolEqualityComparer.Default.Equals(current, named) && IsPackable(current) &&
+                    GenerationMode(current) != PayloadGeneration.Default)
                     return false;
                 foreach (ISymbol member in current.GetMembers())
                 {

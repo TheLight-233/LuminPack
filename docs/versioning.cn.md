@@ -4,12 +4,12 @@
 
 ## 选择模式
 
-默认的 `Object` 模式按位置识别成员，适合读写双方使用相同成员顺序和类型的稳定模型。需要增删、重排或重命名成员时使用 `VersionTolerant`。两种格式均可在具体类上声明 `[LuminPackOption(TrackReferences = true)]`，以支持共享对象与循环。
+默认的 `Default` 模式按位置识别成员，适合读写双方使用相同成员顺序和类型的稳定模型。需要增删、重排或重命名成员时使用 `Version`。两种格式均可在具体类上声明 `[LuminPackOption(TrackReferences = true)]`，以支持共享对象与循环。
 
 ## 版本容忍对象
 
 ```csharp
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial class PlayerV1
 {
     public int Id { get; set; }
@@ -17,7 +17,7 @@ public partial class PlayerV1
     public long Removed { get; set; }
 }
 
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial class PlayerV2
 {
     public List<int>? Scores { get; set; }
@@ -41,7 +41,7 @@ public partial class PlayerV2
   ```
 
 - JSON 读取接受旧名，写入使用当前名称。
-- 需要独立演进的嵌套模型也应使用 `VersionTolerant`，包括集合元素和泛型成员。嵌套的 `Object` 模型及原始结构体各自使用按位置定义的布局。
+- 需要独立演进的嵌套模型也应使用 `Version`，包括集合元素和泛型成员。嵌套的 `Default` 模型及原始结构体各自使用按位置定义的布局。
 - 成员类型、类型所在命名空间及二进制字符串选项须保持兼容。匹配到已知名称键时，读取方要求类型契约哈希和宽度都符合预期；任一不同都会报错。需要修改成员类型时，请使用新名称并在应用代码中转换。
 
 已有对象及其子对象遵循[复用规则](reuse.cn.md)。
@@ -84,8 +84,6 @@ public partial class Node
 }
 ```
 
-声明只作用于被标注的类。对于多态值，引用跟踪由具体 case 的声明决定。类同时需要版本演进时，请在 `[LuminPackable]` 上指定 `GeneratorType.VersionTolerant`。两种格式中的 `LuminPackOrder` 都只决定写入顺序。
+声明只作用于被标注的类。对于多态值，引用跟踪由具体 case 的声明决定。类同时需要版本演进时，在同一个选项中设置 `GeneratorType = GeneratorType.Version`。两种格式中的 `LuminPackOrder` 都只决定写入顺序。
 
-二进制中，对象初次出现时以显式 id 跟踪，随后写 Object 或 VersionTolerant 记录体。后续回引用只写标记 `250` 和对应 id。追加到同一 `LuminBufferWriter` 的记录共享引用状态，读取时须用同一读取状态按顺序读取（见[复用缓冲区](getting-started.cn.md#reusing-a-buffer)）。回引用只能解析读取方已读到的对象。演进版本容忍模型时，被引用对象首次出现的位置应放在旧读取方会读取的成员内。JSON 初次出现时用 `$id`，之后用 `$ref`。这两个名称均保留。
-
-已弃用的 `GeneratorType.CircleReference` 等同于启用引用跟踪的 `GeneratorType.VersionTolerant`。可应用 IDE 代码修复，或改为 `[LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]`，已有的 `LuminPackOrder` 值可以保留。
+二进制中，对象初次出现时以显式 id 跟踪，随后写 按位置编码或版本容忍 记录体。后续回引用只写标记 `250` 和对应 id。追加到同一 `LuminBufferWriter` 的记录共享引用状态，读取时须用同一读取状态按顺序读取（见[复用缓冲区](getting-started.cn.md#reusing-a-buffer)）。回引用只能解析读取方已读到的对象。演进版本容忍模型时，被引用对象首次出现的位置应放在旧读取方会读取的成员内。JSON 初次出现时用 `$id`，之后用 `$ref`。这两个名称均保留。

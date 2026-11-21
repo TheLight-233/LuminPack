@@ -60,6 +60,8 @@ Every root of a shared owner is `NoInlining`. One call into a collection keeps t
 
 Use `[assembly: LuminPackable(typeof(Box<>))]` in the consuming assembly to generate owners for closed `Box<T>` constructions reached by serializer calls or members. Use `typeof(Box<int>)` to select one construction. Marked records inherit the consuming assembly's options and apply their own type and member options. Reference metadata that omits required automatic-property storage reports `LuminPack112`. Reference the implementation assembly when the generated owner needs that storage.
 
+An imported marker whose constructor is unavailable reports `LuminPack113`. Recompile the declaring assembly with the current LuminPack attributes so the generator can recover the type's selected format.
+
 For a marked generic Union defined in a Next-generated library with explicitly declared closed cases, the consumer uses the same canonical hashes and dispatch tier as the defining assembly. Both open and exact root markers work for these Unions.
 
 An annotated reference member with `[LuminPackableObject]` uses its complete generated or registered formatter. An interface

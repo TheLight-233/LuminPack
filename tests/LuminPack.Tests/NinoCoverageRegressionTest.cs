@@ -221,7 +221,7 @@ public sealed class NinoCoverageRegressionTest
 }
 
 /// <summary>Stores read-only wrappers as independently framed versioned members.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public sealed class NinoReadOnlyVersionRecord
 {
     public ReadOnlyMemory<int> Values;

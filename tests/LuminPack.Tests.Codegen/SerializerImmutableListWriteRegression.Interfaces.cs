@@ -13,7 +13,7 @@ internal static partial class SerializerImmutableListWriteRegression
             var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var compilation = CSharpCompilation.Create("ImmutableInterfaces" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(InterfaceSource.Replace("MODE", mode, StringComparison.Ordinal) + UncachedQueueSource, parse, "Entry.cs")], references,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release)).WithLegacyPackableSyntax();
             var driver = Create(parse).RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             using var image = new MemoryStream();

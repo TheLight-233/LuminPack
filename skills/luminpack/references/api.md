@@ -63,7 +63,7 @@ public partial class Message
 | `MaxJsonDepth` | 1024 | ≤ 0 disables. |
 | `ValidateJsonSyntax` | false | Enable for external JSON. |
 | `StandardFormat` | `"G"` | Constant for Custom/formatted kernels. |
-| `TrackReferences` | false | Annotated Object or VersionTolerant class only. Preserves reference identity in binary and JSON. |
+| `TrackReferences` | false | Annotated class in Default or Version mode only. Preserves reference identity in binary and JSON. |
 | `StructLayout` | `Tagged` | Assembly or struct only: `Tagged`, `Packed`, `Native`. |
 | `UntrustedData` | true | Checked binary reads on the ordinary wire format (no envelope; only the reader changes), for objects, version tolerance, reference tracking and Unions. `false` restores trusted reads. Limits are unbounded unless declared: `MaxInputBytes`, `MaxCollectionLength`, `MaxStringLength`, `MaxDepth` (≥ 1, recursive values and JSON depth); `UntrustedData = true` or any declared limit also makes JSON strict. `MaxDecompressedBytes`, `MaxAllocationBytes`, `MaxObjectCount`, `MaxReadWork` are obsolete. Input-selected types (`object`, `System.Type`) fail closed. |
 
@@ -136,7 +136,7 @@ All four methods are required; tags must not collide with generated cases (`Writ
 ## Custom formatters
 
 ```csharp
-[LuminPackable(GeneratorType.Custom)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]
 public sealed class MyVector
 {
     public float X, Y, Z;

@@ -4,12 +4,12 @@
 
 ## Choosing a mode
 
-The default `Object` mode identifies members by position. Use it for stable models whose readers and writers agree on member order and type. Select `VersionTolerant` when members may be added, removed, reordered or renamed. Either format supports shared objects and cycles when the concrete class declares `[LuminPackOption(TrackReferences = true)]`.
+The default `Default` mode identifies members by position. Use it for stable models whose readers and writers agree on member order and type. Select `Version` when members may be added, removed, reordered or renamed. Either format supports shared objects and cycles when the concrete class declares `[LuminPackOption(TrackReferences = true)]`.
 
 ## Version-tolerant objects
 
 ```csharp
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial class PlayerV1
 {
     public int Id { get; set; }
@@ -17,7 +17,7 @@ public partial class PlayerV1
     public long Removed { get; set; }
 }
 
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial class PlayerV2
 {
     public List<int>? Scores { get; set; }
@@ -41,7 +41,7 @@ These two models can read each other's data. The reader skips unknown members an
   ```
 
 - JSON readers accept the old names and JSON writers use the current name.
-- Use `VersionTolerant` for nested models that evolve independently, including elements of a collection and members of a generic model. Nested `Object` models and raw structs keep their own positional layout.
+- Use `Version` for nested models that evolve independently, including elements of a collection and members of a generic model. Nested `Default` models and raw structs keep their own positional layout.
 - Keep member types, their namespaces and binary string options compatible. For a known name key, the reader requires the expected type-contract hash and width. A mismatch is an error. To change a member's type, introduce a new name and handle the conversion in application code.
 
 Existing objects and children follow the [reuse rules](reuse.md).
@@ -82,8 +82,6 @@ public partial class Node
 }
 ```
 
-The declaration applies only to the annotated class. For polymorphic values, the concrete case's declaration controls tracking. Add `GeneratorType.VersionTolerant` to `[LuminPackable]` when the class also needs schema evolution. `LuminPackOrder` only determines write order in either format.
+The declaration applies only to the annotated class. For polymorphic values, the concrete case's declaration controls tracking. Set `GeneratorType = GeneratorType.Version` in the same option when the class also needs schema evolution. `LuminPackOrder` only determines write order in either format.
 
-Binary tracks the first occurrence with an explicit id followed by its Object or VersionTolerant body. A back reference uses marker `250` and that id instead of a body. Records appended to the same `LuminBufferWriter` share reference state. Read them in order with the same reader state (see [reusing a buffer](getting-started.md#reusing-a-buffer)). A back reference can only resolve an object the reader has seen. When evolving a version-tolerant model, keep the first occurrence of a referenced object in a member the older reader will read. JSON uses `$id` on the first occurrence and `$ref` for later references. These property names are reserved.
-
-The obsolete `GeneratorType.CircleReference` declaration means `GeneratorType.VersionTolerant` with tracking enabled. Apply the IDE code fix or change the declaration to `[LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]`. Existing `LuminPackOrder` values can stay in place.
+Binary tracks the first occurrence with an explicit id followed by its positional or version-tolerant body. A back reference uses marker `250` and that id instead of a body. Records appended to the same `LuminBufferWriter` share reference state. Read them in order with the same reader state (see [reusing a buffer](getting-started.md#reusing-a-buffer)). A back reference can only resolve an object the reader has seen. When evolving a version-tolerant model, keep the first occurrence of a referenced object in a member the older reader will read. JSON uses `$id` on the first occurrence and `$ref` for later references. These property names are reserved.

@@ -13,7 +13,7 @@ internal static partial class SerializerImmutableListWriteRegression
             var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var compilation = CSharpCompilation.Create("SetFamilies" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(SetFamilySource.Replace("MODE", mode, StringComparison.Ordinal) + HashConstructionSource, parse, "Entry.cs")], references,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release)).WithLegacyPackableSyntax();
             Create(parse).RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             using var image = new MemoryStream();
@@ -41,7 +41,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     public static string Json(IReadOnlySet<int> value)=>LuminPackSerializer.SerializeJson(value);
                 }
                 """, parse, "Entry.cs")], references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true)).WithLegacyPackableSyntax();
         var frozen = compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenSet`1")!;
         var original = references.OfType<PortableExecutableReference>().Single(reference =>
             SymbolEqualityComparer.Default.Equals(compilation.GetAssemblyOrModuleSymbol(reference), frozen.ContainingAssembly));

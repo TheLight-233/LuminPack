@@ -1,3 +1,5 @@
+extern alias NextAnalyzer;
+
 using System.Collections.Immutable;
 using System.IO.Compression;
 using System.Reflection;
@@ -10,6 +12,7 @@ using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using NextGenerator = NextAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 await CodeFixChecks.RunAsync(args);
 
@@ -73,8 +76,8 @@ internal static class CodeFixChecks
             ("LuminPack034", "[LuminPackable] public partial class Model { [LuminPackCompress] public string[] Values = null!; }"),
             ("LuminPack034", "[LuminPackable] public partial class Model { [LuminPackCompress] public string[] Values { get; set; } = null!; }"),
             ("LuminPack035", "[LuminPackable] public abstract partial class Model { } [LuminPackable] public class Case : Model { }"),
-            ("LuminPack101", "[LuminPackable(GeneratorType.Custom)] public class Model { public void Serialize(ref LuminPackWriter writer, in Model value) { } public static void Deserialize(ref LuminPackReader reader, ref Model value) { } }"),
-            ("LuminPack103", "[LuminPackable(GeneratorType.Custom)] public class Model { private static void Serialize(ref LuminPackWriter writer, in Model value) { } public static void Deserialize(ref LuminPackReader reader, ref Model value) { } }")
+            ("LuminPack101", "[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)] public class Model { public void Serialize(ref LuminPackWriter writer, in Model value) { } public static void Deserialize(ref LuminPackReader reader, ref Model value) { } }"),
+            ("LuminPack103", "[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)] public class Model { private static void Serialize(ref LuminPackWriter writer, in Model value) { } public static void Deserialize(ref LuminPackReader reader, ref Model value) { } }")
         };
         foreach (var test in cases)
         {
@@ -107,14 +110,14 @@ internal static class CodeFixChecks
 
     /// <summary>Runs both generators to obtain their real diagnostic locations and metadata.</summary>
     /// <param name="project">The input project.</param>
+    /// <param name="next">Whether to use the Next generator for the declaration.</param>
     /// <returns>The generator diagnostics.</returns>
-    private static async Task<ImmutableArray<Diagnostic>> DiagnosticsAsync(Project project)
+    private static async Task<ImmutableArray<Diagnostic>> DiagnosticsAsync(Project project, bool next = false)
     {
         var compilation = await project.GetCompilationAsync() ?? throw new InvalidOperationException("Missing compilation.");
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new ISourceGenerator[]
-        {
-            new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()
-        }, parseOptions: (CSharpParseOptions)project.ParseOptions!);
+        ISourceGenerator[] generators = next ? [new NextGenerator().AsSourceGenerator()] :
+            [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()];
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(generators, parseOptions: (CSharpParseOptions)project.ParseOptions!);
         return driver.RunGenerators(compilation).GetRunResult().Diagnostics;
     }
 
@@ -125,7 +128,8 @@ internal static class CodeFixChecks
     /// <returns>The project after applying the fix.</returns>
     private static async Task<Project> VerifyFixAsync(Project project, string id, string? actionText = null)
     {
-        var diagnostics = await DiagnosticsAsync(project);
+        bool next = id is "LuminPack101" or "LuminPack103";
+        var diagnostics = await DiagnosticsAsync(project, next);
         var diagnostic = diagnostics.FirstOrDefault(value => value.Id == id)
             ?? throw new InvalidOperationException($"Expected {id}, got: {string.Join("; ", diagnostics)}");
         var document = project.GetDocument(diagnostic.Location.SourceTree!)!;
@@ -136,7 +140,7 @@ internal static class CodeFixChecks
             ?? throw new InvalidOperationException($"No fix offered for {diagnostic}.");
         Require(action.EquivalenceKey != null, "Every fix must have a stable equivalence key.");
         var changed = (await ApplyAsync(action)).GetProject(project.Id)!;
-        var remaining = await DiagnosticsAsync(changed);
+        var remaining = await DiagnosticsAsync(changed, next);
         Require(!remaining.Any(value => value.Id == id), $"{id} remains after fixing: {string.Join("; ", remaining)}");
         Require(!remaining.Any(value => value.Id is "LuminPack099" or "CS8785"), $"The fix caused a generator failure: {string.Join("; ", remaining)}");
         var compilation = (await changed.GetCompilationAsync())!;
@@ -167,7 +171,7 @@ internal static class CodeFixChecks
         return operations.OfType<ApplyChangesOperation>().Single().ChangedSolution;
     }
 
-    /// <summary>Migrates the actual obsolete enum diagnostic, preserving a preexisting option across partial declarations.</summary>
+    /// <summary>Migrates the removed enum member, preserving options across partial declarations.</summary>
     /// <returns>The asynchronous verification.</returns>
     private static async Task VerifyReferenceModeAsync()
     {
@@ -188,18 +192,24 @@ internal static class CodeFixChecks
             using var workspace = CreateWorkspace(sources);
             var project = workspace.CurrentSolution.Projects.Single();
             var compilation = (await project.GetCompilationAsync())!;
-            var diagnostic = compilation.GetDiagnostics().Single(d => d.Id == "CS0618");
+            var diagnostic = compilation.GetDiagnostics().Single(d => d.Id == "CS0117");
             var document = project.GetDocument(diagnostic.Location.SourceTree!)!;
             var actions = await ActionsAsync(new LuminPackReferenceModeCodeFixProvider(), document, diagnostic);
             Require(actions.Count == 1, "Expected one reference-tracking migration.");
             var changed = (await ApplyAsync(actions[0])).GetProject(project.Id)!;
             var updated = (await changed.GetCompilationAsync())!;
-            Require(!updated.GetDiagnostics().Any(d => d.Id == "CS0618" || d.Severity == DiagnosticSeverity.Error),
-                "The reference migration must compile without the obsolete enum warning.");
-            Require((await changed.Documents.First().GetTextAsync()).ToString().Contains("Mode.VersionTolerant", StringComparison.Ordinal),
-                "Preserve the enum alias and constructor argument name.");
+            Require(!updated.GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error),
+                "The reference migration must compile successfully.");
+            if (sources.Length == 1)
+                Require((await changed.Documents.First().GetTextAsync()).ToString().Contains("Mode.Version", StringComparison.Ordinal),
+                    "Keep the enum alias when it is in scope.");
+            var marker = updated.GetTypeByMetadataName("Node")!.GetAttributes()
+                .Single(item => item.AttributeClass?.Name == "LuminPackableAttribute");
+            Require(marker.ConstructorArguments.IsEmpty, "The migration must leave a parameterless marker.");
             var options = updated.GetTypeByMetadataName("Node")!.GetAttributes()
                 .Single(item => item.AttributeClass?.Name == "LuminPackOptionAttribute");
+            Require(options.NamedArguments.Any(argument => argument.Key == "GeneratorType" && argument.Value.Value is (byte)1),
+                "The migration must select the version mode.");
             Require(options.NamedArguments.Any(argument => argument.Key == "TrackReferences" && argument.Value.Value is true),
                 "The migration must enable tracking on the declaration.");
             if (sources.Length > 1)

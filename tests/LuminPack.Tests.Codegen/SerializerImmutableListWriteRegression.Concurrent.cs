@@ -16,7 +16,7 @@ internal static partial class SerializerImmutableListWriteRegression
         {
             var initial = CSharpCompilation.Create("ConcurrentCases" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(ConcurrentSource.Replace("MODE", mode, StringComparison.Ordinal), parse, "Entry.cs")], references,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release)).WithLegacyPackableSyntax();
             var access = initial.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess")!;
             var original = references.OfType<PortableExecutableReference>().Single(reference =>
                 SymbolEqualityComparer.Default.Equals(initial.GetAssemblyOrModuleSymbol(reference), access.ContainingAssembly));

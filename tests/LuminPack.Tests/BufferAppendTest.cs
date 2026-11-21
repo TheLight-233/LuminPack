@@ -379,7 +379,7 @@ public sealed class AppendLargeFixedContainer
 }
 
 /// <summary>Exercises cyclic references across independently appended root entries.</summary>
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
 public sealed partial class AppendReferenceNode
 {
     [LuminPackOrder(0)]
@@ -401,7 +401,7 @@ public sealed partial class AppendFailureModel
 }
 
 /// <summary>Exercises an exception from a registered Custom method pointer after the cursor advances.</summary>
-[LuminPackable(GeneratorType.Custom)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]
 public sealed class AppendCustomFailure
 {
     public Exception? Failure;

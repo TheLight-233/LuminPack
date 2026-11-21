@@ -16,7 +16,7 @@ namespace LuminPack.CodeFixes;
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(LuminPackReferenceModeCodeFixProvider)), Shared]
 public sealed class LuminPackReferenceModeCodeFixProvider : CodeFixProvider
 {
-    private const string DiagnosticId = "CS0618";
+    private const string DiagnosticId = "CS0117";
     private const string Mode = "CircleReference";
     private const string Option = "TrackReferences";
 
@@ -43,9 +43,9 @@ public sealed class LuminPackReferenceModeCodeFixProvider : CodeFixProvider
             var packable = argument?.FirstAncestorOrSelf<AttributeSyntax>();
             var type = packable?.FirstAncestorOrSelf<TypeDeclarationSyntax>();
             if (argument == null || packable == null || type == null ||
-                model.GetSymbolInfo(argument.Expression, context.CancellationToken).Symbol is not IFieldSymbol { Name: Mode } field ||
-                field.ContainingType.ToDisplayString() != CodeFixSyntax.AttributeNamespace + "GeneratorType" ||
-                !CodeFixSyntax.IsAttribute(packable, model, "LuminPackable") ||
+                argument.Expression is not MemberAccessExpressionSyntax { Name.Identifier.ValueText: Mode } member ||
+                model.GetTypeInfo(member.Expression, context.CancellationToken).Type?.ToDisplayString() != CodeFixSyntax.AttributeNamespace + "GeneratorType" ||
+                model.GetTypeInfo(packable, context.CancellationToken).Type?.ToDisplayString() != CodeFixSyntax.AttributeNamespace + "LuminPackableAttribute" ||
                 model.GetDeclaredSymbol(type, context.CancellationToken) is not INamedTypeSymbol { TypeKind: TypeKind.Class } symbol)
                 continue;
 
@@ -57,7 +57,7 @@ public sealed class LuminPackReferenceModeCodeFixProvider : CodeFixProvider
         }
     }
 
-    /// <summary>Replaces the obsolete argument and enables tracking on the same type.</summary>
+    /// <summary>Moves the version selection to the declaration options and enables tracking.</summary>
     /// <param name="solution">The workspace before the migration.</param>
     /// <param name="packable">The attribute that selects CircleReference mode.</param>
     /// <param name="argument">The bound enum argument.</param>
@@ -67,36 +67,47 @@ public sealed class LuminPackReferenceModeCodeFixProvider : CodeFixProvider
     private static async Task<Solution> MigrateAsync(Solution solution, AttributeSyntax packable, AttributeArgumentSyntax argument,
         AttributeSyntax? option, CancellationToken cancellationToken)
     {
-        ExpressionSyntax mode = argument.Expression is MemberAccessExpressionSyntax member
-            ? member.WithName(member.Name.WithIdentifier(SyntaxFactory.Identifier("VersionTolerant").WithTriviaFrom(member.Name.Identifier)))
-            : SyntaxFactory.ParseExpression("global::" + CodeFixSyntax.AttributeNamespace + "GeneratorType.VersionTolerant")
-                .WithTriviaFrom(argument.Expression);
-        var replacement = packable.ReplaceNode(argument.Expression, mode).WithAdditionalAnnotations(Formatter.Annotation);
+        var member = (MemberAccessExpressionSyntax)argument.Expression;
+        var mode = member.WithName(member.Name.WithIdentifier(SyntaxFactory.Identifier("Version").WithTriviaFrom(member.Name.Identifier)));
+        var replacement = packable.WithArgumentList(null).WithTriviaFrom(packable).WithAdditionalAnnotations(Formatter.Annotation);
         if (option == null)
         {
             var attributes = (AttributeListSyntax)packable.Parent!;
-            var added = Track(SyntaxFactory.Attribute(SyntaxFactory.ParseName("global::" +
-                CodeFixSyntax.AttributeNamespace + "LuminPackOptionAttribute")));
+            var added = SetOptions(SyntaxFactory.Attribute(SyntaxFactory.ParseName("global::" +
+                CodeFixSyntax.AttributeNamespace + "LuminPackOptionAttribute")), mode);
             return await CodeFixSyntax.RewriteAsync(solution, new[] { attributes }, (_, _) =>
                 attributes.WithAttributes(attributes.Attributes.Replace(packable, replacement).Add(added))
                     .WithAdditionalAnnotations(Formatter.Annotation), cancellationToken).ConfigureAwait(false);
         }
+        ExpressionSyntax optionMode = packable.SyntaxTree == option.SyntaxTree ? mode : SyntaxFactory.ParseExpression(
+            "global::" + CodeFixSyntax.AttributeNamespace + "GeneratorType.Version").WithTriviaFrom(mode);
         return await CodeFixSyntax.RewriteAsync(solution, new[] { packable, option },
-            (original, rewritten) => original == packable ? replacement : Track((AttributeSyntax)rewritten),
+            (original, rewritten) => original == packable ? replacement : SetOptions((AttributeSyntax)rewritten, optionMode),
             cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Enables tracking and keeps the other arguments in the same option attribute.</summary>
-    /// <param name="attribute">The existing or newly generated option attribute.</param>
-    /// <returns>The attribute with tracking set to true.</returns>
-    private static AttributeSyntax Track(AttributeSyntax attribute)
+    /// <summary>Sets the version and tracking options while keeping the other arguments.</summary>
+    /// <param name="attribute">The existing or new declaration option.</param>
+    /// <param name="mode">The expression selecting version-tolerant records.</param>
+    /// <returns>The option with both properties set.</returns>
+    private static AttributeSyntax SetOptions(AttributeSyntax attribute, ExpressionSyntax mode)
     {
-        var expression = SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression);
         var arguments = attribute.ArgumentList ?? SyntaxFactory.AttributeArgumentList();
-        var previous = arguments.Arguments.FirstOrDefault(item => item.NameEquals?.Name.Identifier.ValueText == Option);
-        arguments = previous == null
-            ? arguments.AddArguments(SyntaxFactory.AttributeArgument(expression).WithNameEquals(SyntaxFactory.NameEquals(Option)))
-            : arguments.ReplaceNode(previous.Expression, expression.WithTriviaFrom(previous.Expression));
+        arguments = SetArgument(arguments, "GeneratorType", mode);
+        arguments = SetArgument(arguments, Option, SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression));
         return attribute.WithArgumentList(arguments).WithAdditionalAnnotations(Formatter.Annotation);
+    }
+
+    /// <summary>Inserts or replaces a named option.</summary>
+    /// <param name="arguments">The existing option arguments.</param>
+    /// <param name="name">The option to set.</param>
+    /// <param name="expression">The new value.</param>
+    /// <returns>The updated argument list.</returns>
+    private static AttributeArgumentListSyntax SetArgument(AttributeArgumentListSyntax arguments, string name, ExpressionSyntax expression)
+    {
+        var previous = arguments.Arguments.FirstOrDefault(item => item.NameEquals?.Name.Identifier.ValueText == name);
+        return previous == null
+            ? arguments.AddArguments(SyntaxFactory.AttributeArgument(expression).WithNameEquals(SyntaxFactory.NameEquals(name)))
+            : arguments.ReplaceNode(previous.Expression, expression.WithTriviaFrom(previous.Expression));
     }
 }

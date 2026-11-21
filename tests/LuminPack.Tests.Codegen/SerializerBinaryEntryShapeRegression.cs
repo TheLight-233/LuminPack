@@ -58,7 +58,7 @@ internal static class SerializerBinaryEntryShapeRegression
             [LuminPackable, LuminPackUnion(1, typeof(ReadCase))] public abstract partial class ReadUnion { }
             [LuminPackable] public sealed partial class ReadCase : ReadUnion { public int Number; }
             [LuminPackable] public sealed class UnionReadGraph { public ReadUnion Value; }
-            [LuminPackable(GeneratorType.VersionTolerant)] public sealed class VersionCell { public int Value; }
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class VersionCell { public int Value; }
             [LuminPackable] public sealed class VersionGraph { public List<VersionCell> Cells; }
             public sealed class ObservedCulture : global::System.Globalization.CultureInfo
             {
@@ -74,7 +74,7 @@ internal static class SerializerBinaryEntryShapeRegression
                 public uint[] Values;
             }
 
-            [LuminPackable(GeneratorType.Custom)] public struct CustomCell
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)] public struct CustomCell
             {
                 public int Value;
                 public static void Serialize(ref LuminPackWriter writer, in CustomCell value) => writer.Write(value.Value);

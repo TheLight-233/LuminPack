@@ -119,17 +119,17 @@ internal static partial class Program
             [LuminPackableObject] public bool[][] Flags;
             [LuminPackableObject] public List<string> Text;
         }
-        [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(MaxStringLength = 4)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, MaxStringLength = 4)]
         public partial class LimitedVersion { public string Text { get; set; } }
-        [LuminPackable(GeneratorType.VersionTolerant)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
         public partial class EarlierVersion { public string Text { get; set; } public int Removed; }
         [LuminPackable, LuminPackOption(MaxStringLength = 4, MaxCollectionLength = 4)]
         public partial struct LimitedStruct { public string Text; public int[] Values; }
-        [LuminPackable(GeneratorType.CircleReference), LuminPackOption(MaxStringLength = 4)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true, MaxStringLength = 4)]
         public partial class LimitedCircle { [LuminPackOrder(0)] public string Text { get; set; } }
-        [LuminPackable(GeneratorType.CircleReference), LuminPackOption(MaxDepth = 2)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true, MaxDepth = 2)]
         public partial class LimitedCycle { [LuminPackOrder(0)] public LimitedCycle Next; }
-        [LuminPackable(GeneratorType.CircleReference)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
         [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
         public partial class CircleAdjacent
         {
@@ -138,14 +138,14 @@ internal static partial class Program
             [LuminPackOrder(2)] public bool Flag;
             [LuminPackOrder(3)] public volatile int Last;
         }
-        [LuminPackable(GeneratorType.CircleReference)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
         [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
         public partial class CircleGapped
         {
             [LuminPackOrder(0)] public byte First;
             [LuminPackOrder(1)] public long Second;
         }
-        [LuminPackable(GeneratorType.VersionTolerant)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
         [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
         public sealed class VersionedRuns
         {
@@ -155,7 +155,7 @@ internal static partial class Program
             public byte Flag;
             public long Last;
         }
-        [LuminPackable(GeneratorType.VersionTolerant)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
         public sealed class VersionedVolatile
         {
             public int First;
@@ -164,9 +164,9 @@ internal static partial class Program
         }
         [LuminPackable, LuminPackOption(MaxCollectionLength = 4)]
         public partial class LimitedCompressed { [LuminPackCompress] public int[] Values; }
-        [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(MaxCollectionLength = 4)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, MaxCollectionLength = 4)]
         public partial class LimitedVersionCompressed { [LuminPackCompress] public int[] Values; }
-        [LuminPackable(GeneratorType.VersionTolerant)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
         public partial class EarlierVersionCompressed { [LuminPackCompress] public int[] Values; public int Removed; }
         [LuminPackable, LuminPackOption(MaxCollectionLength = 4)]
         public sealed class LimitedJaggedCompressed
@@ -174,12 +174,12 @@ internal static partial class Program
             [LuminPackableObject, LuminPackCompress] public int[][] Array;
             [LuminPackableObject, LuminPackCompress] public List<int[][]> List;
         }
-        [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(MaxCollectionLength = 4)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, MaxCollectionLength = 4)]
         public sealed class LimitedVersionJaggedCompressed
         {
             [LuminPackableObject, LuminPackCompress] public int[][] Array;
         }
-        [LuminPackable(GeneratorType.VersionTolerant)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
         public sealed class EarlierVersionJaggedCompressed
         {
             [LuminPackableObject, LuminPackCompress] public int[][] Array;
@@ -202,7 +202,7 @@ internal static partial class Program
         public abstract partial class LimitedUnion { }
         [LuminPackable, LuminPackOption(UntrustedData = false)]
         public sealed partial class TrustedTextCase : LimitedUnion { public string Text { get; set; } }
-        [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(UntrustedData = false)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, UntrustedData = false)]
         public sealed partial class TrustedVersionCase : LimitedUnion { public string Text { get; set; } }
         [LuminPackable, LuminPackOption(MaxStringLength = 2)]
         public sealed class LimitedUnionMember { public LimitedUnion Value; }
@@ -217,14 +217,14 @@ internal static partial class Program
         [LuminPackable, LuminPackUnion(0, typeof(TrackedCase)), LuminPackUnion(1, typeof(FixedTrackedCase)),
             LuminPackOption(MaxStringLength = 4, MaxCollectionLength = 4, MaxDepth = 2)]
         public abstract partial class LimitedTrackedUnion { }
-        [LuminPackable(GeneratorType.CircleReference), LuminPackOption(UntrustedData = false)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true, UntrustedData = false)]
         public sealed partial class TrackedCase : LimitedTrackedUnion
         {
             [LuminPackOrder(0)] public string Text { get; set; }
             [LuminPackOrder(1)] public TrackedCase Next;
             [LuminPackOrder(2)] public int[] Values;
         }
-        [LuminPackable(GeneratorType.CircleReference)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
         public sealed partial class FixedTrackedCase : LimitedTrackedUnion
         {
             [LuminPackOrder(0)] public int Number;
@@ -254,11 +254,11 @@ internal static partial class Program
         }
         [LuminPackable, LuminPackOption(UntrustedData = false)]
         public partial class TrustedMirror { public string Text { get; set; } }
-        [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(UntrustedData = false)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, UntrustedData = false)]
         public partial class TrustedVersion { public string Text { get; set; } }
         [LuminPackable, LuminPackOption(UntrustedData = false)]
         public partial struct TrustedStruct { public string Text { get; set; } }
-        [LuminPackable(GeneratorType.CircleReference), LuminPackOption(UntrustedData = false)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true, UntrustedData = false)]
         public partial class TrustedCircle
         {
             [LuminPackOrder(0)] public string Text { get; set; }
@@ -272,14 +272,14 @@ internal static partial class Program
             public TrustedStruct Structure;
             public TrustedCircle Circle;
         }
-        [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(MaxStringLength = 4)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, MaxStringLength = 4)]
         public partial class LimitedVersionParent { public TrustedMirror Child; }
         [LuminPackable, LuminPackOption(UntrustedData = false)]
         public sealed class TrustedVersionedFlag
         {
             public bool Flag { get; set; }
         }
-        [LuminPackable(GeneratorType.VersionTolerant)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
         public sealed class UnboundedVersionParent { public TrustedVersionedFlag Child; }
         [LuminPackable]
         public partial struct UnboundedStructParent { public TrustedVersionedFlag Child; }
@@ -302,7 +302,7 @@ internal static partial class Program
         public sealed partial class TrustedUnboundedGenericCase<T> : UnboundedGenericUnion<T> { public T Value; }
         [LuminPackable, LuminPackOption(UntrustedData = false)]
         public sealed class TrustedGenericValue<T> { public T Value; }
-        [LuminPackable(GeneratorType.VersionTolerant)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
         public sealed class UnboundedGenericParent { public TrustedGenericValue<bool> Child; }
         [LuminPackable]
         public sealed class GenericInputRoot<T> { public T Value; public TrustedVersionedFlag Child; }

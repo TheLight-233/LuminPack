@@ -61,7 +61,7 @@ public class CircleReferenceSerializationTest
     }
 
     /// <summary>A reference-tracked node with a non-ASCII property name.</summary>
-    [LuminPackable(GeneratorType.CircleReference)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
     public sealed partial class JsonHeadNode
     {
         /// <summary>The scalar field in the reference-tracked payload.</summary>
@@ -72,7 +72,7 @@ public class CircleReferenceSerializationTest
     }
 
     /// <summary>Provides simple node functionality.</summary>
-    [LuminPackable(GeneratorType.CircleReference)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
     public class SimpleNode
     {
         /// <summary>Gets or sets the name.</summary>
@@ -188,7 +188,7 @@ public class CircleReferenceSerializationTest
     }
 
     /// <summary>Provides tree node functionality.</summary>
-    [LuminPackable(GeneratorType.CircleReference)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
     public class TreeNode
     {
         /// <summary>Gets or sets the name.</summary>

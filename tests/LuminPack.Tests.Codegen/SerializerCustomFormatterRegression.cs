@@ -175,7 +175,7 @@ internal static class SerializerCustomFormatterRegression
         {
             var input = TestCompilation.Create("NestedCustom" + mode,
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), parse)], references,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: false));
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: false)).WithLegacyPackableSyntax();
             GeneratorDriver driver = CSharpGeneratorDriver.Create(
                 [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator()],
                 parseOptions: parse);

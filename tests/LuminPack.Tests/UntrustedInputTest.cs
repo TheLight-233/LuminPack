@@ -449,7 +449,7 @@ public partial class DefaultScalars
 }
 
 /// <summary>A version-tolerant record with Boolean storage.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial class SafeVersioned
 {
     public int Id;
@@ -467,14 +467,14 @@ public partial class VersionHolder
 }
 
 /// <summary>A reference-tracked record with a raw slot.</summary>
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
 public partial class SafeLeaf
 {
     [LuminPackOrder(0)] public int Value;
 }
 
 /// <summary>A reference-tracked owner whose slots expect <see cref="SafeLeaf"/> values.</summary>
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
 public partial class SafeOwner
 {
     [LuminPackOrder(0)] public SafeLeaf? Leaf;

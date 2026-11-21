@@ -32,7 +32,7 @@ internal static partial class SerializerIssueRegression
                 [LuminPackOnSerialized] public void After() => Number += 2;
             }
 
-            [LuminPackable(GeneratorType.VersionTolerant)] public sealed partial class VersionRecord
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed partial class VersionRecord
             {
                 [LuminPackOrder(0)] public Guid Tag;
                 [LuminPackOrder(1)] public DateTime Time;

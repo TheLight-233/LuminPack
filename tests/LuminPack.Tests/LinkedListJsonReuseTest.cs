@@ -198,7 +198,7 @@ public sealed class LinkedListJsonReuseTest
 }
 
 /// <summary>Lets a custom JSON element reader observe its enclosing destination after reading a value.</summary>
-[LuminPackable(GeneratorType.Custom)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]
 public sealed class LinkedListJsonCallbackItem
 {
     /// <summary>The value read by the element formatter.</summary>

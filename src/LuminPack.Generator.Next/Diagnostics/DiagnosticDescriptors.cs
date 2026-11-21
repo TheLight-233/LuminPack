@@ -28,6 +28,10 @@ internal static class DiagnosticDescriptors
         "LuminPack122", "Constructor parameter cannot receive the serialized member",
         "Constructor parameter '{0}' on '{1}' must accept the value of serialized member '{2}' by implicit conversion and cannot be ref or out.");
 
+    /// <summary>Rejects a packable marker that uses a constructor for a different declaration scope.</summary>
+    public static readonly DiagnosticDescriptor InvalidPackableMarker = Error(
+        "LuminPack113", "Invalid LuminPackable marker", "{0}");
+
     /// <summary>Rejects reference metadata that cannot prove an imported automatic property's storage contract.</summary>
     public static readonly DiagnosticDescriptor IncompleteReferencedPropertyStorage = Error(
         "LuminPack112", "Imported automatic-property storage is missing",
@@ -359,6 +363,7 @@ internal static class DiagnosticDescriptors
         [InaccessiblePayloadScope.Id] = InaccessiblePayloadScope,
         [InaccessiblePoolRent.Id] = InaccessiblePoolRent,
         [ConstructorParameterCannotReceiveMember.Id] = ConstructorParameterCannotReceiveMember,
+        [InvalidPackableMarker.Id] = InvalidPackableMarker,
         [IncompleteReferencedPropertyStorage.Id] = IncompleteReferencedPropertyStorage,
         [UnsupportedPortableStorage.Id] = UnsupportedPortableStorage,
         [InvalidCompiledOption.Id] = InvalidCompiledOption,

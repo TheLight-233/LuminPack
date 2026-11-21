@@ -16,26 +16,31 @@ internal static class SerializerSpecialModeBoundaryRegression
             using System;
             using LuminPack;
             using LuminPack.Attribute;
-            [LuminPackable(GeneratorType.VersionTolerant)] public class VersionShort { [LuminPackOrder(0)] public int First; }
-            [LuminPackable(GeneratorType.VersionTolerant)] public class VersionLong
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public class VersionShort { [LuminPackOrder(0)] public int First; }
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public class VersionLong
             {
                 [LuminPackOrder(0)] public int First;
                 [LuminPackOrder(2)] public string Last;
             }
-            [LuminPackable(GeneratorType.VersionTolerant)] public class VersionEmpty { }
-            [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public class VersionEmpty { }
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
             public class CircleShort { public int First; }
-            [LuminPackable(GeneratorType.CircleReference)] public class CircleLong
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)] public class CircleLong
             {
                 [LuminPackOrder(0)] public int First;
                 [LuminPackOrder(2)] public string Last;
             }
-            [LuminPackable(GeneratorType.CircleReference)] public class CircleEmpty { }
-            [LuminPackable, LuminPackOption(TrackReferences = true)]
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)] public class CircleEmpty { }
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Default, TrackReferences = true)]
             public class TrackedPositional
             {
                 public int Value;
                 public TrackedPositional Next;
+                [LuminPackable] public sealed class Nested { public int Value; }
+            }
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
+            public class VersionedScope
+            {
                 [LuminPackable] public sealed class Nested { public int Value; }
             }
             [LuminPackable] public sealed class UntrackedDerived : TrackedPositional { public byte Tail; }
@@ -69,6 +74,9 @@ internal static class SerializerSpecialModeBoundaryRegression
                         throw new Exception("A containing class passed its tracking declaration to a nested class.");
                     if (LuminPackSerializer.Serialize(new UntrackedDerived { Value = 43, Tail = 47 }).Length != 7)
                         throw new Exception("A base class passed its tracking declaration to its derived class.");
+                    if (!LuminPackSerializer.Serialize(new VersionedScope.Nested { Value = 53 }).AsSpan()
+                        .SequenceEqual(new byte[] { 1, 53, 0, 0, 0 }))
+                        throw new Exception("A containing class passed its generation mode to a nested class.");
 
                     var versionEmpty = new VersionEmpty();
                     var circleEmpty = new CircleEmpty();
@@ -92,7 +100,82 @@ internal static class SerializerSpecialModeBoundaryRegression
         Require(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics));
         Assembly.Load(image.ToArray()).GetType("SpecialModeEntry")!.GetMethod("Check")!.Invoke(null, null);
         VerifyTrackingOptionScope(references, parse);
-        Console.WriteLine("Passed versioned evolution, reference-tracked Object and VersionTolerant records, and tracking option scope.");
+        VerifyGenerationOptionScope(references, parse);
+        VerifyRetiredImportedMarker(references, parse);
+        Console.WriteLine("Passed versioned evolution, tracked Default and Version records, and generation option scope.");
+    }
+
+    /// <summary>Prevents an imported record from silently selecting the default when its legacy constructor cannot bind.</summary>
+    /// <param name="references">The framework and current runtime metadata.</param>
+    /// <param name="parse">The consumer's parser settings.</param>
+    private static void VerifyRetiredImportedMarker(MetadataReference[] references, CSharpParseOptions parse)
+    {
+        var core = typeof(LuminPack.Attribute.LuminPackableAttribute).Assembly.GetName();
+        const string legacy = """
+            namespace LuminPack.Attribute
+            {
+                public enum GeneratorType : byte { VersionTolerant = 1 }
+                public sealed class LuminPackableAttribute : System.Attribute
+                {
+                    public LuminPackableAttribute(GeneratorType mode) { }
+                }
+            }
+            """;
+        var framework = references.Where(reference => Path.GetFileName(reference.Display) != core.Name + ".dll").ToArray();
+        var legacyCore = Emit(CSharpCompilation.Create(core.Name, [CSharpSyntaxTree.ParseText(
+            $"[assembly: System.Reflection.AssemblyVersion(\"{core.Version}\")]\n" + legacy, parse)], framework,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)));
+        var legacyLibrary = Emit(CSharpCompilation.Create("LegacyMarkers", [CSharpSyntaxTree.ParseText("""
+            using LuminPack.Attribute;
+            [LuminPackable(GeneratorType.VersionTolerant)] public class Foreign { public int Value; }
+            """, parse)], framework.Append(legacyCore), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)));
+        var consumer = TestCompilation.Create("ImportedMarker", [CSharpSyntaxTree.ParseText("""
+            using LuminPack.Attribute;
+            [assembly: LuminPackable(typeof(Foreign))]
+            """, parse, "ImportedMarker.cs")], references.Append(legacyLibrary).ToArray());
+        var result = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse)
+            .RunGenerators(consumer).GetRunResult();
+        Require(result.Results.All(item => item.Exception == null) &&
+            result.Diagnostics.Count(d => d.Id == "LuminPack113" && d.GetMessage().Contains("Foreign", StringComparison.Ordinal)) == 1,
+            string.Join(Environment.NewLine, result.Diagnostics.Select(diagnostic => diagnostic.ToString())));
+
+        static MetadataReference Emit(CSharpCompilation input)
+        {
+            using var image = new MemoryStream();
+            var emitted = input.Emit(image);
+            Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
+            return MetadataReference.CreateFromImage(image.ToArray());
+        }
+    }
+
+    /// <summary>Requires valid declaration-owned modes and the correct marker constructor for each scope.</summary>
+    /// <param name="references">The platform and runtime references.</param>
+    /// <param name="parse">The consumer's parser settings.</param>
+    private static void VerifyGenerationOptionScope(MetadataReference[] references, CSharpParseOptions parse)
+    {
+        const string source = """
+            using LuminPack.Attribute;
+            [assembly: LuminPackable]
+            [assembly: LuminPackable(typeof(Local))]
+            [assembly: LuminPackOption(GeneratorType = GeneratorType.Version)]
+            public class Local { }
+            [LuminPackable(typeof(Local))] public class WrongMarker { }
+            [LuminPackable, LuminPackable] public class DuplicateMarker { }
+            [LuminPackOption(GeneratorType = GeneratorType.Version)] public class MissingMarker { }
+            [LuminPackable, LuminPackOption(GeneratorType = (GeneratorType)3)] public class InvalidMode { }
+            [LuminPackable]
+            public class Members
+            {
+                [LuminPackOption(GeneratorType = GeneratorType.Default)] public int Field;
+            }
+            """;
+        var input = TestCompilation.Create("GenerationOptionScope", [CSharpSyntaxTree.ParseText(source, parse, "GenerationOptionScope.cs")], references);
+        var result = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse)
+            .RunGenerators(input).GetRunResult();
+        var errors = result.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
+        Require(result.Results.All(item => item.Exception == null) &&
+            errors.Count(d => d.Id == "LuminPack110") == 4 && errors.Count(d => d.Id == "LuminPack113") == 4 && errors.Length == 8,
+            string.Join(Environment.NewLine, errors.Select(error => error.ToString()).Concat(result.Results.Select(item => item.Exception?.ToString()))));
     }
 
     /// <summary>Requires the tracking option to appear only on a class declaration.</summary>

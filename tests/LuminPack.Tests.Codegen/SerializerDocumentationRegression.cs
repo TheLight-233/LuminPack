@@ -246,7 +246,7 @@ internal static class SerializerDocumentationRegression
                 """)) + "}";
         var compilation = CSharpCompilation.Create("SerializerDocumentationRegression", [CSharpSyntaxTree.ParseText(source, options), CSharpSyntaxTree.ParseText(selections, options)], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true,
-                specificDiagnosticOptions: new Dictionary<string, ReportDiagnostic> { ["CS1591"] = ReportDiagnostic.Error }));
+                specificDiagnosticOptions: new Dictionary<string, ReportDiagnostic> { ["CS1591"] = ReportDiagnostic.Error })).WithLegacyPackableSyntax();
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: options);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
@@ -414,7 +414,7 @@ internal static class SerializerDocumentationRegression
             using LuminPack;
             using LuminPack.Attribute;
 
-            [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
             public sealed class DocumentationVersioned
             {
                 [LuminPackOldName("Number")] public int VersionedValue;

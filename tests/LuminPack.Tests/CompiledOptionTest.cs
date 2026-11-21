@@ -196,7 +196,7 @@ public partial class CompiledOptionTest
     }
 
     /// <summary>Owns its representation and routes all string work through closed profile APIs.</summary>
-    [LuminPackable(GeneratorType.Custom)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]
     public sealed class OpaqueValue
     {
         public string Text = "";

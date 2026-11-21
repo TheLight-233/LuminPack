@@ -73,7 +73,7 @@ internal static class SerializerSourcePresentationRegression
             """;
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER"]);
         var compilation = CSharpCompilation.Create("PresentationRoots", [CSharpSyntaxTree.ParseText(source, parse)], references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release, allowUnsafe: true));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release, allowUnsafe: true)).WithLegacyPackableSyntax();
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);

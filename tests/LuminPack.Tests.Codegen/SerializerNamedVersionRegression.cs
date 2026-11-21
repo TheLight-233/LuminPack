@@ -23,10 +23,10 @@ internal static class SerializerNamedVersionRegression
             using LuminPack.Attribute;
             [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
             namespace VersionModels;
-            [LuminPackable(GeneratorType.VersionTolerant)] public class Child { CHILD }
-            [LuminPackable(GeneratorType.VersionTolerant)] public class Root { ROOT }
-            [LuminPackable(GeneratorType.VersionTolerant)] public class Envelope<T> { public T Value; }
-            [LuminPackable(GeneratorType.VersionTolerant)] public class TypeShapes
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public class Child { CHILD }
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public class Root { ROOT }
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public class Envelope<T> { public T Value; }
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public class TypeShapes
             {
                 public Guid Id; public DateTime Date; public DateTimeOffset Offset; public TimeSpan Duration;
                 public nint Native; public nuint UnsignedNative; public int? Optional;
@@ -77,7 +77,7 @@ internal static class SerializerNamedVersionRegression
     /// <param name="references">Runtime and platform references.</param>
     private static void VerifyVersionDiagnostics(MetadataReference[] references)
     {
-        const string model = "using LuminPack.Attribute; [LuminPackable(GeneratorType.VersionTolerant)] public class Invalid ";
+        const string model = "using LuminPack.Attribute; [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public class Invalid ";
         foreach (string members in new[]
         {
             "[LuminPackOldName(\"\")] public int A;",

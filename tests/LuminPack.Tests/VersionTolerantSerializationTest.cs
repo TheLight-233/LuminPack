@@ -7,7 +7,7 @@ namespace LuminPackUnitTest;
 public class VersionTolerantSerializationTest
 {
     /// <summary>Provides v1 functionality.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public class V1
     {
         /// <summary>Stores the instance.</summary>
@@ -29,7 +29,7 @@ public class VersionTolerantSerializationTest
     }
 
     /// <summary>Provides v2 functionality.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public class V2
     {
         /// <summary>Gets or sets the x.</summary>
@@ -40,7 +40,7 @@ public class VersionTolerantSerializationTest
     }
 
     /// <summary>Provides v3 with missing middle member functionality.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public class V3WithMissingMiddleMember
     {
         /// <summary>Gets or sets the x.</summary>
@@ -50,7 +50,7 @@ public class VersionTolerantSerializationTest
     }
 
     /// <summary>Provides v4 with added middle member functionality.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public class V4WithAddedMiddleMember
     {
         /// <summary>Gets or sets the x.</summary>

@@ -302,7 +302,7 @@ namespace LuminPack.NinoBenchmark.Workloads
     }
 
     [NinoType(trackReferences: true)]
-    [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
     public sealed partial class Alliance
     {
         [LuminPackOrder(0)] public int Id;
@@ -402,7 +402,7 @@ namespace LuminPack.NinoBenchmark.Workloads
     public enum CardType { Minion, Spell, Weapon }
 
     [NinoType(trackReferences: true)]
-    [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
     public sealed partial class CardDef
     {
         [LuminPackOrder(0)] public int Id;

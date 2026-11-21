@@ -4,13 +4,13 @@
 
 ## `GeneratorType.Custom`
 
-`[LuminPackable(GeneratorType.Custom)]` replaces the generated representation with static methods you write on the type. The generator validates them and registers them automatically. With [Next](generator-next.md), registration runs on first use of `LuminPackSerializer`. The original generator runs it in a module initializer on .NET 5 and later.
+`[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]` replaces the generated representation with static methods you write on the type. The generator validates them and registers them automatically. Registration runs on first use of `LuminPackSerializer`.
 
 ```csharp
 using LuminPack.Attribute;
 using LuminPack.Core;
 
-[LuminPackable(GeneratorType.Custom)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]
 public sealed class MyVector
 {
     public float X, Y, Z;
@@ -65,6 +65,8 @@ static void Read(ref LuminPackReader reader, ref LegacyModel value)
 
 LuminPackSerializer.Register<LegacyModel>(Write, Read);
 ```
+
+When an unmarked reference type uses a manually registered formatter, annotate its member with `[LuminPackableObject]` to select that formatter.
 
 | Overload | Methods |
 | --- | --- |

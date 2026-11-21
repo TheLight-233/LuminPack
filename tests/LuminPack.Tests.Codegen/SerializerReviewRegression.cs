@@ -175,7 +175,7 @@ internal static class SerializerReviewRegression
             }
             """;
         var input = CSharpCompilation.Create("CustomStateBoundary", [CSharpSyntaxTree.ParseText(source, Parse)], references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true)).WithLegacyPackableSyntax();
         var driver = NewDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out _);
         CheckErrors(driver, output);
         using var image = new MemoryStream();

@@ -120,7 +120,7 @@ namespace LuminPackUnitTest
 
     /// <summary>A generic reference-tracked payload reached through forwarding methods.</summary>
     /// <typeparam name="T">The value type.</typeparam>
-    [LuminPackable(GeneratorType.CircleReference)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
     public partial class ForwardedNode<T>
     {
         /// <summary>The value.</summary>

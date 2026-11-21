@@ -160,7 +160,7 @@ internal static partial class TypeModelFactory
 
             if (type is not INamedTypeSymbol named)
                 return null;
-            if (GenerationMode(named)is "Custom" or "NonGenerator")
+            if (GenerationMode(named) is PayloadGeneration.Custom or PayloadGeneration.LegacyManual)
                 return new FormatterModel(spelling, FormatterDefinitions.Registered);
             if (IsUnsupportedPackedStorage(named))
                 return null;
@@ -194,7 +194,7 @@ internal static partial class TypeModelFactory
                 return new FormatterModel(spelling, definition, arguments, raw, rawCollection, layout);
             }
 
-            bool ordinary = named.TypeKind == TypeKind.Class && !TracksReferences(named) && GenerationMode(named) == "Object" &&
+            bool ordinary = named.TypeKind == TypeKind.Class && !TracksReferences(named) && GenerationMode(named) == PayloadGeneration.Default &&
                 !HasAttribute(named, UnionAttribute) && !HasAttribute(named, "System.Runtime.CompilerServices.UnionAttribute");
             if (path.Active.Contains(named))
                 return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, ordinaryObject: ordinary);
@@ -236,7 +236,8 @@ internal static partial class TypeModelFactory
             if (IsImplicitFormatterType(named))
             {
                 var localIssues = new List<string>();
-                StructModel payload = CreateStructModel(named, Identity(named), TypeAccessibility.Internal, TypePolicy(named), depth + 1, localIssues, path, "Object", Array.Empty<string>());
+                StructModel payload = CreateStructModel(named, Identity(named), TypeAccessibility.Internal, TypePolicy(named), depth + 1, localIssues, path,
+                    PayloadGeneration.Default, Array.Empty<string>());
                 if (localIssues.Count == 0 && CanPublish(payload))
                     return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, raw: rawCollection, rawCollection: rawCollection, layout: layout, payload: payload, publishPayload: true);
             }
@@ -309,7 +310,7 @@ internal static partial class TypeModelFactory
                 return false;
             if (type is not INamedTypeSymbol named)
                 return false;
-            return GenerationMode(named)is "Custom" or "NonGenerator" || named.TypeArguments.Any(item => ContainsCustomContract(item, visited)) || named.TypeKind == TypeKind.Struct && named.GetMembers().OfType<IFieldSymbol>().Any(field => !field.IsStatic && ContainsCustomContract(field.Type, visited));
+            return GenerationMode(named) is PayloadGeneration.Custom or PayloadGeneration.LegacyManual || named.TypeArguments.Any(item => ContainsCustomContract(item, visited)) || named.TypeKind == TypeKind.Struct && named.GetMembers().OfType<IFieldSymbol>().Any(field => !field.IsStatic && ContainsCustomContract(field.Type, visited));
         }
 
         /// <summary>Normalizes the established Packed, Native and Tagged layout selection.</summary>
@@ -317,7 +318,7 @@ internal static partial class TypeModelFactory
         /// <returns>The normalized result of the operation.</returns>
         private FormatterStorageModel? FormatterStorage(INamedTypeSymbol type)
         {
-            if (!type.IsUnmanagedType || GenerationMode(type) != "Object")
+            if (!type.IsUnmanagedType || GenerationMode(type) != PayloadGeneration.Default)
                 return null;
             int strategy = LayoutStrategy(type);
             PortablePlan? plan;

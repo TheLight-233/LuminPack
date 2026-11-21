@@ -14,7 +14,7 @@ internal static class VersionContractIncrementalChecks
         const string model = """
             using LuminPack.Attribute;
 
-            [LuminPackable(GeneratorType.VersionTolerant)]
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
             public sealed class VersionedModel
             {
                 [LuminPackOldName("FirstName")] public int Name;

@@ -366,15 +366,15 @@ public abstract partial class Choice { }
 public sealed partial class Selected : Choice { public int Value; }
 
 /// <summary>Defines the original named schema.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public sealed class VersionOne { public int Id; public string Name = ""; public long Removed; }
 
 /// <summary>Defines an independently reordered, renamed and extended schema.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public sealed class VersionTwo { public int Added; [LuminPackOldName("Name")] public string DisplayName = ""; public int Id; }
 
 /// <summary>Exercises reference tracking before child reads.</summary>
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
 public sealed class Tracked { [LuminPackOrder(0)] public int Value; [LuminPackOrder(1)] public Tracked? Next; }
 
 /// <summary>Requires declaration-ordered portable storage under the assembly opt-in.</summary>

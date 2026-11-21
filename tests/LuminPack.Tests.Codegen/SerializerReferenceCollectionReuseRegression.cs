@@ -23,9 +23,9 @@ internal static class SerializerReferenceCollectionReuseRegression
             using LuminPack.Attribute;
             [assembly:LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
             [LuminPackable] public sealed class Plain { public int Number; public string Text { get; set; } }
-            [LuminPackable(GeneratorType.CircleReference)] public sealed class Circle { [LuminPackOrder(0)]public Circle Next; }
-            [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Versioned { [LuminPackOrder(0)]public int Number; }
-            [LuminPackable(GeneratorType.Custom)] public sealed class Custom
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)] public sealed class Circle { [LuminPackOrder(0)]public Circle Next; }
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Versioned { [LuminPackOrder(0)]public int Number; }
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)] public sealed class Custom
             {
                 public static void Serialize(ref LuminPackWriter writer, in Custom value) => writer.Write(137);
                 public static void Deserialize(ref LuminPackReader reader, ref Custom value) { reader.Read<int>(); value = new(); }
@@ -140,7 +140,7 @@ internal static class SerializerReferenceCollectionReuseRegression
                 CheckSelection(compatibility, ordinary: true, hasStringKeyGuard: false);
                 Execute(fallback);
             }
-            string editedText = text.Replace("[LuminPackable] public sealed class Plain", "[LuminPackable(GeneratorType.VersionTolerant)] public sealed class Plain", StringComparison.Ordinal)
+            string editedText = text.Replace("[LuminPackable] public sealed class Plain", "[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Plain", StringComparison.Ordinal)
                 .Replace("public int Number; public string Text { get; set; }", "[LuminPackOrder(0)]public int Number; [LuminPackOrder(1)]public string Text { get; set; }", StringComparison.Ordinal);
             var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(editedText, parse, "Shape.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out var editedOutput, out var diagnostics);

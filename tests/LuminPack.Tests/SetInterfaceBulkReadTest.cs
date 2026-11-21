@@ -152,7 +152,7 @@ public partial struct SetPortableValue
 }
 
 /// <summary>Retains version-tolerant framing despite unmanaged CLR storage.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial struct SetVersionedValue
 {
     [LuminPackOrder(2)]

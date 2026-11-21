@@ -7,7 +7,7 @@ namespace LuminPack.Platforms;
 /// <summary>Opts a generated DTO field or collection element into an explicitly registered platform value codec.</summary>
 /// <typeparam name="T">The external platform type.</typeparam>
 /// <remarks>The existing Custom formatter mechanism owns this value; there is no additional object frame or type identifier.</remarks>
-[LuminPackable(GeneratorType.Custom)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]
 public struct LuminPackValue<T>
 {
     private static LuminPackCodec<T>? s_codec;

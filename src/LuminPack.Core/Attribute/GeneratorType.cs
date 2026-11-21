@@ -3,21 +3,16 @@ namespace LuminPack.Attribute;
 /// <summary>Specifies the source-generated serialization layout for a LuminPack type.</summary>
 public enum GeneratorType : byte
 {
-    /// <summary>Specifies object.</summary>
-    Object,
-    /// <summary>Specifies version tolerant.</summary>
-    VersionTolerant,
-    /// <summary>Specifies a version-tolerant record with reference tracking enabled.</summary>
-    [System.Obsolete("Use GeneratorType.VersionTolerant with LuminPackOption(TrackReferences = true).")]
-    CircleReference,
-    /// <summary>Specifies non generator.</summary>
-    NonGenerator,
+    /// <summary>Uses the default representation for the declared type.</summary>
+    Default = 0,
+
+    /// <summary>Identifies binary record members by name so their schema can evolve.</summary>
+    Version = 1,
 
     /// <summary>
     /// The source generator emits no formatter for the type. The user implements static
     /// Serialize/Deserialize methods (optionally SerializeJson/DeserializeJson) and the
-    /// generator automatically registers them through
-    /// <c>LuminPackSerializer.Register&lt;T&gt;</c> at module initialization.
+    /// generator automatically registers them on first use of the serializer.
     /// </summary>
-    Custom
+    Custom = 4,
 }

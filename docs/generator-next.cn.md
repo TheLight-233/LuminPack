@@ -56,6 +56,8 @@ Union、接口、`object`、布尔与可空元素保留各自的专用封闭 own
 
 在消费程序集声明 `[assembly: LuminPackable(typeof(Box<>))]`，可为序列化调用或成员用到的闭合 `Box<T>` 生成 owner。使用 `typeof(Box<int>)` 选择单个构造。标记的记录继承消费程序集选项，并应用类型和成员自身的选项。引用程序集元数据缺少所需的自动属性存储时，生成器报告 `LuminPack112`。此时请引用实现程序集。
 
+引用标记的构造函数不可用时，生成器报告 `LuminPack113`。使用当前 LuminPack 特性重新编译声明程序集，以便生成器读取该类型选择的格式。
+
 对于由 Next 生成且显式声明闭合 case 的库中泛型 Union，消费程序集使用与定义程序集相同的规范哈希和分发档位。这类 Union 支持开放和精确根标记。
 
 引用成员标记 `[LuminPackableObject]` 后使用完整的生成或注册 Formatter。接口即使没有声明 `[LuminPackable]`，其成员也可使用手动注册的 Formatter。

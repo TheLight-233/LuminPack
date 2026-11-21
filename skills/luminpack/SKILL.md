@@ -53,9 +53,9 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 ## Rules that matter
 
 - In Next, declare class/interface Union roots with more than 32 generated cases, their cases and their containing types partial (LuminPack035). Smaller Unions use exact type comparisons. On .NET 11, mark a C# union declaration [LuminPackable]. Compiler Union structs keep their ordinal representation.
-- The default `Object` mode is positional: members in declaration order (or `[LuminPackOrder]`), parents first, 0 to 249 members. Both ends need the same members in the same order. Removing, reordering or retyping members breaks old data; use `VersionTolerant` for evolving schemas.
-- `VersionTolerant` matches members by case-sensitive name key and requires compatible type and width descriptors. It skips unknown members and defaults missing ones, including on reuse reads. Keep every previous name with `[LuminPackOldName("Old")]` in chronological order. Keys must be unique across the model and inherited members. `[LuminPackOrder]` is optional and only affects write order.
-- Use `[LuminPackOption(TrackReferences = true)]` on a concrete class for binary and JSON object identity and cycles. It works with both `Object` and `VersionTolerant` and applies only to the annotated class. For the obsolete `GeneratorType.CircleReference`, use the IDE code fix or declare `VersionTolerant` with `TrackReferences = true`. Convert stored slot-format data using its original reader. See [version tolerance and reference tracking](../../docs/versioning.md).
+- The default `Default` mode is positional: members in declaration order (or `[LuminPackOrder]`), parents first, 0 to 249 members. Both ends need the same members in the same order. Removing, reordering or retyping members breaks old data; use `Version` for evolving schemas.
+- `Version` matches members by case-sensitive name key and requires compatible type and width descriptors. It skips unknown members and defaults missing ones, including on reuse reads. Keep every previous name with `[LuminPackOldName("Old")]` in chronological order. Keys must be unique across the model and inherited members. `[LuminPackOrder]` is optional and only affects write order.
+- Use `[LuminPackOption(TrackReferences = true)]` on a concrete class for binary and JSON object identity and cycles. It works with both `Default` and `Version` and applies only to the annotated class. Convert stored slot-format data using its original reader. See [version tolerance and reference tracking](../../docs/versioning.md).
 - Binary and JSON are separate protocols; never mix their outputs.
 - Optional Unity native-owner codecs remain binary-only. For precompiled `LuminPack.Unity` builds against Unity 6000.2 or later, pass `-p:DefineConstants=UNITY_6000_2_OR_NEWER` to enable public Span key APIs; Unity source integration supplies it automatically. Retained output and warmed scratch pools avoid temporary managed allocations for modern curve/gradient writes and reuse reads. Earlier engines still allocate key arrays for curve reads and gradient operations; pool misses can allocate on modern engines. See [Unity version limits](../../docs/unity.md#native-owner-scratch-and-unity-versions).
 - Default strings are UTF-16 with length prefixes. Reader and writer must use the same options (attribute declarations or explicit profile).
@@ -98,14 +98,14 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 | Reuse an existing JSON graph | `DeserializeJson(json, ref existing)`; UTF-8/UTF-16, concrete/generic and text/span/buffer entries |
 | Polymorphism | `[LuminPackable]` interface/abstract root; cases collected automatically or `[LuminPackUnion(tag, typeof(Case))]` |
 | Type from another assembly | `[assembly: LuminPackable(typeof(Lib.Model))]` (also open generics, also Union roots) |
-| Schema evolution | `[LuminPackable(GeneratorType.VersionTolerant)]` |
-| Shared objects or cycles | `[LuminPackOption(TrackReferences = true)]` on the class, with `[LuminPackable]` or `[LuminPackable(GeneratorType.VersionTolerant)]` |
+| Schema evolution | `[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]` |
+| Shared objects or cycles | `[LuminPackOption(TrackReferences = true)]` on the class, with `[LuminPackable]` or `[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]` |
 | Same bytes on 32-bit and 64-bit | `[LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]` on the struct or assembly |
 | UTF-8 strings | `[LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8)]` or the `LuminPackUtf8LengthOptions` profile |
 | Hostile input | Checked reads are the default; add `[LuminPackOption(MaxInputBytes = ..., MaxCollectionLength = ..., MaxDepth = ...)]` limits on the root type or assembly |
 | Require a complete binary record | `[assembly: LuminPackOption(RequireCompleteBinaryInput = true)]` rejects trailing bytes at value-returning binary document reads; use `ref` or advancing reads for concatenated records |
 | Trusted data only | `[LuminPackOption(UntrustedData = false)]` restores unchecked reads |
-| Hand-written format | `[LuminPackable(GeneratorType.Custom)]` with static `Serialize`/`Deserialize` |
+| Hand-written format | `[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]` with static `Serialize`/`Deserialize` |
 | Generated code selection | Automatic: declared model graphs plus statically required operations; no generation mode setting |
 | Pool instances | `[LuminPackPoolRent] static T Rent()` |
 

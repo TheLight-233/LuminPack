@@ -255,21 +255,21 @@ public partial class CapacityTierTest
         public void OnWriting() => Before?.Invoke();
     }
 
-    [LuminPackable(GeneratorType.VersionTolerant), LuminPackBounded(300000)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version), LuminPackBounded(300000)]
     public sealed partial class VersionedGuaranteed
     {
         [LuminPackOrder(0)] public List<SmallGuaranteed> Values = [];
         [LuminPackOrder(1)] public string Text = "";
     }
 
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public sealed partial class VersionedOrdinary
     {
         [LuminPackOrder(0)] public List<SmallGuaranteed> Values = [];
         [LuminPackOrder(1)] public string Text = "";
     }
 
-    [LuminPackable(GeneratorType.CircleReference), LuminPackBounded(300000)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true), LuminPackBounded(300000)]
     public sealed partial class CircleGuaranteed
     {
         [LuminPackOrder(0)] public CircleGuaranteed? Self;

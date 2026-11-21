@@ -26,7 +26,7 @@ internal static partial class SerializerImmutableListWriteRegression
                             +":"+LuminPackSerializer.SerializeJson(list)+":"+LuminPackSerializer.SerializeJson(listContract);
                     }
                 }
-                """, parse, "Entry.cs")], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+                """, parse, "Entry.cs")], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true)).WithLegacyPackableSyntax();
         var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess")!;
         bool available = access.GetMembers("TryGetImmutableQueueTraversal").Length != 0 && access.GetMembers("RentImmutableQueueReversal").Length != 0;
         if (!available) return;

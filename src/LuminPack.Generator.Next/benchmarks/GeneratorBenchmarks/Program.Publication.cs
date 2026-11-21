@@ -254,9 +254,9 @@ public sealed partial class TextShape : IShape { public int Number; public strin
 public sealed partial class Ordinary { public int Number; public string Name; public int[] Values; public List<int> Items; public List<long> Longs; public int @event; }
 [LuminPackable, LuminPackOption(UntrustedData = true, MaxCollectionLength = 2, MaxStringLength = 8)]
 public sealed partial class Bounded { public Ordinary Child; }
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public sealed partial class Versioned { [LuminPackOrder(0)] public int Value; [LuminPackOrder(2)] public string Name; }
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
 public sealed partial class Node { [LuminPackOrder(0)] public string Name; [LuminPackOrder(1)] public Node Next; }
 [LuminPackable]
 public partial interface IGenericRoot<T> { }

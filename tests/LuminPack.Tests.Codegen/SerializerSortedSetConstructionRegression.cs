@@ -62,7 +62,7 @@ internal static class SerializerSortedSetConstructionRegression
                 Require(Trees(driver).SequenceEqual(Trees(restored), StringComparer.Ordinal), "Restoring " + capability + " retained stale fallback code.");
             }
 
-            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(Source(mode).Replace("SortedSet<UserElement> User", "SortedSet<int> User", StringComparison.Ordinal), parse, "SortedSetCases.cs"));
+            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath is not ("ConcreteReads.cs" or LegacyPackableSyntax.FileName)), CSharpSyntaxTree.ParseText(Source(mode).Replace("SortedSet<UserElement> User", "SortedSet<int> User", StringComparison.Ordinal), parse, "SortedSetCases.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out var editedOutput, out diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             var (editedFresh, _) = Generate(edited, parse);
@@ -210,7 +210,7 @@ internal static class SerializerSortedSetConstructionRegression
     /// <returns>The initial compilation.</returns>
     private static CSharpCompilation Compile(string source, CSharpParseOptions parse, MetadataReference[] references)
         => CSharpCompilation.Create("SortedSetCases" + Guid.NewGuid().ToString("N"), [CSharpSyntaxTree.ParseText(source, parse, "SortedSetCases.cs")], references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true)).WithLegacyPackableSyntax();
 
     /// <summary>Runs both production generators and rejects generator failures.</summary>
     /// <param name="compilation">The complete consumer compilation.</param>

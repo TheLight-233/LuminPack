@@ -64,7 +64,7 @@ public class NinoVersionRegressionTest
     }
 
     /// <summary>Provides a versioned record with both direct and mirrored slice storage.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public struct Current
     {
         public Memory<int> Values;
@@ -72,7 +72,7 @@ public class NinoVersionRegressionTest
     }
 
     /// <summary>Provides an earlier schema with a differently positioned memory field.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public struct Earlier
     {
         public int Removed;

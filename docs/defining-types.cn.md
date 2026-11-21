@@ -22,16 +22,15 @@ Union 的根类型、它的所有 case 以及外层包含类型都必须声明�
 
 不含引用字段的 struct 或 record struct（C# 非托管类型）直接按内存复制。这类结构体的存储方式见 [32/64 位结构体布局](options.cn.md#struct-layout)。
 
-`GeneratorType` 选择数据表示：
+在 `[LuminPackOption]` 中设置 `GeneratorType`，以选择 `[LuminPackable]` 类型的数据表示。
 
 | 模式 | 用途 |
 | --- | --- |
-| `Object`（默认） | 按位置写成员，最快、最紧凑，适合结构稳定的模型。 |
-| `VersionTolerant` | 按名称识别成员，可以增删、重排、重命名字段。见[版本容忍](versioning.cn.md)。 |
+| `Default`（默认） | 按位置写成员，最快、最紧凑，适合结构稳定的模型。 |
+| `Version` | 按名称识别成员，可以增删、重排、重命名字段。见[版本容忍](versioning.cn.md)。 |
 | `Custom` | 使用你手写的静态读写方法。见[自定义格式化器](custom-formatters.cn.md)。 |
-| `NonGenerator` | 不为该类型生成格式化器。 |
 
-如果需要共享对象与循环，在 Object 或 VersionTolerant 类上添加 `[LuminPackOption(TrackReferences = true)]`。见[引用跟踪](versioning.cn.md#reference-tracking)。
+如果需要共享对象与循环，可在使用 `Default` 或 `Version` 的类上设置 `[LuminPackOption(TrackReferences = true)]`。见[引用跟踪](versioning.cn.md#reference-tracking)。
 
 ## 成员
 
@@ -58,7 +57,7 @@ public partial class Inventory
 }
 ```
 
-`Object` 模式按位置写成员：先父类后子类，按声明顺序或 `LuminPackOrder` 顺序。读取方必须使用相同的成员和顺序。一个对象可以有 0 到 249 个成员。
+`Default` 模式按位置写成员：先父类后子类，按声明顺序或 `LuminPackOrder` 顺序。读取方必须使用相同的成员和顺序。一个对象可以有 0 到 249 个成员。
 
 `[LuminPackInclude]` 在每一层嵌套都有效：嵌套类型中标了 `[LuminPackInclude]` 的私有成员会按同样规则纳入。私有成员由生成的代码直接访问，从不使用反射，在 .NET Standard 2.1 和新版 .NET 上都一样。
 
@@ -66,7 +65,7 @@ public partial class Inventory
 
 LuminPack 不要求无参构造函数。标了 `[LuminPackConstructor]` 的构造函数（或自动选中的构造函数）的参数名必须与被序列化的成员同名，读取时这些成员作为参数传入。读入已有对象时（见[复用](reuse.cn.md)）根对象完全不会被构造。
 
-标了 `[LuminPackPoolRent]` 的静态方法会在需要实例时代替 `new`。对 `Object` 模式类型的二进制读取，租到的对象随后被原地填充，和读入已有对象完全一样，因此它原本持有的内容（List、子对象、字符串）都会被复用：
+标了 `[LuminPackPoolRent]` 的静态方法会在需要实例时代替 `new`。对 `Default` 模式类型的二进制读取，租到的对象随后被原地填充，和读入已有对象完全一样，因此它原本持有的内容（List、子对象、字符串）都会被复用：
 
 ```csharp
 [LuminPackPoolRent]
@@ -130,7 +129,7 @@ JSON 中的 `Index` 使用有符号整数。从起点计算的索引直接使用
 
 ### List 派生类
 
-在基类为闭合 `List<T>` 的普通 `[LuminPackable]` 类上标记 `[LuminPackOption(IncludeCollectionBase = true)]`，即可同时序列化继承的元素与声明的成员。此选项适用于未启用引用追踪的 `GeneratorType.Object` 类。反序列化时可填充已有的派生类实例。
+在基类为闭合 `List<T>` 的普通 `[LuminPackable]` 类上标记 `[LuminPackOption(IncludeCollectionBase = true)]`，即可同时序列化继承的元素与声明的成员。此选项适用于未启用引用追踪的 `GeneratorType.Default` 类。反序列化时可填充已有的派生类实例。
 
 二进制写入在声明成员之后追加基类列表记录。二进制读写两端应使用相同的选项。JSON 将列表元素写入 `$items` 属性。
 

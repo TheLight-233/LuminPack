@@ -16,7 +16,7 @@ namespace LuminPack.NinoBenchmark.Workloads
     // measures compatible field layouts without encoding different polymorphic type IDs.
 
     [NinoType(format: NinoFormat.Keyed)]
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public sealed partial class ProfileV1
     {
         [LuminPackOrder(0)] public long Id;
@@ -55,7 +55,7 @@ namespace LuminPack.NinoBenchmark.Workloads
     }
 
     [NinoType(format: NinoFormat.Keyed)]
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public sealed partial class ProfileV2
     {
         [LuminPackOrder(0)] public long Id;
@@ -110,7 +110,7 @@ namespace LuminPack.NinoBenchmark.Workloads
     }
 
     [NinoType(format: NinoFormat.VersionTolerant)]
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public sealed partial class IdleSaveV1
     {
         [LuminPackOrder(0)] public long PlayerId;
@@ -147,7 +147,7 @@ namespace LuminPack.NinoBenchmark.Workloads
     }
 
     [NinoType(format: NinoFormat.VersionTolerant)]
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public sealed partial class IdleSaveV2
     {
         [LuminPackOrder(0)] public long PlayerId;

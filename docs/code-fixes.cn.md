@@ -27,7 +27,7 @@
 | `LuminPack033`、`LuminPack101` | 为池租用方法或 Custom 格式化方法添加 static。排除 abstract、virtual、override 和显式接口实现方法。 |
 | `LuminPack034` | 移除托管集合成员上的 `[LuminPackCompress]`。 |
 | `LuminPack035` | 跨源码文件将 Union 参与者和所有外层类型设为 partial。 |
-| `[LuminPackable]` 中的 `GeneratorType.CircleReference` 所触发的 `CS0618` | 选择 `VersionTolerant`，并在 `[LuminPackOption]` 中启用 `TrackReferences`。 |
+| `[LuminPackable]` 中的 `GeneratorType.CircleReference` 所触发的 `CS0117` | 将模式移至 `[LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]`。 |
 
 常规操作支持文档、项目和解决方案范围的 Fix All。构造函数选择不提供 Fix All，每个类型都需要明确选择构造方式。添加 static、修改可访问性或将 Union 设为 abstract 后，可能还需调整应用代码；请查看预览并重新构建。
 

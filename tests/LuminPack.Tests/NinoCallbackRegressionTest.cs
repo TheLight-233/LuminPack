@@ -176,7 +176,7 @@ public class NinoCallbackRegressionTest
         public void AfterRead() => AddLog("Read done " + Text);
     }
 
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public partial class CallbackVersioned
     {
         public int Number = 3;

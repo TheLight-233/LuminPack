@@ -171,7 +171,7 @@ internal static partial class Program
             RequireIncremental(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
             string registry = Sources(result.Driver).Single(file => file.Key.EndsWith("CustomFormatterRegistry.g.cs", StringComparison.Ordinal)).Value;
             RequireIncremental(!registry.Contains("RegisterGenerated<global::ManualPayload>", StringComparison.Ordinal),
-                "NonGenerator must not publish an automatic registration.");
+                "An explicitly formatted member must not publish an automatic registration for its manually registered type.");
             checks += (int)Assembly.Load(image.ToArray()).GetType("AnnotatedMembersFixture")!.GetMethod("Exercise")!.Invoke(null, null)!;
         }
         Console.WriteLine($"Next assembly-option contracts: {checks} matrix and runtime checks passed.");
@@ -185,7 +185,8 @@ internal static partial class Program
             var root = result.Output.GetTypeByMetadataName("LuminPack.LuminPackSerializer+SettingsPayloadFormatter");
             string[] names = { "Write", "Read", "WriteJson", "ReadJson" };
             for (int index = 0; index < names.Length; index++)
-                RequireIncremental((root?.GetMembers(names[index]).Length > 0) == ((mask & (1 << index)) != 0), "Forced operation selection: " + names[index]);
+                RequireIncremental((root?.GetMembers(names[index]).Length > 0) == ((mask & (1 << index)) != 0),
+                    $"Forced operation selection for {names[index]} (mask {mask}, {settings}): " + string.Join(", ", Sources(result.Driver).Keys));
             var facade = result.Output.GetTypeByMetadataName("LuminPack.LuminPackSerializer")!;
             RequireIncremental(facade.GetMembers("Register").Length == (registration ? 5 : 0), "Assembly registration facade availability.");
             string text = string.Concat(Sources(result.Driver).Values);
@@ -212,48 +213,38 @@ internal static partial class Program
         static string Bool(bool value) => value ? "true" : "false";
     }
 
-    /// <summary>Compares named-member conflicts with the legacy generator's diagnostic contract.</summary>
+    /// <summary>Verifies the named-member diagnostic contract on invalid declarations.</summary>
     /// <param name="references">The framework and runtime references.</param>
     /// <param name="parse">The consumer parse options.</param>
-    /// <param name="legacyDll">The legacy generator assembly.</param>
-    /// <returns>The number of compared declarations.</returns>
-    private static int VerifyAliasDiagnostics(MetadataReference[] references, CSharpParseOptions parse, string legacyDll)
+    /// <returns>The number of invalid declarations checked.</returns>
+    private static int VerifyAliasDiagnostics(MetadataReference[] references, CSharpParseOptions parse)
     {
-        var assembly = new AssemblyLoadContext("AliasDiagnosticReference").LoadFromAssemblyPath(Path.GetFullPath(legacyDll));
-        ISourceGenerator[] legacy = CreateLegacyGenerators(assembly);
-        ISourceGenerator[] next = { new LuminPackSourceGenerator().AsSourceGenerator() };
-        var cases = new (string Mode, string Fields)[]
+        var cases = new (bool Version, string Fields)[]
         {
-            ("VersionTolerant", """[LuminPackOldName("")] public int A;"""),
-            ("VersionTolerant", """[LuminPackOldName(null)] public int A;"""),
-            ("VersionTolerant", """[LuminPackOldName("A")] public int A;"""),
-            ("VersionTolerant", """[LuminPackOldName("B")] public int A; public int B;"""),
-            ("VersionTolerant", """[LuminPackOldName("old")] public int A; [LuminPackOldName("old")] public int B;"""),
-            ("VersionTolerant", """[LuminPackOldName("\uD800")] public int A;"""),
-            ("Object", """[LuminPackOldName("old")] public int A;"""),
+            (true, """[LuminPackOldName("")] public int A;"""),
+            (true, """[LuminPackOldName(null)] public int A;"""),
+            (true, """[LuminPackOldName("A")] public int A;"""),
+            (true, """[LuminPackOldName("B")] public int A; public int B;"""),
+            (true, """[LuminPackOldName("old")] public int A; [LuminPackOldName("old")] public int B;"""),
+            (true, """[LuminPackOldName("\uD800")] public int A;"""),
+            (false, """[LuminPackOldName("old")] public int A;"""),
         };
         foreach (var item in cases)
         {
-            string source = "using LuminPack.Attribute; [LuminPackable(GeneratorType." + item.Mode +
-                ")] public class Invalid { " + item.Fields + " }";
+            string option = item.Version ? "[LuminPackOption(GeneratorType = GeneratorType.Version)]" : string.Empty;
+            string source = "using LuminPack.Attribute; [LuminPackable]" + option + " public class Invalid { " + item.Fields + " }";
             var tree = CSharpSyntaxTree.ParseText(source, parse, "InvalidNames.cs");
             var input = CSharpCompilation.Create("InvalidNames", new[] { tree }, references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
-            var expected = Diagnostics(legacy, input);
-            var actual = Diagnostics(next, input);
-            RequireIncremental(expected.Length == 1 && expected.SequenceEqual(actual),
-                item.Fields + " diagnostic mismatch: " + string.Join(", ", expected) + " / " + string.Join(", ", actual));
-        }
-        return cases.Length;
-
-        (string Message, DiagnosticSeverity Severity)[] Diagnostics(ISourceGenerator[] generators, Compilation compilation)
-        {
-            var result = CSharpGeneratorDriver.Create(generators, parseOptions: parse).RunGenerators(compilation).GetRunResult();
+            var result = CSharpGeneratorDriver.Create(new[] { new LuminPackSourceGenerator().AsSourceGenerator() }, parseOptions: parse)
+                .RunGenerators(input).GetRunResult();
             foreach (var generator in result.Results)
                 RequireIncremental(generator.Exception == null, generator.Exception?.ToString() ?? string.Empty);
-            return result.Diagnostics.Where(item => item.Id == "LuminPack062")
-                .Select(item => (item.GetMessage(), item.Severity)).Distinct().ToArray();
+            var errors = result.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
+            RequireIncremental(errors.Length == 1 && errors[0].Id == "LuminPack062",
+                item.Fields + " did not report the expected alias diagnostic: " + string.Join(", ", errors.Select(error => error.ToString())));
         }
+        return cases.Length;
     }
 
     /// <summary>Runs default and explicit profile registrations in a collectible consuming assembly.</summary>
@@ -290,7 +281,7 @@ internal static partial class Program
             public Dictionary<int, string> Values = new();
         }
 
-        [LuminPackable(GeneratorType.Custom)] public sealed class AutoCustom
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)] public sealed class AutoCustom
         {
             public int Number;
             public static void Serialize(ref LuminPackWriter writer, in AutoCustom value) => writer.Write(value.Number);
@@ -336,7 +327,6 @@ internal static partial class Program
         using LuminPack.Option;
 
         public interface IManualValue { int Number { get; } }
-        [LuminPackable(GeneratorType.NonGenerator)]
         public sealed class ManualPayload : IManualValue { public int Number { get; set; } }
         [LuminPackable] public sealed class AutomaticChild { public int Number; }
 
@@ -345,7 +335,7 @@ internal static partial class Program
         {
             [LuminPackableObject] public IManualValue Manual { get; set; }
             [LuminPackableObject] public AutomaticChild Child;
-            public ManualPayload Value;
+            [LuminPackableObject] public ManualPayload Value;
         }
 
         public static class AnnotatedMembersFixture

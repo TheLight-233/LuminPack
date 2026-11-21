@@ -14,7 +14,7 @@ internal static partial class SerializerImmutableListWriteRegression
         {
             var compilation = CSharpCompilation.Create("SequenceFamilies" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(SequenceFamilySource.Replace("MODE", mode, StringComparison.Ordinal), parse, "Entry.cs")], references,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release)).WithLegacyPackableSyntax();
             Create(parse).RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             foreach (var method in output.SyntaxTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
@@ -50,7 +50,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     public static string Json(Collection<int> value)=>LuminPackSerializer.SerializeJson(value);
                     public static void Read(byte[] bytes,ref ObservableCollection<int> value)=>LuminPackSerializer.DeserializeJson(bytes,ref value);
                 }
-                """, parse, "Entry.cs")], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+                """, parse, "Entry.cs")], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true)).WithLegacyPackableSyntax();
         var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess")!;
         var original = references.OfType<PortableExecutableReference>().Single(reference =>
             SymbolEqualityComparer.Default.Equals(compilation.GetAssemblyOrModuleSymbol(reference), access.ContainingAssembly));

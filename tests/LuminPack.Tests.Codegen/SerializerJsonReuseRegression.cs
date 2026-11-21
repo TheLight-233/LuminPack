@@ -221,13 +221,13 @@ internal static class SerializerJsonReuseRegression
             var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var compilation = CSharpCompilation.Create("JsonReuse" + mode + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), parse, "Shape.cs")], references,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release)).WithLegacyPackableSyntax();
             GeneratorDriver driver = CSharpGeneratorDriver.Create(
                 [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
             driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
             if (diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error)) throw new InvalidOperationException(string.Join(Environment.NewLine, diagnostics));
             Execute(output);
-            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(
+            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath is not ("ConcreteReads.cs" or LegacyPackableSyntax.FileName)), CSharpSyntaxTree.ParseText(
                 source.Replace("MODE", mode, StringComparison.Ordinal).Replace("public int Number;", "public long Number;", StringComparison.Ordinal)
                     .Replace("public int F31;", "public int Extra; public int F31;", StringComparison.Ordinal), parse, "Shape.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out output, out diagnostics);

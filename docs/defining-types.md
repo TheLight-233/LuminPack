@@ -22,16 +22,15 @@ Union roots and their cases, together with every containing type, must be `parti
 
 A struct or record struct that contains no references (a C# unmanaged type) is copied directly from memory. See [32/64-bit struct layouts](options.md#struct-layout) for the storage choices of such structs.
 
-`GeneratorType` selects the representation:
+Set `GeneratorType` in `[LuminPackOption]` to select the representation of a `[LuminPackable]` type.
 
 | Mode | Use |
 | --- | --- |
-| `Object` (default) | Positional members. The fastest and most compact form; use it for stable models. |
-| `VersionTolerant` | Members identified by name; fields can be added, removed, reordered and renamed. See [Version tolerance](versioning.md). |
+| `Default` (default) | Positional members. The fastest and most compact form; use it for stable models. |
+| `Version` | Members identified by name; fields can be added, removed, reordered and renamed. See [Version tolerance](versioning.md). |
 | `Custom` | Your own static read/write methods. See [Custom formatters](custom-formatters.md). |
-| `NonGenerator` | No generated formatter for the type. |
 
-For shared objects and cycles, add `[LuminPackOption(TrackReferences = true)]` to an Object or VersionTolerant class. See [reference tracking](versioning.md#reference-tracking).
+For shared objects and cycles, set `[LuminPackOption(TrackReferences = true)]` on a class in `Default` or `Version` mode. See [reference tracking](versioning.md#reference-tracking).
 
 ## Members
 
@@ -58,7 +57,7 @@ public partial class Inventory
 }
 ```
 
-The `Object` mode writes members by position, parents before children, in declaration order or `LuminPackOrder` order. A reader must use the same members in the same order. An object can have 0 to 249 members.
+The `Default` mode writes members by position, parents before children, in declaration order or `LuminPackOrder` order. A reader must use the same members in the same order. An object can have 0 to 249 members.
 
 `[LuminPackInclude]` works at every nesting level: private members of a nested type marked `[LuminPackInclude]` are picked up the same way. Private members are accessed by generated code, never by reflection, on .NET Standard 2.1 and modern .NET alike.
 
@@ -66,7 +65,7 @@ The `Object` mode writes members by position, parents before children, in declar
 
 LuminPack does not require a parameterless constructor. A constructor marked `[LuminPackConstructor]`, or otherwise the selected constructor, must name its parameters after serialized members; those members are passed to it. Deserialization into an existing object (see [Reuse](reuse.md)) does not construct the root at all.
 
-A static method marked `[LuminPackPoolRent]` replaces `new` whenever an instance is needed. In binary reads of `Object`-mode types the rented object is then filled in place, exactly like a read into an existing object, so anything it already holds (lists, child objects, strings) is reused:
+A static method marked `[LuminPackPoolRent]` replaces `new` whenever an instance is needed. In binary reads of `Default`-mode types the rented object is then filled in place, exactly like a read into an existing object, so anything it already holds (lists, child objects, strings) is reused:
 
 ```csharp
 [LuminPackPoolRent]
@@ -130,7 +129,7 @@ In JSON, `Index` uses a signed integer. An index from the start uses its value a
 
 ### List subclasses
 
-Apply `[LuminPackOption(IncludeCollectionBase = true)]` to an ordinary `[LuminPackable]` class with a closed `List<T>` base to serialize its elements alongside its declared members. This option is for `GeneratorType.Object` without reference tracking. Reads refill the existing derived instance when one is available.
+Apply `[LuminPackOption(IncludeCollectionBase = true)]` to an ordinary `[LuminPackable]` class with a closed `List<T>` base to serialize its elements alongside its declared members. This option is for `GeneratorType.Default` without reference tracking. Reads refill the existing derived instance when one is available.
 
 Binary writes append the base list record after the declared members. Use the same option at both binary endpoints. JSON writes the elements in the `$items` property.
 

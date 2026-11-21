@@ -48,11 +48,9 @@ public sealed class LuminPackableAttribute : System.Attribute
     /// <summary>Gets the referenced type marked by an assembly-level attribute.</summary>
     public System.Type? TargetType { get; }
 
-    /// <summary>Initializes a new instance of <c>LuminPackableAttribute</c>.</summary>
-    /// <param name="generatorType">The generator type used by this operation.</param>
-    public LuminPackableAttribute(GeneratorType generatorType = GeneratorType.Object)
+    /// <summary>Marks this declaration for source-generated serialization.</summary>
+    public LuminPackableAttribute()
     {
-        TargetType = null;
     }
 
     /// <summary>Marks a referenced type for source-generated serialization in the current assembly.</summary>
@@ -331,12 +329,16 @@ public enum LuminPackRegisterMode : byte
 /// Unspecified properties inherit the enclosing declaration's options. Assembly options override the library defaults;
 /// type and member declarations override the corresponding enclosing scope. Binary string settings can vary by member.
 /// JSON encoding, depth and syntax policy describe a complete document and are selected at its root.
-/// WideTag, SingleImplementation, TrackReferences and ReuseRectangularArraySlots are declaration-only contracts and do not inherit enclosing options.
+/// GeneratorType, WideTag, SingleImplementation, TrackReferences and ReuseRectangularArraySlots are declaration-only contracts and do not inherit enclosing options.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Struct |
     AttributeTargets.Interface | AttributeTargets.Field | AttributeTargets.Property, Inherited = false)]
 public sealed class LuminPackOptionAttribute : System.Attribute
 {
+    /// <summary>Gets or sets the source-generated serialization mode of a LuminPackable type.</summary>
+    /// <remarks>Applies only to the annotated type and is independent of operation profiles.</remarks>
+    public GeneratorType GeneratorType { get; set; } = GeneratorType.Default;
+
     /// <summary>Gets or sets whether this class or interface accepts the wide Union tag form.</summary>
     /// <remarks>Applies only to this declaration, not enclosing scopes or explicit operation profiles. The legacy wide-tag attribute also enables it.</remarks>
     public bool WideTag { get; set; }

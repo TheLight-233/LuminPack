@@ -151,8 +151,8 @@ internal static partial class SerializerCompiledOptionRegression
             using LuminPack.Attribute;
             using LuminPack.Option;
             [assembly: LuminPackOption(StringRecording = LuminPackStringRecording.VarInt)]
-            [LuminPackable(GeneratorType.VersionTolerant)] public class Named { public List<string> Names = new(); }
-            [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public class Named { public List<string> Names = new(); }
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
             public class Circle { public string Text; public Circle Next; }
             public static class Entry
             {

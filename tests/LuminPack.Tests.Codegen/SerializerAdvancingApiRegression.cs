@@ -116,8 +116,8 @@ internal static class SerializerAdvancingApiRegression
             using System; using LuminPack; using LuminPack.Attribute;
             [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Light)]
             [LuminPackable] public sealed class Ordinary { public int Id; [LuminPackInclude] internal string Text; }
-            [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Versioned { public int Id; [LuminPackInclude] internal string Text; }
-            [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(TrackReferences = true)]
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Versioned { public int Id; [LuminPackInclude] internal string Text; }
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
             public sealed class Tracked { public int Id; [LuminPackInclude] internal string Text; }
             [LuminPackable] public sealed class Hidden { [LuminPackInclude] private int Id; public int GetId() => Id; }
             public static class Entry

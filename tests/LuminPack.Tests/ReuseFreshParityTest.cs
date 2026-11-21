@@ -202,7 +202,7 @@ public partial struct ParityPadded
 }
 
 /// <summary>An unmanaged struct that uses the version-tolerant record.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial struct ParityVersioned
 {
     /// <summary>The first member.</summary>

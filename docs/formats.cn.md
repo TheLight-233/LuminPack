@@ -32,11 +32,11 @@
 
 | 记录 | 字节 |
 | --- | --- |
-| 初次出现 | `byte memberCount, VarInt referenceId, Object 或 VersionTolerant 记录体` |
+| 初次出现 | `byte memberCount, VarInt referenceId, 按位置编码或版本容忍 记录体` |
 | 回引用 | `250, VarInt referenceId` |
 | 空值 | `255` |
 
-初次出现的标记为写入方的成员数（0–249），接着是显式引用 id 及所选格式的记录。VersionTolerant 记录体可以是完整或简写记录。
+初次出现的标记为写入方的成员数（0–249），接着是显式引用 id 及所选格式的记录。版本容忍记录体可以是完整或简写记录。
 
 ### 字符串
 

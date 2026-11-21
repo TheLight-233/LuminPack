@@ -284,7 +284,9 @@ internal static class FormatterCapabilities
             }
             if (FormatterRuntimeTraits.HasSequenceStorage(compilation))
                 result.Add("InterfaceWrapperStorage");
-            bool ordinary = element is INamedTypeSymbol { TypeKind: TypeKind.Class } payload && payload.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackableAttribute" && (attribute.ConstructorArguments.Length == 0 || Convert.ToInt32(attribute.ConstructorArguments[0].Value, System.Globalization.CultureInfo.InvariantCulture) == 0)) && !payload.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackUnionAttribute");
+            bool ordinary = element is INamedTypeSymbol { TypeKind: TypeKind.Class } payload && TypeModelFactory.IsPackable(payload) &&
+                TypeModelFactory.GenerationMode(payload) == TypeModelFactory.PayloadGeneration.Default &&
+                !payload.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackUnionAttribute");
             if (element.SpecialType == SpecialType.System_String || element.IsUnmanagedType && (element.SpecialType != SpecialType.None || Rendering.Formatters.FrameworkScalarBody.Contains(element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))) || ordinary)
                 result.Add("InterfaceTargetReuse");
         }
@@ -669,8 +671,9 @@ internal static class FormatterCapabilities
         if (type is not INamedTypeSymbol { TypeKind: TypeKind.Class, IsSealed: true, IsGenericType: false } named || named.BaseType?.SpecialType != SpecialType.System_Object || !SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly))
             return false;
         var attributes = named.GetAttributes();
-        var packable = attributes.FirstOrDefault(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackableAttribute");
-        if (packable == null || packable.ConstructorArguments.Length != 0 && Convert.ToInt32(packable.ConstructorArguments[0].Value, System.Globalization.CultureInfo.InvariantCulture)is not (0 or 1) || attributes.Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackUnionAttribute"))
+        if (!TypeModelFactory.IsPackable(named) || TypeModelFactory.TracksReferences(named) || TypeModelFactory.GenerationMode(named) is not
+            (TypeModelFactory.PayloadGeneration.Default or TypeModelFactory.PayloadGeneration.Version) ||
+            attributes.Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackUnionAttribute"))
             return false;
         var fields = named.GetMembers().OfType<IFieldSymbol>().Where(field => !field.IsStatic && !field.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackIgnoreAttribute")).ToArray();
         return fields.Length != 0 && fields.All(field => !field.IsImplicitlyDeclared && !field.IsVolatile && (field.Type.SpecialType == SpecialType.System_String || field.Type.IsUnmanagedType && field.Type.SpecialType != SpecialType.None) && !field.GetAttributes().Any(attribute => attribute.AttributeClass?.Name.IndexOf("Compress", StringComparison.Ordinal) >= 0)) && !named.GetMembers().OfType<IMethodSymbol>().Any(method => method.GetAttributes().Any(attribute => attribute.AttributeClass?.Name.StartsWith("LuminPackOn", StringComparison.Ordinal) == true && attribute.AttributeClass.ContainingNamespace.ToDisplayString() == "LuminPack.Attribute"));

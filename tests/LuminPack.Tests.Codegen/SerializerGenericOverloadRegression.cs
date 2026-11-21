@@ -288,7 +288,7 @@ internal static class SerializerGenericOverloadRegression
                 .Replace("__REGISTRATION__", disabled ? "LuminPackRegisterMode.Disabled" : "LuminPackRegisterMode.Auto", StringComparison.Ordinal);
             var input = CSharpCompilation.Create("RegisteredDispatch" + mode + allowUnsafe + disabled,
                 [CSharpSyntaxTree.ParseText(source, parse, "Contracts.cs")], references,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: allowUnsafe, optimizationLevel: OptimizationLevel.Release));
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: allowUnsafe, optimizationLevel: OptimizationLevel.Release)).WithLegacyPackableSyntax();
             GeneratorDriver Fresh() => CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
             string Text(GeneratorDriver current) => string.Join("\n", current.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
                 .OrderBy(file => file.HintName, StringComparer.Ordinal).Select(file => file.HintName + "\n" + file.SourceText.ToString()));
@@ -302,7 +302,7 @@ internal static class SerializerGenericOverloadRegression
             string result = (string)loaded.GetType("Entry")!.GetMethod("Check")!.Invoke(null, null)!;
             digest ??= result;
             Require(result == digest, "Concrete binary or JSON bytes changed across generation and registration modes.");
-            var edited = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(
+            var edited = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(tree => tree.FilePath == "Contracts.cs"), CSharpSyntaxTree.ParseText(
                 source.Replace("public int Id;", "public long Id;", StringComparison.Ordinal), parse, "Contracts.cs"));
             var retained = driver.RunGenerators(edited);
             Require(Text(retained) == Text(Fresh().RunGenerators(edited)) && Text(retained.RunGenerators(input)) == Text(driver),

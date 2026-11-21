@@ -315,7 +315,7 @@ public partial struct BenchTile
 }
 
 /// <summary>Holds one alliance shared by many cities and armies.</summary>
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
 public sealed partial class BenchAlliance
 {
     /// <summary>Gets or sets the identifier.</summary>
@@ -626,7 +626,7 @@ public sealed partial class BenchMeshBatch
 
 // Issue #7: the previous release's bytes read by the next one.
 /// <summary>Holds the cached profile of the previous release.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public sealed partial class BenchProfileV1
 {
     /// <summary>Gets or sets the identifier.</summary>
@@ -662,7 +662,7 @@ public sealed partial class BenchProfileV1
 }
 
 /// <summary>Holds the cached profile of the next release.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public sealed partial class BenchProfileV2
 {
     /// <summary>Gets or sets the identifier.</summary>
@@ -728,7 +728,7 @@ public sealed partial class BenchOfflineState
 }
 
 /// <summary>Holds the idle-game save of the previous release.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public sealed partial class BenchIdleSaveV1
 {
     /// <summary>Gets or sets the player identifier.</summary>
@@ -756,7 +756,7 @@ public sealed partial class BenchIdleSaveV1
 }
 
 /// <summary>Holds the idle-game save of the next release.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public sealed partial class BenchIdleSaveV2
 {
     /// <summary>Gets or sets the player identifier.</summary>

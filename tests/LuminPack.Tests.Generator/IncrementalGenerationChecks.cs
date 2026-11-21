@@ -45,7 +45,8 @@ internal static class IncrementalGenerationChecks
             """);
         Verify("cached tuple fields after an unrelated edit", tuples, Replace(tuples, "Utility.cs", "17", "18"));
         Verify("cached tuple fields after a model edit", tuples, Replace(tuples, "A.cs", "int Value", "long Value"));
-        var versioned = Replace(full, "A.cs", "[LuminPack.Attribute.LuminPackable]", "[LuminPack.Attribute.LuminPackable(LuminPack.Attribute.GeneratorType.VersionTolerant)]");
+        var versioned = Replace(full.WithLegacyPackableSyntax(), "A.cs", "[LuminPack.Attribute.LuminPackable]",
+            "[LuminPack.Attribute.LuminPackable(LuminPack.Attribute.GeneratorType.VersionTolerant)]");
         var oldName = Replace(versioned, "A.cs", "public int Value", "[LuminPack.Attribute.LuminPackOldName(\"Original\")] public int Value");
         Verify("version member alias added", versioned, oldName, 1);
         Verify("version member alias edited", oldName, Replace(oldName, "A.cs", "Original", "Former"), 1);

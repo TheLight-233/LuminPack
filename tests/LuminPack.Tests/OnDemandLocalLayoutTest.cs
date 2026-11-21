@@ -14,7 +14,7 @@ namespace LuminPackUnitTest
     // ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>Provides public field circle node functionality.</summary>
-    [LuminPackable(GeneratorType.CircleReference)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
     public class PublicFieldCircleNode
     {
         /// <summary>Stores the id.</summary>
@@ -27,7 +27,7 @@ namespace LuminPackUnitTest
     }
 
     /// <summary>Provides public field version tolerant functionality.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public class PublicFieldVersionTolerant
     {
         /// <summary>Stores the a.</summary>

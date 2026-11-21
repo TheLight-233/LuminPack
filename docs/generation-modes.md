@@ -2,7 +2,7 @@
 
 [Chinese](generation-modes.cn.md) · [Back to README](../README.md)
 
-LuminPack uses one automatic generation policy. No generation mode or `CompilerVisibleProperty` is required.
+LuminPack selects operations automatically. The `GeneratorType` option on each model selects its representation independently. See [defining types](defining-types.md).
 
 - Every `[LuminPackable]` declaration contributes its serialized member graph. Libraries retain all four operations for that graph so other assemblies can consume the model.
 - Serializer calls retain the concrete payloads they require, including closed generic wrappers, container elements and Union cases.

@@ -125,7 +125,7 @@ internal static class SerializerScalarInterfaceWriteRegression
         var first = Compile(source, "ChangedInterfaceWrite", parse, references);
         var (driver, _) = Generate(first, parse);
         Require(!Methods(driver).Any(method => method.Identifier.ValueText == "RootWriteExactInterface"), "A user element acquired framework scalar eligibility.");
-        var edited = first.ReplaceSyntaxTree(first.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(source.Replace("IList<UserElement>", "IList<int>", StringComparison.Ordinal), parse));
+        var edited = first.ReplaceSyntaxTree(first.SyntaxTrees.Single(tree => tree.FilePath is not ("ConcreteReads.cs" or LegacyPackableSyntax.FileName)), CSharpSyntaxTree.ParseText(source.Replace("IList<UserElement>", "IList<int>", StringComparison.Ordinal), parse));
         driver = driver.RunGeneratorsAndUpdateCompilation(edited, out _, out var diagnostics);
         Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
         var (fresh, _) = Generate(edited, parse);
@@ -143,7 +143,7 @@ internal static class SerializerScalarInterfaceWriteRegression
     /// <returns>The targeted compilation.</returns>
     private static CSharpCompilation Compile(string source, string name, CSharpParseOptions parse, MetadataReference[] references)
         => CSharpCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, parse)], references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release)).WithLegacyPackableSyntax();
 
     /// <summary>Runs the current production generators for one targeted consumer.</summary>
     /// <param name="compilation">The original consumer.</param>

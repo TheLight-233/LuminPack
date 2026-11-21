@@ -170,7 +170,7 @@ public unsafe class DefaultReferenceContextTest
     }
 
     /// <summary>Provides an explicit circular-reference test contract.</summary>
-    [LuminPackable(GeneratorType.CircleReference)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
     public sealed class ContextNode
     {
         [LuminPackOrder(0)] public int Value;
@@ -178,7 +178,7 @@ public unsafe class DefaultReferenceContextTest
     }
 
     /// <summary>Provides a separate staging owner containing repeated circular children.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public sealed class ContextEnvelope
     {
         [LuminPackOrder(0)] public ContextNode? First;

@@ -381,39 +381,39 @@ LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Null(target);
     }
 
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Original
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Original
     {
         public int Id;
         public string? Removed;
         public string? Name;
         public long Tail;
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Current
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Current
     {
         public long Tail;
         public List<int>? Added;
         [LuminPackOldName("Name")] public string? DisplayName;
         public int Id;
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Earliest { public int A; }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class NullableRecord { public DateTime? Timestamp; public decimal Amount; }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class RemovedString { public string? Text; public int A; }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Intermediate { public int B; }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Latest
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Earliest { public int A; }
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class NullableRecord { public DateTime? Timestamp; public decimal Amount; }
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class RemovedString { public string? Text; public int A; }
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Intermediate { public int B; }
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Latest
     {
         [LuminPackOldName("A"), LuminPackOldName("B")] public int C;
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class UnicodeOriginal
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class UnicodeOriginal
     {
         [LuminPackOldName("\u540D\u524D")] public int @class;
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class UnicodeCurrent
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class UnicodeCurrent
     {
         [LuminPackOldName("\u540D\u524D"), LuminPackOldName("class")] public int Value;
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class ChangedType { public float A; }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class TwoInts { public int A; public int B; }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class VolatileMembers
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class ChangedType { public float A; }
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class TwoInts { public int A; public int B; }
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class VolatileMembers
     {
         public volatile int Number;
         [LuminPackInclude, LuminPackOldName("Secret")] private volatile int _secret;
@@ -426,8 +426,8 @@ LuminPackSerializer.Deserialize(bytes, ref target);
         /// <returns>The stored number.</returns>
         public int ReadSecret() => _secret;
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Empty { }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Constructed
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Empty { }
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Constructed
     {
         public static int Calls;
         public static int Completions;
@@ -442,7 +442,7 @@ LuminPackSerializer.Deserialize(bytes, ref target);
         [LuminPackOnDeserialized]
         public void Complete() => Completions++;
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Pooled
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Pooled
     {
         public static Pooled Instance = null!;
         public static int Rents;
@@ -453,7 +453,7 @@ LuminPackSerializer.Deserialize(bytes, ref target);
         [LuminPackPoolRent]
         public static Pooled Rent() { Rents++; return Instance; }
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public struct CallbackValue
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public struct CallbackValue
     {
         public static int Writes;
         public static int Reads;
@@ -476,29 +476,29 @@ LuminPackSerializer.Deserialize(bytes, ref target);
         [LuminPackOnDeserialized]
         public void AfterRead() => Reads++;
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Graph
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Graph
     {
         public Node Child = new();
         public List<Node> Items = [];
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class GraphBefore
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class GraphBefore
     {
         public Node Child = new();
         public List<Node> Items = [];
         public string? Removed;
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class GraphAfter
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class GraphAfter
     {
         public List<Node> Items = [];
         public List<int>? Added;
         public Node Child = new();
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Node
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Node
     {
         public string? Text;
         public int Number;
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class CallerSlot
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class CallerSlot
     {
         public static CallerSlot? Completed;
         public CallerSlot? Next;
@@ -509,18 +509,18 @@ LuminPackSerializer.Deserialize(bytes, ref target);
         public void Complete() => Completed = this;
     }
     public enum FixedFlag : short { Disabled, Enabled }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class FixedRecord
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class FixedRecord
     {
         public int Number;
         public long Stamp;
         public FixedFlag Flag;
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class FixedReordered
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class FixedReordered
     {
         public FixedFlag Flag;
         public int Added;
         public long Stamp;
     }
-    [LuminPackable(GeneratorType.VersionTolerant)] public sealed class Generic<T> { public T Value = default!; }
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class Generic<T> { public T Value = default!; }
 }
 #endif

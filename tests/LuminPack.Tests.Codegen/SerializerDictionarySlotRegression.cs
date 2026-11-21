@@ -58,7 +58,7 @@ internal static class SerializerDictionarySlotRegression
         var leafTree = CSharpSyntaxTree.ParseText("using LuminPack.Attribute; namespace DictionarySlotModels; " + leaf, parse, "Leaf.cs");
         var input = CSharpCompilation.Create("DictionarySlots_" + Guid.NewGuid().ToString("N"),
             [CSharpSyntaxTree.ParseText(source, parse, "Entry.cs"), leafTree], references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release)).WithLegacyPackableSyntax();
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);

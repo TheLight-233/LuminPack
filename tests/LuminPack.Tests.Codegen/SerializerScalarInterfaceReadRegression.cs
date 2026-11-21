@@ -78,7 +78,7 @@ internal static class SerializerScalarInterfaceReadRegression
             var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
             var compilation = CSharpCompilation.Create("ScalarInterface" + mode,
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), parse)], references,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release)).WithLegacyPackableSyntax();
             var (driver, output) = Generate(compilation, parse);
             var methods = Methods(driver);
             var trait = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits", throwOnError: true)!
@@ -109,7 +109,8 @@ internal static class SerializerScalarInterfaceReadRegression
             {
                 var compatibilityParse = new CSharpParseOptions(LanguageVersion.CSharp13);
                 var compatibility = compilation.WithReferences(FrameworkRuntimeMetadata.WithPointerCursor(CompatibilityCompilationReferences.Create())).RemoveAllSyntaxTrees()
-                    .AddSyntaxTrees(CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), compatibilityParse));
+                    .AddSyntaxTrees(CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), compatibilityParse))
+                    .WithLegacyPackableSyntax();
                 var (compatibilityDriver, _) = Generate(compatibility, compatibilityParse);
                 Require(ReadBody(Methods(compatibilityDriver), "global::System.Collections.Generic.IEnumerable<int>").ToString().Contains("Lease", StringComparison.Ordinal),
                     "The pointer compatibility metadata acquired the managed stateless entry.");

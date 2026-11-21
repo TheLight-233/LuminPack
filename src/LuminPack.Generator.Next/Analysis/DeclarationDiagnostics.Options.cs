@@ -41,8 +41,45 @@ internal static partial class TypeModelFactory
                     return _assemblyDiagnostics;
                 var diagnostics = new DeclarationDiagnosticBag();
                 ValidateCompiledOptions(_compilation.Assembly, ref diagnostics);
+                ValidatePackableMarkers(_compilation.Assembly, ref diagnostics);
                 _assemblyDiagnostics = diagnostics.ToArray();
                 return _assemblyDiagnostics;
+            }
+        }
+
+        /// <summary>Checks that type declarations and external assembly markers use their respective constructors.</summary>
+        /// <param name="symbol">The marked type or consuming assembly declaration.</param>
+        /// <param name="diagnostics">Receives marker errors at their source attributes.</param>
+        private static void ValidatePackableMarkers(ISymbol symbol, ref DeclarationDiagnosticBag diagnostics)
+        {
+            bool seen = false;
+            foreach (AttributeData attribute in symbol.GetAttributes())
+            {
+                if (attribute.AttributeClass?.ToDisplayString() != PackableAttribute || attribute.AttributeConstructor == null)
+                    continue;
+                var arguments = attribute.ConstructorArguments;
+                string? error = null;
+                if (symbol is IAssemblySymbol assembly)
+                {
+                    if (arguments.Length != 1 || arguments[0].Kind != TypedConstantKind.Type ||
+                        arguments[0].Value is not INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Struct or TypeKind.Interface } target ||
+                        SymbolEqualityComparer.Default.Equals(target.ContainingAssembly, assembly))
+                        error = "Use [assembly: LuminPackable(typeof(T))] to mark a class, struct or interface from a referenced assembly.";
+                    else if (HasUnresolvedImportedMarker(target))
+                        error = $"The imported type '{target.ToDisplayString()}' uses a LuminPackable constructor unavailable in this runtime. Recompile its declaring assembly with the current LuminPack attributes.";
+                }
+                else if (arguments.Length != 0 && (arguments.Length != 1 || arguments[0].Kind != TypedConstantKind.Enum))
+                {
+                    error = "Use [LuminPackable] on a type declaration. The typeof argument is reserved for assembly markers.";
+                }
+                else if (seen)
+                {
+                    error = "Apply [LuminPackable] once per type declaration, including partial declarations.";
+                }
+                if (error != null)
+                    diagnostics.Add(DiagnosticInfo.Capture(DiagnosticDescriptors.InvalidPackableMarker.Id,
+                        attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation(), new[] { error }));
+                seen = true;
             }
         }
 
@@ -75,7 +112,7 @@ internal static partial class TypeModelFactory
                     if (argument.Key is "FramedGroupings" or "RequireCompleteBinaryInput" && symbol is not IAssemblySymbol)
                         error = argument.Key + " applies only to assembly declarations.";
                     if (argument.Key == "IncludeCollectionBase" && (symbol is not INamedTypeSymbol declaration || !CanIncludeCollectionBase(declaration)))
-                        error = "IncludeCollectionBase applies to a concrete LuminPackable Object class with a closed List<T> base and no reference tracking.";
+                        error = "IncludeCollectionBase applies to a concrete LuminPackable class in Default mode with a closed List<T> base and no reference tracking.";
                     if (argument.Key is "WideTag" or "SingleImplementation" && symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Interface })
                         error = "Union contract switches apply only to class and interface declarations.";
                     if (argument.Key == "ReuseRectangularArraySlots" && symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class })
@@ -113,7 +150,7 @@ internal static partial class TypeModelFactory
         {
             bool packed = type.TypeKind == TypeKind.Struct && (type.IsUnmanagedType || ReadStructLayoutOption(type.GetAttributes()) == 1) &&
                 LayoutStrategy(type) == 1;
-            if (packed && (GenerationMode(type) != "Object" || !SupportedPortableStorage(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default))))
+            if (packed && (GenerationMode(type) != PayloadGeneration.Default || !SupportedPortableStorage(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default))))
                 diagnostics.Add(DiagnosticDescriptors.UnsupportedPortableStorage, type, type.ToDisplayString());
         }
 
@@ -149,7 +186,7 @@ internal static partial class TypeModelFactory
                 return parameter.HasUnmanagedTypeConstraint;
             if (type is not INamedTypeSymbol { IsUnmanagedType: true, TypeKind: TypeKind.Struct } named ||
                 named.SpecialType is SpecialType.System_IntPtr or SpecialType.System_UIntPtr || IsRuntimeSizedVector(named) ||
-                GenerationMode(named) == "Custom" || HasAttribute(named, "System.Runtime.CompilerServices.InlineArrayAttribute"))
+                GenerationMode(named) == PayloadGeneration.Custom || HasAttribute(named, "System.Runtime.CompilerServices.InlineArrayAttribute"))
                 return false;
             PortablePlanField[]? fields = PlanFields(named, strict: true);
             return fields != null && fields.All(field => SupportedPortableStorage(field.Type, visited));

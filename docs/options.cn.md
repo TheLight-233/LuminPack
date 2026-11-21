@@ -27,6 +27,7 @@ public partial class Message
 
 | 属性 | 默认值 | 含义 |
 | --- | --- | --- |
+| `GeneratorType` | `Default` | 为单个 `[LuminPackable]` 类型选择 `Default`、`Version` 或 `Custom`。见[定义类型](defining-types.cn.md)。 |
 | `StringEncoding` | `UTF16` | 二进制字符串编码，可按成员设置。对 JSON 而言是整份文档的编码，由根类型决定。 |
 | `StringRecording` | `Length` | 固定宽度长度头、可选的 `VarInt` 长度头，或 `Token`（以终止符结束；`null` 和 `""` 读回来都是 `""`）。 |
 | `FramedGroupings` | `false` | Next 程序集选项，为二进制 `IGrouping<TKey, TElement>` 提供明确的分组帧，也适用于 `ILookup<TKey, TElement>` 内的分组。 |
@@ -73,7 +74,7 @@ public sealed partial class MessageBody : MessageBase { public int Id; }
 
 ## 引用跟踪
 
-将 `[LuminPackOption(TrackReferences = true)]` 直接声明在采用 Object 或 VersionTolerant 格式的类上。该契约仅作用于标注的类，也只能通过此特性配置。字符串编码仍由通常的选项声明或操作配置决定。在程序集、结构体、接口、字段或属性上声明该属性会报告 `LuminPack110`。详见[引用跟踪](versioning.cn.md#reference-tracking)。
+将 `[LuminPackOption(TrackReferences = true)]` 直接声明在采用 Default 或 Version 格式的类上。该契约仅作用于标注的类，也只能通过此特性配置。字符串编码仍由通常的选项声明或操作配置决定。在程序集、结构体、接口、字段或属性上声明该属性会报告 `LuminPack110`。详见[引用跟踪](versioning.cn.md#reference-tracking)。
 
 ## 显式配置
 

@@ -12,7 +12,7 @@ internal static partial class SerializerIssueRegression
             using LuminPack;
             using LuminPack.Attribute;
 
-            [LuminPackable(GeneratorType.CircleReference)]
+            [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
             public sealed partial class Card
             {
                 [LuminPackOrder(0)] public int Id;

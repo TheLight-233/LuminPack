@@ -7,7 +7,7 @@ using Xunit;
 namespace LuminPackUnitTest
 {
     /// <summary>
-    /// [LuminPackable(GeneratorType.Custom)] types emit no generated formatters; the user
+    /// [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)] types emit no generated formatters; the user
     /// writes static Serialize/Deserialize methods and the source generator registers them
     /// automatically via LuminPackSerializer.Register through a module initializer.
     /// </summary>
@@ -15,7 +15,7 @@ namespace LuminPackUnitTest
     {
         // ---- Tier 1: binary only ----
         /// <summary>Provides custom binary type functionality.</summary>
-        [LuminPackable(GeneratorType.Custom)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]
         public sealed class CustomBinaryType
         {
             /// <summary>Stores the id.</summary>
@@ -45,7 +45,7 @@ namespace LuminPackUnitTest
 
         // ---- Tier 2: binary + JSON ----
         /// <summary>Provides custom json type functionality.</summary>
-        [LuminPackable(GeneratorType.Custom)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]
         public sealed class CustomJsonType
         {
             /// <summary>Stores the number.</summary>
@@ -116,7 +116,7 @@ namespace LuminPackUnitTest
 
         // ---- Tier 3: binary + JSON + calculate ----
         /// <summary>Provides custom full type functionality.</summary>
-        [LuminPackable(GeneratorType.Custom)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]
         public sealed class CustomFullType
         {
             /// <summary>Stores the a.</summary>

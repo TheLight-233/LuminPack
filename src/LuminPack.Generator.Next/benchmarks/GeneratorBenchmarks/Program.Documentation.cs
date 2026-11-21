@@ -116,9 +116,9 @@ internal static partial class Program
             [FieldOffset(0)] public long Value;
             [FieldOffset(8), LuminPackIgnore] public int Padding;
         }
-        [LuminPackable(GeneratorType.VersionTolerant)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
         public sealed class VersionedDoc { [LuminPackOldName("old_value")] public int Number; public string Name; }
-        [LuminPackable(GeneratorType.CircleReference)]
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
         public sealed class CircleDoc { [LuminPackOrder(0)] public CircleDoc Next; [LuminPackOrder(1)] public int Number; }
         [LuminPackable] public sealed class GenericDoc<T> { public T Value; public string Name; }
         [LuminPackable, LuminPackUnion(1, typeof(KnownDoc))] public abstract partial class RootDoc { }

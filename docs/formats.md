@@ -32,11 +32,11 @@ In a full record, each descriptor holds a name key, a type-contract hash and a w
 
 | Record | Bytes |
 | --- | --- |
-| First occurrence | `byte memberCount, VarInt referenceId, Object or VersionTolerant body` |
+| First occurrence | `byte memberCount, VarInt referenceId, positional or version-tolerant body` |
 | Back reference | `250, VarInt referenceId` |
 | Null | `255` |
 
-The first marker gives the writer's member count (0–249). It is followed by the explicit reference id and a record of the selected format. A VersionTolerant body can be a full or short record.
+The first marker gives the writer's member count (0–249). It is followed by the explicit reference id and a record of the selected format. A version-tolerant body can be a full or short record.
 
 ### String
 

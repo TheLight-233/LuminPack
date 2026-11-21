@@ -71,8 +71,8 @@ internal static class JsonNameHashRegression
             }).ToArray();
             var source = new StringBuilder("using LuminPack; using LuminPack.Attribute; using LuminPack.Option;\n");
             source.AppendLine("[assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Auto, ForceGenerateDeserializeJson = true)]");
-            source.AppendLine(shape == "Circle" ? "[LuminPackable(GeneratorType.CircleReference)]" :
-                shape == "Aliases" ? "[LuminPackable(GeneratorType.VersionTolerant)]" : "[LuminPackable]");
+            source.AppendLine(shape == "Circle" ? "[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]" :
+                shape == "Aliases" ? "[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]" : "[LuminPackable]");
             source.AppendLine("public partial class Payload {");
             string alias = new string('a', 257) + "\u540d\u79f0";
             for (int i = 0; i < names.Length; i++)

@@ -303,7 +303,7 @@ internal static partial class SerializerCodegenPerformanceRegression
             """;
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET10_0_OR_GREATER", "NET11_0_OR_GREATER"]);
         var compilation = TestCompilation.Create("CodegenPerformance", [CSharpSyntaxTree.ParseText(source, parse)], references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release)).WithLegacyPackableSyntax();
         VerifyFreshListTemplates(compilation);
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
@@ -436,7 +436,7 @@ internal static partial class SerializerCodegenPerformanceRegression
         var emit = output.Emit(image);
         Require(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));
         Assembly.Load(image.ToArray()).GetType("Entry")!.GetMethod("Check")!.Invoke(null, null);
-        var originalTree = compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs");
+        var originalTree = compilation.SyntaxTrees.Single(tree => tree.FilePath is not ("ConcreteReads.cs" or LegacyPackableSyntax.FileName));
         var edited = compilation.ReplaceSyntaxTree(originalTree, originalTree.WithChangedText(
             Microsoft.CodeAnalysis.Text.SourceText.From(source.Replace("public volatile int Head;", "public int Head;", StringComparison.Ordinal))));
         var retained = driver.RunGenerators(edited).GetRunResult();

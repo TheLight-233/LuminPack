@@ -34,9 +34,19 @@ internal static class SerializerBinaryStringPairRegression
         var parse = new CSharpParseOptions(LanguageVersion.Preview,
             preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER", "NET11_0_OR_GREATER"])
             .WithFeatures([new("InterceptorsNamespaces", "LuminPack")]);
+        var sourceTree = CSharpSyntaxTree.ParseText(Source, parse, "StringPairs.cs");
         var input = CSharpCompilation.Create("BinaryStringPairs" + (expectPairs ? "Current" : "Previous"),
-            [CSharpSyntaxTree.ParseText(Source, parse, "StringPairs.cs")], references,
+            [sourceTree], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+        if (input.GetTypeByMetadataName("LuminPack.Attribute.LuminPackOptionAttribute")?.GetMembers("GeneratorType").IsEmpty == true)
+        {
+            string legacySource = Source
+                .Replace("LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)",
+                    "LuminPackable(GeneratorType.CircleReference)", StringComparison.Ordinal)
+                .Replace("LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)",
+                    "LuminPackable(GeneratorType.VersionTolerant)", StringComparison.Ordinal);
+            input = input.ReplaceSyntaxTree(sourceTree, CSharpSyntaxTree.ParseText(legacySource, parse, sourceTree.FilePath));
+        }
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new ModelBasedGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
         string generated = string.Join("\n", driver.GetRunResult().GeneratedTrees.Select(tree => tree.GetText().ToString()));
@@ -90,8 +100,8 @@ internal static class SerializerBinaryStringPairRegression
         }
         [LuminPackable] public sealed class MirroredRecord { public string A3 { get; set; } public string B3; }
         [LuminPackable] public sealed class VolatileRecord { public volatile string A4; public string B4; }
-        [LuminPackable(GeneratorType.VersionTolerant)] public sealed class VersionRecord { public string A5; public string B5; }
-        [LuminPackable(GeneratorType.CircleReference)] public sealed class TrackedRecord
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)] public sealed class VersionRecord { public string A5; public string B5; }
+        [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)] public sealed class TrackedRecord
         {
             [LuminPackOrder(0)] public string A6; [LuminPackOrder(1)] public string B6;
         }

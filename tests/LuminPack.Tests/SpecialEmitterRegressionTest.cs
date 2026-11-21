@@ -354,7 +354,7 @@ public partial struct AuditPortableElement
 }
 
 /// <summary>Uses a deliberately different wire width from its four-byte native storage.</summary>
-[LuminPackable(GeneratorType.Custom)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]
 public struct AuditCustomElement
 {
     public int Value;

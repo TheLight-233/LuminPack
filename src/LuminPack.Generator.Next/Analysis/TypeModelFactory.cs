@@ -119,7 +119,7 @@ internal static partial class TypeModelFactory
     internal static string? CustomRegistration(INamedTypeSymbol symbol, GeneratorOptions options, out bool json)
     {
         json = false;
-        if (options.RegisterMode == RegisterMode.Disabled || GenerationMode(symbol) != "Custom")
+        if (options.RegisterMode == RegisterMode.Disabled || GenerationMode(symbol) != PayloadGeneration.Custom)
             return null;
         bool Declares(string name) => symbol.GetMembers(name).OfType<IMethodSymbol>().Any(method => method.MethodKind == MethodKind.Ordinary);
         if (!Declares("Serialize") || !Declares("Deserialize"))
@@ -271,17 +271,17 @@ internal static partial class TypeModelFactory
         /// <param name="constraints">The generic declaration constraints.</param>
         /// <returns>The struct storage and member model.</returns>
         private StructModel CreateStructModel(INamedTypeSymbol symbol, TypeIdentity identity, TypeAccessibility accessibility,
-            WirePolicy policy, int depth, List<string> issues, Path path, string generatorType, string[] constraints)
+            WirePolicy policy, int depth, List<string> issues, Path path, PayloadGeneration generatorType, string[] constraints)
         {
             MemberModel[] members = Members(symbol, policy, depth, issues, out _, path);
             // A closed generic struct whose definition is not unmanaged keeps its definition's object contract, which can close over
             // references, as the original state contract rule does; only a definition that is unmanaged itself stores natively.
             bool unmanaged = symbol.IsUnmanagedType && !(symbol.IsGenericType && !symbol.OriginalDefinition.IsUnmanagedType);
-            PortableLayout? layout = unmanaged && generatorType == "Object" ? TryPortableLayout(symbol) : null;
+            PortableLayout? layout = unmanaged && generatorType == PayloadGeneration.Default ? TryPortableLayout(symbol) : null;
             bool unsupportedPacked = unmanaged && IsUnsupportedPackedStorage(symbol);
             if (unsupportedPacked)
                 issues.Add("the recursive Packed layout contains unsupported storage");
-            bool nativeContract = unmanaged && generatorType == "Object" && !unsupportedPacked &&
+            bool nativeContract = unmanaged && generatorType == PayloadGeneration.Default && !unsupportedPacked &&
                 !ContainsCustomContract(symbol, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
             StructStorage storage = !nativeContract ? StructStorage.ManagedRecord :
                 layout == null ? StructStorage.RawUnmanaged : StructStorage.PortableUnmanaged;
@@ -300,12 +300,12 @@ internal static partial class TypeModelFactory
                 construction = construction.Rented();
             bool rentByRef = rentCall != null && symbol.GetMembers().OfType<IMethodSymbol>()
                 .Any(method => HasAttribute(method, PoolRentAttribute) && method.ReturnsByRef);
-            VersionSchemaModel? version = generatorType == "VersionTolerant" ?
+            VersionSchemaModel? version = generatorType == PayloadGeneration.Version ?
                 TryVersionSchema(symbol, identity, members, policy, false, issues) : null;
             return new StructModel(identity, accessibility, members, policy, constraints, storage, layout,
-                RecordWidthSupported(symbol), versioned: generatorType == "VersionTolerant",
+                RecordWidthSupported(symbol), versioned: generatorType == PayloadGeneration.Version,
                 rent: managed && Rent(symbol), constructors: managed && Constructors(symbol),
-                callbacks: managed && Callbacks(symbol), storagePlan: unmanaged && generatorType == "Object" ? FormatterStorage(symbol) : null,
+                callbacks: managed && Callbacks(symbol), storagePlan: unmanaged && generatorType == PayloadGeneration.Default ? FormatterStorage(symbol) : null,
                 mirror: mirror, mirrorFields: mirrorFields, mirrorOffsets: mirrorOffsets, mirrorLayout: mirrorLayout,
                 construction: construction, serializationCallbacks: callbacks, version: version, rentCall: rentCall, rentByRef: rentByRef);
         }
@@ -318,13 +318,17 @@ internal static partial class TypeModelFactory
         /// <returns>The model, or null when the declaration itself is outside the surface.</returns>
         private TypeModel? CreateCore(INamedTypeSymbol symbol, int depth, List<string> issues, Path path)
         {
-            var attribute = symbol.GetAttributes().FirstOrDefault(item =>
-                item.AttributeClass?.ToDisplayString() == PackableAttribute);
+            bool hasPackableMarker = IsPackable(symbol);
             // A plain class reached as a member is expanded like a nested object record without its own declaration; a referenced
-            // type marked by the assembly is an Object payload of this compilation.
-            if (attribute == null && !IsImplicitInlineClass(symbol) && !Marked(symbol))
+            // type marked by the assembly has a payload contract in this compilation.
+            if (!hasPackableMarker && !IsImplicitInlineClass(symbol) && !Marked(symbol))
             {
                 issues.Add("not a LuminPackable declaration");
+                return null;
+            }
+            if (hasPackableMarker && HasUnresolvedImportedMarker(symbol))
+            {
+                issues.Add("the imported LuminPackable marker constructor is unavailable");
                 return null;
             }
             if (symbol.IsStatic)
@@ -349,8 +353,8 @@ internal static partial class TypeModelFactory
                 return null;
             }
 
-            string generatorType = attribute == null ? "Object" : GeneratorTypeName(attribute);
-            if (generatorType is "NonGenerator" or "Custom")
+            PayloadGeneration generatorType = GenerationMode(symbol);
+            if (generatorType is PayloadGeneration.LegacyManual or PayloadGeneration.Custom)
             {
                 issues.Add("generator type '" + generatorType + "' owns its formatter outside the payload renderers");
                 return null;
@@ -418,7 +422,7 @@ internal static partial class TypeModelFactory
                 default:
                 {
                     MemberModel[] members = Members(symbol, policy, depth, issues, out bool derived, path);
-                    bool versioned = generatorType is "VersionTolerant" or "CircleReference";
+                    bool versioned = generatorType is PayloadGeneration.Version or PayloadGeneration.LegacyTrackedVersion;
                     // A class whose serialized content is only a supported List<T> base publishes that list's body. Modeling it
                     // as an empty record would write the object marker alone and silently drop every element on read.
                     bool includeCollectionBase = OptionSwitch(symbol, "IncludeCollectionBase") && CanIncludeCollectionBase(symbol);
@@ -466,7 +470,7 @@ internal static partial class TypeModelFactory
                         // A declared depth limit counts nesting only on recursive records, including a trusted record read under
                         // a bounded root; without one, recursion keeps only its stack guard. A list-derived payload nests through
                         // its own elements, so it keeps the guard as well.
-                        recursive: sequenceBase != null || IsRecursive(symbol), implicitPayload: attribute == null,
+                        recursive: sequenceBase != null || IsRecursive(symbol), implicitPayload: !hasPackableMarker,
                         sequenceBase: sequenceBase?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                         sequenceElement: sequenceBase?.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), collectionBase: collectionBase,
                         scalarHeader: symbol.BaseType?.SpecialType == SpecialType.System_Object && symbol.AllInterfaces.IsEmpty && HasScalarHeader,
@@ -566,7 +570,7 @@ internal static partial class TypeModelFactory
         /// <returns>Whether the ordinary record and its closed list base can be written together.</returns>
         private bool CanIncludeCollectionBase(INamedTypeSymbol symbol) =>
             symbol is { TypeKind: TypeKind.Class, IsAbstract: false } && IsPackable(symbol) &&
-            GenerationMode(symbol) == "Object" && !TracksReferences(symbol) &&
+            GenerationMode(symbol) == PayloadGeneration.Default && !TracksReferences(symbol) &&
             CollectionBaseType(symbol) is { } list && !ContainsTypeParameter(list);
 
         /// <summary>Decides whether a declared member has serialized instance storage and how it is reached.</summary>
@@ -1069,7 +1073,7 @@ internal static partial class TypeModelFactory
                 return false;
             // As in the original formatter rule, only the ordinary object mode stores raw: version-tolerant, circle-reference,
             // custom and formatter-less declarations frame their values themselves.
-            if (GenerationMode(named) != "Object")
+            if (GenerationMode(named) != PayloadGeneration.Default)
                 return false;
             // A closed generic packable struct whose definition is not unmanaged keeps its definition's object contract, which
             // can close over references; its closed value is not raw storage.
@@ -1119,7 +1123,7 @@ internal static partial class TypeModelFactory
         /// <param name="type">The candidate storage type.</param>
         /// <returns>Whether its width depends on an undetermined type argument.</returns>
         private static bool RequiresClosedDispatch(ITypeSymbol type)
-            => type is INamedTypeSymbol { IsGenericType: true } named && IsPackable(named) && GenerationMode(named) == "Object";
+            => type is INamedTypeSymbol { IsGenericType: true } named && IsPackable(named) && GenerationMode(named) == PayloadGeneration.Default;
 
         /// <summary>Models a member that embeds another payload or a generic definition.</summary>
         /// <param name="member">The declared member.</param>
@@ -1144,7 +1148,7 @@ internal static partial class TypeModelFactory
                 return null;
             }
             // A type that owns its formatter outside the payload renderers is referenced through its registered member entry.
-            if (GenerationMode(type) is "NonGenerator" or "Custom")
+            if (GenerationMode(type) is PayloadGeneration.LegacyManual or PayloadGeneration.Custom)
                 return new PayloadMember(name, storage, policy, Reference(type), PayloadShape.MemberEntry, nested: null);
             // A generic payload closes over a formatter contract at the operation boundary; its complete member graph is not
             // expanded here, so it stays a member entry.
@@ -1309,7 +1313,7 @@ internal static partial class TypeModelFactory
                 }
                 if (!ownEntry && !expandable && caseModel is RecordModel && analyzed.IsComplete &&
                     SymbolEqualityComparer.Default.Equals(caseType.ContainingAssembly, _compilation.Assembly) &&
-                    !ContainsTypeParameter(caseType) && GenerationMode(caseType) != "Custom")
+                    !ContainsTypeParameter(caseType) && GenerationMode(caseType) != PayloadGeneration.Custom)
                     ownEntry = true;
                 if (!ownEntry && !expandable)
                 {
@@ -1402,7 +1406,7 @@ internal static partial class TypeModelFactory
         /// <returns>Whether the case owns its Union read entry.</returns>
         private bool ReadsOwnUnionEntry(INamedTypeSymbol type)
             => type is { IsReferenceType: true, IsAbstract: false, TypeKind: TypeKind.Class } && Owned(type) &&
-               !ContainsTypeParameter(type) && GenerationMode(type) != "Custom" && (TracksReferences(type) || HasVariablePayload(type));
+               !ContainsTypeParameter(type) && GenerationMode(type) != PayloadGeneration.Custom && (TracksReferences(type) || HasVariablePayload(type));
 
         /// <summary>Whether some instance field or property of the case or its bases is not unmanaged storage.</summary>
         /// <param name="type">The concrete case.</param>
@@ -1542,7 +1546,7 @@ internal static partial class TypeModelFactory
         {
             var cases = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
             if (issues.Count != 0 || !IsFixedCursorUnionRoot(root) ||
-                !SymbolEqualityComparer.Default.Equals(root.ContainingAssembly, _compilation.Assembly) || GenerationMode(root) != "Object")
+                !SymbolEqualityComparer.Default.Equals(root.ContainingAssembly, _compilation.Assembly) || GenerationMode(root) != PayloadGeneration.Default)
                 return cases;
             foreach (var item in declared.OrderBy(member => member.Tag))
                 if (item.Type is { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } &&
@@ -1559,7 +1563,7 @@ internal static partial class TypeModelFactory
         private bool IsFixedUnionCase(INamedTypeSymbol type)
         {
             if (type is not { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } || !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly) ||
-                GenerationMode(type) != "Object")
+                GenerationMode(type) != PayloadGeneration.Default)
                 return false;
             INamedTypeSymbol? root = FixedUnionRoot(type);
             if (root == null)
@@ -1567,7 +1571,7 @@ internal static partial class TypeModelFactory
             var issues = new List<string>();
             var declared = UnionMembers(root, issues, out _);
             if (issues.Count != 0 || !IsFixedCursorUnionRoot(root) ||
-                !SymbolEqualityComparer.Default.Equals(root.ContainingAssembly, _compilation.Assembly) || GenerationMode(root) != "Object")
+                !SymbolEqualityComparer.Default.Equals(root.ContainingAssembly, _compilation.Assembly) || GenerationMode(root) != PayloadGeneration.Default)
                 return false;
             return declared.Any(item => SymbolEqualityComparer.Default.Equals(item.Type, type)) && CanUseCursorPayload(type);
         }
@@ -1588,7 +1592,7 @@ internal static partial class TypeModelFactory
             }
             return type.AllInterfaces.FirstOrDefault(parent => IsPackable(parent) &&
                 IsFixedCursorUnionRoot(parent) && SymbolEqualityComparer.Default.Equals(parent.ContainingAssembly, _compilation.Assembly) &&
-                GenerationMode(parent) == "Object" && UnionCaseDeclarations(parent).Any(declaration =>
+                GenerationMode(parent) == PayloadGeneration.Default && UnionCaseDeclarations(parent).Any(declaration =>
                     SymbolEqualityComparer.Default.Equals(declaration.Type, type)));
         }
 
@@ -1608,7 +1612,7 @@ internal static partial class TypeModelFactory
             var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
             for (var level = type; level != null && level.SpecialType != SpecialType.System_Object; level = level.BaseType)
             {
-                if (GenerationMode(level) != "Object")
+                if (GenerationMode(level) != PayloadGeneration.Default)
                     return false;
                 foreach (var member in level.GetMembers())
                 {
@@ -1646,7 +1650,7 @@ internal static partial class TypeModelFactory
                 return true;
             if (type is not INamedTypeSymbol named)
                 return true;
-            if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T || GenerationMode(named) != "Object" ||
+            if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T || GenerationMode(named) != PayloadGeneration.Default ||
                 HasAttribute(named, UnionAttribute) || HasAttribute(named, "System.Runtime.CompilerServices.UnionAttribute"))
                 return false;
             return named.TypeKind != TypeKind.Struct || named.GetMembers().OfType<IFieldSymbol>()
@@ -1890,7 +1894,7 @@ internal static partial class TypeModelFactory
             PortablePlan? plan;
             if (LayoutStrategy(symbol) == 1)
             {
-                if (GenerationMode(symbol) != "Object")
+                if (GenerationMode(symbol) != PayloadGeneration.Default)
                     return null;
                 plan = AnalyzePortable(symbol, strict: true);
                 if (plan?.HasPadding != true)
@@ -1913,7 +1917,7 @@ internal static partial class TypeModelFactory
         {
             if (named.TypeKind != TypeKind.Struct || named.SpecialType != SpecialType.None || !named.IsUnmanagedType)
                 return null;
-            if ((strategy ?? LayoutStrategy(named)) != 0 || GenerationMode(named) != "Object")
+            if ((strategy ?? LayoutStrategy(named)) != 0 || GenerationMode(named) != PayloadGeneration.Default)
                 return null;
             if (PortableScalarSize(named) != 0 || ContainsTypeParameter(named) || Opaque(named) != null)
                 return null;
@@ -1951,7 +1955,7 @@ internal static partial class TypeModelFactory
         /// <returns>Whether the type has an ordinary unmanaged layout with fields to inspect.</returns>
         private static bool CanInheritPackedStorage(INamedTypeSymbol symbol) =>
             symbol is { TypeKind: TypeKind.Struct, IsUnmanagedType: true, SpecialType: SpecialType.None or SpecialType.System_Nullable_T } &&
-            Opaque(symbol) == null && !FrameworkScalarBody.Contains(FormatterName(symbol)) && GenerationMode(symbol) == "Object";
+            Opaque(symbol) == null && !FrameworkScalarBody.Contains(FormatterName(symbol)) && GenerationMode(symbol) == PayloadGeneration.Default;
 
         /// <summary>Recognizes aggregates whose selected Packed layout cannot be emitted.</summary>
         /// <param name="symbol">The unmanaged aggregate.</param>
@@ -2015,7 +2019,7 @@ internal static partial class TypeModelFactory
         private static bool IsImplicitFormatterType(INamedTypeSymbol type)
             => type.TypeKind == TypeKind.Struct && type.IsUnmanagedType && !type.IsRefLikeType && type.ContainingType == null &&
                type.SpecialType == SpecialType.None && !type.IsTupleType && type.DeclaringSyntaxReferences.Length != 0 &&
-               !type.IsGenericType && !IsPackable(type) && GenerationMode(type) != "Custom" && Opaque(type) == null;
+               !type.IsGenericType && !IsPackable(type) && GenerationMode(type) != PayloadGeneration.Custom && Opaque(type) == null;
 
         /// <summary>Whether JSON can assign a fresh instance directly instead of staging members in temporaries.</summary>
         /// <param name="symbol">The record declaration.</param>
@@ -2054,7 +2058,7 @@ internal static partial class TypeModelFactory
         /// <param name="symbol">The struct declaration.</param>
         /// <returns>Whether every instance member is a fixed-width primitive.</returns>
         private static bool RecordWidthSupported(INamedTypeSymbol symbol)
-            => GenerationMode(symbol) is not ("NonGenerator" or "Custom") && IsFixedRecord(symbol);
+            => GenerationMode(symbol) is not (PayloadGeneration.LegacyManual or PayloadGeneration.Custom) && IsFixedRecord(symbol);
 
         /// <summary>Recognizes a source-declared object record whose every instance field and property is a primitive or enum.</summary>
         /// <param name="type">The candidate type.</param>
@@ -2064,11 +2068,7 @@ internal static partial class TypeModelFactory
             if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct) || type.IsAbstract || type.IsStatic || type.IsRefLikeType ||
                 ContainsTypeParameter(type))
                 return false;
-            var packable = type.GetAttributes().FirstOrDefault(attribute =>
-                attribute.AttributeClass?.ToDisplayString() == PackableAttribute);
-            if (packable == null || packable.ConstructorArguments.Length == 1 &&
-                !(packable.ConstructorArguments[0].Kind == TypedConstantKind.Enum &&
-                  Convert.ToInt32(packable.ConstructorArguments[0].Value, CultureInfo.InvariantCulture) is 0 or 1))
+            if (!IsPackable(type) || GenerationMode(type) is not (PayloadGeneration.Default or PayloadGeneration.Version))
                 return false;
             for (var current = type; current != null && current.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType);
                 current = current.BaseType)
@@ -2082,11 +2082,8 @@ internal static partial class TypeModelFactory
                         return false;
                 if (OptionSwitch(current, "WideTag") || OptionSwitch(current, "SingleImplementation"))
                     return false;
-                if (!SymbolEqualityComparer.Default.Equals(current, type) && current.GetAttributes().Any(attribute =>
-                        attribute.AttributeClass?.ToDisplayString() == PackableAttribute &&
-                        attribute.ConstructorArguments.Length == 1 &&
-                        !(attribute.ConstructorArguments[0].Kind == TypedConstantKind.Enum &&
-                          Convert.ToInt32(attribute.ConstructorArguments[0].Value, CultureInfo.InvariantCulture) == 0)))
+                if (!SymbolEqualityComparer.Default.Equals(current, type) && IsPackable(current) &&
+                    GenerationMode(current) != PayloadGeneration.Default)
                     return false;
                 foreach (var member in current.GetMembers())
                 {
@@ -2326,7 +2323,7 @@ internal static partial class TypeModelFactory
                     Alignment32 = opaque.Alignment32, Alignment64 = opaque.Alignment64
                 };
             if (type is not INamedTypeSymbol { IsUnmanagedType: true, TypeKind: TypeKind.Struct } named ||
-                GenerationMode(named) == "Custom" ||
+                GenerationMode(named) == PayloadGeneration.Custom ||
                 named.SpecialType is SpecialType.System_IntPtr or SpecialType.System_UIntPtr ||
                 IsRuntimeSizedVector(named) ||
                 named.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() ==
@@ -3416,7 +3413,7 @@ internal static partial class TypeModelFactory
         /// <returns>The legacy Other code, or the declared class or struct code of a non-object packable.</returns>
         private static int VersionOwnFormatterType(ITypeSymbol type) =>
             type is INamedTypeSymbol { IsRecord: false, IsAbstract: false, TypeKind: TypeKind.Class or TypeKind.Struct } named &&
-            IsPackable(named) && GenerationMode(named) != "Object" ? named.TypeKind == TypeKind.Class ? 16 : 15 : 19;
+            IsPackable(named) && GenerationMode(named) != PayloadGeneration.Default ? named.TypeKind == TypeKind.Class ? 16 : 15 : 19;
 
         /// <summary>Classifies a member's declared type with the legacy schema codes.</summary>
         /// <param name="type">The declared member type.</param>
@@ -3507,7 +3504,7 @@ internal static partial class TypeModelFactory
             int scalarWidth = PortableScalarSize(type);
             if (scalarWidth != 0)
                 return scalarWidth;
-            if (type is not INamedTypeSymbol { IsUnmanagedType: true } named || GenerationMode(named) != "Object" ||
+            if (type is not INamedTypeSymbol { IsUnmanagedType: true } named || GenerationMode(named) != PayloadGeneration.Default ||
                 ContainsTypeParameter(named) || IsRuntimeSizedVector(named))
                 return null;
             if (type.SpecialType == SpecialType.System_DateTime || Builtin(type) == "global::System.TimeSpan")
@@ -3917,35 +3914,6 @@ internal static partial class TypeModelFactory
         return PayloadKind.Record;
     }
 
-    /// <summary>Reads the enum member name of the packable attribute's generation mode.</summary>
-    /// <param name="attribute">The packable attribute instance.</param>
-    /// <returns>The declared mode name, or <c>Object</c> for the default.</returns>
-    private static string GeneratorTypeName(AttributeData attribute)
-    {
-        TypedConstant argument = default;
-        bool found = false;
-        foreach (var named in attribute.NamedArguments)
-        {
-            if (named.Key != "generatorType")
-                continue;
-            argument = named.Value;
-            found = true;
-        }
-        if (!found && attribute.ConstructorArguments.Length != 0)
-        {
-            argument = attribute.ConstructorArguments[0];
-            found = true;
-        }
-        if (!found || argument.Value == null || argument.Type is not INamedTypeSymbol enumType)
-            return "Object";
-        int value = Convert.ToInt32(argument.Value, CultureInfo.InvariantCulture);
-        foreach (var member in enumType.GetMembers().OfType<IFieldSymbol>())
-            if (member.HasConstantValue &&
-                Convert.ToInt32(member.ConstantValue, CultureInfo.InvariantCulture) == value)
-                return member.Name;
-        return "Object";
-    }
-
     /// <summary>Spells the canonical Union slot suffix for an identity.</summary>
     /// <param name="identity">The Union root identity.</param>
     /// <returns>The slot suffix.</returns>
@@ -3988,11 +3956,6 @@ internal static partial class TypeModelFactory
         return fallback;
     }
 
-    /// <summary>Whether a type carries the packable attribute.</summary>
-    /// <param name="symbol">The candidate type.</param>
-    /// <returns>Whether the type declares a generated payload contract.</returns>
-    private static bool IsPackable(INamedTypeSymbol symbol) => HasAttribute(symbol, PackableAttribute);
-
     /// <summary>Whether an unannotated class is expanded inline as a nested object, as the original pipeline does.</summary>
     /// <param name="type">The member type.</param>
     /// <returns>Whether the class is a concrete, non-record, non-generic source class of this compilation.</returns>
@@ -4031,19 +3994,9 @@ internal static partial class TypeModelFactory
     /// <summary>Resolves the reference contract directly from a concrete class declaration.</summary>
     /// <param name="type">The declaration whose own option applies.</param>
     /// <returns>Whether its generated records preserve object identity.</returns>
-    private static bool TracksReferences(INamedTypeSymbol type) =>
+    internal static bool TracksReferences(INamedTypeSymbol type) =>
         type is { TypeKind: TypeKind.Class, IsAbstract: false } &&
-        (OptionSwitch(type, "TrackReferences") || GenerationMode(type) == "CircleReference");
-
-    /// <summary>Reads a packable declaration's generation mode.</summary>
-    /// <param name="symbol">The candidate type.</param>
-    /// <returns>The declared mode name, or <c>Object</c> when the type is not packable.</returns>
-    private static string GenerationMode(INamedTypeSymbol symbol)
-    {
-        var attribute = symbol.GetAttributes().FirstOrDefault(item =>
-            item.AttributeClass?.ToDisplayString() == PackableAttribute);
-        return attribute == null ? "Object" : GeneratorTypeName(attribute);
-    }
+        (OptionSwitch(type, "TrackReferences") || GenerationMode(type) == PayloadGeneration.LegacyTrackedVersion);
 
     /// <summary>Whether a type mentions a parameter declared by the payload definition's chain.</summary>
     /// <param name="type">The referenced type.</param>

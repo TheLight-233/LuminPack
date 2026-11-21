@@ -146,7 +146,7 @@ internal static class SerializerSmallHashSetWriteRegression
     /// <returns>The isolated input compilation.</returns>
     private static CSharpCompilation Compile(string source, CSharpParseOptions parse, MetadataReference[] references)
         => CSharpCompilation.Create("SmallSets" + Guid.NewGuid().ToString("N"), [CSharpSyntaxTree.ParseText(source, parse, "SmallSets.cs")], references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true)).WithLegacyPackableSyntax();
 
     /// <summary>Runs both production generators and rejects generator errors.</summary>
     /// <param name="compilation">The current consumer compilation.</param>

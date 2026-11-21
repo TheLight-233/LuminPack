@@ -8,6 +8,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/LuminPack.CodeFixes/LuminPack.CodeFixes.csproj" />
     <ProjectReference Include="../../src/LuminPack.Generator/LuminPack.Generator.csproj" />
+    <ProjectReference Include="../../src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj" Aliases="NextAnalyzer" />
     <ProjectReference Include="../../src/LuminPack.Core/LuminPack.Core.csproj" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.3.0" />
   </ItemGroup>

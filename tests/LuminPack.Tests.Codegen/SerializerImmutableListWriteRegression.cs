@@ -56,12 +56,12 @@ internal static partial class SerializerImmutableListWriteRegression
             string text = source.Replace("MODE", mode, StringComparison.Ordinal);
             var compilation = CSharpCompilation.Create("ImmutableWrite" + mode + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(text, parse, "Entry.cs")], references,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release)).WithLegacyPackableSyntax();
             GeneratorDriver driver = Create(parse).RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             CheckSelection(driver, ordinary: true);
             Execute(output);
-            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(
+            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath is not ("ConcreteReads.cs" or LegacyPackableSyntax.FileName)), CSharpSyntaxTree.ParseText(
                 text.Replace("[LuminPackable] public sealed class Plain", "[LuminPackable(GeneratorType.CircleReference)] public sealed class Plain", StringComparison.Ordinal), parse, "Entry.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out var editedOutput, out diagnostics);
             CheckSelection(driver, ordinary: false);

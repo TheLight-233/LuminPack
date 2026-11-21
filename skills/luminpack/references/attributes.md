@@ -1,17 +1,18 @@
 # LuminPack attribute catalog
 
-All attributes are in `LuminPack.Attribute`; option enums are in `LuminPack.Option`.
+All attributes and `GeneratorType` are in `LuminPack.Attribute`. String option enums are in `LuminPack.Option`.
 
 ## Types and assemblies
 
 | Attribute | Target | Behavior |
 | --- | --- | --- |
-| `[LuminPackable]` | class, struct, record, interface | Generate a formatter. `GeneratorType`: `Object` (default, positional), `VersionTolerant` (by name key), `Custom` (your static methods), `NonGenerator`. |
+| `[LuminPackable]` | class, struct, record, interface | Mark a type for generation. |
 | `[assembly: LuminPackable(typeof(T))]` | assembly | Generate a type from a referenced assembly; repeatable; open generics (`typeof(G<>)`) cover the closed types used; works for Union roots. |
+| `[LuminPackOption(GeneratorType = ...)]` | `[LuminPackable]` type | `Default` uses the default representation. `Version` gives record members name keys. `Custom` registers the type's own static methods. |
 | `[LuminPackUnion(tag, typeof(Case))]` | interface, abstract class | Declare a Union case explicitly (tags 0..65535; below 250 is one byte). Cases marked `[LuminPackable]` are also collected automatically. |
 | `[LuminPackOption(WideTag = true)]` | class/interface Union root | Accept wide tags for registered cases in Next. Generated cases use type-name hashes. Declaration only. `[LuminPackWideTag]` remains compatible. |
 | `[LuminPackOption(SingleImplementation = true)]` | class/interface Union root | Promise one implementation everywhere; retains Union framing and, without generated `Register` APIs, lets the single sealed case be called directly. `[LuminPackSingleImplementation]` remains compatible. |
-| `[LuminPackOption(TrackReferences = true)]` | Object or VersionTolerant class | Preserve shared objects and cycles in binary and JSON. The declaration applies only to the annotated class. |
+| `[LuminPackOption(TrackReferences = true)]` | class in Default or Version mode | Preserve shared objects and cycles in binary and JSON. The declaration applies only to the annotated class. |
 | `[LuminPackBounded(maxBytes)]` | class, struct | Promise a maximum complete binary size; removes inner capacity checks. A wrong bound can overrun the buffer. |
 | `[LuminPackOption(...)]` | assembly, type, field, property | Compile-time options; see below. |
 | `[assembly: LuminPackGeneratorOptions(register)]` | assembly | `LuminPackRegisterMode.Auto/Disabled`. Generation is automatic; legacy mode arguments are ignored. |
@@ -23,7 +24,7 @@ All attributes are in `LuminPack.Attribute`; option enums are in `LuminPack.Opti
 | `[LuminPackOrder(n)]` | Optional write order. It never changes CLR layout. |
 | `[LuminPackIgnore]` | Exclude a public member. |
 | `[LuminPackInclude]` | Include a private/protected field or property (works through nested levels via generated layout mirrors). |
-| `[LuminPackOldName("Name")]` | `VersionTolerant` only: keep old names readable; list several in chronological order. |
+| `[LuminPackOldName("Name")]` | `Version` only: keep old names readable; list several in chronological order. |
 | `[LuminPackableObject]` | Call the member type's own complete formatter. Next also accepts a marked interface member with a manually registered formatter. |
 | `[LuminPackCompress]` | LZ-compress a supported unmanaged array/span member. Managed elements are rejected (LuminPack034). |
 | `[LuminPackDelegate(instanceName, methodName)]` | Route the member through a method on an instance member. |
@@ -64,12 +65,10 @@ These Union switches do not inherit from assemblies, containing types or base ty
 
 In Next, values without a type-owned LuminPack contract use the consuming assembly's `StructLayout` option. The default is `Tagged`. Contiguous `Tagged` blocks with multiple models write a verified native layout tag and raw bytes. Matching readers copy the block, and other layouts use the layout converter. `Packed` writes portable bytes without padding and propagates through enclosing structs, pairs and value tuples. A type explicitly declared `Native` is a storage boundary and requires matching runtime layouts. On supported .NET 8+ targets, eligible `Nullable<T>` collection elements follow the underlying type's layout. Packed nullable elements write a marker and the packed payload of a present value.
 
-The obsolete `GeneratorType.CircleReference` mode is an alias for `VersionTolerant` with `TrackReferences = true`. Use the IDE code fix to update the declaration.
-
 ## Examples
 
 ```csharp
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial class Player
 {
     public int Id;

@@ -2,7 +2,7 @@
 
 [English](generation-modes.md) · [返回 README](README.cn.md)
 
-LuminPack 采用统一的自动生成规则，不需要选择生成档位，也不需要配置 `CompilerVisibleProperty`。
+LuminPack 自动选择需要生成的操作。每个模型通过自己的 `GeneratorType` 选项选择数据表示。见[定义类型](defining-types.cn.md)。
 
 - 每个 `[LuminPackable]` 声明提供自己的序列化成员图。库为成员图保留四种操作，以便其他程序集使用模型。
 - 序列化调用保留其所需的具体负载，包括闭合泛型包装方法、容器元素和 Union case。

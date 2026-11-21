@@ -78,21 +78,21 @@ namespace LuminPackUnitTest
 }
 
 /// <summary>A version-tolerant model matching the recorded revision-1 fixture.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial class CompatVersion { public int Id; public string Name = ""; public int[] Values = []; public CompatVersionChild? Child; }
 
 /// <summary>A nested version-tolerant model of fixed-width members.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial class CompatVersionChild { public bool Flag; public long Stamp; }
 
 /// <summary>A reference-tracked model with a self-referential member.</summary>
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
 public partial class CompatNode { [LuminPackOrder(0)] public int Id; [LuminPackOrder(1)] public string Text = ""; [LuminPackOrder(2)] public CompatNode? Next; }
 
 /// <summary>A writer model with trailing slots unknown to <see cref="CompatNarrowNode"/>.</summary>
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
 public partial class CompatWideNode { [LuminPackOrder(0)] public int Id; [LuminPackOrder(1)] public string Text = ""; [LuminPackOrder(2)] public string Extra = ""; [LuminPackOrder(3)] public int Tail; }
 
 /// <summary>A reader model with the first two slots of <see cref="CompatWideNode"/>.</summary>
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
 public partial class CompatNarrowNode { [LuminPackOrder(0)] public int Id; [LuminPackOrder(1)] public string Text = ""; }

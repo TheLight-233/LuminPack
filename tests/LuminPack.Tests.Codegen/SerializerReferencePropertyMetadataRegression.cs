@@ -26,7 +26,7 @@ internal static class SerializerReferencePropertyMetadataRegression
                     public static void Serialize(ref LuminPack.Core.LuminPackWriter writer,in Custom value)=>writer.Write(value.Name);
                     public static void Deserialize(ref LuminPack.Core.LuminPackReader reader,ref Custom value)=>value=new(){Name=reader.Read()};
                 }
-                """, parse)], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+                """, parse)], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)).WithLegacyPackableSyntax();
         byte[] implementation = Emit(producer);
         byte[] reference = Emit(producer, new EmitOptions(metadataOnly: true, includePrivateMembers: false));
         AssemblyLoadContext.Default.LoadFromStream(new MemoryStream(implementation));

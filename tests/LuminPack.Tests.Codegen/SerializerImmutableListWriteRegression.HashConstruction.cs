@@ -30,7 +30,7 @@ internal static partial class SerializerImmutableListWriteRegression
                         return Convert.ToBase64String(bytes)+":"+string.Join(",",value)+":"+string.Join(",",sorted);
                     }
                 }
-                """, parse, "Entry.cs")], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+                """, parse, "Entry.cs")], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true)).WithLegacyPackableSyntax();
         var access = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage")!;
         var original = references.OfType<PortableExecutableReference>().Single(reference =>
             SymbolEqualityComparer.Default.Equals(compilation.GetAssemblyOrModuleSymbol(reference), access.ContainingAssembly));

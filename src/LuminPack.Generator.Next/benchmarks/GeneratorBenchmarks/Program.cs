@@ -52,8 +52,8 @@ internal static partial class Program
             return VerifyAssemblyOptions(references, parse, coreDll);
         if (options.VerifyAliasDiagnostics)
         {
-            int checks = VerifyAliasDiagnostics(references, parse, oldDll);
-            Console.WriteLine($"Next alias diagnostics: {checks} legacy comparisons passed.");
+            int checks = VerifyAliasDiagnostics(references, parse);
+            Console.WriteLine($"Next alias diagnostics: {checks} invalid declarations rejected.");
             return 0;
         }
         if (options.VerifyExternal)

@@ -75,7 +75,7 @@ public sealed class NinoReadFailureRegressionTest
 }
 
 /// <summary>Provides a variable-width value for the rectangular array replacement path.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial struct NinoRectangularVersionedValue
 {
     public long Number;

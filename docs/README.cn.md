@@ -190,7 +190,7 @@ LuminPackSerializer.Deserialize(bytes, ref back);   // Circle
 <summary><b>📝 版本容忍</b></summary>
 
 ```csharp
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial class SaveData
 {
     public int Level;

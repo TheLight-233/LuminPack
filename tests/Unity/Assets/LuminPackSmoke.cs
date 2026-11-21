@@ -174,13 +174,13 @@ public struct UnityNative { public byte Tag; public long Value; }
 public struct UnityPackedGuid { public byte Tag; public Guid Id; }
 
 /// <summary>Provides an original named schema.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public sealed class UnityVersionOne { public int Id; public string Name; }
 
 /// <summary>Provides a renamed and reordered named schema.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public sealed class UnityVersionTwo { [LuminPackOldName("Name")] public string DisplayName; public int Id; }
 
 /// <summary>Exercises cyclic object reconstruction.</summary>
-[LuminPackable(GeneratorType.CircleReference)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version, TrackReferences = true)]
 public sealed class UnityTracked { [LuminPackOrder(0)] public UnityTracked Next; }

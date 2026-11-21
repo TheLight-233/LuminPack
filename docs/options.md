@@ -27,6 +27,7 @@ public partial class Message
 
 | Property | Default | Meaning |
 | --- | --- | --- |
+| `GeneratorType` | `Default` | Selects `Default`, `Version` or `Custom` on an individual `[LuminPackable]` type. See [defining types](defining-types.md). |
 | `StringEncoding` | `UTF16` | Binary string encoding, per member. For JSON, the encoding of the whole document, chosen by its root type. |
 | `StringRecording` | `Length` | Fixed-width length headers, opt-in `VarInt` headers, or `Token` (terminated; `null` and `""` both read back as `""`). |
 | `FramedGroupings` | `false` | Next assembly option for unambiguous binary `IGrouping<TKey, TElement>` records, including groups in an `ILookup<TKey, TElement>`. |
@@ -73,7 +74,7 @@ These switches apply only to the annotated class or interface. They are invalid 
 
 ## Reference tracking
 
-Set `[LuminPackOption(TrackReferences = true)]` directly on an Object or VersionTolerant class. The annotated class alone owns this contract and the attribute is its only configuration API. The normal string declarations and operation profiles still select the encoding. Using this option on an assembly, struct, interface, field or property reports `LuminPack110`. See [reference tracking](versioning.md#reference-tracking).
+Set `[LuminPackOption(TrackReferences = true)]` directly on a class in `Default` or `Version` mode. The annotated class alone owns this contract and the attribute is its only configuration API. The normal string declarations and operation profiles still select the encoding. Using this option on an assembly, struct, interface, field or property reports `LuminPack110`. See [reference tracking](versioning.md#reference-tracking).
 
 ## Explicit profiles
 

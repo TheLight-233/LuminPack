@@ -4,13 +4,13 @@
 
 ## `GeneratorType.Custom`
 
-`[LuminPackable(GeneratorType.Custom)]` 用你写在类型上的静态方法代替生成的数据表示。生成器会校验这些方法，并自动注册。[Next](generator-next.cn.md) 在首次使用 `LuminPackSerializer` 时注册。原生成器在 .NET 5 及更高版本上通过模块初始化器注册。
+`[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]` 用你写在类型上的静态方法代替生成的数据表示。生成器会校验这些方法，并自动注册。注册在首次使用 `LuminPackSerializer` 时运行。
 
 ```csharp
 using LuminPack.Attribute;
 using LuminPack.Core;
 
-[LuminPackable(GeneratorType.Custom)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]
 public sealed class MyVector
 {
     public float X, Y, Z;
@@ -66,6 +66,8 @@ static void Read(ref LuminPackReader reader, ref LegacyModel value)
 
 LuminPackSerializer.Register<LegacyModel>(Write, Read);
 ```
+
+引用类型没有类型标记且使用手动注册的格式化器时，可在该类型的成员声明上添加 `[LuminPackableObject]` 以选择注册的格式化器。
 
 | 重载 | 方法 |
 | --- | --- |

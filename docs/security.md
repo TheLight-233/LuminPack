@@ -26,7 +26,7 @@ Generated binary reads treat their input as untrusted unless a declaration says 
 - **Date and time domains.** Standalone `DateOnly` and `TimeOnly` binary reads reject values outside the framework types' representable ranges.
 - **Culture names.** Binary `CultureInfo` reads accept names enumerated by the current platform, the invariant culture and supported compatibility aliases. The allowed name is checked before framework resolution, so input cannot grow the framework culture cache beyond this finite set.
 - **Version-tolerant records.** The reader checks the form, active ordinal, descriptor table range, name-key uniqueness and width codes. A known member requires the expected complete descriptor. A length-prefixed member is constrained to its checked payload range and must consume that range before it is published.
-- **Reference tracking.** A back reference must name an object already read, of the type expected at that position. The selected Object or VersionTolerant reader checks the first occurrence's record body.
+- **Reference tracking.** A back reference must name an object already read, of the type expected at that position. The selected positional or version-tolerant reader checks the first occurrence's record body.
 - **Unions.** An undeclared tag is rejected. Case payloads are read with the same checks, under the enclosing root's limits.
 - **Compressed collections.** The declared element count must match the compressed frame and cannot exceed what its encoded bytes can produce, before any storage is allocated.
 

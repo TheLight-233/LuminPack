@@ -141,7 +141,7 @@ public class DictionaryRawSideTest
     }
 
     /// <summary>Uses versioned slot framing despite having unmanaged CLR storage.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public struct VersionedStorage
     {
         /// <summary>Stores a scalar after two absent version slots.</summary>

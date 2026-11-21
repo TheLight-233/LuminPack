@@ -193,7 +193,7 @@ LuminPackSerializer.Deserialize(bytes, ref map);
     }
 
     /// <summary>Provides a flat named contract for the approved slot path.</summary>
-    [LuminPackable(GeneratorType.VersionTolerant)]
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
     public sealed class SlotVersionedLeaf
     {
         public int Number;

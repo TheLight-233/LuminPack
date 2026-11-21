@@ -15,7 +15,7 @@ public partial class FuzzGraph
 }
 
 /// <summary>Exercises version descriptors, string encodings, scope boundaries and recursive members.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public partial class FuzzVersioned
 {
     public int Id;
@@ -27,7 +27,7 @@ public partial class FuzzVersioned
 }
 
 /// <summary>Provides a second schema that can be registered inside and outside a member scope.</summary>
-[LuminPackable(GeneratorType.VersionTolerant)]
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
 public sealed partial class FuzzVersionLeaf
 {
     public int Value;

@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../LuminPack.Tests.Codegen/SerializerInterceptorRegression*.cs" Link="%(Filename)%(Extension)" />
+    <Compile Include="../LuminPack.Tests.Codegen/LegacyPackableSyntax.cs" Link="LegacyPackableSyntax.cs" />
     <ProjectReference Include="../../src/LuminPack.ILPostProcessor/LuminPack.ILPostProcessor.csproj" />
     <ProjectReference Include="..\..\src\LuminPack.Generator\LuminPack.Generator.csproj" />
     <ProjectReference Include="../../src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj"
