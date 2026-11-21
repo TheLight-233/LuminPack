@@ -8,7 +8,7 @@
 
 使用方只需安装一个 `LuminPack` NuGet 包。包内的 `lib/` 存放 Core 运行时，`analyzers/dotnet/cs/` 存放 Next 生成器和 CodeFixes，`tools/` 存放 IL 后处理器和 Mono.Cecil。`buildTransitive/` 提供编译器拦截和 IL 重写所需的构建配置。Core 的可移植符号另以 `.snupkg` 上传到 NuGet 符号服务。平台适配器、Unity 和 Burst 仍通过源码分发。
 
-`eng/Versions.props` 配置开发目标版本 `2.0.0`、可选的已发布 Core 基线，以及允许上传 NuGet 的版本。`LuminPackNuGetPublishVersion` 当前设为 `2.0.0-rc.2`，留空时工作流只验证候选包。
+`eng/Versions.props` 配置开发目标版本 `2.0.0`、可选的已发布 Core 基线，以及允许上传 NuGet 的版本。`LuminPackNuGetPublishVersion` 当前设为 `2.0.0-rc.3`，留空时工作流只验证候选包。
 
 - 使用 `major.minor.patch`，可附加 SemVer 预发布标识。候选的数字版本必须与版本文件一致，纯数字预发布标识不能有前导零。
 - 不兼容的公共 API 或数据格式契约变更应提升主版本。提升主版本不能替代机制变更所需的批准。
@@ -20,7 +20,7 @@
 安装 PowerShell 7 和仓库要求的 SDK（包括 .NET 11 SDK），在仓库根目录执行以下命令。
 
 ```powershell
-pwsh -File .github/scripts/release.ps1 -Version 2.0.0-rc.2 -ApiBaseRef 'HEAD^'
+pwsh -File .github/scripts/release.ps1 -Version 2.0.0-rc.3 -ApiBaseRef 'v2.0.0-rc.2'
 ```
 
 该命令构建候选包和符号，运行 Core PackageValidation，核验包布局和 SourceLink，并与指定 Git 提交比较公共 API。安装验证使用隔离的本地源，消费项目只引用一个 `LuminPack` 包，检查二进制/JSON 值、复用、截断输入拒绝、编译器拦截、IL 重写和注册回退。完整裁剪/AOT 契约由运行时兼容性工作流检查。
@@ -67,7 +67,7 @@ API 清单用于审查，不是完整的二进制/源码兼容证明。SDK Packa
 
 1. 在 GitHub 创建 `nuget` 环境，把环境变量 `NUGET_USER` 设为拥有 `LuminPack` 的 NuGet.org 账号名（`TheLight233`）。可通过环境设置限制发布标签并启用审查人。
 2. 在 NuGet.org 创建[可信发布策略](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing)。填写仓库所有者 `TheLight-233`、仓库 `LuminPack`、工作流文件 `release.yml` 和环境 `nuget`。权限限定为为现有 `LuminPack` 包上传新版本。
-3. 审查目标提交的候选 API 差异、变更记录及平台检查结果。将已授权的 `v2.0.0-rc.2` 标签推送到该提交，提交须包含发布工作流。标签版本必须与 `LuminPackNuGetPublishVersion` 一致。
+3. 审查目标提交的候选 API 差异、变更记录及平台检查结果。将已授权的 `v2.0.0-rc.3` 标签推送到该提交，提交须包含发布工作流。标签版本必须与 `LuminPackNuGetPublishVersion` 一致。
 4. 发布任务检查候选清单和哈希，通过 OIDC 获取短期 NuGet 密钥，然后上传验证过的包和符号。发布中断时，在同一次运行中重试失败的任务，复用同一份产物。需要发布不同构建时使用新版本。
 
 PR 构建、手动验证和其他版本标签只生成候选产物。Git 标签和 GitHub Release 由维护者管理。
