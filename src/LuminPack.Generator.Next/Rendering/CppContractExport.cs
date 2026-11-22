@@ -98,7 +98,10 @@ internal static class CppContractExport
         if (model is UnionModel union)
         {
             foreach (UnionCaseModel item in union.Cases)
+            {
                 Add(contracts, item.Model, cancellationToken);
+                Add(contracts, item.Closed?.Payload, cancellationToken);
+            }
         }
     }
 
@@ -161,8 +164,9 @@ internal static class CppContractExport
             ("jsonInt32Runs", orderedRuns),
             ("sequenceBase", record?.SequenceBase), ("collectionBase", Formatter(record?.CollectionBase, getRawCompoundStorage)),
             ("unionWideTags", union?.WideTags), ("unionRegistration", union != null && registration),
+            ("unionTier", union?.ClosedWriteSlot != null ? UnionDispatchTier.Exact.ToString() : union?.Tier.ToString()),
             ("cases", union?.Cases.Select(static item => Object(("id", item.Type.MetadataName), ("type", item.Type.GlobalName),
-                ("hash", item.NameHash), ("tag", item.Tag), ("ownEntry", item.OwnEntry)))),
+                ("hash", item.NameHash), ("tag", item.Tag), ("ownEntry", item.OwnEntry), ("definition", item.Definition)))),
             ("members", model.Members.Select((member, index) => Member(member, version, index, getRawCompoundStorage))));
     }
 

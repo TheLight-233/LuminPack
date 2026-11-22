@@ -82,6 +82,64 @@ struct json_polymorphic_union_codec
 
 namespace detail
 {
+// Generated roots choose one slot for the compiled profile before the virtual call.
+template<auto Slot, class Base>
+bool try_write_virtual_binary_union(writer& output, Base& value, version_state& version,
+    reference_write_state* references = nullptr)
+{
+    return (value.*Slot)(output, version, references);
+}
+
+template<auto Slot, class Base>
+bool try_write_virtual_binary_union(writer& output, Base& value, version_state& version,
+    reference_write_state& references)
+{
+    return try_write_virtual_binary_union<Slot>(output, value, version, &references);
+}
+
+template<auto Slot, class Base>
+bool try_write_virtual_binary_union(writer& output, Base& value)
+{
+    version_state version;
+    return try_write_virtual_binary_union<Slot>(output, value, version);
+}
+
+/// Carries the enclosing operation's registries into a graph-bearing virtual case payload.
+template<class Codec, class Value>
+void write_virtual_union_case_payload(writer& output, const Value& value, version_state& version,
+    reference_write_state* references)
+{
+    if (references)
+        write_codec<Codec>(output, value, version, *references);
+    else
+    {
+        reference_write_state local;
+        write_codec<Codec>(output, value, version, local);
+    }
+}
+
+template<class Case, std::uint32_t Hash>
+struct virtual_union_case
+{
+    using type = Case;
+    static constexpr auto hash = Hash;
+    static_assert(hash != 0 && hash != std::numeric_limits<std::uint32_t>::max());
+};
+
+/// Resolves a declared generic case group once per closed type for both write formats.
+template<class Closed, class... Cases>
+inline constexpr std::uint32_t virtual_union_case_hash = [] {
+    constexpr auto matches = (std::size_t{0} + ... + static_cast<std::size_t>(std::same_as<Closed, typename Cases::type>));
+    static_assert(matches <= 1, "A closed type must identify at most one virtual Union case.");
+    auto hash = std::numeric_limits<std::uint32_t>::max();
+    [[maybe_unused]] auto select = [&]<class Candidate> {
+        if constexpr (std::same_as<Closed, typename Candidate::type>)
+            hash = Candidate::hash;
+    };
+    (select.template operator()<Cases>(), ...);
+    return hash;
+}();
+
 template<class Base, class ReadCase>
 void read_graph_union(reader& input, Base*& destination, version_state& version,
     reference_read_state& references, ReadCase read_case)

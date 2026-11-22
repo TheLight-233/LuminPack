@@ -19,7 +19,7 @@ internal sealed partial class CppEmitter
         if (declaredReferenceStorage.Add(storage))
             code.Append("struct ").Append(storage).Append(";\n");
 
-        var binding = new Binding(storage + "*", name + "_binary", name + "_json");
+        var binding = new Binding(storage + "*", name + "_binary", name + "_json", RecordStorage: storage);
         code.Append("struct ").Append(binding.Binary).Append("\n{\n    using value_type = ").Append(binding.Type).Append(";\n")
             .Append("    static constexpr std::size_t minimum_size = 1;\n")
             .Append("    static value_type read(luminpack::reader&, luminpack::version_state&, luminpack::reference_read_state&);\n")

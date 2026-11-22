@@ -161,12 +161,13 @@ internal sealed partial class CppEmitter
             code.Append("struct ").Append(storage).Append(inheritance).Append("\n{\n");
             foreach (string declaration in declarations)
                 code.Append(declaration).Append('\n');
+            MarkRttiCaseSlots(storage);
             code.Append("};\n");
         }
         if (trackedStorage != null)
         {
             EmitTrackedRecordCodec(name, trackedStorage, profile, version, binaryMembers, jsonMembers);
-            return new Binding(storage + "*", name + "_binary", name + "_json");
+            return new Binding(storage + "*", name + "_binary", name + "_json", RecordStorage: storage);
         }
         if (version)
             Alias(name + "_binary", "luminpack::version_codec", new[] { name, Profile(profile) }.Concat(binaryMembers));
@@ -179,7 +180,7 @@ internal sealed partial class CppEmitter
         Alias(name + "_json", "luminpack::json_optional_codec<" + name + "_json_body>");
         code.Append('\n');
         return new Binding("std::optional<" + name + ">", name + "_binary", name + "_json",
-            version ? null : name + "_binary::payload", name + "_json_body");
+            version ? null : name + "_binary::payload", name + "_json_body", RecordStorage: name);
     }
 
     /// <summary>Emits a raw value when sequential managed layout and local field offsets prove the same wire block.</summary>
@@ -601,5 +602,5 @@ internal sealed partial class CppEmitter
         new InvalidOperationException("Cannot emit C++ for " + label + ": " + reason + ".");
 
     private readonly record struct Binding(string Type, string Binary, string Json, string? Payload = null,
-        string? JsonPayload = null, string? SequenceBinary = null);
+        string? JsonPayload = null, string? SequenceBinary = null, string? RecordStorage = null);
 }
