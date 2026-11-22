@@ -24,13 +24,15 @@ struct dom
 
     static void items(node input, const auto& visit)
     {
-        for (auto value : input.get_array().value())
+        const auto array = input.get_array().value();
+        for (auto value : array)
             visit(value);
     }
 
     static void members(node input, const auto& visit)
     {
-        for (auto entry : input.get_object().value())
+        const auto object = input.get_object().value();
+        for (auto entry : object)
             visit(entry.key, entry.value);
     }
 };
