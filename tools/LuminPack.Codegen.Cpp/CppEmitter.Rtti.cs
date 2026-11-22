@@ -90,14 +90,19 @@ internal sealed partial class CppEmitter
     private void EmitDeferredRecordsAndRttiUnions()
     {
         var complete = new List<(JsonElement Contract, string Name, int Profile, IReadOnlyList<RttiCase> Cases)>();
-        EmitTrackedRecords();
-        while (deferredRttiUnions.TryDequeue(out var item))
+        do
         {
-            complete.Add((item.Contract, item.Name, item.Profile,
-                BindRttiCases(item.Contract.GetProperty("cases"), Text(item.Contract, "id"), item.Profile)));
             EmitTrackedRecords();
+            while (deferredRttiUnions.TryDequeue(out var item))
+            {
+                complete.Add((item.Contract, item.Name, item.Profile,
+                    BindRttiCases(item.Contract.GetProperty("cases"), Text(item.Contract, "id"), item.Profile)));
+                EmitTrackedRecords();
+            }
+            EmitRecursiveStorage();
         }
-        EmitRecursiveRecords();
+        while (trackedRecords.Count != 0 || deferredRttiUnions.Count != 0);
+        EmitRecursiveCodecs();
         foreach (var item in complete)
         {
             string baseName = RttiBaseName(item.Contract);

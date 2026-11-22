@@ -3,6 +3,8 @@ using System.Text.Json;
 internal sealed partial class CppEmitter
 {
     private readonly HashSet<string> recursiveRecords = new(StringComparer.Ordinal);
+    private readonly HashSet<string> recursiveReferenceTypes = new(StringComparer.Ordinal);
+    private readonly HashSet<string> recursiveReferenceBindings = new(StringComparer.Ordinal);
     private readonly Queue<(JsonElement Contract, string Name, int Profile)> deferredRecursiveRecords = new();
     private readonly List<string> recursiveRecordBodies = new();
     private bool isolatedRecursiveEntries;
@@ -33,23 +35,35 @@ internal sealed partial class CppEmitter
         {
             string[] boundaries = reachable.Keys.Where(IsContextBoundary).ToArray();
             isolatedRecursiveEntries = boundaries.Length != 0;
+            bool rootProjectsLimits = HasFiniteLimit(rootType, "maxDepth") || HasFiniteLimit(rootType, "maxCollection") ||
+                HasFiniteLimit(rootType, "maxString");
             if (isolatedRecursiveEntries)
             {
-                if (recursiveRecords.Any(type => Reaches(type, IsContextBoundary)))
-                    throw Missing(Text(root, "id"), "an owning recursive subtree that reaches references or a Union");
-                if (boundaries.Any(type => Text(contracts[type], "kind") == "Union" && reachable[type].Any(recursiveRecords.Contains)))
+                if (recursiveRecords.Any(type => Reaches(type, IsUnion)))
+                    throw Missing(Text(root, "id"), "an owning recursive subtree that reaches a Union");
+                if (boundaries.Any(type => IsUnion(type) && reachable[type].Any(recursiveRecords.Contains)))
                     throw Missing(Text(root, "id"), "an owning recursive record used directly as a Union case");
                 if (boundaries.Any(type => Reaches(type, recursiveRecords.Contains) &&
                         reachable[type].Any(child => Reaches(child, candidate => candidate == type))))
                     throw Missing(Text(root, "id"), "a recursive reference or Union boundary above an owning recursive subtree");
                 if (reachable.Keys.Any(type => HasFiniteLimit(type, "maxDepth")))
                     throw Missing(Text(root, "id"), "a finite Binary depth shared by owning recursion and references or a Union");
+
+                foreach (string type in recursiveRecords)
+                    if (Reaches(type, IsTracked))
+                        recursiveReferenceTypes.Add(type);
+                string[] outgoing = reachable.Keys.Where(type =>
+                    recursiveReferenceTypes.Any(owner => Reaches(owner, candidate => candidate == type))).ToArray();
+                IEnumerable<string> trackedDescendants = outgoing.Where(IsTracked);
+                if (trackedDescendants.Any(type => Reaches(type, recursiveRecords.Contains) ||
+                        reachable[type].Any(child => Reaches(child, candidate => candidate == type))))
+                    throw Missing(Text(root, "id"), "a recursive tracked descendant of an owning recursive subtree");
+                if (outgoing.Any(type => HasIndependentLimit(type, "maxCollection") || HasIndependentLimit(type, "maxString")))
+                    throw Missing(Text(root, "id"), "an outgoing recursive subtree with independent Binary collection or string limits");
             }
             if (reachable.Keys.Any(type => HasFiniteLimit(type, "maxDepth") &&
                     Reaches(type, candidate => recursiveRecords.Contains(candidate) && Flag(contracts[candidate], "versioned"))))
                 throw Missing(Text(root, "id"), "a finite Binary depth across isolated recursive Version reads");
-            bool rootProjectsLimits = HasFiniteLimit(rootType, "maxDepth") || HasFiniteLimit(rootType, "maxCollection") ||
-                HasFiniteLimit(rootType, "maxString");
             if (!rootProjectsLimits && reachable.Keys.Any(type => type != rootType && HasFiniteLimit(type, "maxDepth") &&
                     Reaches(type, recursiveRecords.Contains)))
                 throw Missing(Text(root, "id"), "a recursive child with an independent Binary depth limit");
@@ -59,8 +73,11 @@ internal sealed partial class CppEmitter
                 throw Missing(Text(root, "id"), "managed Binary depth accounting outside the projected recursive record graph");
         }
 
-        bool IsContextBoundary(string type) => Text(contracts[type], "kind") == "Union" ||
-            Flag(contracts[type].GetProperty("profile"), "trackReferences");
+        bool IsUnion(string type) => Text(contracts[type], "kind") == "Union";
+
+        bool IsTracked(string type) => Flag(contracts[type].GetProperty("profile"), "trackReferences");
+
+        bool IsContextBoundary(string type) => IsUnion(type) || IsTracked(type);
 
         bool HasFiniteLimit(string type, string limit)
         {
@@ -68,6 +85,10 @@ internal sealed partial class CppEmitter
             return !Flag(profile, "trusted") && profile.TryGetProperty(limit, out JsonElement value) &&
                 value.ValueKind == JsonValueKind.Number && value.GetInt32() < int.MaxValue;
         }
+
+        bool HasIndependentLimit(string type, string limit) => HasFiniteLimit(type, limit) &&
+            (!HasFiniteLimit(rootType, limit) || contracts[type].GetProperty("profile").GetProperty(limit).GetInt32() !=
+                root.GetProperty("profile").GetProperty(limit).GetInt32());
 
         bool Reaches(string start, Func<string, bool> matches)
         {
@@ -140,19 +161,32 @@ internal sealed partial class CppEmitter
     private Binding DeclareRecursiveRecord(JsonElement contract, (string Type, int Profile) key, string name)
     {
         var binding = new Binding("std::unique_ptr<" + name + ">", name + "_binary", name + "_json", RecordStorage: name);
+        bool tracking = recursiveReferenceTypes.Contains(key.Type);
+        if (tracking)
+            recursiveReferenceBindings.Add(name);
+        string readState = tracking ? ", luminpack::reference_read_state&" : string.Empty;
+        string writeState = tracking ? ", luminpack::reference_write_state&" : string.Empty;
         code.Append("struct ").Append(name).Append(";\nstruct ").Append(binding.Binary)
             .Append("\n{\n    using value_type = ").Append(binding.Type).Append(";\n")
             .Append("    static constexpr std::size_t minimum_size = 1;\n")
-            .Append("    static value_type read(luminpack::reader&, luminpack::version_state&, luminpack::detail::recursive_record_depth&);\n")
-            .Append("    static void write(luminpack::writer&, const value_type&, luminpack::version_state&, luminpack::detail::recursive_record_depth&);\n");
+            .Append("    static value_type read(luminpack::reader&, luminpack::version_state&").Append(readState)
+            .Append(", luminpack::detail::recursive_record_depth&);\n")
+            .Append("    static void write(luminpack::writer&, const value_type&, luminpack::version_state&").Append(writeState)
+            .Append(", luminpack::detail::recursive_record_depth&);\n");
         if (isolatedRecursiveEntries)
         {
-            // These subtrees have no graph or Union descendants. Their Binary codecs
-            // can use the surrounding Version state and start a private stack guard.
-            code.Append("    static value_type read(luminpack::reader& input, luminpack::version_state& version)\n")
-                .Append("    {\n        luminpack::detail::recursive_record_depth depth;\n        return read(input, version, depth);\n    }\n")
-                .Append("    static void write(luminpack::writer& output, const value_type& value, luminpack::version_state& version)\n")
-                .Append("    {\n        luminpack::detail::recursive_record_depth depth;\n        write(output, value, version, depth);\n    }\n");
+            string referenceArgument = tracking ? ", references" : string.Empty;
+            // The subtree starts a private stack guard and borrows its operation registries.
+            code.Append("    static value_type read(luminpack::reader& input, luminpack::version_state& version");
+            if (tracking)
+                code.Append(readState).Append(" references");
+            code.Append(")\n    {\n        luminpack::detail::recursive_record_depth depth;\n        return read(input, version")
+                .Append(referenceArgument).Append(", depth);\n    }\n")
+                .Append("    static void write(luminpack::writer& output, const value_type& value, luminpack::version_state& version");
+            if (tracking)
+                code.Append(writeState).Append(" references");
+            code.Append(")\n    {\n        luminpack::detail::recursive_record_depth depth;\n        write(output, value, version")
+                .Append(referenceArgument).Append(", depth);\n    }\n");
         }
         code.Append("};\nstruct ").Append(binding.Json).Append("\n{\n    using value_type = ").Append(binding.Type).Append(";\n")
             .Append("    static value_type read(auto&);\n    static void write(auto&, const value_type&);\n};\n");
@@ -161,11 +195,16 @@ internal sealed partial class CppEmitter
         return binding;
     }
 
-    /// <summary>Completes every recursive DTO before its codecs instantiate their owning bodies.</summary>
-    private void EmitRecursiveRecords()
+    /// <summary>Emits recursive storage and discovers the concrete codecs of its dependencies.</summary>
+    private void EmitRecursiveStorage()
     {
         while (deferredRecursiveRecords.TryDequeue(out var item))
             EmitRecord(item.Contract, item.Name, item.Profile);
+    }
+
+    /// <summary>Emits recursive bodies after both owning and tracked dependencies are complete.</summary>
+    private void EmitRecursiveCodecs()
+    {
         foreach (string name in recursiveRecordBodies)
             EmitRecursiveRecordCodec(name);
     }
@@ -178,12 +217,20 @@ internal sealed partial class CppEmitter
         string json = name + "_json";
         string binaryCodec = $"luminpack::detail::recursive_binary_record<{name}, {binary}_body>";
         string jsonCodec = $"luminpack::detail::recursive_json_record<{name}, {json}_body>";
+        bool tracking = recursiveReferenceBindings.Contains(name);
+        string references = tracking ? ", references" : string.Empty;
         code.Append("inline ").Append(binary).Append("::value_type ").Append(binary)
-            .Append("::read(luminpack::reader& input, luminpack::version_state& version, luminpack::detail::recursive_record_depth& depth)\n")
-            .Append("{\n    return ").Append(binaryCodec).Append("::read(input, version, depth);\n}\n")
+            .Append("::read(luminpack::reader& input, luminpack::version_state& version");
+        if (tracking)
+            code.Append(", luminpack::reference_read_state& references");
+        code.Append(", luminpack::detail::recursive_record_depth& depth)\n")
+            .Append("{\n    return ").Append(binaryCodec).Append("::read(input, version, depth").Append(references).Append(");\n}\n")
             .Append("inline void ").Append(binary)
-            .Append("::write(luminpack::writer& output, const value_type& value, luminpack::version_state& version, luminpack::detail::recursive_record_depth& depth)\n")
-            .Append("{\n    ").Append(binaryCodec).Append("::write(output, value, version, depth);\n}\n")
+            .Append("::write(luminpack::writer& output, const value_type& value, luminpack::version_state& version");
+        if (tracking)
+            code.Append(", luminpack::reference_write_state& references");
+        code.Append(", luminpack::detail::recursive_record_depth& depth)\n")
+            .Append("{\n    ").Append(binaryCodec).Append("::write(output, value, version, depth").Append(references).Append(");\n}\n")
             .Append("inline ").Append(json).Append("::value_type ").Append(json).Append("::read(auto& input)\n")
             .Append("{\n    return ").Append(jsonCodec).Append("::read(input);\n}\n")
             .Append("inline void ").Append(json).Append("::write(auto& output, const value_type& value)\n")

@@ -163,7 +163,7 @@ The emitter maps C# `nint` and `nuint` to `std::intptr_t` and `std::uintptr_t` i
 
 Ordinary recursive classes use `std::unique_ptr` for each recursive node, including values reached through List and Dictionary. Acyclic enclosing classes keep their ordinary value type. Default and Version use the Binary and JSON representations of their managed declarations. A Default Binary read follows the root's declared recursion depth. The native stack guard limits recursive record traversal to 512 levels.
 
-A tracked object or an ordinary RTTI Union case can own an ordinary recursive subtree through a field. The graph document owns the tracked objects and the recursive fields own their decoded copies. Generation diagnoses direct recursive Union cases and traversal from a recursive subtree into a tracked object or Union. It also diagnoses independent descendant depth, finite depth across a mixed recursive graph, and finite depth across isolated Version reads.
+A tracked object or an ordinary RTTI Union case can own an ordinary recursive subtree through a field. An ordinary recursive subtree can also refer to acyclic tracked descendants. The graph document owns the tracked objects and the recursive fields own their decoded copies. Generation diagnoses direct recursive Union cases, Union descendants below an ordinary recursion boundary, and tracked descendants that lead back into recursion. It also diagnoses independent descendant limits, finite depth across a mixed recursive graph, and finite depth across isolated Version reads.
 
 ## Verify the benchmark models
 

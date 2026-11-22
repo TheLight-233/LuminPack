@@ -48,6 +48,36 @@ inline version_state::scope version_transaction(version_state& version, recursiv
     return version_state::scope(version);
 }
 
+template<class ReferenceState>
+requires std::same_as<ReferenceState, reference_read_state> || std::same_as<ReferenceState, reference_write_state>
+auto version_transaction(version_state& version, ReferenceState& references, recursive_record_depth&) noexcept
+{
+    return version_transaction(version, references);
+}
+
+template<class Codec>
+decltype(auto) read_codec(reader& input, version_state& version, reference_read_state& references, recursive_record_depth& depth)
+{
+    if constexpr (requires { Codec::read(input, version, references, depth); })
+        return Codec::read(input, version, references, depth);
+    else if constexpr (requires { Codec::read(input, version, depth); })
+        return Codec::read(input, version, depth);
+    else
+        return read_codec<Codec>(input, version, references);
+}
+
+template<class Codec, class Value>
+void write_codec(writer& output, const Value& value, version_state& version, reference_write_state& references,
+    recursive_record_depth& depth)
+{
+    if constexpr (requires { Codec::write(output, value, version, references, depth); })
+        Codec::write(output, value, version, references, depth);
+    else if constexpr (requires { Codec::write(output, value, version, depth); })
+        Codec::write(output, value, version, depth);
+    else
+        write_codec<Codec>(output, value, version, references);
+}
+
 /// Supplies one recursion context from the generated root without changing the binary cursor.
 template<class Codec, std::size_t MaxDepth>
 struct recursive_binary_root
@@ -86,7 +116,8 @@ struct recursive_binary_record
 {
     using value_type = std::unique_ptr<T>;
 
-    static value_type read(reader& input, version_state& version, recursive_record_depth& depth)
+    template<class... Context>
+    static value_type read(reader& input, version_state& version, recursive_record_depth& depth, Context&... context)
     {
         reader marker = input;
         if (marker.read<std::uint8_t>() == 255)
@@ -97,20 +128,21 @@ struct recursive_binary_record
 
         recursive_record_depth::scope nesting(depth);
         reader next = input;
-        version_state::scope transaction(version);
-        auto value = read_codec<Body>(next, version, depth);
+        auto transaction = version_transaction(version, context...);
+        auto value = read_codec<Body>(next, version, context..., depth);
         auto result = std::make_unique<T>(std::move(*value));
         input = next;
         transaction.commit();
         return result;
     }
 
-    static void write(writer& output, const value_type& value, version_state& version, recursive_record_depth& depth)
+    template<class... Context>
+    static void write(writer& output, const value_type& value, version_state& version, recursive_record_depth& depth, Context&... context)
     {
         if (value)
         {
             recursive_record_depth::scope nesting(depth);
-            Body::write_body(output, *value, version, depth);
+            Body::write_body(output, *value, version, context..., depth);
         }
         else
             output.write<std::uint8_t>(255);

@@ -163,7 +163,7 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 普通递归类用 `std::unique_ptr` 持有每个递归节点，包括 List 和 Dictionary 中的值。外围的非递归类沿用普通值类型。Default 和 Version 的 Binary 与 JSON 表示沿用托管声明。Default 的 Binary 读取器使用根类型声明的递归深度，原生栈保护将递归记录遍历限制为 512 层。
 
-启用引用跟踪的对象或普通 RTTI Union case 可以通过字段持有普通递归子树。图文档拥有跟踪对象，递归字段独立拥有各自解码的值。递归类直接作为 Union case，或者递归子树再进入跟踪对象或 Union 时，生成器会给出诊断。诊断也覆盖子类型独立的深度限制、混合递归图的有限深度，以及隔离 Version 读取的有限深度。
+启用引用跟踪的对象或普通 RTTI Union case 可以通过字段持有普通递归子树。普通递归子树也可以引用非递归的跟踪对象。图文档拥有跟踪对象，递归字段独立拥有各自解码的值。递归类直接作为 Union case、递归子树包含 Union 后代，或跟踪对象重新进入递归时，生成器会给出诊断。诊断也覆盖后代独立的输入限制、混合递归图的有限深度，以及隔离 Version 读取的有限深度。
 
 ## 验证基准模型
 

@@ -21,7 +21,7 @@ Use a newly generated root's `read_root_binary` to apply the managed `RequireCom
 
 Generate a modeled closed generic root with its exact manifest `id` in quotes, for example `'Example.Box<string>'`. A concrete C# serialization call can reach that type directly or through a container.
 
-Ordinary recursive C++ records own each recursive node with `std::unique_ptr`, including List and Dictionary elements. A tracked object or ordinary RTTI Union case can own an ordinary recursive subtree through a field. Use the generated root codec to apply the supported recursion context and the declared Default Binary depth.
+Ordinary recursive C++ records own each recursive node with `std::unique_ptr`, including List and Dictionary elements. A tracked object or ordinary RTTI Union case can own an ordinary recursive subtree through a field. The subtree can refer to acyclic tracked descendants owned by the graph document. Use the generated root codec to apply the supported recursion context and the declared Default Binary depth.
 
 Use `generate --rtti` to project Next's exact and virtual Union dispatch tiers. Exact writers compare concrete RTTI types. Virtual writers call a generated slot for the active Binary profile or JSON encoding and share compile-time hashes for closed generic cases. Readers switch on the C# wire hash. A Union with all ordinary direct cases uses `std::unique_ptr`. A Union with a direct tracked case uses pointers borrowed from the reference graph for all cases.
 
