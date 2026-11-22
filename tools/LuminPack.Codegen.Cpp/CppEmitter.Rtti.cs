@@ -97,6 +97,7 @@ internal sealed partial class CppEmitter
                 BindRttiCases(item.Contract.GetProperty("cases"), Text(item.Contract, "id"), item.Profile)));
             EmitTrackedRecords();
         }
+        EmitRecursiveRecords();
         foreach (var item in complete)
         {
             string baseName = RttiBaseName(item.Contract);

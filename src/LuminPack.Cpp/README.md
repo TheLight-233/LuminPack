@@ -153,7 +153,9 @@ The emitter supports positional and Version class contracts, including tracked r
 
 The emitter maps C# `nint` and `nuint` to `std::intptr_t` and `std::uintptr_t` in scalar fields and supported collections. Binary preserves the managed native width, including inside length-delimited Version fields. Use matching 32-bit or 64-bit endpoints for Binary. JSON uses decimal integer tokens and follows the default managed 64-bit parse and native-width conversion.
 
-Ordinary recursive classes use `std::unique_ptr` for each recursive node, including values reached through List and Dictionary. Acyclic enclosing classes keep their ordinary value type. Default and Version use the Binary and JSON representations of their managed declarations. A Default Binary read follows the root's declared recursion depth. The native stack guard limits recursive record traversal to 512 levels. Generation diagnoses ordinary recursion combined with Union or tracked-reference codecs, an independently bounded descendant, or a finite Binary depth across isolated Version reads.
+Ordinary recursive classes use `std::unique_ptr` for each recursive node, including values reached through List and Dictionary. Acyclic enclosing classes keep their ordinary value type. Default and Version use the Binary and JSON representations of their managed declarations. A Default Binary read follows the root's declared recursion depth. The native stack guard limits recursive record traversal to 512 levels.
+
+A tracked object or an ordinary RTTI Union case can own an ordinary recursive subtree through a field. The graph document owns the tracked objects and the recursive fields own their decoded copies. Generation diagnoses direct recursive Union cases and traversal from a recursive subtree into a tracked object or Union. It also diagnoses independent descendant depth, finite depth across a mixed recursive graph, and finite depth across isolated Version reads.
 
 ## Verify the benchmark models
 

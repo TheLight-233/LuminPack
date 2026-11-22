@@ -62,7 +62,6 @@ internal sealed partial class CppEmitter
         emitter.AnalyzeRecursiveRecords(declaration);
         JsonElement profile = declaration.GetProperty("profile");
         Binding binding = emitter.BindContract(declaration, binaryProfile ?? profile.GetProperty("binary").GetInt32());
-        emitter.EmitRecursiveRecords();
         emitter.EmitDeferredRecordsAndRttiUnions();
         emitter.EmitRoot(binding, profile);
         emitter.code.Append("}\n");
