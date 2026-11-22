@@ -35,7 +35,7 @@ final class Json {
         return result.toString();
     }
 
-    private static void write(StringBuilder output, Object value, int depth, int limit) {
+    static void write(StringBuilder output, Object value, int depth, int limit) {
         if (value == null) output.append("null");
         else if (value instanceof Boolean bool) output.append(bool);
         else if (value instanceof String text) quote(output, text);
@@ -131,7 +131,7 @@ final class Json {
 
     private static IllegalArgumentException failure(String message) { return new IllegalArgumentException(message + '.'); }
 
-    private static final class Reader {
+    static final class Reader {
         private final String text;
         private final int maximumDepth;
         private int position;
@@ -139,6 +139,32 @@ final class Json {
         Reader(String text, int maximumDepth) {
             this.text = text;
             this.maximumDepth = maximumDepth;
+        }
+
+        int position() { return position; }
+
+        void position(int value) { position = value; }
+
+        boolean atEnd() { return position == text.length(); }
+
+        void checkDepth(int depth) {
+            if (depth >= maximumDepth) throw failure("LuminPack JSON depth limit exceeded");
+        }
+
+        boolean match(String token) {
+            if (!text.startsWith(token, position)) return false;
+            position += token.length();
+            return true;
+        }
+
+        boolean consumeNull() {
+            space();
+            return match("null");
+        }
+
+        boolean next(char token) {
+            space();
+            return !atEnd() && text.charAt(position) == token;
         }
 
         void space() {
@@ -149,13 +175,13 @@ final class Json {
             }
         }
 
-        private boolean consume(char c) {
+        boolean consume(char c) {
             if (position == text.length() || text.charAt(position) != c) return false;
             position++;
             return true;
         }
 
-        private void expect(char c) {
+        void expect(char c) {
             space();
             if (!consume(c)) throw failure("Expected JSON token " + c);
         }
@@ -181,7 +207,7 @@ final class Json {
         }
 
         private Map<String, Object> object(int depth) {
-            if (depth >= maximumDepth) throw failure("LuminPack JSON depth limit exceeded");
+            checkDepth(depth);
             position++;
             var map = new LinkedHashMap<String, Object>();
             space();
@@ -198,7 +224,7 @@ final class Json {
         }
 
         private List<Object> array(int depth) {
-            if (depth >= maximumDepth) throw failure("LuminPack JSON depth limit exceeded");
+            checkDepth(depth);
             position++;
             var values = new ArrayList<Object>();
             space();
@@ -211,7 +237,7 @@ final class Json {
             return values;
         }
 
-        private String string() {
+        String string() {
             if (!consume('"')) throw failure("Expected a JSON string");
             int start = position;
             StringBuilder result = null;
@@ -267,6 +293,36 @@ final class Json {
         private void digits() {
             if (!digit()) throw failure("Invalid LuminPack JSON number");
             do position++; while (digit());
+        }
+
+        // The complete token still needs a delimiter check in its enclosing record or array.
+        long signedInteger() {
+            space();
+            int start = position;
+            boolean negative = consume('-');
+            if (consume('0')) {
+                if (!fractionStarts()) return 0;
+            } else if (digit()) {
+                long value = 0;
+                long limit = negative ? Long.MIN_VALUE : -Long.MAX_VALUE;
+                do {
+                    int digit = text.charAt(position++) - '0';
+                    if (value < limit / 10 || value * 10 < limit + digit) {
+                        position = start;
+                        return Schema.longValue(number());
+                    }
+                    value = value * 10 - digit;
+                } while (digit());
+                if (!fractionStarts()) return negative ? value : -value;
+            }
+            position = start;
+            return Schema.longValue(value(0));
+        }
+
+        private boolean fractionStarts() {
+            if (atEnd()) return false;
+            char c = text.charAt(position);
+            return c == '.' || c == 'e' || c == 'E';
         }
 
         private Number number() {

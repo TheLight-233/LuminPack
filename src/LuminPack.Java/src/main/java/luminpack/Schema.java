@@ -2,6 +2,7 @@ package luminpack;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -16,6 +17,7 @@ final class Schema {
     final int nativeBytes;
     final int nativeScalarAlignment;
     final boolean completeBinaryInput;
+    final boolean directJson;
     final Map<String, Map<?, ?>> valueLayouts = new HashMap<>();
 
     Schema(String manifest) {
@@ -45,6 +47,8 @@ final class Schema {
         // Resolve reachable contracts eagerly. Recursive references terminate at the existing declaration.
         if (rootWire == null) root.resolve(contracts);
         else rootWire.resolve(contracts);
+        directJson = contracts.values().stream().filter(contract -> contract.resolved)
+            .noneMatch(contract -> contract.profile.track() || contract.kind.equals("Custom"));
     }
 
     record Profile(int binary, boolean declared, int json, boolean track, int input, int collection,
@@ -68,6 +72,7 @@ final class Schema {
         final boolean versioned;
         final boolean wideTags;
         final List<Field> members = new ArrayList<>();
+        final Field[] jsonFields;
         final Map<String, Field> names = new HashMap<>();
         final Map<Integer, Field> versionNames = new HashMap<>();
         final Field[] versionFields;
@@ -91,6 +96,7 @@ final class Schema {
                 members.add(field);
                 if (names.putIfAbsent(field.name, field) != null) throw fail("Duplicate member " + field.name);
             }
+            jsonFields = members.toArray(Field[]::new);
             versionFields = versioned ? members.toArray(Field[]::new) : null;
             versionDescriptors = versioned ? new long[versionFields.length] : null;
             for (int index = 0; index < members.size(); index++) {
@@ -136,6 +142,8 @@ final class Schema {
     static final class Field {
         final String name;
         final Json.Name jsonName;
+        final byte[] firstJsonHead;
+        final byte[] nextJsonHead;
         final String[] aliases;
         final int[] nameKeys;
         final Profile profile;
@@ -148,6 +156,8 @@ final class Schema {
         Field(Map<?, ?> metadata) {
             name = string(metadata.get("name"));
             jsonName = Json.name(name);
+            firstJsonHead = jsonName.token().getBytes(StandardCharsets.UTF_8);
+            nextJsonHead = ("," + jsonName.token()).getBytes(StandardCharsets.UTF_8);
             aliases = list(metadata.get("oldNames")).stream().map(Schema::string).toArray(String[]::new);
             nameKeys = list(metadata.get("nameKeys")).stream().mapToInt(key -> (int) longValue(key)).toArray();
             profile = Profile.from(object(metadata.get("profile")));

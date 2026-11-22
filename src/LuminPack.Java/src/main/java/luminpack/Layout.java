@@ -1,11 +1,15 @@
 package luminpack;
 
+import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.RandomAccess;
 
 import static luminpack.Schema.Wire.*;
 import static luminpack.Schema.fail;
@@ -26,14 +30,14 @@ final class Layout {
         Plan plan = structPlan(document, contract);
         if (plan == NO_PLAN) return false;
         Model model = packed ? plan.packed : plan.standalone(document);
-        value.putAll(castRecord(readValue(document, input, plan, model)));
+        value.putAll(castRecord(readValue(input, plan, model)));
         return true;
     }
 
     static Map<String, Object> readStruct(BinaryDocument document, BinaryCursor.Reader input, Schema.Contract contract) {
         Plan plan = structPlan(document, contract);
         if (plan == NO_PLAN) return null;
-        return castRecord(readValue(document, input, plan, plan.standalone(document)));
+        return castRecord(readValue(input, plan, plan.standalone(document)));
     }
 
     @SuppressWarnings("unchecked")
@@ -53,7 +57,7 @@ final class Layout {
             int profile, int depth) {
         Plan plan = aggregatePlan(document, wire);
         if (plan != NO_PLAN && wire.kind == TUPLE)
-            return castTuple(readValue(document, input, plan, plan.standalone(document)));
+            return castTuple(readValue(input, plan, plan.standalone(document)));
         var values = new ArrayList<Object>(wire.elements.size());
         for (Schema.Wire element : wire.elements) values.add(document.readWire(input, element, profile, depth));
         return values;
@@ -76,30 +80,26 @@ final class Layout {
             document.writeWire(output, wire.elements.get(index), values.get(index), profile, depth);
     }
 
-    static boolean readCollection(BinaryDocument document, BinaryCursor.Reader input, Schema.Wire element,
-            List<Object> values, int count, int profile, int depth) {
-        return readCollection(document, input, element, values, count, profile, depth, false);
-    }
-
-    static boolean readCollection(BinaryDocument document, BinaryCursor.Reader input, Schema.Wire element,
-            List<Object> values, int count, int profile, int depth, boolean segmented) {
-        if (count == 0) return true;
+    static List<Object> readCollection(BinaryDocument document, BinaryCursor.Reader input, Schema.Wire element,
+            int count, boolean segmented) {
+        if (count == 0) return new ArrayList<>();
         if (element.kind == NULLABLE) {
             NullablePlan plan = nullablePlan(document, element);
-            if (plan == null || segmented && !plan.nativeElement) return false;
+            if (plan == null || segmented && !plan.nativeElement) return null;
             Model model = plan.selectRead(input, segmented);
             checkBlock(input, count, model);
+            var values = new ArrayList<Object>(count);
             for (int index = 0; index < count; index++)
                 values.add(readNullable(document, input, model));
-            return true;
+            return values;
         }
         Plan plan = collectionPlan(document, element, segmented);
-        if (plan == NO_PLAN) return false;
+        if (plan == NO_PLAN) return null;
         Model model = plan.selectRead(document, input);
         checkBlock(input, count, model);
-        for (int index = 0; index < count; index++)
-            values.add(readValue(document, input, plan, model));
-        return true;
+        byte[] storage = input.take(count * model.stride);
+        model.validateBooleans(storage, count);
+        return new RawRows(plan, model, count, storage);
     }
 
     static boolean writeCollection(BinaryDocument document, BinaryCursor.Writer output, Schema.Wire element,
@@ -120,6 +120,7 @@ final class Layout {
         Plan plan = collectionPlan(document, element, segmented);
         if (plan == NO_PLAN) return false;
         Model model = plan.selectWrite(document, output);
+        if (values instanceof RawRows raw && raw.write(document, output, plan, model)) return true;
         for (Object value : values) writeValue(document, output, plan, model, value);
         return true;
     }
@@ -423,14 +424,14 @@ final class Layout {
         zeroes(output, model.stride - (output.position() - start));
     }
 
-    private static Object readValue(BinaryDocument document, BinaryCursor.Reader input, Plan plan, Model model) {
+    private static Object readValue(BinaryCursor.Reader input, Plan plan, Model model) {
         if (model.stride > input.remaining()) throw fail("Truncated LuminPack storage value");
-        if (model.sequential) return plan.shape.readSequential(document, input);
-        Slot slot = readSlot(document, input, plan, model);
+        if (model.sequential) return plan.shape.readSequential(input);
+        Slot slot = readSlot(input, plan, model);
         return plan.shape.read(slot.values, slot.padding);
     }
 
-    private static Slot readSlot(BinaryDocument document, BinaryCursor.Reader input, Plan plan, Model model) {
+    private static Slot readSlot(BinaryCursor.Reader input, Plan plan, Model model) {
         if (model.stride > input.remaining()) throw fail("Truncated LuminPack storage value");
         Object[] values = new Object[plan.leaves.length];
         int start = input.position();
@@ -440,7 +441,7 @@ final class Layout {
             int offset = model.offsets[leaf.index];
             if (retain) padding = readPadding(input, start, offset, model.stride, padding);
             else input.skip(offset - (input.position() - start));
-            values[leaf.index] = document.readScalar(input, leaf.type);
+            values[leaf.index] = BinaryDocument.readScalar(input, leaf.type, leaf.width);
         }
         if (retain) padding = readPadding(input, start, model.stride, model.stride, padding);
         else input.skip(model.stride - (input.position() - start));
@@ -501,6 +502,7 @@ final class Layout {
         final int stride;
         final int[] offsets;
         final Leaf[] order;
+        final int[] booleanOffsets;
         final boolean sequential;
 
         Model(int stride, Leaf[] leaves, int[] offsets) {
@@ -508,6 +510,8 @@ final class Layout {
             this.offsets = offsets;
             order = leaves.clone();
             Arrays.sort(order, Comparator.comparingInt(leaf -> offsets[leaf.index]));
+            booleanOffsets = Arrays.stream(order).filter(leaf -> leaf.type.equals("bool"))
+                .mapToInt(leaf -> offsets[leaf.index]).toArray();
             int end = 0;
             int next = 0;
             boolean dense = true;
@@ -523,11 +527,20 @@ final class Layout {
         boolean sameOffsets(Model other) {
             return other == this || stride == other.stride && Arrays.equals(offsets, other.offsets);
         }
+
+        void validateBooleans(byte[] source, int count) {
+            for (int offset : booleanOffsets) {
+                for (int row = 0, position = offset; row < count; row++, position += stride) {
+                    if ((source[position] & ~1) != 0) throw fail("Invalid LuminPack Boolean marker");
+                }
+            }
+        }
     }
 
     static final class Plan {
         final Node shape;
         final Leaf[] leaves;
+        final int[] widths;
         final Model packed;
         final Model[] models;
         final boolean tagged;
@@ -536,6 +549,7 @@ final class Layout {
         Plan(Node shape, Leaf[] leaves, Model packed, Model[] models, boolean tagged) {
             this.shape = shape;
             this.leaves = leaves;
+            widths = Arrays.stream(leaves).mapToInt(Leaf::width).toArray();
             this.packed = packed;
             this.models = models;
             this.tagged = tagged;
@@ -555,6 +569,99 @@ final class Layout {
             // Java has no CLR-compatible object stride. Use the canonical first model.
             output.writeU8(1);
             return models[0];
+        }
+    }
+
+    /** Owned storage snapshot. A row is materialized once because its maps and tuples are writable. */
+    private static final class RawRows extends AbstractList<Object> implements RandomAccess {
+        private final Plan plan;
+        private final Model model;
+        private final int count;
+        private byte[] storage;
+        private Object[] accessed;
+        private ArrayList<Object> elements;
+
+        RawRows(Plan plan, Model model, int count, byte[] storage) {
+            this.plan = plan;
+            this.model = model;
+            this.count = count;
+            this.storage = storage;
+        }
+
+        @Override public int size() { return elements == null ? count : elements.size(); }
+
+        @Override public Object get(int index) {
+            if (elements != null) return elements.get(index);
+            Objects.checkIndex(index, count);
+            if (accessed == null) accessed = new Object[count];
+            Object value = accessed[index];
+            if (value == null) {
+                var cursor = BinaryCursor.Reader.window(storage, index * model.stride, model.stride);
+                value = readValue(cursor, plan, model);
+                accessed[index] = value;
+            }
+            return value;
+        }
+
+        boolean write(BinaryDocument document, BinaryCursor.Writer output, Plan required, Model target) {
+            if (required != plan || storage == null) return false;
+            if (accessed == null) {
+                writeRun(output, target, 0, count);
+                return true;
+            }
+            int start = 0;
+            for (int row = 0; row < count; row++) {
+                Object value = accessed[row];
+                if (value == null) continue;
+                if (start != row) writeRun(output, target, start, row - start);
+                writeValue(document, output, plan, target, value);
+                start = row + 1;
+            }
+            if (start < count) writeRun(output, target, start, count - start);
+            return true;
+        }
+
+        private void writeRun(BinaryCursor.Writer output, Model target, int start, int length) {
+            int offset = start * model.stride;
+            if (target.sameOffsets(model) && (plan.retainPadding || model.stride == plan.packed.stride))
+                output.writeBytes(storage, offset, length * model.stride);
+            else
+                output.writeModeledRows(storage, offset, length, model.stride, target.stride,
+                    model.offsets, target.offsets, plan.widths);
+        }
+
+        @Override public Object set(int index, Object value) { return writable().set(index, value); }
+
+        @Override public void add(int index, Object value) {
+            writable().add(index, value);
+            modCount++;
+        }
+
+        @Override public boolean addAll(int index, Collection<?> values) {
+            if (!writable().addAll(index, values)) return false;
+            modCount++;
+            return true;
+        }
+
+        @Override public Object remove(int index) {
+            Object previous = writable().remove(index);
+            modCount++;
+            return previous;
+        }
+
+        @Override protected void removeRange(int fromIndex, int toIndex) {
+            writable().subList(fromIndex, toIndex).clear();
+            modCount++;
+        }
+
+        private ArrayList<Object> writable() {
+            if (elements != null) return elements;
+            var result = new ArrayList<Object>(count);
+            for (int index = 0; index < count; index++) result.add(get(index));
+            elements = result;
+            accessed = null;
+            storage = null;
+            return result;
         }
     }
 
@@ -604,7 +711,7 @@ final class Layout {
     private interface Node {
         Object read(Object[] values, Padding padding);
         void collect(Object value, Object[] values);
-        Object readSequential(BinaryDocument document, BinaryCursor.Reader input);
+        Object readSequential(BinaryCursor.Reader input);
         void writeSequential(BinaryDocument document, BinaryCursor.Writer output, Object value);
 
     }
@@ -612,8 +719,8 @@ final class Layout {
     private record ScalarNode(Leaf leaf) implements Node {
         public Object read(Object[] values, Padding padding) { return values[leaf.index]; }
         public void collect(Object value, Object[] values) { values[leaf.index] = value; }
-        public Object readSequential(BinaryDocument document, BinaryCursor.Reader input) {
-            return document.readScalar(input, leaf.type);
+        public Object readSequential(BinaryCursor.Reader input) {
+            return BinaryDocument.readScalar(input, leaf.type, leaf.width);
         }
         public void writeSequential(BinaryDocument document, BinaryCursor.Writer output, Object value) {
             document.writeScalar(output, leaf.type, value);
@@ -639,10 +746,10 @@ final class Layout {
                 children[index].collect(fields.get(names[index]), values);
         }
 
-        public Object readSequential(BinaryDocument document, BinaryCursor.Reader input) {
+        public Object readSequential(BinaryCursor.Reader input) {
             Map<String, Object> value = new LinkedHashMap<>(names.length);
             for (int index = 0; index < names.length; index++)
-                value.put(names[index], children[index].readSequential(document, input));
+                value.put(names[index], children[index].readSequential(input));
             return value;
         }
 
@@ -666,9 +773,9 @@ final class Layout {
             for (int index = 0; index < children.length; index++) children[index].collect(items.get(index), values);
         }
 
-        public Object readSequential(BinaryDocument document, BinaryCursor.Reader input) {
+        public Object readSequential(BinaryCursor.Reader input) {
             List<Object> value = new ArrayList<>(children.length);
-            for (Node child : children) value.add(child.readSequential(document, input));
+            for (Node child : children) value.add(child.readSequential(input));
             return value;
         }
 

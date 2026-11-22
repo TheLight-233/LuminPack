@@ -43,7 +43,7 @@ final class JsonDocument {
         return Json.write(json, schema.rootProfile.jsonDepth());
     }
 
-    private Object readContract(Schema.Contract type, Object value) {
+    Object readContract(Schema.Contract type, Object value) {
         if (type.kind.equals("Custom")) return bindings.custom(type).readJson(value);
         if (value == null) {
             if (type.kind.equals("Struct")) throw fail("Missing LuminPack JSON struct");
@@ -112,7 +112,7 @@ final class JsonDocument {
         return payload == null ? null : new LuminPack.UnionValue(hash, payload);
     }
 
-    private Object writeUnion(Schema.Contract union, Object value) {
+    Object writeUnion(Schema.Contract union, Object value) {
         var result = new LinkedHashMap<Json.Name, Object>(2);
         if (value instanceof LuminPack.RegisteredUnionValue registered) {
             if (!Schema.flag(union.metadata, "unionRegistration")) throw fail("LuminPack Union registration is disabled");
@@ -129,7 +129,7 @@ final class JsonDocument {
         return result;
     }
 
-    private Object readWire(Schema.Wire wire, Object value) {
+    Object readWire(Schema.Wire wire, Object value) {
         return switch (wire.kind) {
             case SCALAR -> scalar(wire.type, value);
             case STRING -> string(value);
@@ -143,7 +143,7 @@ final class JsonDocument {
         };
     }
 
-    private Object writeWire(Schema.Wire wire, Object value) {
+    Object writeWire(Schema.Wire wire, Object value) {
         return switch (wire.kind) {
             case SCALAR -> {
                 Object scalar = value == null ? BinaryDocument.defaultScalar(wire.type) : scalar(wire.type, value);
@@ -239,7 +239,7 @@ final class JsonDocument {
         return BinaryDocument.rectangle(lengths, bounds, sequenceElements(wire.element, values, write));
     }
 
-    private Object scalar(String type, Object value) {
+    Object scalar(String type, Object value) {
         return switch (type) {
             case "bool" -> BinaryDocument.checkedBoolean(value);
             case "char" -> {
@@ -276,14 +276,14 @@ final class JsonDocument {
         };
     }
 
-    private String string(Object value) {
+    String string(Object value) {
         if (value == null) return null;
         String text = Schema.string(value);
         if (text.length() > schema.rootProfile.string()) throw fail("LuminPack JSON string limit exceeded");
         return text;
     }
 
-    private void checkCollection(int count) {
+    void checkCollection(int count) {
         if (count > schema.rootProfile.collection()) throw fail("LuminPack JSON collection limit exceeded");
     }
 }

@@ -50,6 +50,8 @@ Load the output of `project` through `LuminPack.fromManifest(Files.readString(pa
 
 ## Text and primitive fast paths
 
+Decoded Packed, Tagged, and Native lists keep a checked byte block and materialize rows on demand. A compatible write can copy untouched row bytes. Alternate Tagged models are converted to the canonical layout, and Native writes preserve padding. Ordinary UTF-8 JSON uses precompiled property heads and direct scalar operations.
+
 The baseline runtime uses bounded word-at-a-time text operations and contiguous primitive storage. The optional Vector API provider accelerates long ASCII and token scans. Build it using a JDK that includes `jdk.incubator.vector`, then copy the service metadata from `src/vector/resources` onto the same classpath.
 
 ```sh

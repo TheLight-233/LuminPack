@@ -1,7 +1,10 @@
 package luminpack;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.SplittableRandom;
 
 /** Exercises the default SWAR kernels and the optional Vector API provider. */
 public final class FastPathChecks {
@@ -15,6 +18,8 @@ public final class FastPathChecks {
         checkStrings();
         checkScalarBlock();
         checkScalarRoot();
+        checkOrderedJson();
+        checkFloatingJson();
     }
 
     private static void checkScans(StringKernels provider) {
@@ -97,6 +102,69 @@ public final class FastPathChecks {
         require(Arrays.equals(codec.writeBinary(decoded), wire), "Root scalar block passthrough");
         byte[] json = codec.writeJson(decoded, LuminPack.UTF8);
         require(codec.readJson(json, LuminPack.UTF8).equals(decoded), "Root sequence JSON");
+    }
+
+    private static void checkOrderedJson() {
+        var codec = LuminPack.fromManifest("""
+            {"version":1,"root":"Shape","contracts":[{"id":"Shape","type":"Shape","kind":"Record",
+             "profile":{"jsonDepth":2,"maxCollection":3},"members":[
+              {"name":"Id","profile":{},"wire":{"kind":"scalar","type":"int"}},
+              {"name":"Name","oldNames":["Previous"],"profile":{},"wire":{"kind":"string"}},
+              {"name":"Values","profile":{},"wire":{"kind":"sequence","element":{"kind":"scalar","type":"int"}}}]}]}
+            """);
+        String canonical = "{\"Id\":7,\"Name\":\"\u00e9\\n\",\"Values\":[-2147483648,0,2147483647]}";
+        byte[] expected = canonical.getBytes(StandardCharsets.UTF_8);
+        Object model = codec.readJson(expected, LuminPack.UTF8);
+        require(Arrays.equals(expected, codec.writeJson(model, LuminPack.UTF8)), "Ordered UTF-8 JSON bytes");
+        require(((Map<?, ?>) model).get("Values") instanceof ScalarBlock, "Contiguous JSON Int32 sequence");
+        String alias = "{\"Previous\":\"\u00e9\\n\",\"Values\":[-2147483648,-0,2147483647],\"I\\u0064\":7}";
+        require(codec.readJson(alias.getBytes(StandardCharsets.UTF_8), LuminPack.UTF8).equals(model), "Escaped and previous names");
+        String duplicate = canonical.replace("\"Id\":7", "\"Id\":\"unused\",\"Id\":7");
+        require(codec.readJson(duplicate.getBytes(StandardCharsets.UTF_8), LuminPack.UTF8).equals(model), "Duplicate key fallback");
+        String replacement = canonical.replace("\u00e9", "\ufffd");
+        byte[] replacementBytes = replacement.getBytes(StandardCharsets.UTF_8);
+        require(Arrays.equals(replacementBytes, codec.writeJson(codec.readJson(replacementBytes, LuminPack.UTF8), LuminPack.UTF8)),
+            "Valid replacement character retains its UTF-8 bytes");
+        byte[] malformed = expected.clone();
+        for (int i = 0; i < malformed.length; i++) {
+            if (malformed[i] != (byte) 0xc3) continue;
+            malformed[i + 1] = 'x';
+            break;
+        }
+        try {
+            codec.readJson(malformed, LuminPack.UTF8);
+            throw new AssertionError("Accepted malformed UTF-8");
+        } catch (IllegalArgumentException expectedFailure) {
+            // Replacement must never silently repair a malformed JSON document.
+        }
+        for (String invalid : List.of(canonical.replace("\"Id\":7", "\"Id\":07"), canonical + "true",
+                canonical.replace("2147483647]", "2147483648]"), canonical.replace("2147483647]", "2147483647,0]"),
+                canonical.substring(0, canonical.length() - 1) + ",\"Unknown\":[[0]]}")) {
+            try {
+                codec.readJson(invalid.getBytes(StandardCharsets.UTF_8), LuminPack.UTF8);
+                throw new AssertionError("Accepted invalid ordered JSON");
+            } catch (IllegalArgumentException | ArithmeticException expectedFailure) {
+                // The ordered path and its fallback must enforce the same syntax, width and shape limits.
+            }
+        }
+    }
+
+    private static void checkFloatingJson() {
+        var random = new SplittableRandom(881627);
+        for (int index = 0; index < 4096; index++) {
+            float single = Float.intBitsToFloat(random.nextInt());
+            double wide = Double.longBitsToDouble(random.nextLong());
+            if (Float.isFinite(single)) {
+                var writer = new JsonUtf8Writer();
+                writer.floating(single);
+                require(new String(writer.finish(), StandardCharsets.UTF_8).equals(Json.write(single, 1)), "Float JSON digits");
+            }
+            if (Double.isFinite(wide)) {
+                var writer = new JsonUtf8Writer();
+                writer.floating(wide);
+                require(new String(writer.finish(), StandardCharsets.UTF_8).equals(Json.write(wide, 1)), "Double JSON digits");
+            }
+        }
     }
 
     private static void require(boolean condition, String description) {

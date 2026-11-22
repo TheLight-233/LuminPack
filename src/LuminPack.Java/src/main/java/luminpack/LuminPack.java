@@ -76,8 +76,14 @@ public final class LuminPack {
         checkInput(input);
         var charset = charset(encoding);
         try {
-            String text = charset.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(input)).toString();
+            boolean direct = useDirectJson(encoding);
+            String text = direct ? new String(input, StandardCharsets.UTF_8) : null;
+            // HotSpot can decode an ordinary UTF-8 array directly. Its replacement character also
+            // identifies when an exact decoder must distinguish malformed input from a valid U+FFFD.
+            if (text == null || text.indexOf('\ufffd') >= 0)
+                text = charset.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(input)).toString();
+            if (direct) return new JsonDirect(schema, bindings).read(text);
             return new JsonDocument(schema, bindings, encoding).read(text);
         } catch (CharacterCodingException error) {
             throw new IllegalArgumentException("Invalid LuminPack JSON text encoding.", error);
@@ -92,10 +98,15 @@ public final class LuminPack {
     /** Writes a JSON document in UTF-8 or little-endian UTF-16. */
     public byte[] writeJson(Object value, int encoding) {
         try {
+            if (useDirectJson(encoding)) return new JsonDirect(schema, bindings).write(value);
             return new JsonDocument(schema, bindings, encoding).write(value).getBytes(charset(encoding));
         } catch (StackOverflowError exhausted) {
             throw Schema.fail("LuminPack JSON depth limit exceeded");
         }
+    }
+
+    private boolean useDirectJson(int encoding) {
+        return encoding == UTF8 && schema.directJson && bindings.custom().isEmpty() && bindings.registered().isEmpty();
     }
 
     private void checkInput(byte[] input) {

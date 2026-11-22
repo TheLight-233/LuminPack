@@ -54,6 +54,11 @@ final class BinaryCursor {
             this.index = start;
         }
 
+        static Reader window(byte[] data, int offset, int width) {
+            Objects.checkFromIndexSize(offset, width, data.length);
+            return new Reader(data, offset, offset + width, Integer.MAX_VALUE, Integer.MAX_VALUE);
+        }
+
         int position() {
             return index - start;
         }
@@ -444,6 +449,28 @@ final class BinaryCursor {
             ensure(value.length);
             System.arraycopy(value, 0, data, index, value.length);
             index += value.length;
+        }
+
+        void writeBytes(byte[] value, int offset, int length) {
+            Objects.checkFromIndexSize(offset, length, value.length);
+            ensure(length);
+            System.arraycopy(value, offset, data, index, length);
+            index += length;
+        }
+
+        void writeModeledRows(byte[] source, int start, int count, int sourceStride, int targetStride,
+                              int[] from, int[] to, int[] widths) {
+            Objects.checkFromIndexSize(start, Math.multiplyExact(count, sourceStride), source.length);
+            int length = Math.multiplyExact(count, targetStride);
+            ensure(length);
+            // Layout compilation proves each lane fits wholly within its row and does not overlap.
+            Arrays.fill(data, index, index + length, (byte) 0);
+            int target = index;
+            for (int row = 0; row < count; row++, start += sourceStride, target += targetStride) {
+                for (int lane = 0; lane < widths.length; lane++)
+                    System.arraycopy(source, start + from[lane], data, target + to[lane], widths[lane]);
+            }
+            index += length;
         }
 
         private void writeVariableLength(int value) {

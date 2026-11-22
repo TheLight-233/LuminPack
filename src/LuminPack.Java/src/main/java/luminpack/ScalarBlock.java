@@ -35,6 +35,19 @@ final class ScalarBlock extends AbstractList<Object> implements RandomAccess {
         return width == requiredWidth && type.equals(requiredType) ? storage : null;
     }
 
+    boolean writeJsonInt32(JsonUtf8Writer output) {
+        byte[] data = raw("int", Integer.BYTES);
+        if (data == null) return false;
+        if (data.length > 0) {
+            output.integer((int) INT32.get(data, 0));
+            for (int offset = Integer.BYTES; offset < data.length; offset += Integer.BYTES) {
+                output.token(',');
+                output.integer((int) INT32.get(data, offset));
+            }
+        }
+        return true;
+    }
+
     @Override public int size() { return elements == null ? storage.length / width : elements.size(); }
 
     @Override public Object get(int index) {

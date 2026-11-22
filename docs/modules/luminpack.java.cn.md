@@ -50,6 +50,8 @@ Object fromJson = Message.CODEC.readJson(json, LuminPack.UTF8);
 
 ## 文本和基本类型快路径
 
+读出的 Packed、Tagged 和 Native 列表保留已校验的字节块，按需生成行值。布局兼容时，写入可直接复制未访问行的字节。替代 Tagged 模型会转换为规范布局，Native 写入保留 padding。普通 UTF-8 JSON 使用预编译的属性头和标量操作。
+
 基础运行时使用有边界检查的机器字文本操作和连续基本类型存储。可选的 Vector API 可加速长 ASCII 和 Token 扫描。使用包含 `jdk.incubator.vector` 的 JDK 编译该实现，并将 `src/vector/resources` 下的服务元数据加入同一个 classpath。
 
 ```sh

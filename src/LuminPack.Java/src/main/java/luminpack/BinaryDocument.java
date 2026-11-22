@@ -254,8 +254,9 @@ final class BinaryDocument {
             int width = scalarWidth(element.type);
             return new ScalarBlock(element.type, width, input.take(count * width));
         }
+        List<Object> storage = Layout.readCollection(this, input, element, count, segmented);
+        if (storage != null) return storage;
         var values = new ArrayList<Object>(Math.min(count, 256));
-        if (Layout.readCollection(this, input, element, values, count, profile, depth, segmented)) return values;
         for (int index = 0; index < count; index++) values.add(readWire(input, element, profile, depth));
         return values;
     }
@@ -384,6 +385,10 @@ final class BinaryDocument {
     }
 
     Object readScalar(BinaryCursor.Reader input, String type) {
+        return readScalar(input, type, schema.nativeBytes);
+    }
+
+    static Object readScalar(BinaryCursor.Reader input, String type, int nativeWidth) {
         return switch (type) {
             case "bool" -> {
                 int marker = input.readU8();
@@ -399,8 +404,8 @@ final class BinaryDocument {
             case "uint" -> Integer.toUnsignedLong(input.readI32());
             case "long" -> input.readI64();
             case "ulong" -> unsigned64(input.readI64());
-            case "nint" -> schema.nativeBytes == 8 ? input.readI64() : (long) input.readI32();
-            case "nuint" -> schema.nativeBytes == 8 ? unsigned64(input.readI64()) : BigInteger.valueOf(Integer.toUnsignedLong(input.readI32()));
+            case "nint" -> nativeWidth == 8 ? input.readI64() : (long) input.readI32();
+            case "nuint" -> nativeWidth == 8 ? unsigned64(input.readI64()) : BigInteger.valueOf(Integer.toUnsignedLong(input.readI32()));
             case "float" -> Float.intBitsToFloat(input.readI32());
             case "double" -> Double.longBitsToDouble(input.readI64());
             default -> throw fail("Unsupported LuminPack scalar " + type);
