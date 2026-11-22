@@ -35,6 +35,8 @@ For a proven padded headerless CLR pair or tuple, use its generated aggregate. T
 
 Generated `Memory<T>`, `ReadOnlyMemory<T>`, and supported `ReadOnlySequence<T>` decode into owning vectors. Generated `ArraySegment<T>` and `ImmutableArray<T>` use optional vectors to preserve the difference between the default value and an empty collection.
 
+Generated C++ native integers use `std::intptr_t` and `std::uintptr_t`. Binary requires matching native widths in .NET and C++ for both positional and Version records. JSON uses the default .NET 64-bit integer parse followed by conversion to the target native width.
+
 Generated Native nullable slots require one exported CLR model that matches the target ABI's flag offset, payload offset and stride. Use the same layout at both endpoints, including when the process architectures differ.
 
 Generated models do not require a runtime plan or formatter witness supplied by the caller. Operation plans are internal source-generator data; they do not add a runtime API or dispatch layer.

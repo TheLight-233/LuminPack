@@ -147,6 +147,8 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 生成器支持位置类和 Version 类，包括引用跟踪对象图、封闭的类或接口 Union、枚举、定宽标量、文本、一维数组、矩形数组、List、Dictionary，以及具有已生成字段契约的 Packed 和 Tagged 聚合和存储经过验证的顺序布局原始结构体。可空原生类型和枚举也可以用作 Version 字段、数组或 List 元素和字典值。遇到尚未实现的 wire 表示时，生成器会报告对应成员或类型。
 
+标量字段及受支持的集合中的 C# `nint` 和 `nuint` 分别映射为 `std::intptr_t` 和 `std::uintptr_t`。二进制保留 C# 的原生位宽，带长度前缀的 Version 字段也使用这一位宽。二进制互通的两端须同为 32 位或同为 64 位。JSON 使用十进制整数，按 C# 默认行为解析为 64 位整数后转换为原生位宽。
+
 ## 验证基准模型
 
 互通测试调用托管基准项目实际使用的 `SimpleClass.Create()` 和 `CharacterSaveData.Create()`。将 .NET 文档和两个生成头文件放在同一目录。

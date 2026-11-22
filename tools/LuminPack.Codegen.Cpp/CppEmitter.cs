@@ -331,6 +331,15 @@ internal sealed partial class CppEmitter
         if (type is "bool" or "System.Boolean")
             return new Binding("bool", "luminpack::boolean_codec", "luminpack::json_codec<luminpack::boolean_codec>");
         if (Scalar(type) is { } scalar)
+        string? nativeInteger = type switch
+        {
+            "nint" or "System.IntPtr" => "std::intptr_t",
+            "nuint" or "System.UIntPtr" => "std::uintptr_t",
+            _ => null
+        };
+        if (nativeInteger != null)
+            return new Binding(nativeInteger, "luminpack::scalar_codec<" + nativeInteger + ">",
+                "luminpack::json_native_integer_codec<" + nativeInteger + ">");
         {
             string codec = "luminpack::scalar_codec<" + scalar + ">";
             return new Binding(scalar, codec, "luminpack::json_codec<" + codec + ">");

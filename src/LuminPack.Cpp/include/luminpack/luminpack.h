@@ -33,13 +33,14 @@ public:
     using std::runtime_error::runtime_error;
 };
 
-/// Fixed-width primitives whose C++ object representations match the wire.
+/// Numeric and character types whose C++ object representations match the wire.
 template<class T>
 concept scalar =
     std::same_as<T, std::int8_t> || std::same_as<T, std::uint8_t> ||
     std::same_as<T, std::int16_t> || std::same_as<T, std::uint16_t> ||
     std::same_as<T, std::int32_t> || std::same_as<T, std::uint32_t> ||
     std::same_as<T, std::int64_t> || std::same_as<T, std::uint64_t> ||
+    std::same_as<T, std::intptr_t> || std::same_as<T, std::uintptr_t> ||
     std::same_as<T, float> || std::same_as<T, double> || std::same_as<T, char16_t>;
 
 namespace detail

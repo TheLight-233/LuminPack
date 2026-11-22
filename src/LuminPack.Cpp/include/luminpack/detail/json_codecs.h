@@ -34,6 +34,18 @@ struct json_codec<scalar_codec<T>>
     }
 };
 
+/// The CLR native integer JSON formatter parses a 64-bit number before the native-width conversion.
+template<class T>
+requires (std::same_as<T, std::intptr_t> || std::same_as<T, std::uintptr_t>)
+struct json_native_integer_codec
+{
+    using value_type = T;
+    using wide_type = std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t>;
+
+    static T read(auto& input) { return static_cast<T>(input.template read_number<wide_type>()); }
+    static void write(auto& output, T value) { output.write_number(static_cast<wide_type>(value)); }
+};
+
 template<>
 struct json_codec<boolean_codec>
 {

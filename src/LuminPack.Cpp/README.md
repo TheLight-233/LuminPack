@@ -147,6 +147,8 @@ An RTTI Union exported from an assembly with registration enabled exposes `root_
 
 The emitter supports positional and Version class contracts, including tracked reference graphs, closed class or interface Unions, enums, fixed-width primitives, text, vectors and rectangular arrays, List, Dictionary, Packed and Tagged aggregates with generated field contracts, and sequential raw structs with proven storage. Nullable primitives and enums also work as Version fields, array or List elements, and dictionary values. Generation reports the member or type when its model needs an unimplemented representation.
 
+The emitter maps C# `nint` and `nuint` to `std::intptr_t` and `std::uintptr_t` in scalar fields and supported collections. Binary preserves the managed native width, including inside length-delimited Version fields. Use matching 32-bit or 64-bit endpoints for Binary. JSON uses decimal integer tokens and follows the default managed 64-bit parse and native-width conversion.
+
 ## Verify the benchmark models
 
 The integration test uses the actual `SimpleClass.Create()` and `CharacterSaveData.Create()` factories from the managed benchmark project. Emit the .NET documents and generate both headers into the same directory:
