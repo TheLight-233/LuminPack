@@ -42,7 +42,7 @@ std::optional<std::size_t> reader::read_collection_count(std::size_t minimum_ele
     }
 
     const auto size = static_cast<std::size_t>(count);
-    if (size > limits_.max_collection_length)
+    if (size > max_collection_length_)
         throw wire_error("LuminPack collection exceeds the configured length limit.");
     if (minimum_element_width != 0)
         detail::checked_input_width(size, minimum_element_width, next.remaining());
@@ -52,7 +52,7 @@ std::optional<std::size_t> reader::read_collection_count(std::size_t minimum_ele
 
 void reader::check_string_length(std::size_t length) const
 {
-    if (length > limits_.max_string_length)
+    if (length > max_string_length_)
         throw wire_error("LuminPack string exceeds the configured length limit.");
 }
 

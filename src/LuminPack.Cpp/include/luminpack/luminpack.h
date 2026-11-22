@@ -45,6 +45,12 @@ namespace detail
 [[noreturn]] void truncated_input();
 [[noreturn]] void short_output();
 
+inline void check_document_size(std::size_t size, std::size_t maximum)
+{
+    if (size > maximum)
+        throw wire_error("LuminPack document exceeds the configured input byte limit.");
+}
+
 inline std::size_t checked_input_width(std::size_t count, std::size_t width, std::size_t available)
 {
     if (count > available / width)
@@ -74,11 +80,12 @@ inline void store_count(std::span<std::byte> header, std::int32_t count) noexcep
 bool overlaps(std::span<const std::byte> source, std::span<const std::byte> destination) noexcept;
 }
 
-/// Binary collection and UTF-16 code-unit limits for a read operation.
+/// Binary collection and UTF-16 code-unit limits, with an encoded byte limit for independent documents.
 struct reader_limits
 {
     std::uint32_t max_collection_length = std::numeric_limits<std::int32_t>::max();
     std::uint32_t max_string_length = std::numeric_limits<std::int32_t>::max();
+    std::size_t max_input_bytes = std::numeric_limits<std::size_t>::max();
 };
 
 /// Reads a contiguous input window. The input must outlive this cursor.
@@ -86,7 +93,8 @@ class reader
 {
 public:
     explicit reader(std::span<const std::byte> input, reader_limits limits = {}) noexcept
-        : input_(input), limits_(limits) {}
+        : input_(input), max_collection_length_(limits.max_collection_length),
+          max_string_length_(limits.max_string_length) {}
 
     [[nodiscard]] std::size_t remaining() const noexcept { return input_.size() - position_; }
     [[nodiscard]] std::span<const std::byte> unread() const noexcept { return input_.subspan(position_); }
@@ -102,7 +110,10 @@ public:
     }
 
     /// Restricts a child reader to a validated member payload while inheriting the current limits.
-    [[nodiscard]] reader subrecord(std::size_t size) { return reader(take(size), limits_); }
+    [[nodiscard]] reader subrecord(std::size_t size)
+    {
+        return reader(take(size), {max_collection_length_, max_string_length_});
+    }
 
     /// Reads one unaligned scalar after validating its complete storage.
     template<scalar T>
@@ -137,7 +148,8 @@ public:
 private:
     std::span<const std::byte> input_;
     std::size_t position_ = 0;
-    reader_limits limits_;
+    std::uint32_t max_collection_length_;
+    std::uint32_t max_string_length_;
 };
 
 /// Writes into caller-owned contiguous storage, which must outlive this cursor.

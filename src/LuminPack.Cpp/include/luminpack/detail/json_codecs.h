@@ -580,6 +580,7 @@ private:
 template<class Codec, json_encoding Encoding = json_encoding::utf16>
 [[nodiscard]] typename Codec::value_type read_json_document(std::span<const std::byte> input, json_read_options options = {})
 {
+    detail::check_document_size(input.size(), options.max_input_bytes);
     basic_json_reader<Encoding> cursor(input, options);
     auto result = Codec::read(cursor);
     cursor.require_end();

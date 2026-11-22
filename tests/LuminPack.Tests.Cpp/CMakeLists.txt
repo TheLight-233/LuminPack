@@ -18,6 +18,10 @@ add_executable(luminpack_cpp_xxhash3 xxhash3.cpp)
 target_link_libraries(luminpack_cpp_xxhash3 PRIVATE LuminPack::Cpp)
 add_test(NAME luminpack_cpp_xxhash3 COMMAND luminpack_cpp_xxhash3)
 
+add_executable(luminpack_cpp_document_limits document_limits.cpp)
+target_link_libraries(luminpack_cpp_document_limits PRIVATE LuminPack::Cpp)
+add_test(NAME luminpack_cpp_document_limits COMMAND luminpack_cpp_document_limits)
+
 set(LUMINPACK_CPP_MODEL_FIXTURES "" CACHE PATH "Generated benchmark headers and .NET model documents")
 if(LUMINPACK_CPP_MODEL_FIXTURES)
     add_executable(luminpack_cpp_models benchmark_models.cpp)

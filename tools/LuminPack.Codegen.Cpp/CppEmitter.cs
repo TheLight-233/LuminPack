@@ -386,12 +386,18 @@ internal sealed partial class CppEmitter
         Alias("root_json", binding.Json);
         Alias("root_value", binding.Type);
         string encoding = profile.GetProperty("jsonEncoding").GetInt32() == 0 ? "utf8" : "utf16";
+        string inputLimit = !Flag(profile, "trusted") && profile.TryGetProperty("maxInput", out JsonElement maximum) &&
+            maximum.ValueKind == JsonValueKind.Number && maximum.TryGetInt32(out int bytes) && bytes is >= 0 and < int.MaxValue
+                ? ", " + bytes.ToString(CultureInfo.InvariantCulture)
+                : string.Empty;
         code.Append("inline constexpr auto root_json_encoding = luminpack::json_encoding::").Append(encoding).Append(";\n");
         code.Append("inline constexpr luminpack::json_read_options root_json_options{")
-            .Append(Math.Max(0, profile.GetProperty("jsonDepth").GetInt32()).ToString(CultureInfo.InvariantCulture)).Append("};\n");
+            .Append(Math.Max(0, profile.GetProperty("jsonDepth").GetInt32()).ToString(CultureInfo.InvariantCulture))
+            .Append(inputLimit).Append("};\n");
         code.Append("inline constexpr luminpack::reader_limits root_binary_limits{")
             .Append(profile.GetProperty("maxCollection").GetInt32().ToString(CultureInfo.InvariantCulture)).Append(", ")
-            .Append(profile.GetProperty("maxString").GetInt32().ToString(CultureInfo.InvariantCulture)).Append("};\n");
+            .Append(profile.GetProperty("maxString").GetInt32().ToString(CultureInfo.InvariantCulture))
+            .Append(inputLimit).Append("};\n");
     }
 
     /// <summary>Appends a C++ type alias.</summary>

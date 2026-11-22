@@ -13,10 +13,11 @@ enum class json_encoding
     utf16
 };
 
-/// Applies a document-wide container depth limit. Zero leaves the limit unset.
+/// Limits container depth and the size in bytes of an independent JSON document. Zero disables the depth limit.
 struct json_read_options
 {
     std::size_t max_depth = 1024;
+    std::size_t max_input_bytes = std::numeric_limits<std::size_t>::max();
 };
 
 template<json_encoding Encoding>

@@ -230,6 +230,7 @@ private:
 template<class Codec>
 [[nodiscard]] typename Codec::value_type read_binary_document(std::span<const std::byte> input, reader_limits limits = {})
 {
+    detail::check_document_size(input.size(), limits.max_input_bytes);
     reader cursor(input, limits);
     version_state state;
     auto value = detail::read_codec<Codec>(cursor, state);
