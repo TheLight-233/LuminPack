@@ -210,15 +210,16 @@ public:
     {
         if constexpr (detail::plain_json_property_name<Name>)
         {
-            constexpr const auto& head = detail::json_property_head<Encoding, Name>;
-            if (!first && head.size() * sizeof(unit) > output_.remaining())
+            constexpr auto width = detail::json_property_head<Encoding, Name>.size() * sizeof(unit);
+            if (first)
+                write_property_head<Name, 1>();
+            else if (width <= output_.remaining())
+                write_property_head<Name, 0>();
+            else
             {
                 token(',');
-                first = true;
+                write_property_head<Name, 1>();
             }
-            const auto skip = first ? std::size_t{1} : std::size_t{0};
-            auto target = output_.reserve((head.size() - skip) * sizeof(unit));
-            std::memcpy(target.data(), head.data() + skip, target.size());
         }
         else
         {
@@ -246,6 +247,15 @@ public:
     }
 
 private:
+    template<auto Name, std::size_t Skip>
+    void write_property_head()
+    {
+        constexpr const auto& head = detail::json_property_head<Encoding, Name>;
+        constexpr auto width = (head.size() - Skip) * sizeof(unit);
+        auto target = output_.reserve(width);
+        std::memcpy(target.data(), head.data() + Skip, width);
+    }
+
     void ascii(std::string_view value);
     writer output_;
 };
