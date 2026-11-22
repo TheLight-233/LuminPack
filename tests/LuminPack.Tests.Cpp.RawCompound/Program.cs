@@ -26,12 +26,17 @@ internal static class Program
             Pair = new(0x98, -75),
             Pairs = [new(0x01, 0x11223344), new(0x12, -73)],
             PairList = [new(0x13, 0x55667788)],
+            NestedTuple = new((0x11223344, 0x55)),
+            NestedPairs = [new(new(0x6A, 0x33445566), 0x70)],
         };
         FillPadding(MemoryMarshal.CreateSpan(ref expected.Tuple, 1), 5, 0xA1);
         FillPadding(expected.Tuples.AsSpan(), 5, 0xA2);
         FillPadding(CollectionsMarshal.AsSpan(expected.TupleList), 5, 0xA4);
         FillPadding(expected.Pairs.AsSpan(), 1, 0xB1);
         FillPadding(CollectionsMarshal.AsSpan(expected.PairList), 1, 0xB3);
+        FillPadding(MemoryMarshal.CreateSpan(ref expected.NestedTuple, 1), 5, 0xC1);
+        FillPadding(expected.NestedPairs.AsSpan(), 1, 0xC2, stride: 12);
+        FillPadding(expected.NestedPairs.AsSpan(), 9, 0xC3, stride: 12);
 
         if (args is ["write", var output])
         {
@@ -58,13 +63,14 @@ internal static class Program
     /// <param name="values">The initialized storage to mark.</param>
     /// <param name="offset">The expected padding start.</param>
     /// <param name="marker">The first record's padding byte.</param>
-    private static void FillPadding<T>(Span<T> values, int offset, byte marker) where T : unmanaged
+    /// <param name="stride">The expected byte width of each record.</param>
+    private static void FillPadding<T>(Span<T> values, int offset, byte marker, int stride = 8) where T : unmanaged
     {
         Span<byte> bytes = MemoryMarshal.AsBytes(values);
-        if (bytes.Length != values.Length * 8)
+        if (bytes.Length != values.Length * stride)
             throw new InvalidDataException("The CLR fixture has an unexpected native stride.");
         for (int index = 0; index < values.Length; index++)
-            bytes.Slice(index * 8 + offset, 3).Fill((byte)(marker + index));
+            bytes.Slice(index * stride + offset, 3).Fill((byte)(marker + index));
     }
 
     /// <summary>Verifies all logical fields without inspecting JSON-irrelevant padding.</summary>
@@ -78,7 +84,7 @@ internal static class Program
     }
 }
 
-/// <summary>Contains flat padded pair collections and tuple scalar and collection values.</summary>
+/// <summary>Contains flat and nested padded pair collections and tuple values.</summary>
 [LuminPackable]
 public partial class RawCompoundPacket
 {
@@ -88,6 +94,8 @@ public partial class RawCompoundPacket
     public KeyValuePair<byte, int> Pair { get; set; }
     public KeyValuePair<byte, int>[] Pairs { get; set; } = [];
     public List<KeyValuePair<byte, int>> PairList { get; set; } = [];
+    public ValueTuple<(int, byte)> NestedTuple;
+    public KeyValuePair<KeyValuePair<byte, int>, byte>[] NestedPairs { get; set; } = [];
 }
 
 #if LUMINPACK_CPP_RAW_COMPOUND_NATIVE

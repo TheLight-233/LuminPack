@@ -15,6 +15,8 @@ internal sealed partial class CppEmitter
         JsonElement components = formatter.GetProperty("arguments");
         if (components.GetArrayLength() != 2 || Flag(formatter, "raw"))
             throw Missing(label, "an unsupported standalone KeyValuePair formatter");
+        if (collection && formatter.TryGetProperty("rawCompoundStorage", out _))
+            return BindRawCompound(formatter, profile, label);
 
         Binding key = BindFormatter(components[0], profile, label);
         Binding value = BindFormatter(components[1], profile, label);
@@ -64,7 +66,7 @@ internal sealed partial class CppEmitter
         }
 
         if (layout.ValueKind == JsonValueKind.Null && Flag(formatter, "rawCollection"))
-            return BindRawCompound(formatter, arguments, components, pair, label);
+            throw Missing(label, "a headerless framework value without a unique proven CLR layout");
         throw Missing(label, "a KeyValuePair collection with unproven CLR storage");
     }
 

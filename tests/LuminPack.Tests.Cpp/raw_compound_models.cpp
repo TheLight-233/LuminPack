@@ -32,7 +32,7 @@ void check_raw_compound(const interop_models::path& directory)
     const auto document = interop_models::load(directory / "raw-compound.bin");
     const auto original = luminpack::read_binary_document<packet::root_binary>(document);
     const auto copy = original;
-    check(copy && copy->field_Tuples && copy->field_TupleList && copy->field_Pairs && copy->field_PairList,
+    check(copy && copy->field_Tuples && copy->field_TupleList && copy->field_Pairs && copy->field_PairList && copy->field_NestedPairs,
         "Expected non-null raw framework fields.");
     check(copy->field_Tuple.field_Item1 == 0x12345678 && copy->field_Tuple.field_Item2 == 0x67,
         "Tagged or Native scalar tuple fields are out of order.");
@@ -45,6 +45,14 @@ void check_raw_compound(const interop_models::path& directory)
     check_padding(copy->field_Pairs->at(0).padding_1, std::byte{0xB1});
     check_padding(copy->field_Pairs->at(1).padding_1, std::byte{0xB2});
     check_padding(copy->field_PairList->front().padding_1, std::byte{0xB3});
+    check(copy->field_NestedTuple.field_Item1_Item1 == 0x11223344 && copy->field_NestedTuple.field_Item1_Item2 == 0x55,
+        "Nested CLR tuple storage changed the logical component values.");
+    const auto& nested_pair = copy->field_NestedPairs->front();
+    check(nested_pair.field_Key_Key == 0x6a && nested_pair.field_Key_Value == 0x33445566 && nested_pair.field_Value == 0x70,
+        "Nested CLR pair storage changed the logical component values.");
+    check_padding(copy->field_NestedTuple.padding_2, std::byte{0xC1});
+    check_padding(nested_pair.padding_1, std::byte{0xC2});
+    check_padding(nested_pair.padding_3, std::byte{0xC3});
 
     std::vector<std::byte> output(document.size());
     const auto written = luminpack::write_binary_document<packet::root_binary>(output, copy);
@@ -53,9 +61,12 @@ void check_raw_compound(const interop_models::path& directory)
 
     const auto json_output = interop_models::load(directory / "out" / "raw-compound.bin");
     const auto from_json = luminpack::read_binary_document<packet::root_binary>(json_output);
-    check(from_json && from_json->field_Pairs && !from_json->field_Pairs->empty(), "Expected a decoded JSON pair array.");
+    check(from_json && from_json->field_Pairs && !from_json->field_Pairs->empty() && from_json->field_NestedPairs &&
+        !from_json->field_NestedPairs->empty(), "Expected decoded JSON pair arrays.");
     check_padding(from_json->field_Tuple.padding_2, std::byte{});
     check_padding(from_json->field_Pairs->front().padding_1, std::byte{});
+    check_padding(from_json->field_NestedTuple.padding_2, std::byte{});
+    check_padding(from_json->field_NestedPairs->front().padding_3, std::byte{});
 }
 }
 

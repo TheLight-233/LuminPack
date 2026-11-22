@@ -28,12 +28,9 @@ internal sealed partial class CppEmitter
             return tuple with { SequenceBinary = sequence };
         }
 
-        JsonElement[] arguments = TupleArguments(formatter, label);
-        Binding[] components = arguments.Select(argument => BindFormatter(argument, profile, label)).ToArray();
-        Binding logical = Tuple(components);
         if ((Flag(formatter, "raw") || collection && Flag(formatter, "rawCollection")) && !Flag(formatter, "denseTupleStorage"))
-            return BindRawCompound(formatter, arguments, components, logical, label);
-        return logical;
+            return BindRawCompound(formatter, profile, label);
+        return Tuple(TupleArguments(formatter, label).Select(argument => BindFormatter(argument, profile, label)));
     }
 
     /// <summary>Binds the tuple in its containing Packed layout and records the exported scalar leaf order.</summary>
