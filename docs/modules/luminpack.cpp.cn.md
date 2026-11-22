@@ -78,6 +78,8 @@ Reader 在 Release 构建中也会校验输入范围。用 `reader_limits` 限�
 
 x64 启用 SIMD 时，UTF-16 Length 写入 1–16 个码元会使用与 C# 相同的有界短 Latin-1 路径。写入 17–64 个码元时，若原始 payload 完整放得下且输入输出 payload 不重叠，写入器使用 C# 的头尾路径。UTF-8 Length 写入使用 C# 的短 ASCII 路径，SSE2 支持 4–16 个码元，AVX2 支持 17–32 个码元，两者都要求 ASCII payload 完整放得下且输入输出 payload 不重叠。通用 x64 Latin-1 内核按 CPU 支持和完整块大小选择 AVX-512BW、AVX2 或 SSE2。其他目标使用可移植实现。设置 `LUMINPACK_CPP_MAX_SIMD_BITS` 为 `128`、`256` 或 `512` 可限制编译的最大向量宽度。设置 `LUMINPACK_CPP_SIMD=OFF` 可在 x64 上也使用可移植实现。
 
+UTF-16 Length 新建字符串和读取符合条件的列表前缀时，使用 C# 的 4–16 码元 Latin-1 扩展路径。每条记录在解码前检查完整窗口与字符串配额。
+
 固定 UTF-8 Length 写入也使用 C# 的长 ASCII 前缀 AVX2 路径，以及连续双字节或三字节 UTF-8 字符的 SIMD 路径。这些路径先探测前缀，再处理完整、已验证的向量分组。三字节 BMP 使用常量重排表，可以在单个 ASCII 分隔符后继续处理下一段。
 
 如果同质探测未命中且字符串以 Latin-1 非 ASCII 字符开头，写入器可使用 C# 的混合 ASCII 与 Latin-1 路径。256 种重排掩码及精确写入宽度都是编译期常量。遇到第一个超出 Latin-1 的码元时恢复通用 UTF-8 编码器。

@@ -225,6 +225,35 @@ void decode_text(std::span<char16_t> destination, text_record record)
 }
 
 #if defined(LUMINPACK_CPP_INLINE_SSE2)
+void widen_short_latin1(std::span<const std::byte> payload, char16_t* target) noexcept
+{
+    const auto* source = payload.data();
+    const auto zero = _mm_setzero_si128();
+    if (payload.size() >= 8)
+    {
+        const auto back = payload.size() - 8;
+        const auto first = detail::load_ascii_word<std::int64_t>(source);
+        const auto last = detail::load_ascii_word<std::int64_t>(source + back);
+        const auto lanes = _mm_set_epi64x(last, first);
+        const auto head = _mm_unpacklo_epi8(lanes, zero);
+        const auto tail = _mm_unpackhi_epi8(lanes, zero);
+        std::memcpy(target, &head, sizeof(head));
+        std::memcpy(target + back, &tail, sizeof(tail));
+    }
+    else
+    {
+        const auto back = payload.size() - 4;
+        const auto first = detail::load_ascii_word<std::int32_t>(source);
+        const auto last = detail::load_ascii_word<std::int32_t>(source + back);
+        const auto lanes = _mm_set_epi32(0, 0, last, first);
+        const auto wide = _mm_unpacklo_epi8(lanes, zero);
+        const auto head = _mm_cvtsi128_si64(wide);
+        const auto tail = _mm_cvtsi128_si64(_mm_unpackhi_epi64(wide, wide));
+        std::memcpy(target, &head, sizeof(head));
+        std::memcpy(target + back, &tail, sizeof(tail));
+    }
+}
+
 bool is_ascii(__m128i chars) noexcept
 {
     const auto high = _mm_and_si128(chars, _mm_set1_epi16(-128));
@@ -336,6 +365,32 @@ void encode_utf8(std::u16string_view value, std::span<std::byte> target)
 }
 }
 
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+std::size_t detail::read_short_utf16_length_prefix(reader& input, std::size_t count, std::size_t first_length,
+    std::vector<std::optional<std::u16string>>& destination)
+{
+    const auto window = input.unread();
+    auto available = window;
+    std::size_t index = 0;
+    auto length = first_length;
+    do
+    {
+        const auto record_size = utf16_length_header_size + length;
+        if (record_size > available.size())
+            detail::truncated_input();
+        input.check_string_length(length);
+        auto& slot = destination.emplace_back(std::in_place, length, u'\0');
+        widen_short_latin1(available.subspan(utf16_length_header_size, length), slot->data());
+        available = available.subspan(record_size);
+        if (++index == count)
+            break;
+        length = short_latin1_length(available);
+    } while (length != 0);
+    (void)input.take(window.size() - available.size());
+    return index;
+}
+#endif
+
 std::optional<std::u16string_view> read_string_into(reader& input, string_profile profile, std::span<char16_t> destination)
 {
     if (profile == string_profile::utf16_length)
@@ -409,6 +464,20 @@ std::optional<std::u16string> read_string(reader& input, string_profile profile)
             }
         }
 #endif
+    }
+    else if (profile == string_profile::utf16_length)
+    {
+        const auto length = detail::short_latin1_length(input.unread());
+        if (length != 0)
+        {
+            reader next = input;
+            const auto record = next.take(detail::utf16_length_header_size + length);
+            next.check_string_length(length);
+            std::u16string result(length, u'\0');
+            widen_short_latin1(record.subspan(detail::utf16_length_header_size), result.data());
+            input = next;
+            return result;
+        }
     }
 #endif
 

@@ -121,6 +121,22 @@ struct raw_struct_codec
 
 namespace detail
 {
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+inline constexpr auto utf16_length_header_size = sizeof(std::int32_t);
+
+inline std::size_t short_latin1_length(std::span<const std::byte> available) noexcept
+{
+    if (available.size() < utf16_length_header_size)
+        return 0;
+    std::int32_t header;
+    std::memcpy(&header, available.data(), sizeof(header));
+    return header >= 9 && header <= 33 && (header & 1) != 0 ? static_cast<std::size_t>(header >> 1) : 0;
+}
+
+std::size_t read_short_utf16_length_prefix(reader& input, std::size_t count, std::size_t first_length,
+    std::vector<std::optional<std::u16string>>& destination);
+#endif
+
 template<class Codec>
 inline constexpr bool contiguous_codec = false;
 
@@ -222,7 +238,19 @@ struct list_codec
         {
             items.clear();
             items.reserve(std::min(*count, std::size_t{128}));
-            for (std::size_t index = 0; index < *count; ++index)
+            std::size_t index = 0;
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+            if constexpr (std::same_as<Element, string_codec<string_profile::utf16_length>>)
+            {
+                if (*count != 0)
+                {
+                    const auto length = detail::short_latin1_length(next.unread());
+                    if (length != 0)
+                        index = detail::read_short_utf16_length_prefix(next, *count, length, items);
+                }
+            }
+#endif
+            for (; index < *count; ++index)
                 items.emplace_back(detail::read_codec<Element>(next, context...));
         }
         input = next;

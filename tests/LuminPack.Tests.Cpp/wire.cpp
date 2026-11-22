@@ -252,6 +252,63 @@ void short_utf16_records()
     }
 }
 
+void utf16_length_collection_reads()
+{
+    using strings = luminpack::list_codec<luminpack::string_codec<>>;
+    const strings::value_type expected = std::vector<std::optional<std::u16string>>{
+        u"A\u0080\u00ffZ", u"123456\u00ff", u"1234567\u0080", u"123456789ABCDEF\u00ff",
+        std::nullopt, u"", u"Raw\u0100", u"123", u"123456789ABCDEFG\u0080", u"short-tail"
+    };
+    std::array<byte, 256> storage{};
+    writer output(std::span<byte>(storage).subspan(1));
+    strings::write(output, expected);
+    output.write<std::uint32_t>(0x01020304);
+    reader input(output.written());
+    check(strings::read(input) == expected, "Reads a compact UTF-16 list prefix and ordinary suffix.");
+    check(input.read<std::uint32_t>() == 0x01020304, "UTF-16 list consumes its exact record window.");
+    input.require_end();
+
+    const strings::value_type pair = std::vector<std::optional<std::u16string>>{
+        u"A\u0080\u00ffZ", u"1234567\u00ff"
+    };
+    output = writer(std::span<byte>(storage).subspan(1));
+    strings::write(output, pair);
+    const auto wire = output.written();
+    strings::value_type destination(std::in_place, 1, std::u16string(u"Previous"));
+    destination->reserve(32);
+    const auto* reused = destination->data();
+    const auto check_prefix = [&]
+    {
+        check(destination && destination->size() == 1 && destination->front() == pair->front(),
+            "Publishes exactly the validated UTF-16 list prefix.");
+        check(destination->data() == reused, "Retains existing UTF-16 list storage.");
+    };
+
+    input = reader(wire.first(wire.size() - 1));
+    expect_error<luminpack::wire_error>([&] { strings::read_into(input, destination); }, "Accepts a truncated compact UTF-16 list record.");
+    check(input.remaining() == wire.size() - 1, "Consumes a truncated UTF-16 list.");
+    check_prefix();
+
+    input = reader(wire, {.max_string_length = 7});
+    expect_error<luminpack::wire_error>([&] { strings::read_into(input, destination); }, "Accepts a compact UTF-16 list record above its quota.");
+    check(input.remaining() == wire.size(), "Consumes a rejected UTF-16 list.");
+    check_prefix();
+
+    input = reader(wire);
+    strings::read_into(input, destination);
+    check(destination == pair && destination->data() == reused, "Refills the vector in wire order.");
+    input.require_end();
+
+    constexpr std::size_t second_offset = sizeof(std::int32_t) * 2 + 4;
+    const auto second = wire.subspan(second_offset);
+    input = reader(second.first(second.size() - 1));
+    expect_error<luminpack::wire_error>([&] { (void)luminpack::string_codec<>::read(input); }, "Accepts a truncated short UTF-16 string.");
+    check(input.remaining() == second.size() - 1, "Consumes a truncated short UTF-16 string.");
+    input = reader(second, {.max_string_length = 7});
+    expect_error<luminpack::wire_error>([&] { (void)luminpack::string_codec<>::read(input); }, "Accepts a short UTF-16 string above its quota.");
+    check(input.remaining() == second.size(), "Consumes a rejected short UTF-16 string.");
+}
+
 struct tagged32
 {
     std::int32_t key;
@@ -1245,6 +1302,7 @@ int main(int argc, char** argv)
         text_fixtures(directory);
         text_vector_boundaries();
         short_utf16_records();
+        utf16_length_collection_reads();
         tagged_fixtures(directory);
         object_and_input_checks();
         collection_contracts(directory);
