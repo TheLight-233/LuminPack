@@ -85,7 +85,7 @@ Token 模式写以终止符结束的字符串，没有 `null` 标记；`null` �
 | 其他键类型的字典 | `[[key1, value1], [key2, value2]]` |
 | `Tuple`、`ValueTuple` | 按成员顺序排列的数组 |
 | `Lazy<T>` | `{"Value": value}`；实例为 `null` 时写 `null` |
-| Union | `{"$type": tag, "$value": {...}}` |
+| 类或接口 Union | 生成 case 使用 `{"$type": hash, "$value": {...}}`。注册 case 使用数字标签。参见[多态](polymorphism.cn.md#json)。 |
 | 引用跟踪 | 第一次出现时写 `$id`，之后写 `{"$ref": id}` |
 
 - 字典属性名按 JSON 字符串规则转义。重复键沿用相应字典的插入或覆盖行为。若无法识别接口或只读包装器的底层字典，仍可写出键值对数组，以保存自定义实现的 `null` 键等值。优先队列和键值对列表保持键值对数组形式。

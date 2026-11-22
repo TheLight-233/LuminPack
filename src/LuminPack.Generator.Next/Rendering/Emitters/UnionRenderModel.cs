@@ -8,7 +8,7 @@ internal sealed class UnionRenderCase : IEquatable<UnionRenderCase>
 {
     /// <summary>The narrow Union tag.</summary>
     internal readonly int Id;
-    /// <summary>The binary hash of the canonical case name.</summary>
+    /// <summary>The wire hash of the canonical case name.</summary>
     internal readonly uint NameHash;
     /// <summary>The fully qualified case type.</summary>
     internal readonly string Type;

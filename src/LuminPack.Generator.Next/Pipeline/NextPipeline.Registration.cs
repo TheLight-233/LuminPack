@@ -64,14 +64,14 @@ internal static partial class NextPipeline
                 {
                     string definition = Regex.Replace(type, "<[^<>]+>", match =>
                         "<" + new string(',', match.Value.Count(character => character == ',')) + ">");
-                    string tags = string.Join(", ", genericUnion.Cases.Select(item => item.Tag.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                    string tags = UnionEmitter.ReservedTags(genericUnion.Cases.Select(item => (item.Tag, item.NameHash)));
                     openUnionTags.Add((definition, tags));
                 }
                 continue;
             }
             if (model is UnionModel && RenderModelFactory.Create(model, options) is { } union)
                 custom.Add("global::LuminPack.Code.LuminPackUnionFormatter<" + type + ">.ReserveTags(new int[] { " +
-                    string.Join(", ", union.UnionCases.Select(item => item.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)).Distinct()) + " });");
+                    UnionEmitter.ReservedTags(union.UnionCases.Select(item => (item.Id, item.NameHash))) + " });");
             AddPayload(model, type);
         }
 

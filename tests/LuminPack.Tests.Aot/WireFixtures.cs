@@ -256,6 +256,7 @@ internal static partial class WireFixtures
 #if LUMINPACK_NEXT_WIRE
         File.WriteAllBytes(Path.Combine(directory, "dictionary-string.json"), JsonDictionaryBytes());
         File.WriteAllText(Path.Combine(directory, "references.json"), ReferenceJson());
+        File.WriteAllText(Path.Combine(directory, "union-hash.json"), LuminPackSerializer.SerializeJson<Choice>(new Selected { Value = 123 }));
         WriteVersionFixtures(directory);
         WriteRecursivePackedFixture(directory);
 #endif
@@ -278,6 +279,8 @@ internal static partial class WireFixtures
 #if LUMINPACK_NEXT_WIRE
         VerifyJsonDictionary(directory);
         VerifyReferenceJson(directory);
+        Check(LuminPackSerializer.DeserializeJson<Choice, LuminPackUtf8LengthOptions>(
+            File.ReadAllBytes(Path.Combine(directory, "union-hash.json"))) is Selected { Value: 123 }, "union-hash.json");
         VerifyVersionFixtures(directory);
         VerifyRecursivePackedFixture(directory);
         VerifyTaggedAutomaticFixtures(directory);

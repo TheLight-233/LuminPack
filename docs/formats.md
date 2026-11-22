@@ -85,7 +85,7 @@ The default text encoding is UTF-16; select UTF-8 with `[LuminPackOption(StringE
 | Dictionaries with other key types | `[[key1, value1], [key2, value2]]` |
 | `Tuple`, `ValueTuple` | array of members in order |
 | `Lazy<T>` | `{"Value": value}`; a `null` instance is `null` |
-| Union | `{"$type": tag, "$value": {...}}` |
+| Class or interface Union | `{"$type": hash, "$value": {...}}` for a generated case. Registered cases use numeric tags. See [polymorphism](polymorphism.md#json). |
 | Reference tracking | `$id` on the first occurrence, `{"$ref": id}` afterwards |
 
 - A map's property names use the JSON string escaping rules, and duplicate keys follow its insertion or replacement behavior. An interface or read-only wrapper whose underlying map cannot be identified can still emit pairs, preserving keys such as `null` from a custom implementation. Priority queues and lists of key/value pairs keep pair framing.

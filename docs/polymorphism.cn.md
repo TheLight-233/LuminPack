@@ -32,23 +32,16 @@ public abstract partial class NetworkMessage : Message { }
 public sealed partial class Ping : NetworkMessage { public int Sequence; }
 ```
 
-- 在 Next 中，生成 case 数超过 32 时，根类型、各 case 及其外层包含类型必须声明为 `partial`，以生成虚方法。较小的 Union 使用精确类型比较，也适用于泛型 case。
-- 数字标签范围为 0 到 65535。在 Next 中，它们标识 JSON 和显式注册的 case。
+- 在 Next 中，生成 case 数不超过 32 时，两种格式均使用精确运行时类型的 `if` / `else if` 链，也适用于泛型 case。超过 32 时，根类型、各 case 及其外层包含类型必须声明为 `partial`，以生成虚方法。
+- 数字标签范围为 0 到 65535。声明使用的标签会保留，不能用于手工注册。生成 case 在两种格式中使用名称哈希。
 - 支持泛型 case：开放泛型 case（`typeof(Case<>)`）覆盖实际用到的闭合类型，闭合 case（`typeof(Case<int>)`）优先于它。
 - 在 .NET 11 上，两种生成器都支持标了 `[LuminPackable]` 的 C# `union` 声明。二进制和 JSON 都按 case 的声明顺序从零分配标签。未持有 case 的默认值使用空值标记。
 
-对符合条件的本地非泛型抽象类根，生成器根据目标框架和根上声明的 case 统一选择写入档位。各档位使用相同的线上格式。
+各写入档位使用同一线格式。列表、数组、不可变数组和字典逐元素使用根选定的派发档位。读取时对 case 哈希做 `switch`。
 
-| 目标框架 | 分派 |
-| --- | --- |
-| 低于 .NET 8 | 一个精确类型模式 `switch` 覆盖所有生成的 case。 |
-| .NET 8 及以上 | 闭合单 case 直接调用，2 到 4 个 case 或开放单 case 用精确类型模式 `switch`，5 个及以上走虚槽。 |
+Next 的类与接口 Union 使用每个生成 case 的规范 UTF-8 类型名的 32 位 FNV-1a 哈希。二进制写入四字节小端值，JSON 写入无符号十进制数。规范名称包含命名空间，以 `+` 分隔嵌套类型，以尖括号包围全限定类型参数。开放类型参数在规范名称中写为 `!0`、`!1` 等。例如 `Example.Case<System.Int32>` 和 `Example.Case<!0>` 的哈希不同。生成器拒绝冲突、零和 `0xFFFFFFFF`。重命名 case 会改变两种格式的模式。
 
-直调要求只有一个 sealed case、源码中无其他派生类型、未启用注册，且根无法被其他程序集扩展。精确类型模式之外的值走原虚槽。列表、数组、不可变数组和字典逐元素使用根选定的同一档位。接口根、泛型根和引用程序集中的根沿用原分派。
-
-Next 的类与接口 Union 为每个生成 case 写入四字节小端值，即规范 UTF-8 类型名的 FNV-1a 哈希。规范名称包含命名空间，以 `+` 分隔嵌套类型，以尖括号包围全限定类型参数。开放类型参数在规范名称中写为 `!0`、`!1` 等。例如 `Example.Case<System.Int32>` 和 `Example.Case<!0>` 的哈希不同。生成器拒绝冲突、零和 `0xFFFFFFFF`。重命名 case 会改变二进制模式。类型名文本不写入数据流。
-
-二进制 `null` 写为四个零字节。注册 case 写入 `0xFFFFFFFF`，后接委托原有的数字标签和负载。`[LuminPackOption(WideTag = true)]` 选择该注册路径的标签宽度。显式数字标签也是 JSON 的 case ID。新的二进制 reader 要求哈希头。此前生成 case 的单字节和三字节头属于另一套二进制模式。
+二进制 `null` 写为四个零字节。注册 case 写入 `0xFFFFFFFF`，后接委托的数字标签和负载。`[LuminPackOption(WideTag = true)]` 选择该注册路径的标签宽度。
 
 ## 引用程序集中的类型
 
@@ -100,4 +93,4 @@ MyLib.IShape.Register<Hexagon>(10, Write, Read, WriteJson, ReadJson);
 
 ## JSON
 
-Union 值写为 `{"$type": tag, "$value": {...}}`，`null` 写为 `null`。双方必须使用相同的标签与类型对应关系。
+Next 将类或接口 Union 的生成 case 写为 `{"$type": hash, "$value": {...}}`。注册 case 使用委托写入的数字标签和负载。落在数字标签范围内的生成哈希均保留，不能用于手工注册。空 Union 写为 `null`。

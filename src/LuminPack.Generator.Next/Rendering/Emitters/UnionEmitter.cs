@@ -759,10 +759,10 @@ internal static class UnionEmitter
     /// <param name="type">The type being analyzed or emitted.</param>
     private static void JsonReadBody(PayloadRenderModel model, CodeWriter w, string reader, string type)
     {
-        OpenJsonCases(w, reader);
+        OpenJsonCases(w, reader, nameHash: true);
         foreach (var item in model.UnionCases)
         {
-            w.Line("case " + item.Id.ToString(CultureInfo.InvariantCulture) + ":");
+            w.Line("case " + NameHash(item) + ":");
             w.Open();
             string member = "member" + Number(Array.IndexOf(model.UnionCases, item));
             w.Line(item.Type + " " + member + " = " + (StructCase(item)
@@ -778,7 +778,7 @@ internal static class UnionEmitter
         w.Open();
         if (model.Registration)
         {
-            w.Line("if (" + "global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(tag, out var registeredFormatter) && registeredFormatter.ReadValueJson != null)");
+            w.Line("if (tag <= ushort.MaxValue && global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter((int)tag, out var registeredFormatter) && registeredFormatter.ReadValueJson != null)");
             w.Open();
             w.Line(model.GlobalName + " registeredValue = default !;");
             w.Line("((global::LuminPack.Code.LuminPackJsonReadDelegate<" + model.GlobalName + ">)registeredFormatter.ReadValueJson)(ref reader, ref registeredValue);");
@@ -787,7 +787,7 @@ internal static class UnionEmitter
             w.Close();
             w.Blank();
         }
-        w.Line(w.A("LuminPackExceptionHelper") + ".ThrowNotFoundInUnionType(tag, typeof(" + model.GlobalName + "));");
+        w.Line(w.A("LuminPackExceptionHelper") + ".ThrowFormatException($\"Unknown Union hash: 0x{tag:X8}.\");");
         w.Line("break;");
         w.Close();
         w.Close();
@@ -797,7 +797,8 @@ internal static class UnionEmitter
     /// <summary>Emits JSON Union framing and opens the case switch inside the property loop.</summary>
     /// <param name="w">The generated source writer.</param>
     /// <param name="reader">The JSON reader type name used to qualify token kinds.</param>
-    internal static void OpenJsonCases(CodeWriter w, string reader)
+    /// <param name="nameHash">Whether the discriminator is a case-name hash instead of a compiler Union ordinal.</param>
+    internal static void OpenJsonCases(CodeWriter w, string reader, bool nameHash = false)
     {
         w.Line("if (reader.IsNull())");
         w.Open();
@@ -806,7 +807,7 @@ internal static class UnionEmitter
         w.Close();
         w.Blank();
         w.Line("reader.TryConsumeObjectStart<" + Profile + ">();");
-        w.Line("ushort tag = 0;");
+        w.Line(nameHash ? "uint tag = uint.MaxValue;" : "ushort tag = 0;");
         w.Line("while (reader.Read<" + Profile + ">())");
         w.Open();
         w.Line("if (reader.CurrentTokenType == " + reader + ".JsonTokenType.ObjectEnd)");
@@ -830,7 +831,7 @@ internal static class UnionEmitter
         w.Indented(() => w.Line("break;"));
         w.Line("if (local == 1)");
         w.Open();
-        w.Line("tag = (ushort)reader.Read<int, " + Profile + ">();");
+        w.Line(nameHash ? "tag = reader.Read<uint, " + Profile + ">();" : "tag = (ushort)reader.Read<int, " + Profile + ">();");
         w.Line("continue;");
         w.Close();
         w.Blank();
@@ -903,7 +904,7 @@ internal static class UnionEmitter
         {
             w.Line("private static readonly bool LuminPackUnionTags_" + model.UnionSuffix +
                 " = global::LuminPack.Code.LuminPackUnionFormatter<" + type + ">.ReserveTags(new int[] { " +
-                string.Join(", ", model.UnionCases.Select(item => item.Id.ToString(CultureInfo.InvariantCulture)).Distinct()) + " });");
+                ReservedTags(model.UnionCases.Select(item => (item.Id, item.NameHash))) + " });");
             w.Blank();
         }
     }
@@ -939,6 +940,23 @@ internal static class UnionEmitter
     /// <param name="item">The declared case.</param>
     /// <returns>The hexadecimal C# constant.</returns>
     private static string NameHash(UnionRenderCase item) => "0x" + item.NameHash.ToString("X8", CultureInfo.InvariantCulture) + "u";
+
+    /// <summary>Formats the declared tags and any name hashes that overlap the registered JSON tag range.</summary>
+    /// <param name="cases">The generated cases of the Union root.</param>
+    /// <returns>The distinct tag literals for the typed registration table.</returns>
+    internal static string ReservedTags(IEnumerable<(int Tag, uint NameHash)> cases)
+    {
+        var tags = new HashSet<int>();
+        var ordered = new List<int>();
+        foreach (var (tag, hash) in cases)
+        {
+            if (tags.Add(tag))
+                ordered.Add(tag);
+            if (hash <= ushort.MaxValue && tags.Add((int)hash))
+                ordered.Add((int)hash);
+        }
+        return string.Join(", ", ordered.Select(tag => tag.ToString(CultureInfo.InvariantCulture)));
+    }
 
     /// <summary>Spells the name hash as a signed constant for the cached generic write dispatch.</summary>
     /// <param name="item">The declared case.</param>
@@ -1222,7 +1240,7 @@ internal static class UnionEmitter
                 w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".TypeU8);"));
                 w.Line("else");
                 w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".TypeU16);"));
-                w.Line("writer.Write<" + profile + ">(" + item.Id.ToString(CultureInfo.InvariantCulture) + ");");
+                w.Line("writer.Write<" + profile + ">(" + NameHash(item) + ");");
                 w.Line("if (default(" + profile + ").JsonByteCount(1) == 1)");
                 w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".ValueU8);"));
                 w.Line("else");
@@ -1365,7 +1383,6 @@ internal static class UnionEmitter
     /// <param name="value">The value to process.</param>
     private static void GenericCaseWrite(PayloadRenderModel model, UnionRenderCase item, CodeWriter w, bool json, string profile, string value)
     {
-        string id = item.Id.ToString(CultureInfo.InvariantCulture);
         if (!json)
         {
             w.Line("writer.EnsureAdditionalCapacity(4);");
@@ -1378,7 +1395,7 @@ internal static class UnionEmitter
         w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".TypeU8);"));
         w.Line("else");
         w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".TypeU16);"));
-        w.Line("writer.Write<" + profile + ">(" + id + ");");
+        w.Line("writer.Write<" + profile + ">(" + NameHash(item) + ");");
         w.Line("if (default(" + profile + ").JsonByteCount(1) == 1)");
         w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".ValueU8);"));
         w.Line("else");

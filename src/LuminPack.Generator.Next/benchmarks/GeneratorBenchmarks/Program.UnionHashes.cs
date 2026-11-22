@@ -25,12 +25,16 @@ internal static partial class Program
             using LuminPack;
             using LuminPack.Attribute;
             using LuminPack.Core;
+            using LuminPack.Option;
             [LuminPackable, LuminPackUnion(7, typeof(Case<int>)), LuminPackUnion(9, typeof(Case<string>))]
             public abstract class Root<T> { }
             [LuminPackable] public sealed class Case<T> : Root<T> { public T Value = default!; }
             [LuminPackable, LuminPackUnion(1, typeof(OpenCase<>))] public abstract class OpenRoot<T> { }
             [LuminPackable] public sealed class OpenCase<T> : OpenRoot<T> { public T Value = default!; }
             public sealed class Registered : Root<int> { public int Value; }
+            [LuminPackable] public abstract class LowHashRoot { }
+            [LuminPackable] public sealed class LowHashCase5217 : LowHashRoot { public int Value; }
+            public sealed class LowHashRegistered : LowHashRoot { }
             [LuminPackable] public abstract class Small { }
             [LuminPackable, CLOSED_CASES] public abstract partial class Large<T> { }
             public static class Entry
@@ -79,9 +83,45 @@ internal static partial class Program
                     Require(BinaryPrimitives.ReadInt32LittleEndian(largeString) == stringHash);
                     Require(LuminPackSerializer.Deserialize<Large<int>>(largeInteger) is Large32<int> { Value: 32 });
                     Require(LuminPackSerializer.Deserialize<Large<string>>(largeString) is Large32<string> { Value: 33 });
-                    Require(LuminPackSerializer.SerializeJson(l).Contains("\"$type\":101", StringComparison.Ordinal));
-                    Require(LuminPackSerializer.SerializeJson(other).Contains("\"$type\":102", StringComparison.Ordinal));
-                    Require(LuminPackSerializer.SerializeJson(integer).Contains("\"$type\":7", StringComparison.Ordinal));
+                    string integerJson = LuminPackSerializer.SerializeJson(integer);
+                    Require(integerJson == "{\"$type\":2727561342,\"$value\":{\"Value\":42}}");
+                    Require(LuminPackSerializer.DeserializeJson<Root<int>>(integerJson) is Case<int> { Value: 42 });
+                    Root<int> existing = new Case<int> { Value = 1 };
+                    Root<int> reused = existing;
+                    LuminPackSerializer.DeserializeJson(integerJson, ref reused);
+                    Require(ReferenceEquals(existing, reused) && reused is Case<int> { Value: 42 });
+                    Require(LuminPackSerializer.SerializeJson(open) == "{\"$type\":1658348052,\"$value\":{\"Value\":17}}");
+                    string largeIntegerJson = LuminPackSerializer.SerializeJson(l);
+                    string largeStringJson = LuminPackSerializer.SerializeJson(other);
+                    Require(largeIntegerJson == "{\"$type\":765709618,\"$value\":{\"Value\":32}}");
+                    Require(largeStringJson == "{\"$type\":3442645745,\"$value\":{\"Value\":33}}");
+                    Require(LuminPackSerializer.DeserializeJson<Large<int>>(largeIntegerJson) is Large32<int> { Value: 32 });
+                    Require(LuminPackSerializer.DeserializeJson<Large<string>>(largeStringJson) is Large32<string> { Value: 33 });
+                    Require(LuminPackSerializer.SerializeJson<Root<int>>(null!) == "null");
+                    Require(LuminPackSerializer.DeserializeJson<Root<int>>("null") is null);
+                    foreach (string discriminator in new[] { "7", "0", "4294967295", "4294967296", "-1567405954" })
+                    {
+                        Root<int> previous = integer;
+                        bool invalidHash = false;
+                        try { LuminPackSerializer.DeserializeJson("{\"$type\":" + discriminator + ",\"$value\":{\"Value\":99}}", ref previous); }
+                        catch (FormatException) { invalidHash = true; }
+                        Require(invalidHash && ReferenceEquals(integer, previous) && previous is Case<int> { Value: 42 });
+                    }
+                    LowHashRoot lowHash = new LowHashCase5217 { Value = 21 };
+                    const string lowHashJson = "{\"$type\":42586,\"$value\":{\"Value\":21}}";
+                    Require(LuminPackSerializer.SerializeJson(lowHash) == lowHashJson);
+                    Require(LuminPackSerializer.DeserializeJson<LowHashRoot>(lowHashJson) is LowHashCase5217 { Value: 21 });
+                    bool hashReserved = false;
+                    try
+                    {
+                        LuminPackSerializer.Register<LowHashRoot, LowHashRegistered>(42586,
+                            static (ref LuminPackWriter writer, ref LowHashRoot value) => throw new NotSupportedException(),
+                            static (ref LuminPackReader reader, ref LowHashRoot value) => throw new NotSupportedException(),
+                            static (ref LuminPackJsonWriter writer, ref LowHashRoot value) => throw new NotSupportedException(),
+                            static (ref LuminPackJsonReader reader, ref LowHashRoot value) => throw new NotSupportedException());
+                    }
+                    catch (ArgumentException) { hashReserved = true; }
+                    Require(hashReserved);
                     bool reserved = false;
                     try { LuminPackSerializer.Register<Root<int>, Registered>(7, Write, Read, WriteJson, ReadJson); }
                     catch (ArgumentException) { reserved = true; }
@@ -90,6 +130,9 @@ internal static partial class Program
                     byte[] registered = LuminPackSerializer.Serialize<Root<int>>(new Registered { Value = 19 });
                     Require(registered.AsSpan().SequenceEqual(Convert.FromHexString("FFFFFFFF0B13000000")));
                     Require(LuminPackSerializer.Deserialize<Root<int>>(registered) is Registered { Value: 19 });
+                    const string registeredJson = "{\"$type\":11,\"$value\":19}";
+                    Require(LuminPackSerializer.SerializeJson<Root<int>>(new Registered { Value = 19 }) == registeredJson);
+                    Require(LuminPackSerializer.DeserializeJson<Root<int>>(registeredJson) is Registered { Value: 19 });
                 }
 
                 private static void Write(ref LuminPackWriter writer, ref Root<int> value)
@@ -101,8 +144,18 @@ internal static partial class Program
                 private static void Read(ref LuminPackReader reader, ref Root<int> value)
                     => value = new Registered { Value = reader.Read<int>() };
 
-                private static void WriteJson(ref LuminPackJsonWriter writer, ref Root<int> value) => throw new NotSupportedException();
-                private static void ReadJson(ref LuminPackJsonReader reader, ref Root<int> value) => throw new NotSupportedException();
+                private static void WriteJson(ref LuminPackJsonWriter writer, ref Root<int> value)
+                {
+                    writer.WriteObjectStart();
+                    writer.WritePropertyName("$type");
+                    writer.Write(11);
+                    writer.WritePropertyName("$value");
+                    writer.Write(((Registered)value).Value);
+                    writer.WriteObjectEnd();
+                }
+
+                private static void ReadJson(ref LuminPackJsonReader reader, ref Root<int> value)
+                    => value = new Registered { Value = reader.Read<int, LuminPackUtf16LengthOptions>() };
 
                 private static uint Hash(ReadOnlySpan<byte> bytes)
                 {
@@ -138,8 +191,12 @@ internal static partial class Program
         AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(coreDll));
         var assembly = Generate(source, out var generated, out var diagnostics);
         RequireIncremental(diagnostics.All(item => item.Severity != DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
-        RequireIncremental(generated.Split('\n').Any(line => line.Contains("GetType() == typeof(global::Case<int>)", StringComparison.Ordinal) &&
-            line.Contains("return; }", StringComparison.Ordinal)), "Closed generic exact branch occupies one line.");
+        var exactBranches = generated.Split('\n').Where(line => line.Contains("GetType() == typeof(global::Case<int>)", StringComparison.Ordinal) &&
+            line.Contains("return; }", StringComparison.Ordinal)).ToArray();
+        RequireIncremental(exactBranches.Any(line => line.Contains("WriteCase", StringComparison.Ordinal)) &&
+            exactBranches.Any(line => line.Contains("WriteJsonCase", StringComparison.Ordinal)), "Closed generic exact branches occupy one line in both formats.");
+        RequireIncremental(generated.Contains("case 0xA293487Eu:", StringComparison.Ordinal) &&
+            generated.Contains("reader.Read<uint, TLuminProfile>()", StringComparison.Ordinal), "JSON Union read did not select by the unsigned hash.");
         RequireIncremental(generated.Contains("public virtual void Write_", StringComparison.Ordinal), "Large union did not retain virtual write dispatch.");
         Generate(source.Replace("abstract partial class Large<T>", "abstract class Large<T>"), out _, out var invalid);
         RequireIncremental(invalid.Any(item => item.Id == "LuminPack035"), "Large non-partial union did not report LuminPack035.");
@@ -152,7 +209,7 @@ internal static partial class Program
             out _, out diagnostics, "ReorderedUnionHashes");
         RequireIncremental(diagnostics.All(item => item.Severity != DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
         Execute(reordered);
-        Console.WriteLine("Passed binary Union hashes, non-partial exact cases, order-independent generic cache IDs, truncation and the 32/33 boundary.");
+        Console.WriteLine("Passed binary and JSON Union hashes, non-partial exact cases, registered tags, order-independent generic cache IDs, truncation and the 32/33 boundary.");
         return 0;
 
         static void Execute(Compilation compilation)
