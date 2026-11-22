@@ -188,6 +188,12 @@ jobs:
             -DLUMINPACK_CPP_SIMD=OFF -DLUMINPACK_CPP_JSON_NUMBER_FIXTURES="$fixtures"
           cmake --build "$work/cpp" --target luminpack_cpp_json_numbers --parallel 2
           ctest --test-dir "$work/cpp" --output-on-failure -R '^luminpack_cpp_json_numbers$'
+      - name: Verify C++ Binary ASCII SIMD paths
+        run: |
+          work=.tmp/portable-json-numbers/cpp
+          cmake -S src/LuminPack.Cpp -B "$work" -DLUMINPACK_CPP_SIMD=ON
+          cmake --build "$work" --target luminpack_cpp_wire luminpack_cpp_utf8_ascii_read --parallel 2
+          ctest --test-dir "$work" --output-on-failure -R '^luminpack_cpp_(wire|utf8_ascii_read)$'
 
   instruction-sets:
     if: github.event_name != 'workflow_dispatch' || !inputs.avx512_only

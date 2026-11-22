@@ -118,6 +118,38 @@ void check_ascii_records()
     }
 }
 
+void check_variable_ascii_groups()
+{
+    constexpr auto variable_profile = luminpack::string_profile::utf8_varint;
+    constexpr auto lengths = std::array{31u, 32u, 33u, 63u, 64u, 65u, 127u, 128u, 129u, 259u};
+    alignas(32) std::array<std::byte, 32 + lengths.back() + 4> storage;
+    for (const auto length : lengths)
+    {
+        const std::u16string expected(length, u'x');
+        for (std::size_t offset = 0; offset < 32; ++offset)
+        {
+            storage.fill(std::byte{0xff});
+            luminpack::writer output(std::span<std::byte>(storage).subspan(offset));
+            luminpack::write_string(output, variable_profile, expected);
+            const auto record = output.written();
+            luminpack::reader input(record);
+            require(luminpack::read_string(input, variable_profile) == expected, "Incorrect variable-length ASCII result.");
+            input.require_end();
+
+            const auto payload_offset = offset + record.size() - length;
+            for (const auto index : {0u, length / 2, length - 1})
+            {
+                auto& byte = storage[payload_offset + index];
+                byte = std::byte{0xff};
+                input = luminpack::reader(record);
+                expect_error([&] { (void)luminpack::read_string(input, variable_profile); });
+                require(input.remaining() == record.size(), "Malformed variable-length UTF-8 advanced the reader.");
+                byte = std::byte{'x'};
+            }
+        }
+    }
+}
+
 void check_asymmetric_width_writes()
 {
     constexpr auto canary = std::byte{0xcc};
@@ -269,6 +301,7 @@ int main(int argc, char** argv)
         managed_records(std::filesystem::path(argv[1]) / "short-ascii.bin", 4, 16);
         managed_records(std::filesystem::path(argv[1]) / "medium-ascii.bin", 17, 32);
         check_ascii_records();
+        check_variable_ascii_groups();
         check_asymmetric_width_writes();
         check_surrogate_width_writes();
         check_heterogeneous_utf8_tail();

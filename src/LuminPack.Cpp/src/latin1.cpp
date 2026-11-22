@@ -90,9 +90,13 @@ __m128i load128(const void* source) noexcept
 
 bool is_ascii_bytes_128(std::span<const std::byte> source) noexcept
 {
-    return ascii_vector_groups(source, load128,
-        [](__m128i first, __m128i second) noexcept { return _mm_or_si128(first, second); },
-        [](__m128i bytes) noexcept { return _mm_movemask_epi8(bytes) == 0; });
+    return ascii_vector_groups<sizeof(__m128i)>(source,
+        []<std::size_t Vectors>(const std::byte* first, const std::byte* second) noexcept {
+            auto bytes = _mm_or_si128(load128(first), load128(second));
+            if constexpr (Vectors == 2)
+                bytes = _mm_or_si128(bytes, _mm_or_si128(load128(first + 16), load128(second + 16)));
+            return _mm_movemask_epi8(bytes) == 0;
+        });
 }
 
 std::size_t first_non_ascii_utf16_128(std::span<const char16_t> source) noexcept
@@ -159,9 +163,13 @@ uint8x16_t load128(const void* source) noexcept
 
 bool is_ascii_bytes_128(std::span<const std::byte> source) noexcept
 {
-    return ascii_vector_groups(source, load128,
-        [](uint8x16_t first, uint8x16_t second) noexcept { return vorrq_u8(first, second); },
-        [](uint8x16_t bytes) noexcept { return vmaxvq_u8(bytes) < 0x80; });
+    return ascii_vector_groups<sizeof(uint8x16_t)>(source,
+        []<std::size_t Vectors>(const std::byte* first, const std::byte* second) noexcept {
+            auto bytes = vorrq_u8(load128(first), load128(second));
+            if constexpr (Vectors == 2)
+                bytes = vorrq_u8(bytes, vorrq_u8(load128(first + 16), load128(second + 16)));
+            return vmaxvq_u8(bytes) < 0x80;
+        });
 }
 
 std::size_t first_non_ascii_utf16_128(std::span<const char16_t> source) noexcept

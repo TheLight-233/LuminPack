@@ -22,9 +22,20 @@ void store_wide_ascii_32(char16_t* target, __m256i source) noexcept
 
 bool is_ascii_bytes_avx2(std::span<const std::byte> source) noexcept
 {
-    return ascii_vector_groups(source, load_ascii_word<__m256i>,
-        [](__m256i first, __m256i second) noexcept { return _mm256_or_si256(first, second); },
-        [](__m256i bytes) noexcept { return _mm256_movemask_epi8(bytes) == 0; });
+    // MinGW GCC can outline a vector-returning loader with an under-aligned return slot.
+    return ascii_vector_groups<sizeof(__m256i)>(source,
+        []<std::size_t Vectors>(const std::byte* first, const std::byte* second) noexcept {
+            const auto a = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(first));
+            const auto b = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(second));
+            auto bytes = _mm256_or_si256(a, b);
+            if constexpr (Vectors == 2)
+            {
+                const auto c = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(first + 32));
+                const auto d = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(second + 32));
+                bytes = _mm256_or_si256(bytes, _mm256_or_si256(c, d));
+            }
+            return _mm256_movemask_epi8(bytes) == 0;
+        });
 }
 
 void widen_medium_ascii_avx2(char16_t* target, std::size_t length, __m128i first, __m128i last) noexcept
@@ -41,8 +52,8 @@ bool try_widen_long_ascii_avx2(std::span<const std::byte> source, std::span<char
     std::size_t index = 0;
     for (; length - index >= 64; index += 64)
     {
-        const auto first = load_ascii_word<__m256i>(bytes + index);
-        const auto second = load_ascii_word<__m256i>(bytes + index + 32);
+        const auto first = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(bytes + index));
+        const auto second = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(bytes + index + 32));
         if (_mm256_movemask_epi8(_mm256_or_si256(first, second)) != 0)
             return false;
         store_wide_ascii_32(target + index, first);
@@ -50,7 +61,7 @@ bool try_widen_long_ascii_avx2(std::span<const std::byte> source, std::span<char
     }
     for (; length - index >= 32; index += 32)
     {
-        const auto block = load_ascii_word<__m256i>(bytes + index);
+        const auto block = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(bytes + index));
         if (_mm256_movemask_epi8(block) != 0)
             return false;
         store_wide_ascii_32(target + index, block);
@@ -59,7 +70,7 @@ bool try_widen_long_ascii_avx2(std::span<const std::byte> source, std::span<char
     if (index < length)
     {
         const auto tail = length - 32;
-        const auto block = load_ascii_word<__m256i>(bytes + tail);
+        const auto block = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(bytes + tail));
         if (_mm256_movemask_epi8(block) != 0)
             return false;
         store_wide_ascii_32(target + tail, block);
