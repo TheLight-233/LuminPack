@@ -65,3 +65,18 @@ Version rev4 和 rev5 用 `version_member` 与 `version_codec` 绑定生成的�
 Reader 在 Release 构建中也会校验输入范围。用 `reader_limits` 限制集合元素数量和解码后的 UTF-16 码元数量。读入缓冲区的操作返回借用目标存储的视图，在使用视图期间保持缓冲区有效。跨布局转换或字符串转换遇到输入输出重叠时，会在堆上暂存输入。
 
 x64 的 Latin-1 内核按 CPU 支持和完整块大小选择 AVX-512BW、AVX2 或 SSE2。其他目标使用可移植实现。设置 `LUMINPACK_CPP_MAX_SIMD_BITS` 为 `128`、`256` 或 `512` 可限制编译的最大向量宽度。设置 `LUMINPACK_CPP_SIMD=OFF` 可在 x64 上也使用可移植实现。
+
+## JSON
+
+用 `read_json_document` 和 `write_json_document` 调用具体的 JSON codec。文档默认使用小端 UTF-16。与 UTF-8 .NET 根类型互通时，将第二个模板参数设为 `json_encoding::utf8`。二进制成员使用的字符串 profile 不会改变 JSON 文档的编码。
+
+```cpp
+using Number = luminpack::scalar_codec<std::int32_t>;
+using Numbers = luminpack::json_codec<luminpack::list_codec<Number>>;
+auto numbers = luminpack::read_json_document<Numbers, luminpack::json_encoding::utf8>(input_bytes);
+auto written = luminpack::write_json_document<Numbers, luminpack::json_encoding::utf8>(output_bytes, numbers);
+```
+
+用 `json_record_member` 绑定 C# 属性名和旧名称，以 `json_record_codec` 组合 DTO。非空值或 Union case 的对象体使用 `json_record_body`。`json_union_codec` 使用 Next 发出的 `$type` 哈希和 `$value` 包装。`json_custom_codec` 绑定应用自己的 JSON 读写函数。
+
+Reader 校验 JSON 语法和文档边界。`json_read_options::max_depth` 限制对象和数组的嵌套深度，默认为 1024。字符串键字典写成 JSON 对象，读取时兼容对象和键值对数组。其他键类型的字典使用键值对数组。

@@ -414,3 +414,5 @@ void write_tagged_array(writer& output, std::optional<std::span<const T>> value)
 #include "detail/collections.h"
 #include "detail/records.h"
 #include "detail/version_codec.h"
+#include "detail/json_reader_writer.h"
+#include "detail/json_codecs.h"
