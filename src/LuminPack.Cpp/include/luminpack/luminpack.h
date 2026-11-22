@@ -445,3 +445,4 @@ void write_tagged_array(writer& output, std::optional<std::span<const T>> value)
 #include "detail/json_reader_writer.h"
 #include "detail/json_codecs.h"
 #include "detail/polymorphic_union.h"
+#include "detail/pair_codecs.h"

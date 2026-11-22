@@ -56,6 +56,8 @@ int main()
 
 `nullable_codec` 用 `std::optional<T>` 表示带标记的 `Nullable<T>` 字段。定宽 Version 字段的第二个模板参数是描述符给出的总宽度。`nullable_storage_codec` 和 `nullable_list_codec` 用 CLR 的步长和偏移描述原生字典值与连续可空集合。读取先校验整个范围及布尔标记，再转换为 C++ 值。多模型 Tagged 集合接受导出的每个标签，并以规范模型写出。Native 集合要求两端的 CLR 布局一致。
 
+`pair_codec` 将 .NET 的 `KeyValuePair<TKey, TValue>` 字段或字典值映射为 `std::pair`。二进制按键、值顺序写入，JSON 使用 `[key,value]`。生成的一维数组和 List 支持逐元素编码、无填充的定宽键值对，以及存储方案匹配的 Packed 键值对。含 CLR 填充或多模型布局标签的键值对集合需要独立的存储契约。
+
 字符串 codec 可绑定六种 `string_profile`。Length 与 VarInt 区分 null 和空字符串。Token 使用零码元结束，null 与空字符串使用同一表示。含内嵌零码元的文本应使用长度模式。
 
 用 `record_member` 和 `record_codec` 按 wire 顺序绑定 DTO 字段。Next 生成的二进制 Union 用 `union_codec` 绑定已有的 case hash 和各 case 的 payload codec。应用可通过 `custom_codec` 绑定自己实现的读写函数来复用同一份 wire 契约。成员顺序、标量类型、字符串 profile 和 Tagged 模型顺序均沿用源 wire 契约。

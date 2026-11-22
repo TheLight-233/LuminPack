@@ -16,12 +16,18 @@ internal sealed partial class CppEmitter
     {
         JsonElement layout = formatter.GetProperty("layout");
         string type = Text(formatter, "type");
+        string definition = Text(formatter, "definition");
+        if (definition == PairDefinition && nullableWidth == 0)
+        {
+            if (required)
+                throw Missing(label, "a KeyValuePair dictionary key");
+            return BindPair(formatter, profile, label);
+        }
         if (layout.ValueKind != JsonValueKind.Null &&
             (!contracts.TryGetValue(Normalize(type), out JsonElement contract) ||
                 Text(contract, "kind") != "Struct" || !JsonElement.DeepEquals(contract.GetProperty("storage"), layout)))
             throw Missing(label, "a specialized layout block");
 
-        string definition = Text(formatter, "definition");
         JsonElement arguments = formatter.GetProperty("arguments");
         if (definition == NullableDefinition)
         {
@@ -38,6 +44,8 @@ internal sealed partial class CppEmitter
             JsonElement element = arguments[0];
             if (element.GetProperty("nullableEncoding").GetInt32() != 0)
                 return BindNullableBlock(element, profile, label);
+            if (Text(element, "definition") == PairDefinition)
+                CheckPairCollection(element, label);
             return Sequence(BindFormatter(element, profile, label));
         }
         if (definition == "System.Collections.Generic.Dictionary")
