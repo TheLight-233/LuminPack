@@ -155,6 +155,8 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 生成器支持位置类和 Version 类，包括引用跟踪对象图、封闭的类或接口 Union、枚举、定宽标量、文本、一维数组、矩形数组、List、Dictionary，以及具有已生成字段契约的 Packed 和 Tagged 聚合和存储经过验证的顺序布局原始结构体。可空原生类型和枚举也可以用作 Version 字段、数组或 List 元素和字典值。遇到尚未实现的 wire 表示时，生成器会报告对应成员或类型。
 
+对于 `[LuminPackCompress]` 字段，生成器为包含标量、枚举和已验证无标签布局的非托管值的一维数组或 List 使用 C# 的 LUM2 集合格式。不规则数组保留外层的元素数量，分别压缩受支持的叶层数组。二进制区分 null 与空集合，JSON 沿用普通元素表示。写入非空的压缩字段时，缓冲区须容纳元素数量、压缩帧长度，以及按原始元素字节数计算的 `compression::max_compressed_size`。
+
 标量字段及受支持的集合中的 C# `nint` 和 `nuint` 分别映射为 `std::intptr_t` 和 `std::uintptr_t`。二进制保留 C# 的原生位宽，带长度前缀的 Version 字段也使用这一位宽。二进制互通的两端须同为 32 位或同为 64 位。JSON 使用十进制整数，按 C# 默认行为解析为 64 位整数后转换为原生位宽。
 
 普通递归类用 `std::unique_ptr` 持有每个递归节点，包括 List 和 Dictionary 中的值。外围的非递归类沿用普通值类型。Default 和 Version 的 Binary 与 JSON 表示沿用托管声明。Default 的 Binary 读取器使用根类型声明的递归深度，原生栈保护将递归记录遍历限制为 512 层。

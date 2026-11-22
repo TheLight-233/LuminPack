@@ -146,8 +146,6 @@ internal sealed partial class CppEmitter
         {
             string property = Text(field, "name");
             string label = owner + "." + property;
-            if (Flag(field, "compressed"))
-                throw Missing(label, "compressed member framing");
 
             JsonElement memberProfile = field.GetProperty("profile");
             int active = Flag(memberProfile, "declared") ? memberProfile.GetProperty("binary").GetInt32() : profile;
@@ -155,7 +153,9 @@ internal sealed partial class CppEmitter
             if (version && !ulong.TryParse(Text(field, "descriptor"), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out descriptor))
                 throw Missing(label, "a missing Version descriptor");
             int nullableWidth = Flag(field, "fixedNullable") ? (int)(descriptor >> 56) : 0;
-            Binding member = BindShape(field.GetProperty("shape"), active, label, nullableWidth);
+            Binding member = Flag(field, "compressed")
+                ? BindCompressedMember(field.GetProperty("shape"), active, label)
+                : BindShape(field.GetProperty("shape"), active, label, nullableWidth);
             string fieldName = "field_" + Identifier(property);
             string pointer = "&" + storage + "::" + fieldName;
             declarations.Add("    " + member.Type + " " + fieldName + "{};");
