@@ -2,10 +2,10 @@
 
 namespace luminpack::detail
 {
-inline bool high_surrogate(char16_t value) noexcept { return value >= 0xd800 && value <= 0xdbff; }
-inline bool low_surrogate(char16_t value) noexcept { return value >= 0xdc00 && value <= 0xdfff; }
+inline constexpr bool high_surrogate(char16_t value) noexcept { return value >= 0xd800 && value <= 0xdbff; }
+inline constexpr bool low_surrogate(char16_t value) noexcept { return value >= 0xdc00 && value <= 0xdfff; }
 
-inline std::uint32_t read_utf16_scalar(std::u16string_view source, std::size_t& offset, bool replace = false)
+inline constexpr std::uint32_t read_utf16_scalar(std::u16string_view source, std::size_t& offset, bool replace = false)
 {
     const auto character = source[offset++];
     if (high_surrogate(character))
@@ -21,6 +21,39 @@ inline std::uint32_t read_utf16_scalar(std::u16string_view source, std::size_t& 
     if (replace)
         return 0xfffd;
     throw std::invalid_argument("LuminPack UTF-8 encoding requires valid UTF-16.");
+}
+
+inline constexpr std::size_t utf8_scalar_width(std::uint32_t value) noexcept
+{
+    if (value < 0x80)
+        return 1;
+    if (value < 0x800)
+        return 2;
+    return value < 0x10000 ? 3 : 4;
+}
+
+template<class Unit>
+constexpr void store_utf8_scalar(Unit*& target, std::uint32_t value) noexcept
+{
+    if (value < 0x80)
+        *target++ = static_cast<Unit>(value);
+    else if (value < 0x800)
+    {
+        *target++ = static_cast<Unit>(0xc0 | (value >> 6));
+        *target++ = static_cast<Unit>(0x80 | (value & 0x3f));
+    }
+    else
+    {
+        if (value < 0x10000)
+            *target++ = static_cast<Unit>(0xe0 | (value >> 12));
+        else
+        {
+            *target++ = static_cast<Unit>(0xf0 | (value >> 18));
+            *target++ = static_cast<Unit>(0x80 | ((value >> 12) & 0x3f));
+        }
+        *target++ = static_cast<Unit>(0x80 | ((value >> 6) & 0x3f));
+        *target++ = static_cast<Unit>(0x80 | (value & 0x3f));
+    }
 }
 
 inline std::uint32_t read_utf8_scalar(std::span<const std::byte> source, std::size_t& offset, bool replace)

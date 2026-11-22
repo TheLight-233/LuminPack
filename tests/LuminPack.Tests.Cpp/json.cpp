@@ -298,6 +298,56 @@ void sparse_property_lookup()
     }, "An exact-match miss still validates the skipped JSON value.");
 }
 
+void unicode_property_heads()
+{
+    using luminpack::detail::json_property_head;
+    constexpr auto name = luminpack::json_name{u"A\u00e9\u754c\U00010400"};
+    constexpr auto& head8 = json_property_head<json_encoding::utf8, name, '{'>;
+    constexpr auto& head16 = json_property_head<json_encoding::utf16, name, '{'>;
+    constexpr std::array<unsigned char, 14> expected8{
+        '{', '"', 'A', 0xc3, 0xa9, 0xe7, 0x95, 0x8c, 0xf0, 0x90, 0x90, 0x80, '"', ':'};
+    static_assert(std::ranges::equal(head8, expected8, {}, [](char byte) { return static_cast<unsigned char>(byte); }));
+    static_assert(std::u16string_view(head16.data(), head16.size()) == u"{\"A\u00e9\u754c\U00010400\":");
+
+    basic_json_reader<json_encoding::utf8> reader8(bytes("{\"A\xc3\xa9\xe7\x95\x8c\xf0\x90\x90\x80\":7}"));
+    const auto scope8 = reader8.begin('{');
+    require(reader8.try_read_ordered_property<name>(true) && reader8.read_number<std::int32_t>() == 7,
+        "Match a complete generated UTF-8 property head containing multibyte code points.");
+    reader8.expect('}');
+    reader8.require_end();
+
+    basic_json_reader<json_encoding::utf16> reader16(bytes(u"{\"A\u00e9\u754c\U00010400\":-7}"));
+    const auto scope16 = reader16.begin('{');
+    auto run = reader16.begin_generated_int32_run();
+    std::int32_t value{};
+    require(run.read<name, true>(value) && value == -7, "Use the UTF-16 Unicode head in a generated Int32 run.");
+    run.complete();
+    reader16.expect('}');
+    reader16.require_end();
+
+    using unicode = json_record_body<selected, json_record_member<name, &selected::value, number>>;
+    require(read_json_document<unicode, json_encoding::utf8>(
+        bytes("{\"A\\u00e9\\u754c\\ud801\\udc00\":7}")) == selected{7},
+        "Accept the decoded spelling after an ordered Unicode name mismatch.");
+
+    const auto check_short_write = []<json_encoding Encoding>(std::span<const std::byte> prefix) {
+        std::array<std::byte, 32> buffer{};
+        basic_json_writer<Encoding> writer(std::span<std::byte>(buffer).first(prefix.size()));
+        try
+        {
+            writer.template write_opening_property<name>();
+        }
+        catch (const std::length_error&)
+        {
+            require(std::ranges::equal(writer.written(), prefix), "Preserve the quoted Unicode name before a short colon.");
+            return;
+        }
+        throw std::runtime_error("A Unicode property head exceeded the destination.");
+    };
+    check_short_write.template operator()<json_encoding::utf8>(bytes("{\"A\xc3\xa9\xe7\x95\x8c\xf0\x90\x90\x80\""));
+    check_short_write.template operator()<json_encoding::utf16>(bytes(u"{\"A\u00e9\u754c\U00010400\""));
+}
+
 // These 16-byte UTF-16 names collide under seed-zero XXH3.
 constexpr auto first_collision = luminpack::json_name{u"\u39b9\uea42\u737b\u6782\u523a\u0996\ubc3b\uae56"};
 constexpr auto second_collision = luminpack::json_name{u"\u39b8\uea42\u737b\u6782\u523a\u0996\ubc3b\uaf56"};
@@ -543,6 +593,82 @@ void validation()
         require(writer.written().empty(), "Non-finite JSON write commits no bytes.");
     }
 }
+
+template<json_encoding Encoding, class Ordinary, class Generated>
+void compare_generated_opening(const typename Ordinary::value_type& value, std::span<const std::byte> expected)
+{
+    const auto write = [&]<class Codec>(std::type_identity<Codec>, std::span<std::byte> destination) {
+        basic_json_writer<Encoding> output(destination);
+        try
+        {
+            Codec::write(output, value);
+        }
+        catch (const std::length_error&)
+        {
+            return std::pair{false, output.written()};
+        }
+        return std::pair{true, output.written()};
+    };
+    std::array<std::byte, 96> manual{};
+    std::array<std::byte, 96> generated{};
+    for (std::size_t capacity = 0; capacity <= expected.size(); ++capacity)
+    {
+        const auto prior = write(std::type_identity<Ordinary>{}, std::span(manual).first(capacity));
+        const auto current = write(std::type_identity<Generated>{}, std::span(generated).subspan(1, capacity));
+        require(prior.first == current.first && std::ranges::equal(prior.second, current.second),
+            "Generated opening heads preserve the original bytes and published prefix at every capacity.");
+        if (capacity == expected.size())
+            require(current.first && std::ranges::equal(current.second, expected),
+                "Generated opening heads preserve the complete JSON document.");
+    }
+}
+
+struct nested_selection
+{
+    selected item;
+    bool enabled;
+};
+
+void generated_opening_heads()
+{
+    constexpr auto utf8 = json_encoding::utf8;
+    constexpr auto utf16 = json_encoding::utf16;
+    using generated_selection = luminpack::json_lookup_record_body<selected, void,
+        json_record_member<u"Value", &selected::value, number>>;
+    using manual_nested = json_record_body<nested_selection,
+        json_record_member<u"Nested", &nested_selection::item, selection>,
+        json_record_member<u"Enabled", &nested_selection::enabled, boolean>>;
+    using generated_nested = luminpack::json_lookup_record_body<nested_selection, void,
+        json_record_member<u"Nested", &nested_selection::item, generated_selection>,
+        json_record_member<u"Enabled", &nested_selection::enabled, boolean>>;
+    const nested_selection nested{{42}, true};
+    compare_generated_opening<utf8, manual_nested, generated_nested>(
+        nested, bytes("{\"Nested\":{\"Value\":42},\"Enabled\":true}"));
+    compare_generated_opening<utf16, manual_nested, generated_nested>(
+        nested, bytes(u"{\"Nested\":{\"Value\":42},\"Enabled\":true}"));
+
+    using escaped_member = json_record_member<u"\u754c\"", &selected::value, number>;
+    using manual_escaped = json_record_body<selected, escaped_member>;
+    using generated_escaped = luminpack::json_lookup_record_body<selected, void, escaped_member>;
+    compare_generated_opening<utf8, manual_escaped, generated_escaped>(
+        selected{42}, bytes("{\"\xe7\x95\x8c\\\"\":42}"));
+    compare_generated_opening<utf16, manual_escaped, generated_escaped>(
+        selected{42}, bytes(u"{\"\u754c\\\"\":42}"));
+
+    using manual_empty = json_record_body<selected>;
+    using generated_empty = luminpack::json_lookup_record_body<selected, void>;
+    compare_generated_opening<utf8, manual_empty, generated_empty>(selected{}, bytes("{}"));
+    compare_generated_opening<utf16, manual_empty, generated_empty>(selected{}, bytes(u"{}"));
+
+    using manual_nullable = luminpack::json_optional_codec<selection>;
+    using generated_nullable = luminpack::json_optional_codec<generated_selection>;
+    compare_generated_opening<utf8, manual_nullable, generated_nullable>(std::nullopt, bytes("null"));
+    compare_generated_opening<utf16, manual_nullable, generated_nullable>(std::nullopt, bytes(u"null"));
+
+    malformed([] {
+        (void)read_json_document<generated_nested, utf8>(bytes("{\"Nested\":{\"Value\":42},,\"Enabled\":true}"));
+    }, "Generated objects still reject duplicate property separators.");
+}
 }
 
 int main(int argc, char** argv)
@@ -554,10 +680,12 @@ int main(int argc, char** argv)
         profiles_and_strings();
         ordered_property_heads();
         sparse_property_lookup();
+        unicode_property_heads();
         dense_property_lookup();
         ordered_int32_runs();
         validation();
         custom_json();
+        generated_opening_heads();
         std::cout << "LuminPack C++ JSON wire checks passed.\n";
         return 0;
     }

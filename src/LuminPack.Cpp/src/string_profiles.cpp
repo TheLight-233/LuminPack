@@ -2,7 +2,7 @@
 
 #include "cpu_isa.h"
 #include "latin1.h"
-#include "unicode.h"
+#include <luminpack/detail/unicode.h>
 #include "utf8_ascii_read.h"
 #include "utf8_runs.h"
 

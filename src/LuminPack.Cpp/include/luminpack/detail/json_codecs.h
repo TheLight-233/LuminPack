@@ -305,6 +305,13 @@ struct json_record_member
         Codec::write(output, object.*Field);
     }
 
+    static void write_opening(auto& output, const auto& object)
+        requires requires { output.template write_opening_property<Name>(); }
+    {
+        output.template write_opening_property<Name>();
+        Codec::write(output, object.*Field);
+    }
+
 private:
     template<class, class...>
     friend struct json_record_body;
@@ -443,6 +450,31 @@ struct json_lookup_record_body : json_record_body<T, Members...>
     static T read(auto& input)
     {
         return json_record_body<T, Members...>::template read_with_lookup<Lookup>(input);
+    }
+
+    static void write(auto& output, const T& value)
+    {
+        if constexpr (sizeof...(Members) == 0)
+            body::write(output, value);
+        else
+            write_members<Members...>(output, value);
+    }
+
+private:
+    using body = json_record_body<T, Members...>;
+
+    template<class First, class... Rest>
+    static void write_members(auto& output, const T& value)
+    {
+        if constexpr (requires { First::write_opening(output, value); })
+        {
+            First::write_opening(output, value);
+            [[maybe_unused]] bool first = false;
+            (Rest::write(output, value, first), ...);
+            output.token('}');
+        }
+        else
+            body::write(output, value);
     }
 };
 

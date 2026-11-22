@@ -3,7 +3,6 @@
 
 #include "json_scan.h"
 #include "latin1.h"
-#include "unicode.h"
 
 namespace luminpack
 {
@@ -65,29 +64,6 @@ void store_json_unit(std::byte*& target, std::uint32_t value) noexcept
     target += sizeof(json_code_unit<Encoding>);
 }
 
-void store_utf8_scalar(std::byte*& target, std::uint32_t value) noexcept
-{
-    if (value < 0x80)
-        *target++ = static_cast<std::byte>(value);
-    else if (value < 0x800)
-    {
-        *target++ = static_cast<std::byte>(0xc0 | (value >> 6));
-        *target++ = static_cast<std::byte>(0x80 | (value & 0x3f));
-    }
-    else
-    {
-        if (value < 0x10000)
-            *target++ = static_cast<std::byte>(0xe0 | (value >> 12));
-        else
-        {
-            *target++ = static_cast<std::byte>(0xf0 | (value >> 18));
-            *target++ = static_cast<std::byte>(0x80 | ((value >> 12) & 0x3f));
-        }
-        *target++ = static_cast<std::byte>(0x80 | ((value >> 6) & 0x3f));
-        *target++ = static_cast<std::byte>(0x80 | (value & 0x3f));
-    }
-}
-
 template<json_encoding Encoding>
 void store_escape(std::byte*& target, char16_t value) noexcept
 {
@@ -132,7 +108,7 @@ std::size_t detail::json_utf8_encoded_length(std::u16string_view name) noexcept
     for (std::size_t index = 0; index < name.size();)
     {
         const auto code = detail::read_utf16_scalar(name, index, true);
-        length += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+        length += detail::utf8_scalar_width(code);
     }
     return length;
 }
@@ -144,7 +120,7 @@ std::uint64_t hash_json_utf8_name(std::u16string_view name)
     const auto hash = [name](std::span<std::byte> encoded) {
         auto* target = encoded.data();
         for (std::size_t index = 0; index < name.size();)
-            store_utf8_scalar(target, detail::read_utf16_scalar(name, index, true));
+            detail::store_utf8_scalar(target, detail::read_utf16_scalar(name, index, true));
         return detail::xxhash3(encoded);
     };
     const auto size = detail::json_utf8_encoded_length(name);
@@ -595,7 +571,7 @@ void basic_json_writer<Encoding>::write_string(std::u16string_view value)
         else if constexpr (Encoding == json_encoding::utf8)
         {
             const auto code = detail::read_utf16_scalar(value, index, true);
-            width = code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+            width = detail::utf8_scalar_width(code);
             plain = plain && width == 1;
         }
         else
@@ -648,7 +624,7 @@ void basic_json_writer<Encoding>::write_string(std::u16string_view value)
                     ++index;
                 }
                 else if constexpr (Encoding == json_encoding::utf8)
-                    store_utf8_scalar(target, detail::read_utf16_scalar(value, index, true));
+                    detail::store_utf8_scalar(target, detail::read_utf16_scalar(value, index, true));
                 else
                 {
                     store_json_unit<Encoding>(target, character);

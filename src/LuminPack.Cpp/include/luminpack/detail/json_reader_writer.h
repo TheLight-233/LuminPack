@@ -3,6 +3,7 @@
 #include <array>
 #include <charconv>
 #include <cmath>
+#include <luminpack/detail/unicode.h>
 
 // Included by luminpack.h after the common binary and text declarations.
 namespace luminpack
@@ -31,27 +32,60 @@ namespace detail
 std::size_t json_utf8_encoded_length(std::u16string_view name) noexcept;
 
 template<auto Name>
-inline constexpr bool plain_json_property_name = [] {
+inline constexpr bool ascii_json_property_name = [] {
     for (const auto character : Name.view())
+        if (character >= 0x80)
+            return false;
+    return true;
+}();
+
+template<auto Name>
+inline constexpr bool plain_json_property_name = [] {
+    constexpr auto name = Name.view();
+    for (std::size_t index = 0; index < name.size(); ++index)
     {
-        if (character < 0x20 || character >= 0x80 || character == u'"' || character == u'\\')
+        const auto character = name[index];
+        if (character < 0x20 || character == u'"' || character == u'\\' || low_surrogate(character))
+            return false;
+        if (high_surrogate(character) && (++index == name.size() || !low_surrogate(name[index])))
             return false;
     }
     return true;
 }();
 
-/// A static comma, quoted property name and colon in the document's encoding.
-template<json_encoding Encoding, auto Name>
+/// A static separator, quoted property name and colon in the document's encoding.
+template<json_encoding Encoding, auto Name, char Prefix = ','>
 requires plain_json_property_name<Name>
 inline constexpr auto json_property_head = [] {
     using unit = json_code_unit<Encoding>;
-    constexpr auto text = Name.view();
-    std::array<unit, text.size() + 4> head{};
-    head[0] = static_cast<unit>(',');
+    constexpr auto length = [] {
+        constexpr auto name = Name.view();
+        if constexpr (Encoding == json_encoding::utf16)
+            return name.size();
+        else
+        {
+            std::size_t bytes = 0;
+            for (std::size_t index = 0; index < name.size();)
+                bytes += utf8_scalar_width(read_utf16_scalar(name, index));
+            return bytes;
+        }
+    }();
+    std::array<unit, length + 4> head{};
+    head[0] = static_cast<unit>(Prefix);
     head[1] = static_cast<unit>('"');
-    for (std::size_t index = 0; index < text.size(); ++index)
-        head[index + 2] = static_cast<unit>(text[index]);
-    head[text.size() + 2] = static_cast<unit>('"');
+    constexpr auto text = Name.view();
+    if constexpr (Encoding == json_encoding::utf16)
+    {
+        for (std::size_t index = 0; index < text.size(); ++index)
+            head[index + 2] = text[index];
+    }
+    else
+    {
+        auto* target = head.data() + 2;
+        for (std::size_t index = 0; index < text.size();)
+            store_utf8_scalar(target, read_utf16_scalar(text, index));
+    }
+    head[length + 2] = static_cast<unit>('"');
     head.back() = static_cast<unit>(':');
     return head;
 }();
@@ -84,15 +118,19 @@ public:
         if (decoded_)
             return *decoded_ == expected;
 
-        constexpr auto width = expected.size() * sizeof(json_code_unit<Encoding>);
-        if (raw_.size() != width)
-            return false;
-        if constexpr (width == 0)
-            return true;
+        if constexpr (expected.empty())
+            return raw_.empty();
         else if constexpr (Encoding == json_encoding::utf16)
-            return std::memcmp(raw_.data(), expected.data(), width) == 0;
+        {
+            constexpr auto width = expected.size() * sizeof(char16_t);
+            return raw_.size() == width && std::memcmp(raw_.data(), expected.data(), width) == 0;
+        }
         else if constexpr (detail::plain_json_property_name<Name>)
-            return std::memcmp(raw_.data(), detail::json_property_head<Encoding, Name>.data() + 2, width) == 0;
+        {
+            constexpr const auto& head = detail::json_property_head<Encoding, Name>;
+            constexpr auto width = head.size() - 4;
+            return raw_.size() == width && std::memcmp(raw_.data(), head.data() + 2, width) == 0;
+        }
         else
             return false;
     }
@@ -342,11 +380,28 @@ public:
     void write_bool(bool value) { ascii(value ? "true" : "false"); }
     void write_string(std::u16string_view value);
 
-    /// Writes a generated property name and colon with one checked copy when the name is plain ASCII.
+    /// Writes an unescaped generated property name and colon with one checked copy.
     template<auto Name>
     void write_property()
     {
         write_ordered_property<Name>(true);
+    }
+
+    /// Opens a generated object and writes its first property head.
+    template<auto Name>
+    void write_opening_property()
+    {
+        if constexpr (detail::plain_json_property_name<Name>)
+        {
+            constexpr auto width = detail::json_property_head<Encoding, Name, '{'>.size() * sizeof(unit);
+            if (width <= output_.remaining())
+            {
+                write_property_head<Name, 0, '{'>();
+                return;
+            }
+        }
+        token('{');
+        write_property<Name>();
     }
 
     /// Writes the property head including its separator unless this is the first property.
@@ -356,6 +411,15 @@ public:
         if constexpr (detail::plain_json_property_name<Name>)
         {
             constexpr auto width = detail::json_property_head<Encoding, Name>.size() * sizeof(unit);
+            if constexpr (!detail::ascii_json_property_name<Name>)
+            {
+                const auto required = first ? width - sizeof(unit) : width;
+                if (required > output_.remaining())
+                {
+                    write_property_separately<Name>(first);
+                    return;
+                }
+            }
             if (first)
                 write_property_head<Name, 1>();
             else if (width <= output_.remaining())
@@ -367,12 +431,7 @@ public:
             }
         }
         else
-        {
-            if (!first)
-                token(',');
-            write_string(Name.view());
-            token(':');
-        }
+            write_property_separately<Name>(first);
     }
 
     template<class T>
@@ -392,10 +451,19 @@ public:
     }
 
 private:
-    template<auto Name, std::size_t Skip>
+    template<auto Name>
+    void write_property_separately(bool first)
+    {
+        if (!first)
+            token(',');
+        write_string(Name.view());
+        token(':');
+    }
+
+    template<auto Name, std::size_t Skip, char Prefix = ','>
     void write_property_head()
     {
-        constexpr const auto& head = detail::json_property_head<Encoding, Name>;
+        constexpr const auto& head = detail::json_property_head<Encoding, Name, Prefix>;
         constexpr auto width = (head.size() - Skip) * sizeof(unit);
         auto target = output_.reserve(width);
         std::memcpy(target.data(), head.data() + Skip, width);
