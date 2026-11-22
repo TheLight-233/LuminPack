@@ -25,6 +25,35 @@ class basic_json_reader;
 template<json_encoding Encoding>
 using json_code_unit = std::conditional_t<Encoding == json_encoding::utf8, char, char16_t>;
 
+namespace detail
+{
+template<auto Name>
+inline constexpr bool plain_json_property_name = [] {
+    for (const auto character : Name.view())
+    {
+        if (character < 0x20 || character >= 0x80 || character == u'"' || character == u'\\')
+            return false;
+    }
+    return true;
+}();
+
+/// A static comma, quoted property name and colon in the document's encoding.
+template<json_encoding Encoding, auto Name>
+requires plain_json_property_name<Name>
+inline constexpr auto json_property_head = [] {
+    using unit = json_code_unit<Encoding>;
+    constexpr auto text = Name.view();
+    std::array<unit, text.size() + 4> head{};
+    head[0] = static_cast<unit>(',');
+    head[1] = static_cast<unit>('"');
+    for (std::size_t index = 0; index < text.size(); ++index)
+        head[index + 2] = static_cast<unit>(text[index]);
+    head[text.size() + 2] = static_cast<unit>('"');
+    head.back() = static_cast<unit>(':');
+    return head;
+}();
+}
+
 /// A property name borrows unescaped UTF-16 or ASCII storage, or owns a decoded name.
 template<json_encoding Encoding>
 class json_property_name
@@ -79,6 +108,26 @@ public:
     void skip_value();
     [[nodiscard]] basic_json_reader take_value();
     void require_end();
+
+    /// Matches the complete expected property head within an open object.
+    /// The object codec supplies whether a comma is required. A mismatch leaves the cursor unchanged.
+    template<auto Name>
+    [[nodiscard]] bool try_read_ordered_property(bool first) noexcept
+    {
+        if constexpr (!detail::plain_json_property_name<Name>)
+            return false;
+        else
+        {
+            constexpr const auto& head = detail::json_property_head<Encoding, Name>;
+            const auto skip = first ? std::size_t{1} : std::size_t{0};
+            const auto width = (head.size() - skip) * sizeof(unit);
+            if (width > input_.size() - position_ ||
+                std::memcmp(input_.data() + position_, head.data() + skip, width) != 0)
+                return false;
+            position_ += width;
+            return true;
+        }
+    }
 
     template<class T>
     requires scalar<T> && (!std::same_as<T, char16_t>)
@@ -152,33 +201,30 @@ public:
     template<auto Name>
     void write_property()
     {
-        constexpr auto name = Name.view();
-        constexpr auto plain = [] {
-            for (const auto character : Name.view())
-            {
-                if (character < 0x20 || character >= 0x80 || character == u'"' || character == u'\\')
-                    return false;
-            }
-            return true;
-        }();
-        if constexpr (plain)
+        write_ordered_property<Name>(true);
+    }
+
+    /// Writes the property head including its separator unless this is the first property.
+    template<auto Name>
+    void write_ordered_property(bool first)
+    {
+        if constexpr (detail::plain_json_property_name<Name>)
         {
-            static constexpr auto head = [] {
-                constexpr auto text = Name.view();
-                std::array<unit, text.size() + 3> result{};
-                result.front() = static_cast<unit>('"');
-                for (std::size_t index = 0; index < text.size(); ++index)
-                    result[index + 1] = static_cast<unit>(text[index]);
-                result[text.size() + 1] = static_cast<unit>('"');
-                result.back() = static_cast<unit>(':');
-                return result;
-            }();
-            auto target = output_.reserve(head.size() * sizeof(unit));
-            std::memcpy(target.data(), head.data(), target.size());
+            constexpr const auto& head = detail::json_property_head<Encoding, Name>;
+            if (!first && head.size() * sizeof(unit) > output_.remaining())
+            {
+                token(',');
+                first = true;
+            }
+            const auto skip = first ? std::size_t{1} : std::size_t{0};
+            auto target = output_.reserve((head.size() - skip) * sizeof(unit));
+            std::memcpy(target.data(), head.data() + skip, target.size());
         }
         else
         {
-            write_string(name);
+            if (!first)
+                token(',');
+            write_string(Name.view());
             token(':');
         }
     }

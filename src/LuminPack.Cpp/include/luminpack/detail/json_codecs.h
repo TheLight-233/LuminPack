@@ -269,6 +269,15 @@ struct json_name
 template<json_name Name, auto Field, class Codec, json_name... FormerNames>
 struct json_record_member
 {
+    static bool try_read_ordered(auto& input, auto& object, bool first)
+        requires requires { input.template try_read_ordered_property<Name>(first); }
+    {
+        if (!input.template try_read_ordered_property<Name>(first))
+            return false;
+        object.*Field = Codec::read(input);
+        return true;
+    }
+
     static bool read_if(auto& input, const auto& key, auto& object)
     {
         if (!key.matches(Name.view()) && !(key.matches(FormerNames.view()) || ...))
@@ -279,10 +288,27 @@ struct json_record_member
 
     static void write(auto& output, const auto& object, bool& first)
     {
-        if (!std::exchange(first, false))
-            output.token(',');
-        output.template write_property<Name>();
+        const bool initial = std::exchange(first, false);
+        if constexpr (requires { output.template write_ordered_property<Name>(initial); })
+            output.template write_ordered_property<Name>(initial);
+        else
+        {
+            if (!initial)
+                output.token(',');
+            output.template write_property<Name>();
+        }
         Codec::write(output, object.*Field);
+    }
+
+private:
+    template<class, class...>
+    friend struct json_record_body;
+
+    static constexpr auto ordered_name = Name.view();
+
+    static constexpr bool accepts_name(std::u16string_view key) noexcept
+    {
+        return key == ordered_name || ((key == FormerNames.view()) || ...);
     }
 };
 
@@ -294,20 +320,48 @@ struct json_record_body
 
     static T read(auto& input)
     {
+        using reader_type = std::remove_reference_t<decltype(input)>;
         const auto container = input.begin('{');
         T result{};
-        if (input.consume('}'))
-            return result;
-        do
+        bool first = true;
+        std::size_t next_property = 0;
+        for (;;)
         {
+            if constexpr (can_read_ordered_names<reader_type>())
+            {
+                using read_member = bool (*)(reader_type&, T&, bool);
+                static constexpr std::array<read_member, sizeof...(Members)> ordered{
+                    &read_ordered<Members, reader_type>...
+                };
+                if (next_property < ordered.size() && ordered[next_property](input, result, first))
+                {
+                    ++next_property;
+                    first = false;
+                    continue;
+                }
+            }
+
+            if (first)
+            {
+                if (input.consume('}'))
+                    return result;
+            }
+            else if (!input.consume(','))
+            {
+                input.expect('}');
+                return result;
+            }
+
             const auto name = input.read_name();
             input.expect(':');
-            if (!(Members::read_if(input, name, result) || ...))
+            next_property = 0;
+            if (!((++next_property, static_cast<bool>(Members::read_if(input, name, result))) || ...))
+            {
                 input.skip_value();
+                next_property = 0;
+            }
+            first = false;
         }
-        while (input.consume(','));
-        input.expect('}');
-        return result;
     }
 
     static void write(auto& output, const T& value)
@@ -316,6 +370,38 @@ struct json_record_body
         bool first = true;
         (Members::write(output, value, first), ...);
         output.token('}');
+    }
+
+private:
+    template<class Member, class Input>
+    static constexpr bool can_read_ordered = requires(Input& input, T& value) {
+        { Member::try_read_ordered(input, value, true) } -> std::same_as<bool>;
+        { Member::ordered_name } -> std::convertible_to<std::u16string_view>;
+        { Member::accepts_name(Member::ordered_name) } -> std::same_as<bool>;
+    };
+
+    template<class Input>
+    static consteval bool can_read_ordered_names()
+    {
+        if constexpr (sizeof...(Members) == 0 || !(can_read_ordered<Members, Input> && ...))
+            return false;
+        else
+        {
+            const std::array<std::u16string_view, sizeof...(Members)> names{Members::ordered_name...};
+            const std::array<bool (*)(std::u16string_view), sizeof...(Members)> accepts{&Members::accepts_name...};
+            // Manual record contracts may share a name. Preserve the first matching member.
+            for (std::size_t index = 1; index < names.size(); ++index)
+                for (std::size_t earlier = 0; earlier < index; ++earlier)
+                    if (accepts[earlier](names[index]))
+                        return false;
+            return true;
+        }
+    }
+
+    template<class Member, class Input>
+    static bool read_ordered(Input& input, T& value, bool first)
+    {
+        return Member::try_read_ordered(input, value, first);
     }
 };
 

@@ -85,6 +85,8 @@ auto written = luminpack::write_json_document<Numbers, luminpack::json_encoding:
 
 Reader 校验 JSON 语法和文档边界。`json_read_options::max_depth` 限制对象和数组的嵌套深度，默认为 1024。字符串键字典写成 JSON 对象，读取时兼容对象和键值对数组。其他键类型的字典使用键值对数组。
 
+对普通 DTO 的 ASCII 属性名，内置 codec 将 UTF-8 和 UTF-16 属性前缀保存为 `constexpr` 数据。顺序读取在校验可读范围后比较完整前缀，匹配才移动游标。写入共用同一份静态字节。转义、旧名称、乱序和未知属性仍由通用名称解析处理。
+
 ## 生成 C++ DTO 和 codec
 
 使用 Next 的 .NET 项目可以将导出开关提供给编译器：

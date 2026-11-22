@@ -136,6 +136,105 @@ using json_row = json_record_codec<row,
     json_record_member<u"Items", &row::items, list_value>,
     json_record_member<u"Flag", &row::flag, boolean>>;
 
+struct manual_member
+{
+    using value_member = json_record_member<u"Value", &selected::value, number>;
+
+    static bool read_if(auto& input, const auto& key, selected& value)
+    {
+        return value_member::read_if(input, key, value);
+    }
+
+    static void write(auto& output, const selected& value, bool& first)
+    {
+        value_member::write(output, value, first);
+    }
+};
+
+void ordered_property_heads()
+{
+    constexpr auto utf8 = json_encoding::utf8;
+    constexpr auto utf16 = json_encoding::utf16;
+    constexpr auto label = luminpack::json_name{u"Label"};
+    const row expected{choice_code::enabled, u"second", std::vector<std::int32_t>{7}, true};
+
+    const auto with_fallback = read_json_document<json_row, utf8>(bytes(
+        "{\"Kind\":256,\"Name\" : \"first\",\"Items\":[7],\"La\\u0062el\":\"second\","
+        "\"Unknown\":{\"x\":[{}]},\"Flag\":true}"));
+    require(with_fallback == expected, "Ordered JSON can resume after aliases, reordered names and unknown fields.");
+    require(read_json_document<json_row, utf16>(bytes(
+        u"{\"Kind\":256, \"Name\":\"second\",\"Items\":[7],\"Flag\":true}")) == expected,
+        "Ordered UTF-16 JSON can resume after whitespace and a former name.");
+
+    basic_json_reader<utf8> reader(bytes("{\"Label\":\"first\", \"Label\" : \"second\"}"));
+    const auto object = reader.begin('{');
+    require(reader.try_read_ordered_property<label>(true) && reader.read_string() == u"first",
+        "Match a complete first property head.");
+    require(!reader.try_read_ordered_property<label>(false) && reader.consume(','),
+        "A mismatched property head leaves the comma unread.");
+    require(reader.read_name().matches(label.view()), "Read the name through the ordinary parser.");
+    reader.expect(':');
+    require(reader.read_string() == u"second", "Read the value after a head mismatch.");
+    reader.expect('}');
+    reader.require_end();
+
+    for (const auto bad : {"{\"Kind\":256\"Label\":null}", "{\"Kind\":256,}",
+             "{\"Kind\":256,,\"Label\":null}", "{\"Kind\":256,\"Unknown\":{\"x\":[],}}"})
+    {
+        malformed([&] { (void)read_json_document<json_row, utf8>(bytes(std::string_view(bad))); },
+            "Reject malformed JSON after an ordered property.");
+    }
+    malformed([] {
+        (void)read_json_document<json_row, utf8>(bytes("{\"Kind\":256,\"Unknown\":[{}]}"), {2});
+    }, "Enforce the depth limit after an ordered property.");
+
+    const auto document8 = bytes("{\"Kind\":256,\"Label\":null}");
+    const auto document16 = bytes(u"{\"Kind\":256,\"Label\":null}");
+    for (std::size_t size = 0; size < document8.size(); ++size)
+        malformed([&] { (void)read_json_document<json_row, utf8>(document8.first(size)); },
+            "Reject every truncated UTF-8 property head and record.");
+    for (std::size_t size = 0; size < document16.size(); ++size)
+        malformed([&] { (void)read_json_document<json_row, utf16>(document16.first(size)); },
+            "Reject every truncated UTF-16 property head and record.");
+
+    using manual_record = json_record_body<selected, manual_member>;
+    require(read_json_document<manual_record, utf8>(bytes("{\"Value\":42}")) == selected{42},
+        "Read a manual JSON record member with the original contract.");
+
+    using duplicate_names = json_record_body<row,
+        json_record_member<u"Kind", &row::kind, enum_value>,
+        json_record_member<u"Kind", &row::flag, boolean>>;
+    const auto duplicate = read_json_document<duplicate_names, utf8>(bytes("{\"Kind\":0,\"Kind\":256}"));
+    require(duplicate.kind == choice_code::enabled && !duplicate.flag,
+        "Repeated names select the first member of a manual contract.");
+    using conflicting_alias = json_record_body<row,
+        json_record_member<u"Kind", &row::kind, enum_value, u"Flag">,
+        json_record_member<u"Flag", &row::flag, boolean>>;
+    const auto alias = read_json_document<conflicting_alias, utf8>(bytes("{\"Kind\":0,\"Flag\":256}"));
+    require(alias.kind == choice_code::enabled && !alias.flag,
+        "A manual contract's earlier alias takes precedence over a later canonical name.");
+
+    using unicode_record = json_record_body<selected, json_record_member<u"\u754c\"\\", &selected::value, number>>;
+    std::array<std::byte, 32> output{};
+    const auto unicode = write_json_document<unicode_record, utf8>(output, selected{42});
+    require(std::ranges::equal(unicode, bytes("{\"\xe7\x95\x8c\\\"\\\\\":42}")),
+        "Write a non-ASCII escaped property through the ordinary writer.");
+    require(read_json_document<unicode_record, utf8>(unicode) == selected{42},
+        "Read a non-ASCII escaped property through the ordinary reader.");
+
+    basic_json_writer<utf8> short_writer(std::span<std::byte>(output).first(1));
+    try
+    {
+        short_writer.write_ordered_property<label>(false);
+        throw std::runtime_error("A JSON property head exceeded the destination.");
+    }
+    catch (const std::length_error&)
+    {
+        require(std::ranges::equal(short_writer.written(), bytes(",")),
+            "The short destination retains a successfully written separator.");
+    }
+}
+
 void profiles_and_strings()
 {
     constexpr auto utf8 = json_encoding::utf8;
@@ -270,6 +369,7 @@ int main(int argc, char** argv)
         require(argc == 2, "Expected .NET fixture directory.");
         dotnet_fixtures(argv[1]);
         profiles_and_strings();
+        ordered_property_heads();
         validation();
         custom_json();
         std::cout << "LuminPack C++ JSON wire checks passed.\n";
