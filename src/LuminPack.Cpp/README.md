@@ -85,7 +85,7 @@ Use `json_record_member` to bind a DTO field to its C# property name and any for
 
 The reader validates JSON grammar and the document boundary. Set `json_read_options::max_depth` to limit nested objects and arrays. The default is 1024. String-key dictionaries write object properties and accept either properties or pairs on read. Other dictionaries use arrays of key/value pairs.
 
-For ordinary DTO properties with ASCII names, the stock codecs store the UTF-8 and UTF-16 property heads as `constexpr` data. The ordered reader compares the complete head in a validated range before advancing. The writer shares the same static bytes. The ordinary name parser handles escapes, former names, out-of-order properties and unknown members.
+For ordinary DTO properties with ASCII names, the stock codecs store the UTF-8 and UTF-16 property heads as `constexpr` data. The ordered reader compares the complete head in a validated range before advancing. The writer shares the same static bytes. The name parser handles escapes, former names, out-of-order properties and unknown members. After parsing a name, generated codecs use a length switch and exact comparisons when the encoding has at most eight candidates or every length bucket has at most four. They select this path separately for UTF-8 and UTF-16. Dense buckets and hand-written codecs use direct comparisons.
 
 ## Generate C++ DTOs and codecs
 

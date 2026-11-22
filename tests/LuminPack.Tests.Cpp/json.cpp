@@ -235,6 +235,54 @@ void ordered_property_heads()
     }
 }
 
+struct row_name_index
+{
+    template<json_encoding Encoding>
+    static std::size_t find(const luminpack::json_property_name<Encoding>& name) noexcept
+    {
+        switch (name.encoded_length())
+        {
+        case Encoding == json_encoding::utf8 ? 6 : 3:
+            if (name.template matches<luminpack::json_name{u"\u00e9\U0001f600"}>())
+                return 1;
+            break;
+        case 4:
+            if (name.template matches<luminpack::json_name{u"Kind"}>())
+                return 0;
+            if (name.template matches<luminpack::json_name{u"Flag"}>())
+                return 3;
+            break;
+        case 5:
+            if (name.template matches<luminpack::json_name{u"Label"}>())
+                return 1;
+            if (name.template matches<luminpack::json_name{u"Items"}>())
+                return 2;
+            break;
+        }
+        return 4;
+    }
+};
+
+void sparse_property_lookup()
+{
+    using sparse_row = luminpack::json_lookup_record_body<row, row_name_index,
+        json_record_member<u"Kind", &row::kind, enum_value>,
+        json_record_member<u"Label", &row::text, text_value, u"\u00e9\U0001f600">,
+        json_record_member<u"Items", &row::items, list_value>,
+        json_record_member<u"Flag", &row::flag, boolean>>;
+
+    const row expected{choice_code::enabled, u"match", std::vector<std::int32_t>{7}, true};
+    const auto decoded8 = read_json_document<sparse_row, json_encoding::utf8>(bytes(
+        "{\"Fake\":[{}], \"\\u00e9\\ud83d\\ude00\":\"match\",\"Items\":[7],\"Flag\":true,\"Ki\\u006ed\":256}"));
+    require(decoded8 == expected, "UTF-8 length buckets resolve decoded aliases and check same-length names.");
+    const auto decoded16 = read_json_document<sparse_row, json_encoding::utf16>(bytes(
+        u"{\"Fake\":[{}], \"\u00e9\U0001f600\":\"match\",\"Items\":[7],\"Flag\":true,\"Ki\\u006ed\":256}"));
+    require(decoded16 == expected, "UTF-16 length buckets count code units and can compare borrowed Unicode names.");
+    malformed([] {
+        (void)read_json_document<sparse_row, json_encoding::utf8>(bytes("{\"Fake\":{\"x\":[],}}"));
+    }, "An exact-match miss still validates the skipped JSON value.");
+}
+
 void profiles_and_strings()
 {
     constexpr auto utf8 = json_encoding::utf8;
@@ -370,6 +418,7 @@ int main(int argc, char** argv)
         dotnet_fixtures(argv[1]);
         profiles_and_strings();
         ordered_property_heads();
+        sparse_property_lookup();
         validation();
         custom_json();
         std::cout << "LuminPack C++ JSON wire checks passed.\n";

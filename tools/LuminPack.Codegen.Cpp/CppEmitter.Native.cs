@@ -41,14 +41,14 @@ internal sealed partial class CppEmitter
             throw Missing(owner, "a native storage model without all fixed-width numeric fields");
 
         var declarations = new Dictionary<string, string>(StringComparer.Ordinal);
-        var jsonMembers = new List<string>();
+        var jsonMembers = new List<JsonMember>();
         foreach (JsonElement member in contract.GetProperty("members").EnumerateArray())
         {
             string property = Text(member, "name");
             string field = "field_" + Identifier(property);
             Binding binding = BindShape(member.GetProperty("shape"), profile, owner + "." + property);
             declarations.Add(property, binding.Type + " " + field + "{};");
-            jsonMembers.Add(Apply("luminpack::json_record_member", new[] { Literal(property), "&" + name + "::" + field, binding.Json }));
+            jsonMembers.Add(new JsonMember(property, "&" + name + "::" + field, binding.Json, []));
         }
 
         string[] physicalFields = fields.EnumerateArray().Select(field => declarations[Text(field, "name")]).ToArray();
@@ -79,7 +79,7 @@ internal sealed partial class CppEmitter
             .Append(string.Join(", ", leaves.Select(leaf => leaf.Offset))).Append("} } == ").Append(expected)
             .Append(", \"C++ layout does not match the managed native storage model\");\n");
         Alias(name + "_binary", "luminpack::raw_struct_codec", new[] { name });
-        Alias(name + "_json", "luminpack::json_record_body", new[] { name }.Concat(jsonMembers));
+        EmitJsonBody(name + "_json", name, jsonMembers);
         code.Append('\n');
         return new Binding(name, name + "_binary", name + "_json", name + "_binary", name + "_json");
     }

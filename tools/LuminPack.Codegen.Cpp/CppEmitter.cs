@@ -114,7 +114,7 @@ internal sealed partial class CppEmitter
         bool version = Flag(contract, "versioned");
         var declarations = new List<string>();
         var binaryMembers = new List<string>();
-        var jsonMembers = new List<string>();
+        var jsonMembers = new List<JsonMember>();
         foreach (JsonElement field in contract.GetProperty("members").EnumerateArray())
         {
             string property = Text(field, "name");
@@ -142,10 +142,10 @@ internal sealed partial class CppEmitter
             else
                 binaryMembers.Add(Apply("luminpack::record_member", new[] { pointer, member.Binary }));
 
-            IEnumerable<string> names = field.GetProperty("oldNames").ValueKind == JsonValueKind.Array
-                ? field.GetProperty("oldNames").EnumerateArray().Select(static item => Literal(item.GetString()!))
-                : Array.Empty<string>();
-            jsonMembers.Add(Apply("luminpack::json_record_member", new[] { Literal(property), pointer, member.Json }.Concat(names)));
+            string[] names = field.GetProperty("oldNames").ValueKind == JsonValueKind.Array
+                ? field.GetProperty("oldNames").EnumerateArray().Select(static item => item.GetString()!).ToArray()
+                : [];
+            jsonMembers.Add(new JsonMember(property, pointer, member.Json, names));
         }
 
         string inheritance = RttiInheritance(Normalize(Text(contract, "type")));
@@ -157,7 +157,7 @@ internal sealed partial class CppEmitter
             Alias(name + "_binary", "luminpack::version_codec", new[] { name, Profile(profile) }.Concat(binaryMembers));
         else
             Alias(name + "_binary", "luminpack::record_codec", new[] { name }.Concat(binaryMembers));
-        Alias(name + "_json_body", "luminpack::json_record_body", new[] { name }.Concat(jsonMembers));
+        EmitJsonBody(name + "_json_body", name, jsonMembers);
         Alias(name + "_json", "luminpack::json_optional_codec<" + name + "_json_body>");
         code.Append('\n');
         return new Binding("std::optional<" + name + ">", name + "_binary", name + "_json",
@@ -187,7 +187,7 @@ internal sealed partial class CppEmitter
 
         var declarations = new List<string>();
         var binaryMembers = new List<string>();
-        var jsonMembers = new List<string>();
+        var jsonMembers = new List<JsonMember>();
         var offsets = new List<string>();
         var declaredFields = layout.GetProperty("fields").EnumerateArray().Select(static item => item.GetString()).ToArray();
         JsonElement.ArrayEnumerator members = contract.GetProperty("members").EnumerateArray();
@@ -216,7 +216,7 @@ internal sealed partial class CppEmitter
             string pointer = "&" + name + "::" + fieldName;
             declarations.Add("    " + field.Type + " " + fieldName + "{};");
             binaryMembers.Add(Apply("luminpack::record_member", new[] { pointer, field.Binary }));
-            jsonMembers.Add(Apply("luminpack::json_record_member", new[] { Literal(property), pointer, field.Json }));
+            jsonMembers.Add(new JsonMember(property, pointer, field.Json, []));
             offsets.Add("offsetof(" + name + ", " + fieldName + ") == " + stride.ToString(CultureInfo.InvariantCulture));
             stride = checked(stride + width);
         }
@@ -229,7 +229,7 @@ internal sealed partial class CppEmitter
         string matches = "sizeof(" + name + ") == " + stride.ToString(CultureInfo.InvariantCulture) +
             " && " + string.Join(" && ", offsets);
         Alias(name + "_binary", "std::conditional_t", new[] { matches, "luminpack::raw_struct_codec<" + name + ">", name + "_fields" });
-        Alias(name + "_json", "luminpack::json_record_body", new[] { name }.Concat(jsonMembers));
+        EmitJsonBody(name + "_json", name, jsonMembers);
         code.Append('\n');
         return new Binding(name, name + "_binary", name + "_json", name + "_binary", name + "_json");
     }

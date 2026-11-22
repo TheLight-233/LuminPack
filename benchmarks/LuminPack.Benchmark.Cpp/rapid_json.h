@@ -286,6 +286,10 @@ struct binding<luminpack::json_record_body<T, Fields...>>
     }
 };
 
+template<class T, class Lookup, class... Fields>
+struct binding<luminpack::json_lookup_record_body<T, Lookup, Fields...>>
+    : binding<luminpack::json_record_body<T, Fields...>> {};
+
 template<class... Cases>
 struct binding<luminpack::json_union_codec<Cases...>>
 {

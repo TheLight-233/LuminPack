@@ -124,6 +124,17 @@ bool json_property_name<Encoding>::matches(std::u16string_view expected) const n
     }
 }
 
+std::size_t detail::json_utf8_encoded_length(std::u16string_view name) noexcept
+{
+    std::size_t length = 0;
+    for (std::size_t index = 0; index < name.size();)
+    {
+        const auto code = detail::read_utf16_scalar(name, index, true);
+        length += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+    }
+    return length;
+}
+
 template<json_encoding Encoding>
 basic_json_reader<Encoding>::basic_json_reader(std::span<const std::byte> input, json_read_options options)
     : input_(input), max_depth_(options.max_depth)

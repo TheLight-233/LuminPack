@@ -274,7 +274,7 @@ struct json_record_member
     {
         if (!input.template try_read_ordered_property<Name>(first))
             return false;
-        object.*Field = Codec::read(input);
+        read_value(input, object);
         return true;
     }
 
@@ -282,7 +282,7 @@ struct json_record_member
     {
         if (!key.matches(Name.view()) && !(key.matches(FormerNames.view()) || ...))
             return false;
-        object.*Field = Codec::read(input);
+        read_value(input, object);
         return true;
     }
 
@@ -306,6 +306,11 @@ private:
 
     static constexpr auto ordered_name = Name.view();
 
+    static void read_value(auto& input, auto& object)
+    {
+        object.*Field = Codec::read(input);
+    }
+
     static constexpr bool accepts_name(std::u16string_view key) noexcept
     {
         return key == ordered_name || ((key == FormerNames.view()) || ...);
@@ -319,6 +324,21 @@ struct json_record_body
     using value_type = T;
 
     static T read(auto& input)
+    {
+        return read_with_lookup<void>(input);
+    }
+
+    static void write(auto& output, const T& value)
+    {
+        output.token('{');
+        bool first = true;
+        (Members::write(output, value, first), ...);
+        output.token('}');
+    }
+
+protected:
+    template<class Lookup>
+    static T read_with_lookup(auto& input)
     {
         using reader_type = std::remove_reference_t<decltype(input)>;
         const auto container = input.begin('{');
@@ -355,21 +375,25 @@ struct json_record_body
             const auto name = input.read_name();
             input.expect(':');
             next_property = 0;
-            if (!((++next_property, static_cast<bool>(Members::read_if(input, name, result))) || ...))
+            if constexpr (requires { Lookup::find(name); })
             {
-                input.skip_value();
-                next_property = 0;
+                using read_member = void (*)(reader_type&, T&);
+                static constexpr std::array<read_member, sizeof...(Members)> values{
+                    &Members::template read_value<reader_type, T>...
+                };
+                const auto property = Lookup::find(name);
+                if (property < values.size())
+                {
+                    values[property](input, result);
+                    next_property = property + 1;
+                }
             }
+            else if (!((++next_property, static_cast<bool>(Members::read_if(input, name, result))) || ...))
+                next_property = 0;
+            if (next_property == 0)
+                input.skip_value();
             first = false;
         }
-    }
-
-    static void write(auto& output, const T& value)
-    {
-        output.token('{');
-        bool first = true;
-        (Members::write(output, value, first), ...);
-        output.token('}');
     }
 
 private:
@@ -402,6 +426,16 @@ private:
     static bool read_ordered(Input& input, T& value, bool first)
     {
         return Member::try_read_ordered(input, value, first);
+    }
+};
+
+/// A generated object with compiled fallback name lookup for its sparse encodings.
+template<class T, class Lookup, class... Members>
+struct json_lookup_record_body : json_record_body<T, Members...>
+{
+    static T read(auto& input)
+    {
+        return json_record_body<T, Members...>::template read_with_lookup<Lookup>(input);
     }
 };
 

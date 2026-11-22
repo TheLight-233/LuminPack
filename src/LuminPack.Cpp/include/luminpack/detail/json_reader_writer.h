@@ -27,6 +27,8 @@ using json_code_unit = std::conditional_t<Encoding == json_encoding::utf8, char,
 
 namespace detail
 {
+std::size_t json_utf8_encoded_length(std::u16string_view name) noexcept;
+
 template<auto Name>
 inline constexpr bool plain_json_property_name = [] {
     for (const auto character : Name.view())
@@ -60,6 +62,36 @@ class json_property_name
 {
 public:
     [[nodiscard]] bool matches(std::u16string_view expected) const noexcept;
+
+    [[nodiscard]] std::size_t encoded_length() const noexcept
+    {
+        if (!decoded_)
+            return raw_.size() / sizeof(json_code_unit<Encoding>);
+        if constexpr (Encoding == json_encoding::utf16)
+            return decoded_->size();
+        else
+            return detail::json_utf8_encoded_length(*decoded_);
+    }
+
+    template<auto Name>
+    [[nodiscard]] bool matches() const noexcept
+    {
+        constexpr auto expected = Name.view();
+        if (decoded_)
+            return *decoded_ == expected;
+
+        constexpr auto width = expected.size() * sizeof(json_code_unit<Encoding>);
+        if (raw_.size() != width)
+            return false;
+        if constexpr (width == 0)
+            return true;
+        else if constexpr (Encoding == json_encoding::utf16)
+            return std::memcmp(raw_.data(), expected.data(), width) == 0;
+        else if constexpr (detail::plain_json_property_name<Name>)
+            return std::memcmp(raw_.data(), detail::json_property_head<Encoding, Name>.data() + 2, width) == 0;
+        else
+            return false;
+    }
 
 private:
     friend class basic_json_reader<Encoding>;

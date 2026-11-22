@@ -16,14 +16,14 @@ internal sealed partial class CppEmitter
             throw Missing(owner, "a portable struct without its unmanaged storage model");
 
         var declarations = new List<string>();
-        var jsonMembers = new List<string>();
+        var jsonMembers = new List<JsonMember>();
         foreach (JsonElement member in contract.GetProperty("members").EnumerateArray())
         {
             string property = Text(member, "name");
             string field = "field_" + Identifier(property);
             Binding binding = BindShape(member.GetProperty("shape"), profile, owner + "." + property);
             declarations.Add("    " + binding.Type + " " + field + "{};");
-            jsonMembers.Add(Apply("luminpack::json_record_member", new[] { Literal(property), "&" + name + "::" + field, binding.Json }));
+            jsonMembers.Add(new JsonMember(property, "&" + name + "::" + field, binding.Json, []));
         }
 
         var leaves = new List<StorageLeaf>();
@@ -45,7 +45,7 @@ internal sealed partial class CppEmitter
             .Append("{ ").Append(widths).Append(", ").Append(local).Append(" };\n");
         string booleans = EmitBooleanFields(name, leaves);
         Alias(name + "_binary", "luminpack::packed_struct_codec", new[] { name, packed }.Concat(booleans.Length == 0 ? [] : new[] { booleans }));
-        Alias(name + "_json", "luminpack::json_record_body", new[] { name }.Concat(jsonMembers));
+        EmitJsonBody(name + "_json", name, jsonMembers);
 
         string sequenceLayout = packed;
         if (Flag(storage, "tagged"))
