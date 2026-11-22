@@ -83,9 +83,11 @@ internal static partial class NextPipeline
             string.Equals(value, "true", StringComparison.OrdinalIgnoreCase));
         var cppCompilation = context.CompilationProvider.Combine(cppExport)
             .Select(static (input, _) => input.Right ? input.Left : null);
-        context.RegisterSourceOutput(declared.Combine(cppCompilation), static (production, input) =>
+        var cppInputs = cppCompilation.Combine(calls)
+            .Select(static (input, _) => input.Left == null ? default : input);
+        context.RegisterSourceOutput(declared.Combine(cppInputs), static (production, input) =>
         {
-            if (input.Right is not { } compilation)
+            if (input.Right.Left is not { } compilation)
                 return;
 
             var roots = new List<TypeModel>();
@@ -97,13 +99,19 @@ internal static partial class NextPipeline
                 if (payload.CustomContract is { } registration)
                     custom.Add(registration);
             }
-            if (roots.Count != 0 || custom.Count != 0)
+            var callRoots = new Dictionary<string, MemberModel>(StringComparer.Ordinal);
+            foreach (CallFact fact in input.Right.Right)
+                if (fact.Call is { Root: { } root } call)
+                    callRoots[call.Payload] = root;
+            if (roots.Count != 0 || custom.Count != 0 || callRoots.Count != 0)
             {
                 GeneratorOptions options = GeneratorOptionsFactory.From(compilation);
-                production.AddSource("LuminPackGen.CppContracts.g.cs",
-                    CppContractExport.Render(roots, options, model => TypeModelFactory.TryCreateCppNativeStorage(model, compilation, options),
-                        TypeModelFactory.CreateCppRawCompoundStorage(compilation, options), custom, TypeModelFactory.AssemblyPolicy(compilation),
-                        production.CancellationToken));
+                string source = CppContractExport.Render(roots, callRoots.Values, options,
+                    model => TypeModelFactory.TryCreateCppNativeStorage(model, compilation, options),
+                    TypeModelFactory.CreateCppRawCompoundStorage(compilation, options), custom, TypeModelFactory.AssemblyPolicy(compilation),
+                    production.CancellationToken);
+                if (source.Length != 0)
+                    production.AddSource("LuminPackGen.CppContracts.g.cs", source);
             }
         });
         var report = context.AnalyzerConfigOptionsProvider.Select(static (options, _) =>

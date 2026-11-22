@@ -137,6 +137,8 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 导出内容取自 Next 实际解析的成员顺序、二进制 profile、布局、Version 描述符和 Union 哈希。工具读取程序集元数据并生成包含 `<luminpack/luminpack.h>` 的头文件。每个生成根类型有自己的命名空间，提供 `root_value`、`root_binary`、`root_json`，以及声明的 JSON 编码和读取限制。`Example.Message` 的命名空间为 `luminpack_generated::root_Example_x002eMessage`。
 
+当具体的 C# 序列化调用直接使用封闭泛型，或通过容器间接使用它时，可以导出 Next 已建模的封闭类型。从清单复制准确的 `id`，传给 `generate` 时加上引号，例如 `generate .tmp/contracts.json 'Example.Box<string>' .tmp/box.h`。
+
 将生成的 `root_binary_limits` 或 `root_json_options` 传给对应的文档读取入口，就会在解码前检查声明的 `MaxInputBytes`。限制以传入文档的字节数为单位。用于连续读取的游标继续执行集合、字符串和深度检查。
 
 对 Next Custom 注册，在包含生成头文件之前提供特化，例如 `luminpack::custom_binding<u"Example.Message">`。特化提供 `binary` codec。如果 .NET 注册包含 JSON，也提供值类型相同的 `json` codec。可以使用 `custom_codec` 和 `json_custom_codec`。wire 字节和 null 表示由应用负责。生成的 Custom JSON 使用自动注册的 UTF-16 profile。仅注册 Binary 时只需提供 `binary` codec。

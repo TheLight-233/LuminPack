@@ -137,6 +137,8 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 The export is a compiler projection of the resolved member order, binary profiles, layouts, Version descriptors, and Union hashes. The tool reads assembly metadata and produces a header that includes `<luminpack/luminpack.h>`. A generated root has its own namespace containing `root_value`, `root_binary`, `root_json`, and the declared JSON encoding and read limits. For `Example.Message`, the namespace is `luminpack_generated::root_Example_x002eMessage`.
 
+A modeled closed generic type can be exported when a concrete C# serialization call reaches it directly or through a container. Copy its exact `id` from the manifest and quote it when passing it to `generate`, for example `generate .tmp/contracts.json 'Example.Box<string>' .tmp/box.h`.
+
 Pass the generated `root_binary_limits` or `root_json_options` to its document reader to enforce a declared `MaxInputBytes` before decoding. The limit counts bytes in the supplied document. Advancing cursors keep their collection, string, and depth checks.
 
 For a Next Custom registration, provide a specialization such as `luminpack::custom_binding<u"Example.Message">` before including the generated header. The specialization supplies a `binary` codec and, when the .NET registration includes JSON, a `json` codec for the same value type. These can use `custom_codec` and `json_custom_codec`. The application owns the wire bytes and null representation. Generated Custom JSON uses the automatic registration's UTF-16 profile. A Binary-only registration requires only the `binary` codec.
