@@ -70,6 +70,8 @@ Version rev4 和 rev5 用 `version_member` 与 `version_codec` 绑定生成的�
 
 生成器沿用 Next 的存储方案绑定递归 Packed 字段以及多模型 Tagged 数组和 List。多模型 Tagged 值独立出现或作为字典值时，使用紧凑字段顺序。非空的多模型 Tagged 集合携带导出模型的从 1 开始的标签。C++ 字段偏移与步长匹配模型时直接复制，否则转换到导出的第一个模型。无需标签的原始结构体可在 CLR 与目标 C++ 的字段偏移和步长一致时走 Native 路径。生成的填充字段让 DTO 复制保留这些原始字节。
 
+跨模型 Tagged 原始块根据导出的偏移构建与 C# 一致的重排和分组转换计划。SIMD 只处理完整窗口，尾部由标量路径处理。异布局读取保留目标填充，同布局复制保留原始字节，写入规范布局时将填充清零。
+
 Reader 在 Release 构建中也会校验输入范围。用 `reader_limits` 限制集合元素数量和解码后的 UTF-16 码元数量。读入缓冲区的操作返回借用目标存储的视图，在使用视图期间保持缓冲区有效。跨布局转换或字符串转换遇到输入输出重叠时，会在堆上暂存输入。
 
 x64 启用 SIMD 时，UTF-16 Length 写入 1–16 个码元会使用与 C# 相同的有界短 Latin-1 路径。写入 17–64 个码元时，若原始 payload 完整放得下且输入输出 payload 不重叠，写入器使用 C# 的头尾路径。UTF-8 Length 写入使用 C# 的短 ASCII 路径，SSE2 支持 4–16 个码元，AVX2 支持 17–32 个码元，两者都要求 ASCII payload 完整放得下且输入输出 payload 不重叠。通用 x64 Latin-1 内核按 CPU 支持和完整块大小选择 AVX-512BW、AVX2 或 SSE2。其他目标使用可移植实现。设置 `LUMINPACK_CPP_MAX_SIMD_BITS` 为 `128`、`256` 或 `512` 可限制编译的最大向量宽度。设置 `LUMINPACK_CPP_SIMD=OFF` 可在 x64 上也使用可移植实现。

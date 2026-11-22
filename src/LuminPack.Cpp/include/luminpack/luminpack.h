@@ -16,6 +16,8 @@
 #include <type_traits>
 #include <vector>
 
+#include "detail/layout_conversion.h"
+
 namespace luminpack
 {
 static_assert(CHAR_BIT == 8 && std::endian::native == std::endian::little,
@@ -334,16 +336,23 @@ struct tagged_layout
 
 namespace detail
 {
+inline std::span<const std::byte> stage_layout_input(std::span<const std::byte> input, std::span<std::byte> output,
+    std::vector<std::byte>& scratch)
+{
+    if (overlaps(input, output))
+    {
+        scratch.assign(input.begin(), input.end());
+        return scratch;
+    }
+    return input;
+}
+
 template<auto Layout>
 void convert_layout(std::span<const std::byte> input, std::span<std::byte> output, std::size_t count,
     const auto& source, const auto& destination, bool clear_padding)
 {
     std::vector<std::byte> scratch;
-    if (overlaps(input, output))
-    {
-        scratch.assign(input.begin(), input.end());
-        input = scratch;
-    }
+    input = stage_layout_input(input, output, scratch);
     if (clear_padding)
         std::memset(output.data(), 0, output.size());
     for (std::size_t index = 0; index < count; ++index)
@@ -352,6 +361,39 @@ void convert_layout(std::span<const std::byte> input, std::span<std::byte> outpu
         auto* to = output.data() + index * destination.stride;
         for (std::size_t field = 0; field < Layout.widths.size(); ++field)
             std::memcpy(to + destination.offsets[field], from + source.offsets[field], Layout.widths[field]);
+    }
+}
+
+template<auto Layout, auto Source, auto Destination>
+void convert_tagged_layout(std::span<const std::byte> input, std::span<std::byte> output, std::size_t count,
+    bool clear_padding)
+{
+    std::vector<std::byte> scratch;
+    input = stage_layout_input(input, output, scratch);
+    if (clear_padding)
+        std::memset(output.data(), 0, output.size());
+    static constexpr auto plan = make_layout_conversion<Layout.widths, Source, Destination>();
+    static constexpr auto runs = make_layout_runs<Layout.widths, Source, Destination>();
+    static constexpr auto field_bytes = [] {
+        std::size_t result = 0;
+        for (const auto width : Layout.widths)
+            result += width;
+        return result;
+    }();
+    std::size_t done = 0;
+    if constexpr (plan.shuffle.window.elements != 0)
+        if (count >= plan.shuffle.window.reserve)
+            done = convert_layout_prefix(input.data(), output.data(), count, plan,
+                !clear_padding && field_bytes != Destination.stride);
+    for (auto index = done; index < count; ++index)
+    {
+        const auto* from = input.data() + index * Source.stride;
+        auto* to = output.data() + index * Destination.stride;
+        for (std::size_t run = 0; run < runs.second; ++run)
+        {
+            const auto segment = runs.first[run];
+            std::memcpy(to + segment.destination, from + segment.source, segment.length);
+        }
     }
 }
 
@@ -377,6 +419,12 @@ template<auto Layout>
     return block;
 }
 
+template<auto Layout, std::size_t... Model>
+constexpr auto tagged_read_conversions(std::index_sequence<Model...>) noexcept
+{
+    return std::array{&convert_tagged_layout<Layout, Layout.wire[Model], Layout.local>...};
+}
+
 template<auto Layout>
 void transfer_tagged_block(const tagged_block& block, std::span<std::byte> destination)
 {
@@ -385,12 +433,16 @@ void transfer_tagged_block(const tagged_block& block, std::span<std::byte> desti
     if (block.tag == Layout.local_tag())
         std::memmove(destination.data(), block.payload.data(), block.payload.size());
     else
-        convert_layout<Layout>(block.payload, destination, *block.count, Layout.wire[block.tag - 1], Layout.local, false);
+    {
+        static constexpr auto conversions = tagged_read_conversions<Layout>(std::make_index_sequence<Layout.wire.size()>{});
+        conversions[block.tag - 1](block.payload, destination, *block.count, false);
+    }
 }
 }
 
 /// Reads a Tagged array with multiple storage models. Use sizeof and offsetof for the local model.
 /// Describe raw, nonvolatile fields whose object representations accept every bit pattern.
+/// Matching models copy raw bytes. Cross-model reads retain the destination padding.
 template<class T, auto Layout>
 [[nodiscard]] std::optional<std::span<T>> read_tagged_array_into(reader& input, std::span<T> destination)
 {
@@ -441,7 +493,7 @@ void write_tagged_array(writer& output, std::optional<std::span<const T>> value)
     if constexpr (local_tag != 0)
         std::memmove(payload.data(), source.data(), bytes);
     else
-        detail::convert_layout<Layout>(source, payload, value->size(), Layout.local, model, true);
+        detail::convert_tagged_layout<Layout, Layout.local, model>(source, payload, value->size(), true);
     detail::store_count(record, count);
     record[sizeof(std::int32_t)] = static_cast<std::byte>(tag);
     output = next;

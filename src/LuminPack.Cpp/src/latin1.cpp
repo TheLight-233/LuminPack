@@ -20,6 +20,10 @@ struct latin1_isa
 {
     bool avx2;
     bool avx512bw;
+#if defined(LUMINPACK_CPP_LAYOUT_AVX512)
+    bool avx512f;
+    bool avx512vbmi;
+#endif
 };
 
 latin1_isa detect_isa() noexcept
@@ -43,11 +47,20 @@ latin1_isa detect_isa() noexcept
     const auto features = static_cast<unsigned>(registers[1]);
     const bool avx2 = (features & (1u << 5)) != 0;
     constexpr auto avx512f_bw = (1u << 16) | (1u << 30);
-    const bool avx512bw = (features & avx512f_bw) == avx512f_bw && (state & 0xe6u) == 0xe6u;
-    return {avx2, avx512bw};
+    const bool zmm_state = (state & 0xe6u) == 0xe6u;
+    const bool avx512bw = (features & avx512f_bw) == avx512f_bw && zmm_state;
+    return {avx2, avx512bw
+#if defined(LUMINPACK_CPP_LAYOUT_AVX512)
+        , (features & (1u << 16)) != 0 && zmm_state, (registers[2] & (1 << 1)) != 0 && zmm_state
+#endif
+    };
 #else
     return {__builtin_cpu_supports("avx2") != 0,
-        __builtin_cpu_supports("avx512f") != 0 && __builtin_cpu_supports("avx512bw") != 0};
+        __builtin_cpu_supports("avx512f") != 0 && __builtin_cpu_supports("avx512bw") != 0
+#if defined(LUMINPACK_CPP_LAYOUT_AVX512)
+        , __builtin_cpu_supports("avx512f") != 0, __builtin_cpu_supports("avx512vbmi") != 0
+#endif
+    };
 #endif
 }
 
@@ -155,6 +168,18 @@ bool has_avx2() noexcept
 bool has_avx512bw() noexcept
 {
     return available_isa().avx512bw;
+}
+#endif
+
+#if defined(LUMINPACK_CPP_LAYOUT_AVX512)
+bool has_avx512f() noexcept
+{
+    return available_isa().avx512f;
+}
+
+bool has_avx512vbmi() noexcept
+{
+    return available_isa().avx512vbmi;
 }
 #endif
 
