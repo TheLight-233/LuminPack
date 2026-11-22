@@ -27,9 +27,19 @@ if (args is ["write-ordered-json" or "read-ordered-json", var orderedJsonDirecto
     return 0;
 }
 
+if (args is ["write-json-numbers" or "read-json-numbers", var numberDirectory])
+{
+    if (args[0] == "write-json-numbers")
+        JsonNumberFixtures.Write(numberDirectory);
+    else
+        JsonNumberFixtures.Verify(numberDirectory);
+    Console.WriteLine(args[0] == "write-json-numbers" ? ".NET emitted JSON number documents and vectors." : ".NET verified JSON number documents.");
+    return 0;
+}
+
 if (args is not ["read" or "write", var directory])
 {
-    Console.Error.WriteLine("Usage: LuminPack.Tests.Portable <read|write|read-strings|write-strings|read-ordered-json|write-ordered-json> <directory>");
+    Console.Error.WriteLine("Usage: LuminPack.Tests.Portable <read|write|read-strings|write-strings|read-ordered-json|write-ordered-json|read-json-numbers|write-json-numbers> <directory>");
     return 2;
 }
 

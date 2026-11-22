@@ -14,6 +14,7 @@ final class Json {
     private Json() {}
 
     record Name(String token) {}
+    record Opaque(Object value) {}
 
     static Name name(String text) {
         var result = new StringBuilder(text.length() + 3);
@@ -36,7 +37,12 @@ final class Json {
     }
 
     static void write(StringBuilder output, Object value, int depth, int limit) {
-        if (value == null) output.append("null");
+        write(output, value, depth, limit, new NumericOutput());
+    }
+
+    private static void write(StringBuilder output, Object value, int depth, int limit, NumericOutput numbers) {
+        if (value instanceof Opaque opaque) write(output, opaque.value, depth, limit, null);
+        else if (value == null) output.append("null");
         else if (value instanceof Boolean bool) output.append(bool);
         else if (value instanceof String text) quote(output, text);
         else if (value instanceof Map<?, ?> map) {
@@ -51,7 +57,7 @@ final class Json {
                     quote(output, key);
                     output.append(':');
                 } else throw failure("Invalid JSON property name");
-                write(output, entry.getValue(), depth + 1, limit);
+                write(output, entry.getValue(), depth + 1, limit, numbers);
             }
             output.append('}');
         } else if (value instanceof List<?> list) {
@@ -59,10 +65,35 @@ final class Json {
             output.append('[');
             for (int index = 0; index < list.size(); index++) {
                 if (index > 0) output.append(',');
-                write(output, list.get(index), depth + 1, limit);
+                write(output, list.get(index), depth + 1, limit, numbers);
             }
             output.append(']');
-        } else if (value instanceof Float number) {
+        } else if (value instanceof Number number) {
+            if (numbers == null || !numbers.write(output, number)) writeOpaqueNumber(output, number);
+        } else throw failure("Unsupported LuminPack JSON value " + value.getClass().getName());
+    }
+
+    private static final class NumericOutput {
+        private final byte[] buffer = new byte[JsonNumberFormatter.MAX_BYTES];
+        private final JsonNumberFormatter formatter = new JsonNumberFormatter();
+
+        boolean write(StringBuilder output, Number value) {
+            int written;
+            if (value instanceof Float number) written = formatter.floating(buffer, 0, number);
+            else if (value instanceof Double number) written = formatter.floating(buffer, 0, number);
+            else if (value instanceof Integer || value instanceof Short || value instanceof Byte)
+                written = JsonNumberFormatter.signed32(buffer, 0, value.intValue());
+            else if (value instanceof Long) written = JsonNumberFormatter.signed64(buffer, 0, value.longValue());
+            else if (value instanceof BigInteger number && number.signum() >= 0 && number.bitLength() <= 64)
+                written = JsonNumberFormatter.unsigned64(buffer, 0, number.longValue());
+            else return false;
+            for (int i = 0; i < written; i++) output.append((char) buffer[i]);
+            return true;
+        }
+    }
+
+    private static void writeOpaqueNumber(StringBuilder output, Number value) {
+        if (value instanceof Float number) {
             if (!Float.isFinite(number)) throw failure("LuminPack JSON cannot encode a non-finite float");
             int bits = Float.floatToRawIntBits(number);
             int exponent = (bits >>> 23) & 0xff;
@@ -76,8 +107,7 @@ final class Json {
             boolean legacyRange = exponent >= 991 && exponent <= 1055;
             if (!writeSmallIntegral(output, number, bits < 0, legacyRange, 9_007_199_254_740_992.0))
                 output.append(general(Double.toString(number), 17, legacyRange));
-        } else if (value instanceof Number number) output.append(number);
-        else throw failure("Unsupported LuminPack JSON value " + value.getClass().getName());
+        } else output.append(value);
     }
 
     private static boolean writeSmallIntegral(StringBuilder output, double value, boolean negative, boolean legacyRange, double limit) {

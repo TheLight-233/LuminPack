@@ -229,6 +229,11 @@ func (r *jsonReader) shape(d *descriptor, value any) any {
 	}
 	switch d.Kind {
 	case "scalar":
+		if value != nil && (d.Type == "float" || d.Type == "double") {
+			if _, ok := value.(json.Number); !ok {
+				fail(-1, "expected a JSON floating-point number")
+			}
+		}
 		result := r.s.scalarValue(d.Type, value)
 		switch d.Type {
 		case "byte":
@@ -430,11 +435,11 @@ func (w *jsonWriter) contract(c *contract, data any) {
 			if !ok || value.Value == nil {
 				fail(-1, "unknown or empty Union JSON case")
 			}
-			w.data = strconv.AppendUint(w.data, uint64(external.tag), 10)
+			w.data = appendJSONUint32(w.data, uint32(external.tag))
 			w.append(`,"$value":`)
 			w.writeCustomJSON(external.codec, external.id, value.Value)
 		} else {
-			w.data = strconv.AppendUint(w.data, uint64(selected.Hash), 10)
+			w.data = appendJSONUint32(w.data, selected.Hash)
 			w.append(`,"$value":`)
 			w.contract(selected.target, value.Value)
 		}
@@ -457,14 +462,14 @@ func (w *jsonWriter) contract(c *contract, data any) {
 				fail(-1, "record has inconsistent JSON reference types")
 			}
 			w.append(`"$ref":`)
-			w.data = strconv.AppendUint(w.data, uint64(ref.id), 10)
+			w.data = appendJSONUint32(w.data, ref.id)
 			w.byte('}')
 			return
 		}
 		id := uint32(len(w.refs))
 		w.refs[identity] = reference{id, c, value}
 		w.append(`"$id":`)
-		w.data = strconv.AppendUint(w.data, uint64(id), 10)
+		w.data = appendJSONUint32(w.data, id)
 		for i := range c.Members {
 			m := &c.Members[i]
 			w.byte(',')
@@ -548,12 +553,12 @@ func (w *jsonWriter) shape(d *descriptor, value any) {
 		case float64:
 			w.jsonFloat(x, 64)
 		case int64:
-			w.data = strconv.AppendInt(w.data, x, 10)
+			w.data = appendJSONInteger(w.data, uint64(x), true, w.s.scalarWidth(d.Type))
 		case uint64:
 			if d.Type == "char" {
 				w.jsonChar(uint16(x))
 			} else {
-				w.data = strconv.AppendUint(w.data, x, 10)
+				w.data = appendJSONInteger(w.data, x, false, w.s.scalarWidth(d.Type))
 			}
 		case uint16:
 			w.jsonChar(x)
@@ -629,9 +634,9 @@ func (w *jsonWriter) shape(d *descriptor, value any) {
 			fail(-1, "invalid JSON rectangular value")
 		}
 		w.append(`{"Lengths":`)
-		w.data = appendJSONNode(w.data, arr.Lengths)
+		w.data = appendSignedJSONItems(w.data, arr.Lengths)
 		w.append(`,"LowerBounds":`)
-		w.data = appendJSONNode(w.data, arr.LowerBounds)
+		w.data = appendSignedJSONItems(w.data, arr.LowerBounds)
 		w.append(`,"Values":`)
 		w.jsonItems(d.Element, arr.Values)
 		w.byte('}')
@@ -667,17 +672,4 @@ func (w *jsonWriter) jsonUnits(value []uint16) {
 		w.data = append(w.data, hex[unit>>12], hex[(unit>>8)&15], hex[(unit>>4)&15], hex[unit&15])
 	}
 	w.byte('"')
-}
-
-func (w *jsonWriter) jsonFloat(value float64, bits int) {
-	switch {
-	case math.IsNaN(value):
-		w.append(`"NaN"`)
-	case math.IsInf(value, 1):
-		w.append(`"Infinity"`)
-	case math.IsInf(value, -1):
-		w.append(`"-Infinity"`)
-	default:
-		w.data = strconv.AppendFloat(w.data, value, 'g', -1, bits)
-	}
 }

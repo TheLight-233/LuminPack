@@ -3,6 +3,7 @@
 #include <array>
 #include <charconv>
 #include <cmath>
+#include <luminpack/detail/json_number_format.h>
 #include <luminpack/detail/unicode.h>
 
 // Included by luminpack.h after the common binary and text declarations.
@@ -453,15 +454,13 @@ public:
 
         writer next = output_;
         auto reserved = next.reserve(capacity);
-        auto* first = reinterpret_cast<char*>(reserved.data());
+        auto* first = reserved.data();
         constexpr auto native_word = sizeof(std::uint64_t);
         constexpr auto tail = width - native_word;
         std::memcpy(first, head.data(), native_word);
         std::memcpy(first + tail, head.data() + tail, native_word);
-        const auto result = std::to_chars(first + width, first + capacity, value);
-        if (result.ec != std::errc{})
-            throw std::invalid_argument("Cannot format LuminPack JSON number.");
-        (void)output_.reserve(static_cast<std::size_t>(result.ptr - first));
+        const auto written = detail::format_json_integer<false>(first + width, value);
+        (void)output_.reserve(width + written);
         return true;
     }
 
@@ -474,11 +473,32 @@ public:
             if (!std::isfinite(value))
                 throw std::invalid_argument("Non-finite LuminPack JSON number.");
         }
-        std::array<char, 64> buffer;
-        const auto result = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
-        if (result.ec != std::errc{})
-            throw std::invalid_argument("Cannot format LuminPack JSON number.");
-        ascii(std::string_view(buffer.data(), result.ptr));
+        constexpr auto bound = std::floating_point<T> ? (std::same_as<T, float> ? 24 : 32)
+            : std::numeric_limits<T>::digits10 + 1 + std::is_signed_v<T>;
+        constexpr auto capacity = bound * sizeof(unit);
+        const auto format = [value](std::byte* target) {
+            if constexpr (std::integral<T>)
+                return detail::format_json_integer<Encoding == json_encoding::utf16>(target, value);
+            else if constexpr (Encoding == json_encoding::utf8)
+                return detail::format_json_float_utf8(target, value);
+            else
+                return detail::format_json_float_utf16(target, value);
+        };
+
+        if (capacity <= output_.remaining())
+        {
+            writer next = output_;
+            auto target = next.reserve(capacity);
+            const auto written = format(target.data()) * sizeof(unit);
+            (void)output_.reserve(written);
+            return;
+        }
+
+        // A short output can still hold a shorter token. Check its exact width before copying.
+        std::array<std::byte, capacity> scratch;
+        const auto written = format(scratch.data()) * sizeof(unit);
+        auto target = output_.reserve(written);
+        std::memcpy(target.data(), scratch.data(), written);
     }
 
 private:

@@ -39,10 +39,10 @@ final class ScalarBlock extends AbstractList<Object> implements RandomAccess {
         byte[] data = raw("int", Integer.BYTES);
         if (data == null) return false;
         if (data.length > 0) {
-            output.integer((int) INT32.get(data, 0));
+            output.integer32((int) INT32.get(data, 0));
             for (int offset = Integer.BYTES; offset < data.length; offset += Integer.BYTES) {
                 output.token(',');
-                output.integer((int) INT32.get(data, offset));
+                output.integer32((int) INT32.get(data, offset));
             }
         }
         return true;

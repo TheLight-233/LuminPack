@@ -169,6 +169,25 @@ jobs:
         run: |
           python3 tests/LuminPack.Tests.Portable/verify.py --suite benchmarks
           python3 tests/LuminPack.Tests.Portable/verify.py --suite strings --java-vector
+      - name: Match the managed JSON number bytes
+        run: |
+          python3 tools/xjb-tables/emit_portable.py --check
+          work=.tmp/portable-json-numbers
+          python3 tests/LuminPack.Tests.Portable/verify.py --suite json-numbers --work-dir "$work"
+          fixtures="$PWD/$work/managed-models"
+          codegen="$work/codegen/bin/LuminPack.Codegen/release/LuminPack.Codegen.dll"
+          managed="$work/managed/bin/LuminPack.Tests.Portable/release/LuminPack.Tests.Portable.dll"
+          python3 tests/LuminPack.Tests.Portable/verify.py --suite json-numbers --language typescript \
+            --typescript-no-wasm --work-dir "$work/typescript-scalar" --fixtures "$fixtures" \
+            --codegen-dll "$codegen" --managed-dll "$managed"
+          dotnet "$codegen" generate --language cpp "$fixtures/manifest.json" \
+            LuminPackPortableFixtures.JsonNumberDocument "$fixtures/json-number-models.hpp"
+          dotnet "$codegen" generate --language cpp "$fixtures/manifest.json" \
+            LuminPackPortableFixtures.JsonNumberRejectDocument "$fixtures/json-number-reject.hpp"
+          cmake -S src/LuminPack.Cpp -B "$work/cpp" -DCMAKE_BUILD_TYPE=Release \
+            -DLUMINPACK_CPP_SIMD=OFF -DLUMINPACK_CPP_JSON_NUMBER_FIXTURES="$fixtures"
+          cmake --build "$work/cpp" --target luminpack_cpp_json_numbers --parallel 2
+          ctest --test-dir "$work/cpp" --output-on-failure -R '^luminpack_cpp_json_numbers$'
 
   instruction-sets:
     if: github.event_name != 'workflow_dispatch' || !inputs.avx512_only

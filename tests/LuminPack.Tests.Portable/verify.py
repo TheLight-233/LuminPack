@@ -112,6 +112,21 @@ def suite_routes(suite):
                 for name in names:
                     filename = name + ".json"
                     yield Route(root, filename, filename + ".invalid", fmt, fmt, expected_failure=True)
+        case "json-numbers":
+            root = "LuminPackPortableFixtures.JsonNumberDocument"
+            for source, suffix in FORMATS:
+                for target, output_suffix in FORMATS[1:]:
+                    stem = source.removeprefix("json-")
+                    exact = "numbers" + output_suffix
+                    yield Route(root, "numbers" + suffix, "numbers.from-" + stem + output_suffix, source, target, exact=exact)
+            invalid = "LuminPackPortableFixtures.JsonNumberRejectDocument"
+            for width in ("f32", "f64"):
+                for value in ("nan", "positive-infinity", "negative-infinity"):
+                    name = f"{width}-{value}"
+                    binary = name + ".bin"
+                    yield Route(invalid, binary, binary, "binary", "binary", exact=binary)
+                    for target, suffix in FORMATS[1:]:
+                        yield Route(invalid, binary, name + suffix + ".invalid", "binary", target, expected_failure=True)
         case "profiles":
             root = "LuminPackCppBinaryProfileFixtures.ProfileDocument"
             for profile in PROFILES:
@@ -322,7 +337,7 @@ def typescript_runner(args):
 
 
 def prepare_inputs(args, work, codegen, routes):
-    if args.suite in ("benchmarks", "strings", "ordered-json"):
+    if args.suite in ("benchmarks", "strings", "ordered-json", "json-numbers"):
         project = HERE / "LuminPack.Tests.Portable.csproj"
     else:
         name = "LuminPack.Tests.Cpp." + SUITES[args.suite]
@@ -335,7 +350,8 @@ def prepare_inputs(args, work, codegen, routes):
     managed = (args.managed_dll.resolve() if args.managed_dll else
                build_dotnet(project, work / "managed", export=True, properties=properties.get(args.suite, ())))
     inputs = work / "managed-models"
-    operation = {"native-layout": "write-native", "strings": "write-strings", "ordered-json": "write-ordered-json"}.get(args.suite, "write")
+    operation = {"native-layout": "write-native", "strings": "write-strings", "ordered-json": "write-ordered-json",
+                 "json-numbers": "write-json-numbers"}.get(args.suite, "write")
     write = [args.managed_dotnet, managed, operation, inputs]
     if args.suite == "version-archive":
         write.append(ROOT / "tests/LuminPack.Tests.Aot/Fixtures/version-revision-1.bin")
@@ -386,10 +402,10 @@ def assert_ordered_json_contract(schema):
         raise RuntimeError("The ordered JSON fixture requires generated UTF-8 writers for the tested integer widths.")
 
 
-def validate_rejection(command, schema, data, output, fmt, reason):
+def validate_rejection(command, schema, data, output, fmt, reason, *, write_format=None):
     malformed = output.with_name(output.name + "." + reason)
     malformed.write_bytes(data)
-    result = subprocess.run([*command, schema, fmt, fmt, malformed, output], cwd=ROOT, capture_output=True)
+    result = subprocess.run([*command, schema, fmt, write_format or fmt, malformed, output], cwd=ROOT, capture_output=True)
     if result.returncode == 0 or output.exists():
         raise RuntimeError(f"Accepted {reason} {fmt} document: {malformed}")
 
@@ -405,11 +421,16 @@ def exchange(command, inputs, outputs, schemas, routes, cpp_outputs):
         binding = [route.binding] if route.binding else []
         output = outputs / route.output
         if route.expected_failure:
-            validate_rejection(command, schema, original.read_bytes(), output, route.read, original.stem)
+            validate_rejection(command, schema, original.read_bytes(), output, route.read, original.stem, write_format=route.write)
             continue
         invoke([*command, schema, route.read, route.write, original, output, *binding])
-        if route.exact and (inputs / route.exact).read_bytes() != output.read_bytes():
-            raise RuntimeError(f"Native output differs from managed {route.exact}: {output}")
+        if route.exact:
+            expected = (inputs / route.exact).read_bytes()
+            actual = output.read_bytes()
+            if expected != actual:
+                differing = next((offset for offset, (a, b) in enumerate(zip(expected, actual)) if a != b),
+                                 min(len(expected), len(actual)))
+                raise RuntimeError(f"Native output differs from managed {route.exact} at byte {differing}: {output}")
         if route.reject:
             invalid = outputs / (route.output + ".invalid")
             data = original.read_bytes()
@@ -477,7 +498,7 @@ def verify_alternate_tagged(command, schema, canonical, outputs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("benchmarks", "strings", "ordered-json", *SUITES), default="benchmarks")
+    parser.add_argument("--suite", choices=("benchmarks", "strings", "ordered-json", "json-numbers", *SUITES), default="benchmarks")
     parser.add_argument("--language", choices=LANGUAGES, action="append", help="Repeat to select multiple runtimes. The default runs all three.")
     parser.add_argument("--fixtures", type=Path, help="Reuse a manifest and documents emitted by the selected managed suite.")
     parser.add_argument("--manifest", type=Path, help="Use this manifest for reused fixtures stored separately from their manifest.")
@@ -521,7 +542,8 @@ def main():
         outputs = Path(tempfile.mkdtemp(prefix=f"{language}-", dir=work))
         exchange(command, inputs, outputs, schemas, routes, args.fixtures / "out" if args.fixtures else None)
         verify_layout_edits(args.suite, command, inputs, outputs, schemas)
-        operation = {"native-layout": "read-native", "strings": "read-strings", "ordered-json": "read-ordered-json"}.get(args.suite, "read")
+        operation = {"native-layout": "read-native", "strings": "read-strings", "ordered-json": "read-ordered-json",
+                     "json-numbers": "read-json-numbers"}.get(args.suite, "read")
         invoke([args.managed_dotnet, managed, operation, outputs])
         print(f"{backend}: verified {args.suite} managed round trips.", flush=True)
 

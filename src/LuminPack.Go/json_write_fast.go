@@ -11,7 +11,7 @@ func (w *jsonWriter) field(m *member, value any) {
 			// Reserve the complete head and the maximum signed Int32 width
 			// together before publishing the record prefix.
 			out := slices.Grow(w.data, len(m.jsonHead)+11)
-			w.data = strconv.AppendInt(append(out, m.jsonHead...), int64(n), 10)
+			w.data = appendJSONInt32(append(out, m.jsonHead...), n)
 			return
 		}
 	}
@@ -20,8 +20,8 @@ func (w *jsonWriter) field(m *member, value any) {
 }
 
 func (w *jsonWriter) nativeJSONScalar(name string, value any) bool {
-	if bits, signed, ok := w.s.jsonInteger(name, value); ok {
-		w.data = appendJSONInteger(w.data, bits, signed)
+	if bits, signed, width, ok := w.s.jsonInteger(name, value); ok {
+		w.data = appendJSONInteger(w.data, bits, signed, width)
 		return true
 	}
 	switch v := value.(type) {
@@ -49,51 +49,44 @@ func (w *jsonWriter) nativeJSONScalar(name string, value any) bool {
 	return false
 }
 
-func (s *Schema) jsonInteger(name string, value any) (bits uint64, signed, ok bool) {
+func (s *Schema) jsonInteger(name string, value any) (bits uint64, signed bool, width int, ok bool) {
 	switch v := value.(type) {
 	case int8:
-		return uint64(v), true, name == "sbyte"
+		return uint64(v), true, 1, name == "sbyte"
 	case uint8:
-		return uint64(v), false, name == "byte"
+		return uint64(v), false, 1, name == "byte"
 	case int16:
-		return uint64(v), true, name == "short"
+		return uint64(v), true, 2, name == "short"
 	case uint16:
-		return uint64(v), false, name == "ushort"
+		return uint64(v), false, 2, name == "ushort"
 	case int32:
-		return uint64(v), true, name == "int" || s.nativeIntegerBytes == 4 && (name == "nint" || name == "System.IntPtr")
+		return uint64(v), true, 4, name == "int" || s.nativeIntegerBytes == 4 && (name == "nint" || name == "System.IntPtr")
 	case uint32:
-		return uint64(v), false, name == "uint" || s.nativeIntegerBytes == 4 && (name == "nuint" || name == "System.UIntPtr")
+		return uint64(v), false, 4, name == "uint" || s.nativeIntegerBytes == 4 && (name == "nuint" || name == "System.UIntPtr")
 	case int64:
-		return uint64(v), true, name == "long" || s.nativeIntegerBytes == 8 && (name == "nint" || name == "System.IntPtr")
+		return uint64(v), true, 8, name == "long" || s.nativeIntegerBytes == 8 && (name == "nint" || name == "System.IntPtr")
 	case uint64:
-		return v, false, name == "ulong" || s.nativeIntegerBytes == 8 && (name == "nuint" || name == "System.UIntPtr")
+		return v, false, 8, name == "ulong" || s.nativeIntegerBytes == 8 && (name == "nuint" || name == "System.UIntPtr")
 	default:
-		return 0, false, false
+		return 0, false, 0, false
 	}
-}
-
-func appendJSONInteger(output []byte, bits uint64, signed bool) []byte {
-	if signed {
-		return strconv.AppendInt(output, int64(bits), 10)
-	}
-	return strconv.AppendUint(output, bits, 10)
 }
 
 func (w *jsonWriter) integerPair(key, value *descriptor, entry Entry) bool {
 	if key.Kind != "scalar" || value.Kind != "scalar" {
 		return false
 	}
-	left, leftSigned, ok := w.s.jsonInteger(key.Type, entry.Key)
+	left, leftSigned, leftWidth, ok := w.s.jsonInteger(key.Type, entry.Key)
 	if !ok {
 		return false
 	}
-	right, rightSigned, ok := w.s.jsonInteger(value.Type, entry.Value)
+	right, rightSigned, rightWidth, ok := w.s.jsonInteger(value.Type, entry.Value)
 	if !ok {
 		return false
 	}
 	out := slices.Grow(w.data, 43)
-	out = appendJSONInteger(append(out, '['), left, leftSigned)
-	out = appendJSONInteger(append(out, ','), right, rightSigned)
+	out = appendJSONInteger(append(out, '['), left, leftSigned, leftWidth)
+	out = appendJSONInteger(append(out, ','), right, rightSigned, rightWidth)
 	w.data = append(out, ']')
 	return true
 }
@@ -128,23 +121,37 @@ func (w *jsonWriter) nativeJSONItems(d *descriptor, value any) bool {
 }
 
 func appendSignedJSONItems[T int32 | int64](output []byte, values []T) []byte {
-	output = append(output, '[')
-	if len(values) > 0 {
-		output = strconv.AppendInt(output, int64(values[0]), 10)
-		for _, value := range values[1:] {
-			output = strconv.AppendInt(append(output, ','), int64(value), 10)
+	if len(values) == 0 {
+		return append(output, '[', ']')
+	}
+	separator := byte('[')
+	for _, value := range values {
+		output = append(output, separator)
+		switch any(value).(type) {
+		case int32:
+			output = appendJSONInt32(output, int32(value))
+		default:
+			output = appendJSONInt64(output, int64(value))
 		}
+		separator = ','
 	}
 	return append(output, ']')
 }
 
 func appendUnsignedJSONItems[T uint32 | uint64](output []byte, values []T) []byte {
-	output = append(output, '[')
-	if len(values) > 0 {
-		output = strconv.AppendUint(output, uint64(values[0]), 10)
-		for _, value := range values[1:] {
-			output = strconv.AppendUint(append(output, ','), uint64(value), 10)
+	if len(values) == 0 {
+		return append(output, '[', ']')
+	}
+	separator := byte('[')
+	for _, value := range values {
+		output = append(output, separator)
+		switch any(value).(type) {
+		case uint32:
+			output = appendJSONUint32(output, uint32(value))
+		default:
+			output = appendJSONUint64(output, uint64(value))
 		}
+		separator = ','
 	}
 	return append(output, ']')
 }

@@ -78,6 +78,7 @@ Place options before the manifest path.
 
 - Use the same root and Binary profile at both endpoints. The default is UTF-16 Length. Length and VarInt preserve null and empty strings separately. Token uses a zero terminator and represents null as an empty string. Use Length or VarInt for embedded zero units.
 - Use the same JSON encoding at both endpoints. The JSON wire contract also defines names, enum values, collection shapes, and Union discriminators. [Wire formats](formats.md)
+- The portable runtimes use the C# JSON number policy for supported integers, `float`, and `double`. Floating-point output keeps signed zero and the C# fixed and scientific notation rules. The XJB tables for shortest decimal conversion come from the same checked-in C# data. [XJB notice](xjb-NOTICE.md)
 - Use `GeneratorType.Version` for models that must evolve and read old data. Match the Union cases and registered tags across endpoints. Assign application cases tags within the exported width and outside the generated cases' reserved values. [Version tolerance](versioning.md), [Unions](polymorphism.md)
 - Custom formatters define their own payload and require matching application bindings. For an exported automatic Custom registration, JSON uses UTF-16 when the contract includes JSON operations. Binary-only registrations require only the Binary callbacks. A registered Union case supplies its own JSON callbacks for the selected encoding. [Custom formatters](custom-formatters.md)
 - Preserve tracked object identity by sharing the same object or record instance when constructing the graph. Keep a C++ reference document alive while using its borrowed pointers. [Reference tracking](versioning.md#reference-tracking)
@@ -86,6 +87,8 @@ Place options before the manifest path.
 ## Verify an exchange
 
 The interoperability harness writes `SimpleClass` and `CharacterSaveData` in .NET, passes Binary, UTF-8 JSON, and UTF-16 JSON through Java, Go, and TypeScript, then has .NET verify the results. The `strings` suite checks the six Binary profiles against managed bytes. The C++ guide has its CMake interoperability commands. [C++ guide](../src/LuminPack.Cpp/README.md#verify-the-benchmark-models)
+
+The `json-numbers` suite compares exact UTF-8 and UTF-16 JSON bytes and verifies the decoded Binary bits. After changing the checked-in C# XJB tables, run `python tools/xjb-tables/emit_portable.py` to regenerate the portable tables. Then run `node src/LuminPack.TypeScript/scripts/build-json-number.mjs` with a WebAssembly-capable Clang and linker to rebuild the embedded TypeScript kernel.
 
 ```sh
 python tests/LuminPack.Tests.Portable/verify.py

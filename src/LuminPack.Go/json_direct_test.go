@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -27,7 +26,7 @@ func TestDirectJSONMatchesStagedReader(t *testing.T) {
 	inputs := []string{
 		ordered,
 		"{ \"Choice\" : {\"$value\" : {\"X\": 1.25}, \"$type\": 12}, \"Scores\": [[-9,9223372036854775807]], \"Values\": [-2, 0, 2147483647], \"Earl\\u0069er\" : -2147483648, \"Unknown\": [true]}",
-		"{\"Count\":null,\"Values\":[],\"Scores\":null,\"Choice\":{\"$type\": 12,\"$value\":{\"X\":\"NaN\"},\"Extra\":1}}",
+		"{\"Count\":null,\"Values\":[],\"Scores\":null,\"Choice\":{\"$type\": 12,\"$value\":{\"X\":1.5},\"Extra\":1}}",
 		"{\"Count\":-0,\"Count\":2,\"Choice\":{\"$type\":12,\"$type\":41,\"$value\":{\"X\":2.5}}}",
 		"{}",
 	}
@@ -42,14 +41,7 @@ func TestDirectJSONMatchesStagedReader(t *testing.T) {
 			if err != nil || previous != nil {
 				t.Fatalf("decode of %s: direct error %v, staged error %v", text, err, previous)
 			}
-			// JSON encoding gives a stable comparison for the named NaN value.
-			if strings.Contains(text, "NaN") {
-				gotBytes, gotError := fast.EncodeJSONWithEncoding("", result, encoding)
-				wantBytes, wantError := staged.EncodeJSONWithEncoding("", want, encoding)
-				if gotError != nil || wantError != nil || !reflect.DeepEqual(gotBytes, wantBytes) {
-					t.Fatalf("direct and staged NaN round trips differ: %v, %v", gotError, wantError)
-				}
-			} else if !reflect.DeepEqual(result, want) {
+			if !reflect.DeepEqual(result, want) {
 				t.Fatalf("direct and staged decode of %s differ", text)
 			}
 			if text == ordered {
@@ -73,6 +65,7 @@ func TestDirectJSONRejectsInvalidHeadsAndNumbers(t *testing.T) {
 		"{\"Count\":01}", "{\"Count\":-2147483649}", "{\"Count\":1e2}", "{\"Count\":1.0}", "{\"Count\":2147483648}",
 		"{\"Count\":", "{\"Count\":0,\"Values\":[1,]}", "{\"Count\":0 \"Values\":[1]}", "{\"Count\":0,\"Values\":[1],}",
 		"{\"Choice\":{\"$type\":", "{\"Choice\":{\"$type\":12,\"$value\":{}}", "{\"Scores\":[[1,2,3]]}", "{}[]",
+		"{\"Choice\":{\"$type\":12,\"$value\":{\"X\":\"NaN\"}}}", "{\"Choice\":{\"$type\":12,\"$value\":{\"X\":1E+999}}}",
 	} {
 		_, err := schema.DecodeJSONWithEncoding("", []byte(malformed), UTF8)
 		var format *FormatError

@@ -21,7 +21,7 @@ Pushes to `main` and `refactor`, and pull requests, trigger the hosted checks. T
 - `test-areas.yml` runs the AspNetCore, Avalonia, Maui, MonoGame and SkiaSharp adapter contracts on all three systems, plus Drawing and Wpf on Windows. Core is built before the adapters because they consume its existing binary.
 - Registry worker tests launch their adjacent apphost to keep the test process architecture, including self-contained x86.
 - `runtime-compatibility.yml` runs trimmed and NativeAOT programs on Windows, Linux and macOS (x64 and ARM64), the scalar/SSSE3/AVX2 fallbacks and x86. Vendor and ARM32 runs are manual and need their labeled self-hosted runners.
-- Linux x64 and ARM64 jobs also test Go and TypeScript SIMD and scalar paths and exchange managed benchmark and string boundary fixtures with Java, Go, and TypeScript. The Java string run uses the Vector API provider.
+- Linux x64 and ARM64 jobs also test Go and TypeScript SIMD and scalar paths and exchange managed benchmark and string boundary fixtures with Java, Go, and TypeScript. The Java string run uses the Vector API provider. The JSON number suite checks C++, Java, Go, and TypeScript against the managed UTF-8 and UTF-16 byte fixtures and checks the shared XJB tables for drift.
 
 ### AVX-512
 

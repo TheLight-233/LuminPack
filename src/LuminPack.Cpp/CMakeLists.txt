@@ -12,7 +12,7 @@ endif()
 
 add_library(luminpack_cpp STATIC
     src/luminpack.cpp src/latin1.cpp src/layout_conversion.cpp src/string_profiles.cpp src/utf8_runs.cpp src/version.cpp
-    src/json.cpp src/json_scan.cpp src/xxhash3.cpp src/compression.cpp src/compression_match.cpp)
+    src/json.cpp src/json_number_format.cpp src/json_scan.cpp src/xxhash3.cpp src/compression.cpp src/compression_match.cpp)
 add_library(LuminPack::Cpp ALIAS luminpack_cpp)
 target_compile_features(luminpack_cpp PUBLIC cxx_std_20)
 target_include_directories(luminpack_cpp PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")

@@ -78,6 +78,7 @@ dotnet run --project tools/LuminPack.Codegen -c Release -- project .tmp/contract
 
 - 两端使用相同的根类型和二进制配置，默认是 UTF-16 Length。Length 和 VarInt 区分 `null` 与空字符串。Token 使用零码元作为终止符，将 `null` 写成空字符串。需要保留内嵌零码元时，使用 Length 或 VarInt。
 - 两端使用相同的 JSON 编码。JSON 契约还定义成员名、枚举值、集合形状和 Union 类型标识。[数据格式](formats.cn.md)
+- 各语言运行时对已支持的整数、`float` 和 `double` 使用 C# 的 JSON 数字格式。浮点输出保留负零，以及 C# 的定点和科学记数规则。最短十进制转换使用从同一份 C# 数据生成的 XJB 表。[XJB 许可声明](xjb-NOTICE.cn.md)
 - 需要演进并读取旧数据的模型使用 `GeneratorType.Version`。两端的 Union 分支和注册 tag 保持一致。应用注册分支的 tag 应符合导出的宽度，并避开生成分支保留的值。[版本容忍](versioning.cn.md)、[Union 多态](polymorphism.cn.md)
 - Custom 格式化器定义自己的数据负载，两端需要匹配的应用绑定。导出的自动 Custom 注册包含 JSON 操作时，使用 UTF-16。仅注册 Binary 时只需提供二进制回调。注册式 Union 的分支回调处理当前 JSON 编码。[自定义格式化器](custom-formatters.cn.md)
 - 构建启用引用跟踪的对象图时，复用同一对象或记录实例。在 C++ 中使用借用指针期间，保持引用文档存活。[引用跟踪](versioning.cn.md#引用跟踪)
@@ -86,6 +87,8 @@ dotnet run --project tools/LuminPack.Codegen -c Release -- project .tmp/contract
 ## 验证互通
 
 互通测试在 .NET 中生成 `SimpleClass` 和 `CharacterSaveData`，通过 Java、Go、TypeScript 读写二进制、UTF-8 JSON 和 UTF-16 JSON，再由 .NET 验证结果。`strings` 测试组将六种二进制配置与托管端生成的数据逐字节对比。C++ 的互通测试通过 CMake 运行。[C++ 指南](modules/luminpack.cpp.cn.md#验证基准模型)
+
+`json-numbers` 测试组逐字节比较 UTF-8 和 UTF-16 JSON，并验证读回的二进制位。C# XJB 表更新后，运行 `python tools/xjb-tables/emit_portable.py` 重新生成其他语言的表，再用支持 WebAssembly 的 Clang 和链接器运行 `node src/LuminPack.TypeScript/scripts/build-json-number.mjs`，重新构建 TypeScript 内嵌的内核。
 
 ```sh
 python tests/LuminPack.Tests.Portable/verify.py

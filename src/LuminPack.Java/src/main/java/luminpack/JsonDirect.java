@@ -264,7 +264,9 @@ final class JsonDirect {
         else if (scalar instanceof Character character) output.string(character.toString());
         else if (scalar instanceof Float number) output.floating(number);
         else if (scalar instanceof Double number) output.floating(number);
-        else if (scalar instanceof java.math.BigInteger number) output.ascii(number.toString());
+        else if (scalar instanceof java.math.BigInteger number) output.unsignedInteger(number.longValue());
+        else if (scalar instanceof Integer number) output.integer32(number);
+        else if (type.equals("uint")) output.unsignedInteger32(((Number) scalar).longValue());
         else output.integer(((Number) scalar).longValue());
     }
 

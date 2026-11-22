@@ -175,18 +175,6 @@ export function parseJson(text: string, maxDepth: number, maxCollection: number)
     return result;
 }
 
-export function formatJsonNumber(value: number, single: boolean): string {
-    if (!Number.isFinite(value)) throw new WireError("LuminPack JSON numbers must be finite.");
-    if (Object.is(value, -0)) return "-0";
-    if (single && !(Number.isInteger(value) && Math.abs(value) < 10_000_000)) {
-        for (let digits = 1; digits <= 9; digits++) {
-            const rounded = Number(value.toPrecision(digits));
-            if (Math.fround(rounded) === value) return String(rounded);
-        }
-    }
-    return String(value);
-}
-
 export function stringifyJson(value: JsonValue, encodedNames: ReadonlyMap<string, string>): string {
     const parts: string[] = [];
     function append(item: JsonValue): void {

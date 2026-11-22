@@ -1,5 +1,6 @@
 import { BinaryReader, BinaryWriter, WireError, littleEndian } from "./binary.ts";
-import { formatJsonNumber, JsonNumber, type JsonValue } from "./json.ts";
+import { formatJsonInteger, formatJsonNumber } from "./json-number.ts";
+import { JsonNumber, type JsonValue } from "./json.ts";
 
 const integerBounds = new Map<string, readonly [number, number]>([
     ["byte", [0, 0xff]], ["sbyte", [-0x80, 0x7f]], ["short", [-0x8000, 0x7fff]],
@@ -298,7 +299,7 @@ export function writeJsonScalar(type: string, value: unknown, nativeBytes: numbe
     }
     if (type === "float" || type === "double") {
         if (typeof value !== "number") throw new WireError("Expected a LuminPack floating-point value.");
-        return formatJsonNumber(type === "float" ? Math.fround(value) : value, type === "float");
+        return formatJsonNumber(value, type === "float");
     }
-    return String(isWide(type, nativeBytes) ? wideInteger(value, type) : smallInteger(value, type));
+    return formatJsonInteger(isWide(type, nativeBytes) ? wideInteger(value, type) : smallInteger(value, type));
 }

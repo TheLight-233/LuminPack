@@ -4,7 +4,7 @@
   "type": "module",
   "types": "./dist/index.d.ts",
   "exports": "./dist/index.js",
-  "files": ["dist"],
+  "files": ["dist", "LICENSE-xjb.txt"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test test/*.test.mjs"

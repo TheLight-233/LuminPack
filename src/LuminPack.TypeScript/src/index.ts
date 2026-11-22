@@ -2,6 +2,7 @@ import { BinaryReader, BinaryWriter, WireError, decodeUtf16, decodeUtf8, default
     readString, writeString, type Limits } from "./binary.ts";
 import { JsonNumber, OrderedJsonCursor, jsonArray, jsonObject, orderedJsonMiss, parseJson, put, stringifyJson,
     type JsonValue } from "./json.ts";
+import { formatJsonInteger } from "./json-number.ts";
 import { compressLum2, decompressLum2 } from "./lum2.ts";
 import { defaultScalar, fixedScalarRead, fixedScalarWrite, readJsonNumericScalar, readJsonScalar, readScalar, readScalars,
     scalarCollectionView, scalarWidth, writeJsonScalar, writeScalar, writeScalars,
@@ -1289,6 +1290,15 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         parts.push("]");
     }
 
+    private writeJsonDimensions(values: readonly number[], parts: string[]): void {
+        parts.push("[");
+        for (let index = 0; index < values.length; index++) {
+            if (index !== 0) parts.push(",");
+            parts.push(formatJsonInteger(values[index]));
+        }
+        parts.push("]");
+    }
+
     private writeJsonWire(wire: Wire, value: unknown, encoding: JsonEncoding, state: WriteState, parts: string[]): void {
         switch (wire.kind) {
             case "scalar": parts.push(writeJsonScalar(wire.type, value, this.nativeBytes)); return;
@@ -1362,7 +1372,11 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 if (rectangularSize(lengths, this.limits.maxCollection) !== items.length)
                     throw new WireError("LuminPack JSON rectangular dimensions differ from its element count.");
                 rectangularBounds(lengths, lowerBounds);
-                parts.push('{"Lengths":[', lengths.join(","), '],"LowerBounds":[', lowerBounds.join(","), '],"Values":');
+                parts.push('{"Lengths":');
+                this.writeJsonDimensions(lengths, parts);
+                parts.push(',"LowerBounds":');
+                this.writeJsonDimensions(lowerBounds, parts);
+                parts.push(',"Values":');
                 this.writeJsonElements(wire.element, items, encoding, state, parts);
                 parts.push("}");
                 return;
@@ -1434,13 +1448,13 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 const type = plan.byId.has(record.type) || plan.registeredByType.has(record.type) ? record.type : identity(record.type);
                 const hash = plan.byId.get(type);
                 if (hash !== undefined) {
-                    parts.push('{"$type":', String(hash), ',"$value":');
+                    parts.push('{"$type":', formatJsonInteger(hash), ',"$value":');
                     this.writeJsonContract(this.jsonPlan(type), record.value, encoding, state, parts);
                 } else {
                     const registered = plan.registeredByType.get(type);
                     if (!registered) throw new WireError("Unknown LuminPack JSON Union type.");
                     if (!registered.codec.writeJson) throw new WireError("No registered LuminPack Union JSON writer.");
-                    parts.push('{"$type":', String(registered.tag), ',"$value":',
+                    parts.push('{"$type":', formatJsonInteger(registered.tag), ',"$value":',
                         stringifyJson(registered.codec.writeJson(record.value, encoding), this.encodedJsonNames));
                 }
                 parts.push("}");
@@ -1449,8 +1463,8 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             let first = true;
             if (contract.profile.trackReferences === true) {
                 const reference = this.referenceIndex(state, record, contract.id);
-                if (reference.existing) { parts.push('{"$ref":', String(reference.id), "}"); return; }
-                parts.push('{"$id":', String(reference.id));
+                if (reference.existing) { parts.push('{"$ref":', formatJsonInteger(reference.id), "}"); return; }
+                parts.push('{"$id":', formatJsonInteger(reference.id));
                 first = false;
             }
             for (const { member, head, next } of plan.jsonHeads) {

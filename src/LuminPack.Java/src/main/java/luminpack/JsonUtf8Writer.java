@@ -9,14 +9,7 @@ final class JsonUtf8Writer {
     private static final byte[] TRUE = {'t', 'r', 'u', 'e'};
     private static final byte[] FALSE = {'f', 'a', 'l', 's', 'e'};
     private static final byte[] HEX = "0123456789abcdef".getBytes(StandardCharsets.US_ASCII);
-    private static final byte[] DIGIT_PAIRS = new byte[200];
-
-    static {
-        for (int i = 0; i < 100; i++) {
-            DIGIT_PAIRS[i * 2] = (byte) ('0' + i / 10);
-            DIGIT_PAIRS[i * 2 + 1] = (byte) ('0' + i % 10);
-        }
-    }
+    private final JsonNumberFormatter numbers = new JsonNumberFormatter();
 
     private byte[] buffer = new byte[512];
     private int position;
@@ -45,108 +38,34 @@ final class JsonUtf8Writer {
 
     void booleanValue(boolean value) { raw(value ? TRUE : FALSE); }
 
+    void integer32(int value) {
+        reserve(JsonNumberFormatter.MAX_SIGNED32_BYTES);
+        position += JsonNumberFormatter.signed32(buffer, position, value);
+    }
+
+    void unsignedInteger32(long value) {
+        reserve(JsonNumberFormatter.MAX_UNSIGNED32_BYTES);
+        position += JsonNumberFormatter.unsigned32(buffer, position, value);
+    }
+
     void integer(long value) {
-        if (value >= 0 && value < 10) {
-            token((char) ('0' + value));
-            return;
-        }
-        reserve(20);
-        boolean negative = value < 0;
-        long remaining = negative ? value : -value;
-        int end = position + 20;
-        int start = end;
-        while (remaining <= -100) {
-            long quotient = remaining / 100;
-            int pair = (int) (quotient * 100 - remaining) * 2;
-            buffer[--start] = DIGIT_PAIRS[pair + 1];
-            buffer[--start] = DIGIT_PAIRS[pair];
-            remaining = quotient;
-        }
-        int last = (int) -remaining * 2;
-        buffer[--start] = DIGIT_PAIRS[last + 1];
-        if (last >= 20) buffer[--start] = DIGIT_PAIRS[last];
-        if (negative) buffer[--start] = '-';
-        System.arraycopy(buffer, start, buffer, position, end - start);
-        position += end - start;
+        reserve(JsonNumberFormatter.MAX_INTEGER64_BYTES);
+        position += JsonNumberFormatter.signed64(buffer, position, value);
+    }
+
+    void unsignedInteger(long value) {
+        reserve(JsonNumberFormatter.MAX_INTEGER64_BYTES);
+        position += JsonNumberFormatter.unsigned64(buffer, position, value);
     }
 
     void floating(float value) {
-        int bits = Float.floatToRawIntBits(value);
-        int exponent = (bits >>> 23) & 0xff;
-        boolean legacyRange = exponent >= 95 && exponent <= 159;
-        if (!Float.isFinite(value)) throw Schema.fail("LuminPack JSON cannot encode a non-finite float");
-        if (!smallIntegral(value, bits < 0, legacyRange, 16_777_216.0))
-            decimal(Float.toString(value), 9, legacyRange);
+        reserve(JsonNumberFormatter.MAX_BYTES);
+        position += numbers.floating(buffer, position, value);
     }
 
     void floating(double value) {
-        long bits = Double.doubleToRawLongBits(value);
-        int exponent = (int) ((bits >>> 52) & 0x7ff);
-        boolean legacyRange = exponent >= 991 && exponent <= 1055;
-        if (!Double.isFinite(value)) throw Schema.fail("LuminPack JSON cannot encode a non-finite double");
-        if (!smallIntegral(value, bits < 0, legacyRange, 9_007_199_254_740_992.0))
-            decimal(Double.toString(value), 17, legacyRange);
-    }
-
-    // Convert the JVM's shortest digits directly to the established LuminPack notation.
-    private void decimal(String text, int precision, boolean legacyRange) {
-        boolean negative = text.charAt(0) == '-';
-        int point = text.indexOf('.');
-        int exponentAt = text.indexOf('E');
-        int end = exponentAt < 0 ? text.length() : exponentAt;
-        int exponent = exponentAt < 0 ? 0 : Integer.parseInt(text, exponentAt + 1, text.length(), 10);
-        int first = negative ? 1 : 0;
-        while (first == point || text.charAt(first) == '0') first++;
-        int last = end - 1;
-        while (last == point || text.charAt(last) == '0') last--;
-        int digitCount = last - first + 1 - (point > first && point < last ? 1 : 0);
-        int leadingExponent = point - first - 1 + exponent + (first > point ? 1 : 0);
-        int integralDigits = leadingExponent + 1;
-        boolean fixed = (legacyRange && digitCount - integralDigits <= precision) ||
-            (leadingExponent >= -4 && leadingExponent < precision);
-        if (negative) token('-');
-        if (fixed) {
-            if (integralDigits <= 0) {
-                token('0');
-                token('.');
-                for (int i = integralDigits; i < 0; i++) token('0');
-            }
-            int digits = 0;
-            for (int i = first; i <= last; i++) {
-                if (i == point) continue;
-                if (digits > 0 && digits == integralDigits) token('.');
-                token(text.charAt(i));
-                digits++;
-            }
-            for (; digits < integralDigits; digits++) token('0');
-        } else {
-            token(text.charAt(first));
-            if (digitCount > 1) {
-                token('.');
-                for (int i = first + 1; i <= last; i++) if (i != point) token(text.charAt(i));
-            }
-            token('E');
-            token(leadingExponent < 0 ? '-' : '+');
-            int magnitude = Math.abs(leadingExponent);
-            if (magnitude < 10) token('0');
-            integer(magnitude);
-        }
-    }
-
-    private boolean smallIntegral(double value, boolean negative, boolean legacyRange, double limit) {
-        if (value == 0) {
-            if (negative) token('-');
-            token('0');
-            return true;
-        }
-        if (!legacyRange || Math.abs(value) >= limit || (long) value != value) return false;
-        integer((long) value);
-        return true;
-    }
-
-    void ascii(String text) {
-        reserve(text.length());
-        for (int i = 0; i < text.length(); i++) buffer[position++] = (byte) text.charAt(i);
+        reserve(JsonNumberFormatter.MAX_BYTES);
+        position += numbers.floating(buffer, position, value);
     }
 
     void string(String text) {

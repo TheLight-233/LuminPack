@@ -21,7 +21,7 @@
 - `test-areas.yml` 在三个系统上都运行 AspNetCore、Avalonia、Maui、MonoGame、SkiaSharp 适配契约，Windows 额外运行 Drawing 和 Wpf。适配模块使用已经构建好的 Core 二进制，所以先构建 Core。
 - 注册表子进程测试启动测试程序集旁边的 apphost，保持与测试进程一致的架构，包括自包含 x86。
 - `runtime-compatibility.yml` 在 Windows、Linux、macOS（x64 和 ARM64）上运行裁剪版与 NativeAOT 程序、标量/SSSE3/AVX2 回退以及 x86。按 CPU 厂商和 ARM32 的运行需要手动触发，并需要带对应标签的自托管 runner。
-- Linux x64 和 ARM64 任务也会验证 Go 和 TypeScript 的 SIMD 与标量路径，并在 .NET 与 Java、Go、TypeScript 之间交换基准模型和字符串边界夹具。Java 的字符串测试启用 Vector API。
+- Linux x64 和 ARM64 任务也会验证 Go 和 TypeScript 的 SIMD 与标量路径，并在 .NET 与 Java、Go、TypeScript 之间交换基准模型和字符串边界夹具。Java 的字符串测试启用 Vector API。JSON 数字测试对照 C++、Java、Go、TypeScript 与托管端的 UTF-8 和 UTF-16 字节，并检查共用的 XJB 表是否一致。
 
 ### AVX-512
 

@@ -77,7 +77,7 @@ final class JsonDocument {
     }
 
     private Object writeContract(Schema.Contract type, Object value) {
-        if (type.kind.equals("Custom")) return customJson(type).writeJson(value);
+        if (type.kind.equals("Custom")) return new Json.Opaque(customJson(type).writeJson(value));
         if (value == null) {
             if (type.kind.equals("Struct")) throw fail("Missing LuminPack JSON struct");
             return null;
@@ -123,7 +123,7 @@ final class JsonDocument {
         if (value instanceof LuminPack.RegisteredUnionValue registered) {
             if (!union.unionRegistration) throw fail("LuminPack Union registration is disabled");
             result.put(TYPE, registered.tag());
-            result.put(VALUE, bindings.registered(union, registered.tag()).writeJson(registered.value()));
+            result.put(VALUE, new Json.Opaque(bindings.registered(union, registered.tag()).writeJson(registered.value())));
             return result;
         }
         if (!(value instanceof LuminPack.UnionValue item)) throw fail("Expected a LuminPack JSON Union value");
