@@ -8,7 +8,7 @@
 | --- | --- |
 | `ci.yml` | 仓库检查、构建、生成代码与生成器契约、增量验证、运行时测试、Hooks 测试区、数据格式夹具，以及从新打包的 NuGet 包安装的测试。手动运行时可加跑基准测试。 |
 | `test-areas.yml` | 在 Windows、Linux、macOS 上以 Debug 和 Release 运行 Safety 测试区和平台适配契约。 |
-| `runtime-compatibility.yml` | 裁剪与 NativeAOT 程序、SIMD 回退路径、x86 以及 AVX-512 硬件测试。 |
+| `runtime-compatibility.yml` | 裁剪与 NativeAOT 程序、跨语言 Runtime 互通、SIMD 回退路径、x86 以及 AVX-512 硬件测试。 |
 | `unity.yml`、`unity-extensions.yml` | Unity Editor 测试、IL2CPP 与 WebGL Player、Unity 对象与 Burst 契约。 |
 | `benchmark-matrix.yml` | 序列化矩阵的往返校验；手动运行时计时。 |
 | `benchmark-matrix-paired.yml` | 手动在同一 runner 上以 FullOpts 和 TieredPGO 对照两个或三个版本的指定 Matrix 用例。 |
@@ -20,6 +20,7 @@
 - `test-areas.yml` 在三个系统上都运行 AspNetCore、Avalonia、Maui、MonoGame、SkiaSharp 适配契约，Windows 额外运行 Drawing 和 Wpf。适配模块使用已经构建好的 Core 二进制，所以先构建 Core。
 - 注册表子进程测试启动测试程序集旁边的 apphost，保持与测试进程一致的架构，包括自包含 x86。
 - `runtime-compatibility.yml` 在 Windows、Linux、macOS（x64 和 ARM64）上运行裁剪版与 NativeAOT 程序、标量/SSSE3/AVX2 回退以及 x86。按 CPU 厂商和 ARM32 的运行需要手动触发，并需要带对应标签的自托管 runner。
+- Linux x64 和 ARM64 任务也会验证 Go 和 TypeScript 的 SIMD 与标量路径，并在 .NET 与 Java、Go、TypeScript 之间交换基准模型和字符串边界夹具。Java 的字符串测试启用 Vector API。
 
 ### AVX-512
 

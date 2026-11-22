@@ -352,6 +352,7 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter "Lumi
 | 💡 | [IDE Code Fixes](docs/code-fixes.md) | Included quick actions for generator diagnostics and Fix All |
 | 🎮 | [Unity, IL2CPP & NativeAOT](docs/unity.md) | Unity setup, Burst, trimming |
 | 📐 | [Wire Formats](docs/formats.md) | The binary layout and the JSON representation |
+| 🌐 | [Java, Go, and TypeScript](docs/portable-runtime.md) | Generate bindings and exchange Binary and JSON with .NET |
 | 🗜️ | [Compression](docs/compression.md) | `LuminCompressor`, `[LuminPackCompress]` and the `LUM2` frame |
 | 🛡️ | [Security](docs/security.md) | Portability, untrusted input, encryption |
 

@@ -8,10 +8,14 @@ try
         ContractExport.Write(assemblyPath, manifestPath);
     else if (args is ["generate", ..] && CppGenerateCommand.TryRun(args.AsSpan(1)))
         return 0;
+    else if (args is ["project-portable" or "generate-portable", ..] && PortableGenerateCommand.TryRun(args))
+        return 0;
     else
     {
         Console.Error.WriteLine("Usage: LuminPack.Codegen.Cpp export <assembly.dll> <manifest.json>");
         Console.Error.WriteLine("       LuminPack.Codegen.Cpp generate [--binary-profile <profile>] [--rtti] <manifest.json> <root-type> <output.h>");
+        Console.Error.WriteLine("       LuminPack.Codegen.Cpp project-portable [--binary-profile <profile>] [--native-integer-bytes <4|8>] [--native-scalar-alignment <4|8>] <manifest.json> <root-type> <output.json>");
+        Console.Error.WriteLine("       LuminPack.Codegen.Cpp generate-portable <java|go|typescript> [--binary-profile <profile>] [--native-integer-bytes <4|8>] [--native-scalar-alignment <4|8>] [--package <name>] [--runtime-import <path>] <manifest.json> <root-type> <output>");
         return 2;
     }
     return 0;

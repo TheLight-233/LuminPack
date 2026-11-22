@@ -8,7 +8,7 @@ Pushes to `main` and `refactor`, and pull requests, trigger the hosted checks. T
 | --- | --- |
 | `ci.yml` | Repository checks, the build, codegen and generator contracts, incremental verification, the runtime suite, the Hooks area, wire fixtures and an installation test from freshly packed NuGet packages. Manual runs can add the benchmarks. |
 | `test-areas.yml` | The Safety area in Debug and Release, and the platform adapter contracts, on Windows, Linux and macOS. |
-| `runtime-compatibility.yml` | Trimmed and NativeAOT programs, SIMD fallbacks, x86 and AVX-512 hardware tests. |
+| `runtime-compatibility.yml` | Trimmed and NativeAOT programs, portable runtime interoperability, SIMD fallbacks, x86 and AVX-512 hardware tests. |
 | `unity.yml`, `unity-extensions.yml` | Unity Editor tests, IL2CPP and WebGL players, Unity object and Burst contracts. |
 | `benchmark-matrix.yml` | Round-trip validation of the serialization matrix; timing on manual runs. |
 | `benchmark-matrix-paired.yml` | Manual same-runner comparison of two or three revisions for selected Matrix fixtures, in FullOpts and TieredPGO. |
@@ -20,6 +20,7 @@ Pushes to `main` and `refactor`, and pull requests, trigger the hosted checks. T
 - `test-areas.yml` runs the AspNetCore, Avalonia, Maui, MonoGame and SkiaSharp adapter contracts on all three systems, plus Drawing and Wpf on Windows. Core is built before the adapters because they consume its existing binary.
 - Registry worker tests launch their adjacent apphost to keep the test process architecture, including self-contained x86.
 - `runtime-compatibility.yml` runs trimmed and NativeAOT programs on Windows, Linux and macOS (x64 and ARM64), the scalar/SSSE3/AVX2 fallbacks and x86. Vendor and ARM32 runs are manual and need their labeled self-hosted runners.
+- Linux x64 and ARM64 jobs also test Go and TypeScript SIMD and scalar paths and exchange managed benchmark and string boundary fixtures with Java, Go, and TypeScript. The Java string run uses the Vector API provider.
 
 ### AVX-512
 

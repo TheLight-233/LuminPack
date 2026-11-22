@@ -1,0 +1,351 @@
+//go:build !purego
+
+#include "textflag.h"
+
+TEXT ·asciiPrefixVector(SB), NOSPLIT, $0-32
+	MOVQ src_base+0(FP), SI
+	MOVQ src_len+8(FP), CX
+	XORQ AX, AX
+scan:
+	MOVOU (SI)(AX*1), X0
+	PMOVMSKB X0, DX
+	TESTL DX, DX
+	JNZ nonascii
+	ADDQ $16, AX
+	CMPQ AX, CX
+	JB scan
+	MOVQ AX, ret+24(FP)
+	RET
+nonascii:
+	BSFL DX, DX
+	ADDQ DX, AX
+	MOVQ AX, ret+24(FP)
+	RET
+
+TEXT ·widenLatin1Vector(SB), NOSPLIT, $0-48
+	MOVQ dst_base+0(FP), DI
+	MOVQ src_base+24(FP), SI
+	MOVQ src_len+32(FP), CX
+	PXOR X2, X2
+widen:
+	MOVOU (SI), X0
+	MOVO X0, X1
+	PUNPCKLBW X2, X0
+	PUNPCKHBW X2, X1
+	MOVOU X0, (DI)
+	MOVOU X1, 16(DI)
+	ADDQ $16, SI
+	ADDQ $32, DI
+	SUBQ $16, CX
+	JNZ widen
+	RET
+
+TEXT ·narrowASCIIVector(SB), NOSPLIT, $0-49
+	MOVQ dst_base+0(FP), DI
+	MOVQ src_base+24(FP), SI
+	MOVQ src_len+32(FP), CX
+	PXOR X3, X3
+	PCMPEQB X2, X2
+	PSLLW $7, X2
+narrow:
+	MOVOU (SI), X0
+	MOVOU 16(SI), X1
+	MOVO X0, X4
+	POR X1, X4
+	PAND X2, X4
+	PCMPEQW X3, X4
+	PMOVMSKB X4, DX
+	CMPL DX, $0xffff
+	JNE rejected
+	PACKUSWB X1, X0
+	MOVOU X0, (DI)
+	ADDQ $32, SI
+	ADDQ $16, DI
+	SUBQ $32, CX
+	JNZ narrow
+	MOVB $1, ret+48(FP)
+	RET
+rejected:
+	MOVB $0, ret+48(FP)
+	RET
+
+TEXT ·detectVectorFeatures(SB), NOSPLIT, $0-1
+	MOVL $0, AX
+	CPUID
+	CMPL AX, $7
+	JB unavailable
+	MOVL $1, AX
+	CPUID
+	ANDL $0x18000000, CX
+	CMPL CX, $0x18000000
+	JNE unavailable
+	XORL CX, CX
+	XGETBV
+	MOVL AX, R8
+	ANDL $0x6, R8
+	CMPL R8, $0x6
+	JNE unavailable
+	MOVL AX, R8
+	MOVL $7, AX
+	XORL CX, CX
+	CPUID
+	XORL AX, AX
+	TESTL $0x20, BX
+	JZ check512
+	ORL $1, AX
+check512:
+	ANDL $0xe6, R8
+	CMPL R8, $0xe6
+	JNE returnFeatures
+	ANDL $0x40010000, BX
+	CMPL BX, $0x40010000
+	JNE returnFeatures
+	ORL $2, AX
+returnFeatures:
+	MOVB AX, ret+0(FP)
+	RET
+unavailable:
+	MOVB $0, ret+0(FP)
+	RET
+
+TEXT ·asciiPrefixAVX2(SB), NOSPLIT, $0-32
+	MOVQ src_base+0(FP), SI
+	MOVQ src_len+8(FP), CX
+	XORQ AX, AX
+scan32:
+	VMOVDQU (SI)(AX*1), Y0
+	VPMOVMSKB Y0, DX
+	TESTL DX, DX
+	JNZ nonascii32
+	ADDQ $32, AX
+	CMPQ AX, CX
+	JB scan32
+	MOVQ AX, ret+24(FP)
+	VZEROUPPER
+	RET
+nonascii32:
+	BSFL DX, DX
+	ADDQ DX, AX
+	MOVQ AX, ret+24(FP)
+	VZEROUPPER
+	RET
+
+TEXT ·widenLatin1AVX2(SB), NOSPLIT, $0-48
+	MOVQ dst_base+0(FP), DI
+	MOVQ src_base+24(FP), SI
+	MOVQ src_len+32(FP), CX
+widen32:
+	VPMOVZXBW (SI), Y0
+	VPMOVZXBW 16(SI), Y1
+	VMOVDQU Y0, (DI)
+	VMOVDQU Y1, 32(DI)
+	ADDQ $32, SI
+	ADDQ $64, DI
+	SUBQ $32, CX
+	JNZ widen32
+	VZEROUPPER
+	RET
+
+TEXT ·narrowASCIIAVX2(SB), NOSPLIT, $0-49
+	MOVQ dst_base+0(FP), DI
+	MOVQ src_base+24(FP), SI
+	MOVQ src_len+32(FP), CX
+	VPCMPEQB Y2, Y2, Y2
+	VPSLLW $7, Y2, Y2
+narrow32:
+	VMOVDQU (SI), Y0
+	VMOVDQU 32(SI), Y1
+	VPOR Y1, Y0, Y3
+	VPTEST Y2, Y3
+	JNZ rejected32
+	VPACKUSWB Y1, Y0, Y0
+	VPERMQ $0xd8, Y0, Y0
+	VMOVDQU Y0, (DI)
+	ADDQ $64, SI
+	ADDQ $32, DI
+	SUBQ $64, CX
+	JNZ narrow32
+	MOVB $1, ret+48(FP)
+	VZEROUPPER
+	RET
+rejected32:
+	MOVB $0, ret+48(FP)
+	VZEROUPPER
+	RET
+
+TEXT ·asciiPrefixAVX512(SB), NOSPLIT, $0-32
+	MOVQ src_base+0(FP), SI
+	MOVQ src_len+8(FP), CX
+	XORQ AX, AX
+scan64:
+	VMOVDQU64 (SI)(AX*1), Z0
+	VPMOVB2M Z0, K1
+	KMOVQ K1, DX
+	TESTQ DX, DX
+	JNZ nonascii64
+	ADDQ $64, AX
+	CMPQ AX, CX
+	JB scan64
+	MOVQ AX, ret+24(FP)
+	VZEROUPPER
+	RET
+nonascii64:
+	BSFQ DX, DX
+	ADDQ DX, AX
+	MOVQ AX, ret+24(FP)
+	VZEROUPPER
+	RET
+
+TEXT ·widenLatin1AVX512(SB), NOSPLIT, $0-48
+	MOVQ dst_base+0(FP), DI
+	MOVQ src_base+24(FP), SI
+	MOVQ src_len+32(FP), CX
+widen64:
+	VPMOVZXBW (SI), Z0
+	VPMOVZXBW 32(SI), Z1
+	VMOVDQU64 Z0, (DI)
+	VMOVDQU64 Z1, 64(DI)
+	ADDQ $64, SI
+	ADDQ $128, DI
+	SUBQ $64, CX
+	JNZ widen64
+	VZEROUPPER
+	RET
+
+TEXT ·narrowASCIIAVX512(SB), NOSPLIT, $0-49
+	MOVQ dst_base+0(FP), DI
+	MOVQ src_base+24(FP), SI
+	MOVQ src_len+32(FP), CX
+	MOVL $0xff80, AX
+	VPBROADCASTW AX, Z2
+narrow64:
+	VMOVDQU64 (SI), Z0
+	VMOVDQU64 64(SI), Z1
+	VPORD Z1, Z0, Z3
+	VPTESTMW Z2, Z3, K1
+	KORTESTD K1, K1
+	JNZ rejected64
+	VPMOVWB Z0, (DI)
+	VPMOVWB Z1, 32(DI)
+	ADDQ $128, SI
+	ADDQ $64, DI
+	SUBQ $128, CX
+	JNZ narrow64
+	MOVB $1, ret+48(FP)
+	VZEROUPPER
+	RET
+rejected64:
+	MOVB $0, ret+48(FP)
+	VZEROUPPER
+	RET
+
+TEXT ·jsonLiteralVector(SB), NOSPLIT, $0-32
+	MOVQ src_base+0(FP), SI
+	MOVQ src_len+8(FP), CX
+	XORQ AX, AX
+	PXOR X5, X5
+	MOVQ $0x1f1f1f1f1f1f1f1f, DX
+	MOVQ DX, X2
+	PUNPCKLQDQ X2, X2
+	MOVQ $0x2222222222222222, DX
+	MOVQ DX, X3
+	PUNPCKLQDQ X3, X3
+	MOVQ $0x5c5c5c5c5c5c5c5c, DX
+	MOVQ DX, X4
+	PUNPCKLQDQ X4, X4
+jsonScan:
+	MOVOU (SI)(AX*1), X0
+	MOVO X0, X1
+	MOVO X0, X6
+	MOVO X0, X7
+	PSUBUSB X2, X1
+	PCMPEQB X5, X1
+	PCMPEQB X3, X6
+	PCMPEQB X4, X7
+	POR X6, X1
+	POR X7, X1
+	POR X0, X1
+	PMOVMSKB X1, DX
+	TESTL DX, DX
+	JNZ jsonSpecialByte
+	ADDQ $16, AX
+	CMPQ AX, CX
+	JB jsonScan
+	MOVQ AX, ret+24(FP)
+	RET
+jsonSpecialByte:
+	BSFL DX, DX
+	ADDQ DX, AX
+	MOVQ AX, ret+24(FP)
+	RET
+
+TEXT ·matchPrefixVector(SB), NOSPLIT, $0-56
+	MOVQ a_base+0(FP), SI
+	MOVQ a_len+8(FP), CX
+	MOVQ b_base+24(FP), DI
+	XORQ AX, AX
+match16:
+	MOVOU (SI)(AX*1), X0
+	MOVOU (DI)(AX*1), X1
+	PCMPEQB X1, X0
+	PMOVMSKB X0, DX
+	XORL $0xffff, DX
+	JNZ difference16
+	ADDQ $16, AX
+	CMPQ AX, CX
+	JB match16
+	MOVQ AX, ret+48(FP)
+	RET
+difference16:
+	BSFL DX, DX
+	ADDQ DX, AX
+	MOVQ AX, ret+48(FP)
+	RET
+
+TEXT ·matchPrefixAVX2(SB), NOSPLIT, $0-56
+	MOVQ a_base+0(FP), SI
+	MOVQ a_len+8(FP), CX
+	MOVQ b_base+24(FP), DI
+	XORQ AX, AX
+match32:
+	VMOVDQU (SI)(AX*1), Y0
+	VPCMPEQB (DI)(AX*1), Y0, Y1
+	VPMOVMSKB Y1, DX
+	XORL $-1, DX
+	JNZ difference32
+	ADDQ $32, AX
+	CMPQ AX, CX
+	JB match32
+	MOVQ AX, ret+48(FP)
+	VZEROUPPER
+	RET
+difference32:
+	BSFL DX, DX
+	ADDQ DX, AX
+	MOVQ AX, ret+48(FP)
+	VZEROUPPER
+	RET
+
+TEXT ·matchPrefixAVX512(SB), NOSPLIT, $0-56
+	MOVQ a_base+0(FP), SI
+	MOVQ a_len+8(FP), CX
+	MOVQ b_base+24(FP), DI
+	XORQ AX, AX
+match64:
+	VMOVDQU64 (SI)(AX*1), Z0
+	VPCMPUB $4, (DI)(AX*1), Z0, K1
+	KMOVQ K1, DX
+	TESTQ DX, DX
+	JNZ difference64
+	ADDQ $64, AX
+	CMPQ AX, CX
+	JB match64
+	MOVQ AX, ret+48(FP)
+	VZEROUPPER
+	RET
+difference64:
+	BSFQ DX, DX
+	ADDQ DX, AX
+	MOVQ AX, ret+48(FP)
+	VZEROUPPER
+	RET

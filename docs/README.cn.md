@@ -352,6 +352,7 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter "Lumi
 | 💡 | [IDE 代码修复](code-fixes.cn.md) | 随包提供的生成器诊断快速修复与 Fix All |
 | 🎮 | [Unity、IL2CPP 与 NativeAOT](unity.cn.md) | Unity 配置、Burst、裁剪 |
 | 📐 | [数据格式](formats.cn.md) | 二进制布局与 JSON 表示 |
+| 🌐 | [Java、Go 和 TypeScript](portable-runtime.cn.md) | 生成绑定，与 .NET 互通二进制和 JSON |
 | 🗜️ | [压缩](compression.cn.md) | `LuminCompressor`、`[LuminPackCompress]` 与 `LUM2` 帧格式 |
 | 🛡️ | [安全](security.cn.md) | 可移植性、不可信输入、加密 |
 

@@ -79,6 +79,17 @@ jobs:
           DOTNET_PreferredVectorBitWidth: '512'
         run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 -p:PublishAot=false --filter 'FullyQualifiedName~Latin1VectorTranscoderTest|FullyQualifiedName~ConsecutiveMediumRecordsMatchIndividualWrites|FullyQualifiedName~Utf8BmpTranscoderTest|FullyQualifiedName~StringSerializerFallback|FullyQualifiedName~StringSerializerOptionsTest|FullyQualifiedName~ShortAsciiTranscoderTest|FullyQualifiedName~AuditSafetyRegressionTest|FullyQualifiedName~CompressionSafetyPerf|FullyQualifiedName~LuminLayoutConverterTest|FullyQualifiedName~LuminStorageTagTest|FullyQualifiedName~PortableTransferTest|FullyQualifiedName~MarshalCopyBlockTest|FullyQualifiedName~RawScalarSpanSafetyTest|FullyQualifiedName~TruncatedFixedHeaderTest'
 
+      - uses: actions/setup-go@v5
+        if: steps.hardware.outputs.supported == 'true'
+        with:
+          go-version-file: src/LuminPack.Go/go.mod
+          cache: false
+      - name: Exercise the Go kernels on AVX-512 hardware
+        if: steps.hardware.outputs.supported == 'true'
+        env:
+          LUMINPACK_REQUIRE_AVX512: '1'
+        working-directory: src/LuminPack.Go
+        run: go test -count=1 ./...
 
       - name: Record successful hardware execution
         if: steps.hardware.outputs.supported == 'true'
@@ -117,6 +128,47 @@ jobs:
             exit 0
           fi
           echo 'AVX-512 hardware tests: passed on supported hardware.' >> "$GITHUB_STEP_SUMMARY"
+
+  portable-runtimes:
+    if: github.event_name != 'workflow_dispatch' || !inputs.avx512_only
+    name: Portable runtimes (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          dotnet-version: 10.0.x
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: src/LuminPack.Go/go.mod
+          cache: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify native and scalar Go kernels
+        working-directory: src/LuminPack.Go
+        run: |
+          go test -count=1 ./...
+          go test -count=1 -tags purego ./...
+      - name: Verify TypeScript SIMD and fallback paths
+        working-directory: src/LuminPack.TypeScript
+        run: |
+          npm ci
+          npm test
+      - name: Exchange managed benchmark and string boundary fixtures
+        run: |
+          python3 tests/LuminPack.Tests.Portable/verify.py --suite benchmarks
+          python3 tests/LuminPack.Tests.Portable/verify.py --suite strings --java-vector
 
   instruction-sets:
     if: github.event_name != 'workflow_dispatch' || !inputs.avx512_only
