@@ -45,7 +45,7 @@ internal sealed partial class CppEmitter
             if (element.GetProperty("nullableEncoding").GetInt32() != 0)
                 return BindNullableBlock(element, profile, label);
             if (Text(element, "definition") == PairDefinition)
-                CheckPairCollection(element, label);
+                return Sequence(BindPair(element, profile, label, collection: true));
             return Sequence(BindFormatter(element, profile, label));
         }
         if (definition == "System.Collections.Generic.Dictionary")

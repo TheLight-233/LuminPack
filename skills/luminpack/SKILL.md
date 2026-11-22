@@ -17,7 +17,7 @@ Use `json_record_member` for named C++ DTO properties. The stock reader and writ
 
 For C++ struct interchange, generate from Next's storage plan. Packed values and standalone values from multi-model Tagged contracts use the packed field order. Nonempty multi-model Tagged arrays and lists carry a layout tag. Match the target's C++ size and offsets to the exported CLR model before copying Native bytes, including padding.
 
-Use `pair_codec` for .NET `KeyValuePair<TKey, TValue>` fields and dictionary values represented as `std::pair`. It writes the key and value in order, and JSON uses `[key,value]`. Generated pair arrays and lists require element-wise encoding, proven unpadded fixed-width storage, or a matching Packed plan.
+Use `pair_codec` for .NET `KeyValuePair<TKey, TValue>` fields and dictionary values represented as `std::pair`. It writes the key and value in order, and JSON uses `[key,value]`. Generated pair arrays and lists use element-wise encoding, proven unpadded fixed-width storage, a matching Packed plan, or an exported multi-model Tagged plan for supported scalars. Tagged pair collections accept each exported tag and write the canonical model.
 
 Generated models do not require a runtime plan or formatter witness supplied by the caller. Operation plans are internal source-generator data; they do not add a runtime API or dispatch layer.
 

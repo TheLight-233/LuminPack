@@ -8,8 +8,9 @@ internal sealed partial class CppEmitter
     /// <param name="formatter">The normalized CLR pair formatter.</param>
     /// <param name="profile">The effective binary profile.</param>
     /// <param name="label">The member or type used in diagnostics.</param>
+    /// <param name="collection">Whether the pair is an element of a binary array or list.</param>
     /// <returns>The C++ pair type and codecs.</returns>
-    private Binding BindPair(JsonElement formatter, int profile, string label)
+    private Binding BindPair(JsonElement formatter, int profile, string label, bool collection = false)
     {
         JsonElement components = formatter.GetProperty("arguments");
         if (components.GetArrayLength() != 2 || Flag(formatter, "raw"))
@@ -19,21 +20,22 @@ internal sealed partial class CppEmitter
         Binding value = BindFormatter(components[1], profile, label);
         string binary = Apply("luminpack::pair_codec", new[] { key.Binary, value.Binary });
         string json = Apply("luminpack::json_pair_codec", new[] { key.Json, value.Json });
-        return new Binding(binary + "::value_type", binary, json);
+        string? sequence = collection ? PairCollection(formatter, components, key.Binary, value.Binary, label) : null;
+        return new Binding(binary + "::value_type", binary, json, SequenceBinary: sequence);
     }
 
-    /// <summary>Checks when CLR pair collection storage equals the standalone field stream.</summary>
+    /// <summary>Checks ordinary pair collection storage or binds the exported Tagged models.</summary>
     /// <param name="formatter">The normalized CLR pair element.</param>
+    /// <param name="components">The normalized key and value formatters.</param>
+    /// <param name="key">The emitted Binary key codec.</param>
+    /// <param name="value">The emitted Binary value codec.</param>
     /// <param name="label">The collection used in diagnostics.</param>
-    private static void CheckPairCollection(JsonElement formatter, string label)
+    /// <returns>The specialized Tagged block codec, or null for element-wise Binary.</returns>
+    private static string? PairCollection(JsonElement formatter, JsonElement components, string key, string value, string label)
     {
         JsonElement layout = formatter.GetProperty("layout");
         if (layout.ValueKind == JsonValueKind.Null && !Flag(formatter, "rawCollection"))
-            return;
-
-        JsonElement components = formatter.GetProperty("arguments");
-        if (components.GetArrayLength() != 2)
-            throw Missing(label, "an incomplete KeyValuePair element contract");
+            return null;
 
         int keyWidth = PairScalarWidth(components[0]);
         int valueWidth = PairScalarWidth(components[1]);
@@ -41,20 +43,39 @@ internal sealed partial class CppEmitter
         {
             // A CLR pair has consecutive key and value fields. Equal scalar sizes require no intervening or tail padding.
             if (layout.ValueKind == JsonValueKind.Null && keyWidth == valueWidth)
-                return;
+                return null;
 
-            if (layout.ValueKind == JsonValueKind.Object && !Flag(layout, "tagged"))
+            if (layout.ValueKind == JsonValueKind.Object && layout.GetProperty("wireSize").GetInt32() == keyWidth + valueWidth)
             {
                 JsonElement fields = layout.GetProperty("fields");
-                if (fields.GetArrayLength() == 2 && Text(fields[0], "name") == "key" && Text(fields[1], "name") == "value" &&
-                    fields[0].GetProperty("storage").GetProperty("wireSize").GetInt32() == keyWidth &&
-                    fields[1].GetProperty("storage").GetProperty("wireSize").GetInt32() == valueWidth &&
-                    layout.GetProperty("wireSize").GetInt32() == keyWidth + valueWidth)
-                    return;
+                if (fields.GetArrayLength() == 2 && PairFieldMatches(fields[0], components[0], "key", keyWidth) &&
+                    PairFieldMatches(fields[1], components[1], "value", valueWidth))
+                {
+                    if (!Flag(layout, "tagged"))
+                        return null;
+
+                    StorageLeaf[] leaves = [new(string.Empty, keyWidth, false), new(string.Empty, valueWidth, false)];
+                    StorageModel[] models = StorageModels(layout, leaves, keyWidth + valueWidth, label, tagged: true);
+                    return Apply("luminpack::tagged_pair_list_codec", new[] { key, value }.Concat(
+                        models.Select(static model => "luminpack::storage_model<2>" + ModelInitializer(model))));
+                }
             }
         }
 
-        throw Missing(label, "a KeyValuePair collection with tagged, padded, or unproven CLR storage");
+        throw Missing(label, "a KeyValuePair collection with padded or unproven CLR storage");
+    }
+
+    /// <summary>Verifies that a pair storage leaf represents the corresponding closed formatter.</summary>
+    /// <param name="field">The physical field in the CLR storage plan.</param>
+    /// <param name="component">The matching key or value formatter.</param>
+    /// <param name="name">The expected field name.</param>
+    /// <param name="width">The formatter's fixed wire width.</param>
+    /// <returns>Whether the field has the required scalar storage.</returns>
+    private static bool PairFieldMatches(JsonElement field, JsonElement component, string name, int width)
+    {
+        JsonElement storage = field.GetProperty("storage");
+        return Text(field, "name") == name && !Flag(field, "volatile") && storage.GetProperty("fields").GetArrayLength() == 0 &&
+            Normalize(Text(storage, "type")) == Normalize(Text(component, "type")) && storage.GetProperty("wireSize").GetInt32() == width;
     }
 
     /// <summary>Finds the width of a portable scalar or enum in a pair's storage proof.</summary>

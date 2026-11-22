@@ -19,6 +19,8 @@ internal static class Program
     {
         var expected = new PairPacket
         {
+            TaggedArray = [new(39, 0x0102030405060708), new(-500, long.MaxValue)],
+            TaggedList = [new(-42, 0x1122334455667788)],
             Uneven = new(0x51, 0x11223344),
             Wide = new(-17, long.MinValue),
             Text = new(null, -3),
@@ -28,7 +30,6 @@ internal static class Program
             ByKey = new() { [76] = new(0x27, -100) },
 #if LUMINPACK_CPP_PAIR_PACKED
             PaddedArray = [new(0x99, -11), new(0x32, 0x01020304)],
-            TaggedList = [new(-42, 0x1122334455667788)],
 #endif
         };
 
@@ -44,6 +45,9 @@ internal static class Program
         {
             Verify(LuminPackSerializer.Deserialize<PairPacket>(File.ReadAllBytes(Path.Combine(input, "pair.bin"))), expected);
             Verify(LuminPackSerializer.DeserializeJson<PairPacket>(File.ReadAllBytes(Path.Combine(input, "pair.json"))), expected);
+#if !LUMINPACK_CPP_PAIR_PACKED
+            Verify(LuminPackSerializer.Deserialize<PairPacket>(File.ReadAllBytes(Path.Combine(input, "pair-alternate.bin"))), expected);
+#endif
             Console.WriteLine(".NET verified the C++ KeyValuePair Binary and JSON documents.");
             return 0;
         }
@@ -67,6 +71,8 @@ internal static class Program
 [LuminPackable]
 public partial class PairPacket
 {
+    public KeyValuePair<int, long>[] TaggedArray { get; set; } = [];
+    public List<KeyValuePair<int, long>> TaggedList { get; set; } = [];
     public KeyValuePair<byte, int> Uneven { get; set; }
     public KeyValuePair<int, long> Wide { get; set; }
     public KeyValuePair<string?, int?> Text { get; set; }
@@ -76,7 +82,6 @@ public partial class PairPacket
     public Dictionary<int, KeyValuePair<byte, int>> ByKey { get; set; } = [];
 #if LUMINPACK_CPP_PAIR_PACKED
     public KeyValuePair<byte, int>[] PaddedArray { get; set; } = [];
-    public List<KeyValuePair<int, long>> TaggedList { get; set; } = [];
 #endif
 }
 
@@ -85,11 +90,4 @@ public partial class PairPacket
 public partial class PaddedPairBlock
 {
     public KeyValuePair<byte, int>[] Values { get; set; } = [];
-}
-
-/// <summary>Contains a multi-model CLR collection with a layout tag under the default options.</summary>
-[LuminPackable]
-public partial class TaggedPairBlock
-{
-    public List<KeyValuePair<int, long>> Values { get; set; } = [];
 }
