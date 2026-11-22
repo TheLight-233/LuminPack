@@ -54,7 +54,7 @@ int main()
 
 用 `scalar_codec`、`boolean_codec` 和 `enum_codec` 读写定宽值。`list_codec` 适用于采用相同元素表示的一维数组与 List。数值与枚举列表校验完整范围后一次复制。`dictionary_codec` 写入数量及键值序列。内部的无序映射保留键值语义。需要重现另一端的枚举顺序时，向 `write_entries` 传入按目标顺序排列且键唯一的键值序列。
 
-`nullable_codec` 用 `std::optional<T>` 表示带标记的 `Nullable<T>` 字段。定宽 Version 字段的第二个模板参数是描述符给出的总宽度。`nullable_storage_codec` 和 `nullable_list_codec` 用 CLR 的步长和偏移描述原生字典值与连续可空集合。读取先校验整个范围及布尔标记，再转换为 C++ 值。多模型 Tagged 集合接受导出的每个标签，并以规范模型写出。Native 集合要求两端的 CLR 布局一致。
+`nullable_codec` 用 `std::optional<T>` 表示带标记的 `Nullable<T>` 字段。定宽 Version 字段的第二个模板参数是描述符给出的总宽度。`nullable_storage_codec` 和 `nullable_list_codec` 用 CLR 的步长和偏移描述原生字典值与连续可空集合。读取先校验整个范围及布尔标记，再转换为 C++ 值。多模型 Tagged 集合接受导出的每个标签，并以规范模型写出。对于 Native 存储，生成代码在编译时核对目标 ABI 的存在标记偏移、载荷偏移和步长，要求它们与导出的 CLR 布局匹配。两端须使用相同的布局。
 
 `pair_codec` 将 .NET 的 `KeyValuePair<TKey, TValue>` 字段或字典值映射为 `std::pair`。二进制按键、值顺序写入，JSON 使用 `[key,value]`。生成的一维数组和 List 支持逐元素编码、无填充的定宽键值对，以及存储方案匹配的 Packed 键值对。对于定宽数值、字符或枚举组成的多模型 Tagged 键值对，`tagged_pair_list_codec` 接受所有已导出的布局标签，写入时将字段转换到 CLR 的规范模型。
 

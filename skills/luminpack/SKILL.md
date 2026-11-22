@@ -33,6 +33,8 @@ For a proven padded headerless CLR pair or tuple, use its generated aggregate. T
 
 Generated `Memory<T>`, `ReadOnlyMemory<T>`, and supported `ReadOnlySequence<T>` decode into owning vectors. Generated `ArraySegment<T>` and `ImmutableArray<T>` use optional vectors to preserve the difference between the default value and an empty collection.
 
+Generated Native nullable slots require one exported CLR model that matches the target ABI's flag offset, payload offset and stride. Use the same layout at both endpoints, including when the process architectures differ.
+
 Generated models do not require a runtime plan or formatter witness supplied by the caller. Operation plans are internal source-generator data; they do not add a runtime API or dispatch layer.
 
 JSON property-name lookup is generated automatically: sparse length groups use exact comparisons, and dense groups use a shared seed-zero hash followed by exact comparison. Generated hash calls use `XxHash3.Hash64(ref byte, uint)` over a validated range, without pointers or pinning. Do not persist these internal hashes; rebuild generated consumers with the matching Core after an algorithm change. See [JSON name lookup](../../docs/json-name-lookup.md).

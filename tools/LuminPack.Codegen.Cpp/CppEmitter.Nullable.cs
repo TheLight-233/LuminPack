@@ -65,7 +65,10 @@ internal sealed partial class CppEmitter
                 if (native.GetBoolean())
                 {
                     var storage = NullableStorage(valueFormatter, profile, label);
-                    string codec = Apply("luminpack::nullable_storage_codec", new[] { storage.Payload.Binary, NativeModel(storage.Models) });
+                    string codec = Apply("luminpack::nullable_storage_codec", new[]
+                    {
+                        storage.Payload.Binary, UntaggedNullableModel(valueFormatter, storage.Payload, storage.Models, label)
+                    });
                     value = value with { Binary = codec };
                 }
             }
@@ -97,7 +100,7 @@ internal sealed partial class CppEmitter
         string[] layouts = encoding switch
         {
             1 => storage.Models,
-            2 => [NativeModel(storage.Models)],
+            2 => [UntaggedNullableModel(element, storage.Payload, storage.Models, label)],
             _ => throw Missing(label, "an unknown nullable storage encoding")
         };
         string codec = Apply("luminpack::nullable_list_codec", new[] { storage.Payload.Binary }.Concat(layouts));
@@ -138,9 +141,17 @@ internal sealed partial class CppEmitter
         return (BindFormatter(item, profile, label), models);
     }
 
-    /// <summary>Selects the CLR native model for the shared process width.</summary>
-    /// <param name="models">The validated 64-bit and optional 32-bit storage models.</param>
-    /// <returns>The C++ model expression without a tag.</returns>
-    private static string NativeModel(string[] models) => models.Length == 1 ? models[0] :
-        "(sizeof(void*) == 8 ? " + models[0] + " : " + models[1] + ")";
+    /// <summary>Uses the target ABI proof for Native and the single exported layout for a tag-free Tagged slot.</summary>
+    /// <param name="element">The normalized nullable formatter.</param>
+    /// <param name="payload">The scalar or enum payload binding.</param>
+    /// <param name="models">The exported CLR layout alternatives.</param>
+    /// <param name="label">The consuming field used in diagnostics.</param>
+    /// <returns>The selected layout expression.</returns>
+    private static string UntaggedNullableModel(JsonElement element, Binding payload, string[] models, string label) =>
+        element.GetProperty("nullableEncoding").GetInt32() switch
+        {
+            2 => Apply("luminpack::detail::select_native_nullable_layout", new[] { payload.Binary }.Concat(models)) + "()",
+            1 when models.Length == 1 => models[0],
+            _ => throw Missing(label, "an untagged nullable field without proven CLR storage")
+        };
 }

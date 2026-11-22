@@ -15,6 +15,8 @@ void check_alternate_layout()
     using wide = scalar_codec<std::int64_t>;
     constexpr nullable_storage_layout model64{16, 0, 8};
     constexpr nullable_storage_layout model32{12, 0, 4};
+    static_assert(detail::select_native_nullable_layout<wide, model64, model32>() ==
+        detail::select_native_nullable_layout<wide, model32, model64>());
     using list = nullable_list_codec<wide, model64, model32>;
 
     std::array<std::byte, 64> buffer{};

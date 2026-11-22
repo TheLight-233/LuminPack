@@ -51,6 +51,8 @@ struct nullable_storage_layout
     std::size_t presence;
     std::size_t payload;
 
+    constexpr bool operator==(const nullable_storage_layout&) const noexcept = default;
+
     constexpr bool valid(std::size_t width) const noexcept
     {
         return presence < stride && payload < stride && width <= stride - payload &&
@@ -60,6 +62,24 @@ struct nullable_storage_layout
 
 namespace detail
 {
+/// Binds headerless Native storage to the modeled flag and payload layout on the target ABI.
+template<class Payload, nullable_storage_layout... Models>
+[[nodiscard]] consteval nullable_storage_layout select_native_nullable_layout() noexcept
+{
+    struct native_storage
+    {
+        std::uint8_t presence;
+        typename Payload::value_type payload;
+    };
+    static_assert(std::is_standard_layout_v<native_storage>);
+    constexpr nullable_storage_layout local{
+        sizeof(native_storage), offsetof(native_storage, presence), offsetof(native_storage, payload)
+    };
+    static_assert((std::size_t{0} + ... + (Models == local ? 1u : 0u)) == 1,
+        "The C++ nullable storage layout must match exactly one exported CLR Native model.");
+    return local;
+}
+
 template<class Payload>
 struct nullable_storage_record
 {

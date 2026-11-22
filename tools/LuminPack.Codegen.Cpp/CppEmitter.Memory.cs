@@ -65,9 +65,10 @@ internal sealed partial class CppEmitter
             if (native.GetBoolean())
             {
                 var storage = NullableStorage(element, profile, label);
-                if (storage.Models.Length != 1)
-                    throw Missing(label, "an untagged nullable sequence element without a unique proven CLR layout");
-                string codec = Apply("luminpack::nullable_storage_codec", new[] { storage.Payload.Binary, storage.Models[0] });
+                string codec = Apply("luminpack::nullable_storage_codec", new[]
+                {
+                    storage.Payload.Binary, UntaggedNullableModel(element, storage.Payload, storage.Models, label)
+                });
                 item = item with { Binary = codec };
             }
         }

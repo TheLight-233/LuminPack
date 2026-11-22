@@ -37,9 +37,9 @@ internal static class Program
             Pairs = MakeSequence(new KeyValuePair<int, byte>(-123, 0x41), new(922, 0x62)),
             Tuples = MakeSequence((0x11223344, (byte)1), (-933, (byte)2)),
             SmallNullable = MakeSequence((int?)null, (int?)712),
+            WideNullable = MakeSequence((long?)null, (long?)0x1122334455667788),
             BooleanNullable = MakeSequence((bool?)null, (bool?)true),
 #if !LUMINPACK_CPP_SEQUENCE_NATIVE
-            WideNullable = MakeSequence((long?)null, (long?)0x1122334455667788),
             WidePairs = MakeSequence(new KeyValuePair<byte, long>(0x41, -123), new(0x62, 0x1122334455667788)),
             WideTuples = MakeSequence((0x11223344, -25L), (-933, 0x1122334455667788L)),
             NestedTuples = MakeSequence(((true, 0x112233u), -25L), ((false, 0x11223344u), 0x1122334455667788L)),
@@ -112,24 +112,15 @@ public sealed partial class SequencePacket
     public ReadOnlySequence<KeyValuePair<int, byte>> Pairs;
     public ReadOnlySequence<(int, byte)> Tuples;
     public ReadOnlySequence<int?> SmallNullable;
+    public ReadOnlySequence<long?> WideNullable;
     public ReadOnlySequence<bool?> BooleanNullable;
     public ReadOnlySequence<TaggedItem> Empty;
 #if !LUMINPACK_CPP_SEQUENCE_NATIVE
-    public ReadOnlySequence<long?> WideNullable;
     public ReadOnlySequence<KeyValuePair<byte, long>> WidePairs;
     public ReadOnlySequence<(int, long)> WideTuples;
     public ReadOnlySequence<((bool, uint), long)> NestedTuples;
 #endif
 }
-
-#if LUMINPACK_CPP_SEQUENCE_NATIVE
-/// <summary>Exercises the diagnostic for an untagged nullable without a unique storage layout.</summary>
-[LuminPackable]
-public sealed partial class AmbiguousNativeNullableSequence
-{
-    public ReadOnlySequence<long?> Values;
-}
-#endif
 
 [LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Tagged)]
 public partial struct TaggedItem

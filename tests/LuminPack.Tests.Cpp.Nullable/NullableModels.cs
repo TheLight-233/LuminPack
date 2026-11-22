@@ -1,3 +1,5 @@
+using System.Buffers;
+using System.Collections.Immutable;
 using LuminPack.Attribute;
 
 #if LUMINPACK_CPP_TEST_PACKED
@@ -12,6 +14,7 @@ namespace LuminPackCppFixtures;
 [LuminPackable]
 public partial class CppNullablePacket
 {
+    public long?[] WideArray { get; set; } = [];
     public int? Value { get; set; }
     public long? Absent { get; set; }
     public CppMode? Mode { get; set; }
@@ -21,17 +24,28 @@ public partial class CppNullablePacket
     public int?[]? NullArray { get; set; }
     public Dictionary<int, int?> ValuesById { get; set; } = new();
     public Dictionary<int, long?> WideById { get; set; } = new();
+    public Memory<long?> WideMemory { get; set; }
+    public ReadOnlyMemory<long?> WideReadOnlyMemory { get; set; }
+    public ArraySegment<long?> WideSegment { get; set; }
+    public ImmutableArray<long?> WideImmutable { get; set; }
+    public ReadOnlySequence<long?> WideSequence { get; set; }
 
     /// <summary>Builds a fixed fixture containing nulls, boundary values and gaps between populated elements.</summary>
     /// <returns>The managed fixture.</returns>
     internal static CppNullablePacket Create() => new()
     {
+        WideArray = [0x1122334455667788, null],
         Value = int.MinValue,
         Mode = CppMode.High,
         Flags = [null, false, true, null],
         Longs = [null, long.MaxValue, long.MinValue, null],
         ValuesById = { [7] = null, [19] = int.MaxValue },
-        WideById = { [13] = long.MinValue }
+        WideById = { [13] = long.MinValue },
+        WideMemory = new long?[] { null, long.MaxValue },
+        WideReadOnlyMemory = new long?[] { long.MinValue, null },
+        WideSegment = new ArraySegment<long?>([0, null, 17, 0], 1, 2),
+        WideImmutable = [null, -17],
+        WideSequence = new ReadOnlySequence<long?>(new long?[] { 0x1122334455667788, null })
     };
 }
 
