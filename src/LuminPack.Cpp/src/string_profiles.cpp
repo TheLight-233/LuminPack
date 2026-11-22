@@ -3,6 +3,7 @@
 #include "cpu_isa.h"
 #include "latin1.h"
 #include <luminpack/detail/unicode.h>
+#include "short_ascii.h"
 #include "utf8_ascii_read.h"
 #include "utf8_runs.h"
 
@@ -254,72 +255,21 @@ void widen_short_latin1(std::span<const std::byte> payload, char16_t* target) no
     }
 }
 
-bool is_ascii(__m128i chars) noexcept
-{
-    const auto high = _mm_and_si128(chars, _mm_set1_epi16(-128));
-    return _mm_movemask_epi8(_mm_cmpeq_epi16(high, _mm_setzero_si128())) == 0xffff;
-}
-
-bool try_encode_short_ascii(std::span<const char16_t> text, std::span<std::byte> payload) noexcept
-{
-    const auto length = text.size();
-#if defined(LUMINPACK_CPP_AVX2)
-    if (length > 16)
-        return detail::try_encode_medium_ascii(text, payload);
 #endif
 
-    // Validate both bounded loads before storing either overlapping group.
-    if (length < 8)
-    {
-        const auto tail = length - 4;
-        std::uint64_t first;
-        std::uint64_t last;
-        std::memcpy(&first, text.data(), sizeof(first));
-        std::memcpy(&last, text.data() + tail, sizeof(last));
-        const auto chars = _mm_set_epi64x(static_cast<std::int64_t>(last), static_cast<std::int64_t>(first));
-        if (!is_ascii(chars))
-            return false;
-        const auto packed = static_cast<std::uint64_t>(_mm_cvtsi128_si64(_mm_packus_epi16(chars, chars)));
-        const auto head = static_cast<std::uint32_t>(packed);
-        const auto end = static_cast<std::uint32_t>(packed >> 32);
-        std::memcpy(payload.data(), &head, sizeof(head));
-        std::memcpy(payload.data() + tail, &end, sizeof(end));
-    }
-    else
-    {
-        const auto tail = length - 8;
-        __m128i first;
-        __m128i last;
-        std::memcpy(&first, text.data(), sizeof(first));
-        std::memcpy(&last, text.data() + tail, sizeof(last));
-        if (!is_ascii(_mm_or_si128(first, last)))
-            return false;
-        const auto packed = _mm_packus_epi16(first, last);
-        const auto head = _mm_cvtsi128_si64(packed);
-        const auto end = _mm_cvtsi128_si64(_mm_unpackhi_epi64(packed, packed));
-        std::memcpy(payload.data(), &head, sizeof(head));
-        std::memcpy(payload.data() + tail, &end, sizeof(end));
-    }
-    return true;
-}
-
+#if defined(LUMINPACK_CPP_INLINE_SSE2) || defined(LUMINPACK_CPP_SHORT_ASCII_NEON)
 bool try_write_short_ascii_utf8(writer& output, std::u16string_view text)
 {
     constexpr auto header_size = sizeof(std::uint64_t);
-#if defined(LUMINPACK_CPP_AVX2)
-    constexpr std::size_t max_length = 32;
-#else
-    constexpr std::size_t max_length = 16;
-#endif
     const auto length = text.size();
-    if (length < 4 || length > max_length || output.remaining() < header_size + length || text.front() > 0x7f)
+    if (length < 4 || length > detail::short_ascii_max_length || output.remaining() < header_size + length || text.front() > 0x7f)
         return false;
 
     writer next = output;
     const auto record = next.reserve(header_size + length);
     const auto payload = record.subspan(header_size);
     const auto source = std::span(text.data(), length);
-    if (detail::overlaps(std::as_bytes(source), payload) || !try_encode_short_ascii(source, payload))
+    if (detail::overlaps(std::as_bytes(source), payload) || !detail::try_encode_short_ascii<false>(source, payload))
         return false;
 
     // The byte count and UTF-16 code-unit count are equal for ASCII.
@@ -509,7 +459,7 @@ void write_string(writer& output, string_profile profile, std::optional<std::u16
         return;
     }
 
-#if defined(LUMINPACK_CPP_INLINE_SSE2)
+#if defined(LUMINPACK_CPP_INLINE_SSE2) || defined(LUMINPACK_CPP_SHORT_ASCII_NEON)
     if (profile == string_profile::utf8_length && value && try_write_short_ascii_utf8(output, *value))
         return;
 #endif

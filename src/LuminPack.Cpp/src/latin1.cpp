@@ -225,13 +225,6 @@ std::int32_t write_medium_utf16_payload(std::span<const char16_t> source, std::s
 }
 #endif
 
-#if defined(LUMINPACK_CPP_AVX2)
-bool try_encode_medium_ascii(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
-{
-    return has_avx2() && try_encode_medium_ascii_avx2(source, destination);
-}
-#endif
-
 void widen_latin1(std::span<const std::byte> source, std::span<char16_t> destination) noexcept
 {
 #if defined(LUMINPACK_CPP_AVX512BW)

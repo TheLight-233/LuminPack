@@ -1,4 +1,5 @@
 #include "latin1.h"
+#include "short_ascii.h"
 
 #include <algorithm>
 #include <cstring>
@@ -37,9 +38,8 @@ void store_narrowed(std::byte* destination, __m256i first, __m256i second) noexc
     std::memcpy(destination, &ordered, sizeof(ordered));
 }
 
-void store_narrowed_halves(std::byte* destination, std::size_t tail, __m256i first, __m256i last) noexcept
+void store_narrowed_halves(std::byte* destination, std::size_t tail, __m256i packed) noexcept
 {
-    const auto packed = narrow_validated(first, last);
     const auto low = _mm256_castsi256_si128(packed);
     const auto high = _mm256_extracti128_si256(packed, 1);
     std::memcpy(destination, &low, sizeof(low));
@@ -66,6 +66,7 @@ void widen_block(const std::byte* source, char16_t* destination) noexcept
 }
 }
 
+template<bool EscapeJson>
 bool try_encode_medium_ascii_avx2(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
 {
     const auto tail = source.size() - 16;
@@ -73,9 +74,21 @@ bool try_encode_medium_ascii_avx2(std::span<const char16_t> source, std::span<st
     const auto last = load256(source.data() + tail);
     if (!is_ascii(_mm256_or_si256(first, last)))
         return false;
-    store_narrowed_halves(destination.data(), tail, first, last);
+    const auto packed = narrow_validated(first, last);
+    if constexpr (EscapeJson)
+    {
+        const auto controls = _mm256_cmpgt_epi8(_mm256_set1_epi8(0x20), packed);
+        const auto punctuation = _mm256_or_si256(_mm256_cmpeq_epi8(packed, _mm256_set1_epi8('"')),
+            _mm256_cmpeq_epi8(packed, _mm256_set1_epi8('\\')));
+        if (_mm256_movemask_epi8(_mm256_or_si256(controls, punctuation)) != 0)
+            return false;
+    }
+    store_narrowed_halves(destination.data(), tail, packed);
     return true;
 }
+
+template bool try_encode_medium_ascii_avx2<false>(std::span<const char16_t>, std::span<std::byte>) noexcept;
+template bool try_encode_medium_ascii_avx2<true>(std::span<const char16_t>, std::span<std::byte>) noexcept;
 
 std::size_t encode_ascii_prefix_avx2(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
 {
@@ -162,7 +175,7 @@ std::int32_t write_medium_utf16_payload_avx2(std::span<const char16_t> source, s
         const auto last_block = load256(chars + last);
         if (is_latin1(_mm256_or_si256(first, last_block)))
         {
-            store_narrowed_halves(payload, last, first, last_block);
+            store_narrowed_halves(payload, last, narrow_validated(first, last_block));
             return raw_size | 1;
         }
         std::memcpy(payload, chars, 32);

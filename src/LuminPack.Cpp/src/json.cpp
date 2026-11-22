@@ -3,6 +3,7 @@
 
 #include "json_scan.h"
 #include "latin1.h"
+#include "short_ascii.h"
 
 namespace luminpack
 {
@@ -544,6 +545,22 @@ void basic_json_writer<Encoding>::write_string(std::u16string_view value)
     if (output_.remaining() < 2 * quote_bytes)
         detail::short_output();
     auto room = (output_.remaining() - 2 * quote_bytes) / sizeof(unit);
+    if constexpr (Encoding == json_encoding::utf8 && detail::short_ascii_max_length != 0)
+    {
+        const auto length = value.size();
+        if (length >= 4 && length <= detail::short_ascii_max_length && length <= room && value.front() <= 0x7f)
+        {
+            writer next = output_;
+            auto record = next.reserve(length + 2);
+            // The SIMD kernel captures both input groups before writing an overlapping payload.
+            if (detail::try_encode_short_ascii<true>(std::span(value), record.subspan(1, length)))
+            {
+                record.front() = record.back() = std::byte{'"'};
+                output_ = next;
+                return;
+            }
+        }
+    }
     const auto initial_room = room;
     const auto content = std::as_bytes(std::span(value.data(), value.size()));
     std::size_t literal_prefix = 0;

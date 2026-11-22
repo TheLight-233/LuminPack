@@ -60,6 +60,62 @@ void text_round_trip(const std::u16string& text)
         "String write changed its canary.");
 }
 
+void short_utf8_text()
+{
+    constexpr auto utf8 = luminpack::json_encoding::utf8;
+    constexpr auto canary = std::byte{0xcc};
+    for (std::size_t length = 4; length <= 32; ++length)
+    {
+        std::u16string plain(length, u'A');
+        for (std::size_t index = 0; index < length; ++index)
+            plain[index] = static_cast<char16_t>(u'A' + (index % 26));
+        text_round_trip<utf8>(plain);
+
+        for (const std::size_t offset : {0u, 1u, 3u})
+        {
+            alignas(char16_t) std::array<char16_t, 34> overlap{};
+            std::ranges::copy(plain, overlap.begin());
+            auto bytes = std::as_writable_bytes(std::span(overlap));
+            const auto output = bytes.subspan(offset, length + 2);
+            const auto next = bytes[offset + output.size()];
+            luminpack::basic_json_writer<utf8> writer(output);
+            writer.write_string(std::u16string_view(overlap.data(), length));
+            auto expected = std::string(1, '"');
+            for (char16_t unit : plain)
+                expected.push_back(static_cast<char>(unit));
+            expected.push_back('"');
+            require(std::ranges::equal(writer.written(), std::as_bytes(std::span(expected))),
+                "Short overlapping UTF-8 string write changed its wire bytes.");
+            require(bytes[offset + output.size()] == next, "Short overlapping UTF-8 string wrote past its end.");
+        }
+
+        for (std::size_t index = 0; index < length; ++index)
+        {
+            for (const auto special : {u'\0', u'\x1f', u'"', u'\\', u'\u0080', u'\u805c'})
+            {
+                plain[index] = special;
+                text_round_trip<utf8>(plain);
+
+                std::array<std::byte, 35> storage;
+                storage.fill(canary);
+                luminpack::basic_json_writer<utf8> writer(std::span{storage}.subspan(1, length + 2));
+                try
+                {
+                    writer.write_string(plain);
+                    throw std::runtime_error("UTF-8 string write accepted a short output window.");
+                }
+                catch (const std::length_error&)
+                {
+                    require(writer.written().empty(), "Failed UTF-8 string write published output.");
+                    require(std::ranges::all_of(storage, [=](std::byte byte) { return byte == canary; }),
+                        "Failed UTF-8 string write modified the output window.");
+                }
+            }
+            plain[index] = static_cast<char16_t>(u'A' + (index % 26));
+        }
+    }
+}
+
 void validated_text()
 {
     constexpr auto utf8 = luminpack::json_encoding::utf8;
@@ -105,6 +161,7 @@ int main()
         scan_lanes<std::uint8_t>({0, 0x1f, '"', '\\', 0x80, 0xff});
         scan_lanes<std::uint16_t>({0, 0x1f, '"', '\\'});
         validated_text();
+        short_utf8_text();
         std::cout << "LuminPack C++ JSON literal scan checks passed.\n";
     }
     catch (const std::exception& error)

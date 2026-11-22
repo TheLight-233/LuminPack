@@ -103,7 +103,7 @@ auto written = luminpack::write_json_document<Numbers, luminpack::json_encoding:
 
 Reader 校验 JSON 语法和文档边界。`json_read_options::max_depth` 限制对象和数组的嵌套深度，默认为 1024。字符串键字典写成 JSON 对象，读取时兼容对象和键值对数组。其他键类型的字典使用键值对数组。
 
-JSON 读取器先扫描完整的普通文本段，再解码转义或非 ASCII UTF-8。UTF-16 写入器对较长的普通文本段使用同一个有界扫描。x64 按现有 SIMD 宽度上限选择 AVX-512BW、AVX2 或 SSE2。ARM64 启用 SIMD 时使用 NEON。每条路径均用标量处理尾部。
+JSON 读取器先扫描完整的普通文本段，再解码转义或非 ASCII UTF-8。UTF-16 写入器对较长的普通文本段使用同一个有界扫描。x64 按现有 SIMD 宽度上限选择 AVX-512BW、AVX2 或 SSE2。ARM64 启用 SIMD 时使用 NEON。每条路径均用标量处理尾部。UTF-8 写入器还沿用 C# 的短 ASCII 路径，SSE2 和 NEON 处理 4–16 个码元，AVX2 处理 17–32 个码元。它先校验整个范围内的 JSON 转义条件，再提交窄化后的字节。
 
 内置 codec 将无需转义的 Unicode 属性头保存为 UTF-8 和 UTF-16 `constexpr` 数据。顺序读取在校验可读范围后比较完整属性头，匹配才移动游标。空间充足时，生成的写入器一次复制左花括号和首个属性头，后续属性头包含逗号。转义、旧名称、乱序和未知属性由名称解析器处理。若某种编码的候选名总数不超过八个，或各长度分组均不超过四个，生成 codec 使用长度 `switch`。密集分组使用与 C# 相同的零种子 XXH3 `switch`。两种路径都在返回匹配结果前比较完整名称。UTF-8 和 UTF-16 各自选择路径。手写 codec 使用逐项精确匹配。
 
