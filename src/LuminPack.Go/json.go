@@ -87,11 +87,20 @@ func (s *Schema) decodeJSON(typeID string, data []byte, encoding JSONEncoding) (
 	}
 	r := jsonReader{s: s}
 	scanner := jsonScanner{data: data}
-	node := scanner.value(min(depth, 1024))
-	scanner.space()
-	if scanner.pos != len(scanner.data) {
-		fail(scanner.pos, "trailing JSON content")
+	depth = min(depth, 1024)
+	if !p.StrictJSON && len(s.custom) == 0 && len(s.registered) == 0 &&
+		(c != nil && c.jsonDirect || c == nil && s.rootJSONDirect) {
+		reader := directJSONReader{scan: scanner, fallback: &r}
+		if c != nil {
+			value = reader.contract(c, depth)
+		} else {
+			value = reader.shape(shape, depth)
+		}
+		reader.scan.end()
+		return value, nil
 	}
+	node := scanner.value(depth)
+	scanner.end()
 	if shape != nil {
 		value = r.shape(shape, node)
 	} else {
@@ -433,9 +442,8 @@ func (w *jsonWriter) contract(c *contract, data any) {
 		w.append("null")
 		return
 	}
-	w.byte('{')
-	first := true
 	if c.Profile.TrackReferences {
+		w.byte('{')
 		identity := recordIdentity(value)
 		if w.refs == nil {
 			w.refs = make(map[uintptr]reference)
@@ -453,16 +461,19 @@ func (w *jsonWriter) contract(c *contract, data any) {
 		w.refs[identity] = reference{id, c, value}
 		w.append(`"$id":`)
 		w.data = strconv.AppendUint(w.data, uint64(id), 10)
-		first = false
-	}
-	for i := range c.Members {
-		m := &c.Members[i]
-		if !first {
+		for i := range c.Members {
+			m := &c.Members[i]
 			w.byte(',')
+			w.data = append(w.data, m.jsonHead[1:]...)
+			w.shape(m.Wire, value[m.Name])
 		}
-		first = false
-		w.data = append(w.data, m.jsonName...)
-		w.shape(m.Wire, value[m.Name])
+	} else if len(c.Members) == 0 {
+		w.byte('{')
+	} else {
+		for i := range c.Members {
+			m := &c.Members[i]
+			w.field(m, value[m.Name])
+		}
 	}
 	w.byte('}')
 }
@@ -515,6 +526,9 @@ func (w *jsonWriter) shape(d *descriptor, value any) {
 	}
 	switch d.Kind {
 	case "scalar":
+		if w.nativeJSONScalar(d.Type, value) {
+			return
+		}
 		v := w.s.scalarValue(d.Type, value)
 		switch x := v.(type) {
 		case bool:
@@ -543,6 +557,9 @@ func (w *jsonWriter) shape(d *descriptor, value any) {
 	case "nullable":
 		w.shape(d.Element, value)
 	case "sequence":
+		if w.nativeJSONItems(d.Element, value) {
+			return
+		}
 		w.jsonItems(d.Element, asSequence(value))
 	case "pair", "tuple":
 		items := asSequence(value)
@@ -574,6 +591,9 @@ func (w *jsonWriter) shape(d *descriptor, value any) {
 			}
 			if i > 0 {
 				w.byte(',')
+			}
+			if !strings && w.integerPair(d.Key, d.Value, item) {
+				continue
 			}
 			if strings {
 				w.shape(d.Key, item.Key)

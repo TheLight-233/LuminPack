@@ -192,6 +192,9 @@ func (r *binaryReader) contract(c *contract, inherited int, body bool) any {
 		if c.Storage != nil {
 			return r.readStorage(c, nil, c.Storage, p)
 		}
+		if c.rawFields != nil {
+			return c.rawFields.read(r.take(c.rawFields.width))
+		}
 		return r.body(c, p, body, nil)
 	case "Custom":
 		return r.readCustom(r.s.custom[normalize(c.ID)], c.ID)
@@ -264,6 +267,8 @@ func (w *binaryWriter) contract(c *contract, data any, inherited int, body bool)
 			w.writeNativeLayout(plan, data, func(child *binaryWriter, value any) { child.writeStorage(c, nil, plan, value, p) })
 		} else if c.Storage != nil {
 			w.writeStorage(c, nil, c.Storage, data, p)
+		} else if c.rawFields != nil {
+			c.rawFields.write(w, data)
 		} else {
 			w.body(c, p, body, data)
 		}
@@ -478,6 +483,20 @@ func (r *binaryReader) elements(d *descriptor, n, p int) []any {
 		}
 		return values
 	}
+	if raw := r.s.sequenceRawFields(d); raw != nil {
+		r.descend()
+		defer func() { r.depth-- }()
+		if n > (len(r.data)-r.pos)/raw.width {
+			fail(r.pos, "truncated collection storage")
+		}
+		data := r.take(n * raw.width)
+		values := make([]any, n)
+		for i := range values {
+			offset := i * raw.width
+			values[i] = raw.read(data[offset : offset+raw.width])
+		}
+		return values
+	}
 	values := make([]any, 0, min(n, 128))
 	for range n {
 		values = append(values, r.shape(d.Element, p))
@@ -654,6 +673,14 @@ func dimensions(lengths []int32) int {
 }
 
 func (s *Schema) scalarWidth(name string) int {
+	if width := s.knownScalarWidth(name); width != 0 {
+		return width
+	}
+	fail(-1, "unsupported scalar "+name)
+	return 0
+}
+
+func (s *Schema) knownScalarWidth(name string) int {
 	switch name {
 	case "bool", "byte", "sbyte":
 		return 1
@@ -666,7 +693,6 @@ func (s *Schema) scalarWidth(name string) int {
 	case "nint", "System.IntPtr", "nuint", "System.UIntPtr":
 		return s.nativeIntegerBytes
 	}
-	fail(-1, "unsupported scalar "+name)
 	return 0
 }
 

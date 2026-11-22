@@ -63,6 +63,8 @@ Pass the bytes from `project` to `luminpack.LoadSchema` to use a contract direct
 
 ## SIMD and scalar builds
 
+Fixed-width typed slices use checked block transfers. For modeled Packed, Tagged, and Native rows, the schema compiles byte offsets into copy ranges. Tagged writes use the canonical layout, and Native rewrites retain saved padding around the current field values. An ordered JSON reader matches cached property heads and uses the general parser for documents outside its fast path.
+
 The runtime uses SSE2 on amd64 and selects AVX2 or AVX-512BW when available for complete blocks. On arm64 it uses NEON. The text kernels cover ASCII scans and supported UTF-16 conversions. The `purego` build tag exercises the portable implementation. Run the following commands from the runtime module.
 
 ```sh

@@ -119,6 +119,10 @@ func (r *jsonScanner) digits() {
 }
 
 func (r *jsonScanner) number() json.Number {
+	return json.Number(r.numberToken())
+}
+
+func (r *jsonScanner) numberToken() []byte {
 	start := r.pos
 	if r.data[r.pos] == '-' {
 		r.pos++
@@ -139,7 +143,7 @@ func (r *jsonScanner) number() json.Number {
 		}
 		r.digits()
 	}
-	return json.Number(r.data[start:r.pos])
+	return r.data[start:r.pos]
 }
 
 func (r *jsonScanner) text() string {

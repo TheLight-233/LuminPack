@@ -72,6 +72,7 @@ type Schema struct {
 	root                  string
 	rootWire              *descriptor
 	rootProfile           profile
+	rootJSONDirect        bool
 	binaryProfile         *int
 	nativeIntegerBytes    int
 	nativeScalarAlignment int
@@ -122,6 +123,8 @@ type contract struct {
 	byHash                           map[uint32]*unionCase
 	byType                           map[string]*unionCase
 	byName                           map[string]*member
+	jsonDirect                       bool
+	rawFields                        *packedStorage
 }
 
 type member struct {
@@ -137,7 +140,7 @@ type member struct {
 	versionDescriptor     uint64
 	hasVersionDescriptor  bool
 	legacy                string
-	jsonName              []byte
+	jsonHead              []byte
 }
 
 type valueLayout struct {
@@ -146,6 +149,9 @@ type valueLayout struct {
 	ModelSizes   []int
 	ModelOffsets [][]int
 	Fields       []storageField
+	transfers    []storageTransfer
+	program      *packedStorage
+	scalarSlot   bool
 }
 
 type storageField struct {
@@ -221,7 +227,11 @@ func LoadSchema(data []byte) (*Schema, error) {
 			}
 			c.byName[m.Name] = m
 			name, _ := json.Marshal(m.Name)
-			m.jsonName = append(name, ':')
+			separator := byte(',')
+			if i == 0 {
+				separator = '{'
+			}
+			m.jsonHead = append(append([]byte{separator}, name...), ':')
 			m.versionDescriptor, m.hasVersionDescriptor = parseDescriptor(m.Descriptor)
 			_ = json.Unmarshal(m.LegacyVersionContract, &m.legacy)
 		}
@@ -253,6 +263,17 @@ func LoadSchema(data []byte) (*Schema, error) {
 	}
 	if s.root != "" && s.types[s.root] == nil && s.rootWire == nil {
 		return nil, fmt.Errorf("luminpack: unknown root contract %s", s.root)
+	}
+	for _, c := range wire.Contracts {
+		c.jsonDirect = s.jsonContractEligible(c, make(map[*contract]bool))
+		s.compileContractStorage(c)
+		for i := range c.Members {
+			s.compileShapeStorage(c.Members[i].Wire)
+		}
+	}
+	if s.rootWire != nil {
+		s.rootJSONDirect = s.jsonShapeEligible(s.rootWire, make(map[*contract]bool))
+		s.compileShapeStorage(s.rootWire)
 	}
 	return s, nil
 }

@@ -93,20 +93,22 @@ func (p *valueLayout) model(index int) (int, []int) {
 }
 
 func (r *binaryReader) readLayout(p *valueLayout, model int, read func(*binaryReader) any) any {
-	stride, offsets := p.model(model)
-	source := r.take(stride)
+	transfer := p.transfer(model)
+	source := r.take(transfer.stride)
 	var local [64]byte
 	var packed []byte
-	if len(offsets) <= len(local) {
-		packed = local[:len(offsets)]
+	if len(transfer.runs) == 1 && (p.program != nil || p.scalarSlot) {
+		run := transfer.runs[0]
+		packed = source[run.native : run.native+run.width]
 	} else {
-		packed = make([]byte, len(offsets))
-	}
-	for i, offset := range offsets {
-		if offset < 0 || offset >= stride {
-			fail(r.pos, "invalid storage field offset")
+		if p.WireSize <= len(local) {
+			packed = local[:p.WireSize]
+		} else {
+			packed = make([]byte, p.WireSize)
 		}
-		packed[i] = source[offset]
+		for _, run := range transfer.runs {
+			copy(packed[run.packed:run.packed+run.width], source[run.native:run.native+run.width])
+		}
 	}
 	child := *r
 	child.data, child.pos = packed, 0
@@ -122,28 +124,42 @@ func (w *binaryWriter) writeLayout(p *valueLayout, model int, write func(*binary
 }
 
 func (w *binaryWriter) writeStorageLayout(p *valueLayout, model int, storage []byte, write func(*binaryWriter)) {
-	stride, offsets := p.model(model)
+	transfer := p.transfer(model)
+	if storage != nil && len(storage) != transfer.stride {
+		fail(-1, "native storage width mismatch")
+	}
+	if len(transfer.runs) == 1 && (p.program != nil || p.scalarSlot) {
+		start := len(w.data)
+		w.appendStorage(storage, transfer.stride)
+		run := transfer.runs[0]
+		child := *w
+		from := start + run.native
+		child.data = w.data[from : from : from+run.width]
+		write(&child)
+		if len(child.data) != p.WireSize {
+			fail(-1, "storage field width mismatch")
+		}
+		return
+	}
 	var local [64]byte
 	child := *w
 	child.data = local[:0]
 	write(&child)
-	if len(child.data) != len(offsets) {
+	if len(child.data) != p.WireSize {
 		fail(-1, "storage field width mismatch")
 	}
 	start := len(w.data)
-	if storage != nil && len(storage) != stride {
-		fail(-1, "native storage width mismatch")
+	w.appendStorage(storage, transfer.stride)
+	for _, run := range transfer.runs {
+		copy(w.data[start+run.native:start+run.native+run.width], child.data[run.packed:run.packed+run.width])
 	}
+}
+
+func (w *binaryWriter) appendStorage(storage []byte, stride int) {
 	if storage == nil {
 		w.data = append(w.data, make([]byte, stride)...)
 	} else {
 		w.data = append(w.data, storage...)
-	}
-	for i, offset := range offsets {
-		if offset < 0 || offset >= stride {
-			fail(-1, "invalid storage field offset")
-		}
-		w.data[start+offset] = child.data[i]
 	}
 }
 
@@ -162,6 +178,9 @@ func (w *binaryWriter) writeNativeLayout(p *valueLayout, data any, write func(*b
 }
 
 func (r *binaryReader) readStorage(c *contract, d *descriptor, p *valueLayout, profile int) any {
+	if p.program != nil {
+		return p.program.read(r.take(p.program.width))
+	}
 	if c != nil {
 		fields := make(Record, len(p.Fields))
 		for _, field := range p.Fields {
@@ -179,6 +198,10 @@ func (r *binaryReader) readStorage(c *contract, d *descriptor, p *valueLayout, p
 }
 
 func (w *binaryWriter) writeStorage(c *contract, d *descriptor, p *valueLayout, value any, profile int) {
+	if p.program != nil {
+		p.program.write(w, value)
+		return
+	}
 	if c != nil {
 		record := asRecord(value)
 		for _, field := range p.Fields {
@@ -285,9 +308,28 @@ func (w *binaryWriter) elements(d *descriptor, values []any, p int) {
 		}
 		return
 	}
+	if raw := w.s.sequenceRawFields(d); raw != nil {
+		w.descend()
+		defer func() { w.depth-- }()
+		for _, value := range values {
+			raw.write(w, value)
+		}
+		return
+	}
 	for _, value := range values {
 		w.shape(d.Element, value, p)
 	}
+}
+
+func (s *Schema) sequenceRawFields(d *descriptor) *packedStorage {
+	if d.Element.Kind == "contract" {
+		c := s.get(d.Element.Type)
+		if c.Storage != nil && !c.Storage.Tagged {
+			return c.Storage.program
+		}
+		return c.rawFields
+	}
+	return nil
 }
 
 func (s *Schema) rawWidth(d *descriptor, depth int) int {

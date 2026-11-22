@@ -63,6 +63,8 @@ func transcode(binary []byte) ([]byte, error) {
 
 ## SIMD 与 Go 回退实现
 
+定宽类型切片使用带范围检查的整块传输。对于已建模的 Packed、Tagged 和 Native 结构体，schema 会将字节偏移编译为连续复制区间。Tagged 按规范布局写回，Native 按当前字段值重写并保留原有 padding。有序 JSON 读路径匹配预计算的属性头，其余输入走通用解析器。
+
 amd64 使用 SSE2，并在硬件及系统支持时为完整数据块选用 AVX2 或 AVX-512BW。arm64 使用 NEON。文本内核加速 ASCII 扫描和适用的 UTF-16 转换。`purego` 构建标签可验证 Go 回退实现。以下命令在运行时模块目录执行。
 
 ```sh

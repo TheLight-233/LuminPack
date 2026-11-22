@@ -11,6 +11,11 @@ type blockScalar interface {
 
 const nativeLittleEndian = uint16(1)
 
+var nativeBooleanLayout = func() bool {
+	off, on := false, true
+	return unsafe.Sizeof(off) == 1 && *(*byte)(unsafe.Pointer(&off)) == 0 && *(*byte)(unsafe.Pointer(&on)) == 1
+}()
+
 func nativeScalarBytes[T blockScalar](values []T, width int) []byte {
 	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(values))), len(values)*width)
 }
@@ -55,12 +60,14 @@ func (r *binaryReader) scalarSequence(element *descriptor, n int) any {
 	switch element.Type {
 	case "bool":
 		raw := r.take(n)
+		validateBooleans(raw, r.pos)
 		result := make([]bool, n)
-		for i, b := range raw {
-			if b > 1 {
-				fail(r.pos, "invalid Boolean byte")
+		if nativeBooleanLayout {
+			copy(nativeBooleanBytes(result), raw)
+		} else {
+			for i, b := range raw {
+				result[i] = b == 1
 			}
-			result[i] = b == 1
 		}
 		return result
 	case "byte":
@@ -108,6 +115,10 @@ func (w *binaryWriter) typedScalarSequence(d *descriptor, value any) bool {
 	case []bool:
 		if name == "bool" {
 			w.count(len(v))
+			if nativeBooleanLayout {
+				w.data = append(w.data, nativeBooleanBytes(v)...)
+				return true
+			}
 			for _, b := range v {
 				if b {
 					w.byte(1)
@@ -169,4 +180,23 @@ func (w *binaryWriter) typedScalarSequence(d *descriptor, value any) bool {
 		}
 	}
 	return false
+}
+
+func nativeBooleanBytes(values []bool) []byte {
+	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(values))), len(values))
+}
+
+func validateBooleans(data []byte, position int) {
+	const invalidBits = 0xfefefefefefefefe
+	for len(data) >= 8 {
+		if binary.LittleEndian.Uint64(data)&invalidBits != 0 {
+			fail(position, "invalid Boolean byte")
+		}
+		data = data[8:]
+	}
+	for _, b := range data {
+		if b > 1 {
+			fail(position, "invalid Boolean byte")
+		}
+	}
 }
