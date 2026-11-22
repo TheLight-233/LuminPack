@@ -263,6 +263,12 @@ struct binding<luminpack::json_record_member<Name, Field, Codec, Aliases...>>
     }
 };
 
+template<luminpack::json_name Name, auto Field, class Codec, luminpack::json_name... Aliases>
+struct binding<luminpack::detail::generated_json_integer_member<Name, Field, Codec, Aliases...>>
+    : binding<luminpack::json_record_member<Name, Field, Codec, Aliases...>>
+{
+};
+
 template<class T, class... Fields>
 struct binding<luminpack::json_record_body<T, Fields...>>
 {
