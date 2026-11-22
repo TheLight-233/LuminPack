@@ -33,6 +33,9 @@ template<class T, class Member>
 struct record_read_field
 {
     static constexpr std::size_t width = 0;
+    static constexpr bool has_dictionary = false;
+
+    static void read_member(reader& input, T& value, auto&... context) { Member::read(input, value, context...); }
 };
 
 template<class T, auto Field, class Codec, bool AllowBatch>
@@ -40,6 +43,7 @@ struct record_read_field<T, record_member<Field, Codec, AllowBatch>>
 {
     using field_type = std::remove_reference_t<decltype(std::declval<T&>().*Field)>;
     static constexpr bool boolean = std::same_as<Codec, boolean_codec>;
+    static constexpr bool has_dictionary = dictionary_member_codec<Codec>;
     static constexpr std::size_t width = []
     {
         if constexpr (AllowBatch && (contiguous_codec<Codec> || boolean))
@@ -60,6 +64,24 @@ struct record_read_field<T, record_member<Field, Codec, AllowBatch>>
         else
             return false;
     }();
+
+    static void read_member(reader& input, T& value, auto&... context)
+    {
+        auto& destination = value.*Field;
+        if constexpr (has_dictionary)
+        {
+            if constexpr (std::same_as<decltype(destination), typename Codec::value_type&>)
+            {
+                // Fill a fresh slot directly. An initialized dictionary keeps replacement semantics.
+                if (!destination)
+                {
+                    Codec::read_into(input, destination, context...);
+                    return;
+                }
+            }
+        }
+        record_member<Field, Codec, AllowBatch>::read(input, value, context...);
+    }
 
     static const std::byte* address(const T& value) noexcept
     {
@@ -109,18 +131,7 @@ struct record_payload_codec
     template<class... Context>
     static T read(reader& input, Context&... context)
     {
-        reader next = input;
-        auto transaction = detail::version_transaction(context...);
-        if (minimum_size > next.remaining())
-            detail::truncated_input();
-        T result{};
-        if constexpr (has_batch)
-            transfer_fields(next, result, std::index_sequence_for<Members...>{}, context...);
-        else
-            (Members::read(next, result, context...), ...);
-        input = next;
-        transaction.commit();
-        return result;
+        return read_value<T>(input, context...);
     }
 
     template<class... Context>
@@ -143,6 +154,40 @@ private:
     using members = std::tuple<Members...>;
     template<std::size_t Index>
     using field = detail::record_read_field<T, std::tuple_element_t<Index, members>>;
+
+    // Construct an ordinary aggregate in its optional to avoid moving its dictionaries into the result.
+    static constexpr bool read_owned = std::is_aggregate_v<T> && !std::is_union_v<T> &&
+        std::is_default_constructible_v<T> && (detail::record_read_field<T, Members>::has_dictionary || ...);
+
+    template<class Result, class... Context>
+    static Result read_value(reader& input, Context&... context)
+    {
+        reader next = input;
+        auto transaction = detail::version_transaction(context...);
+        if (minimum_size > next.remaining())
+            detail::truncated_input();
+        auto result = []
+        {
+            if constexpr (std::same_as<Result, T>)
+                return T{};
+            else
+                return Result(std::in_place);
+        }();
+        T& value = [&]() -> T&
+        {
+            if constexpr (std::same_as<Result, T>)
+                return result;
+            else
+                return *result;
+        }();
+        if constexpr (has_batch)
+            transfer_fields(next, value, std::index_sequence_for<Members...>{}, context...);
+        else
+            (detail::record_read_field<T, Members>::read_member(next, value, context...), ...);
+        input = next;
+        transaction.commit();
+        return result;
+    }
 
     static constexpr std::array widths{detail::record_read_field<T, Members>::width..., std::size_t{0}};
     static constexpr bool has_batch = []
@@ -236,7 +281,7 @@ private:
                 transfer_batch<First, width>(cursor, value, std::make_index_sequence<end - First>{});
             }
             else if constexpr (std::same_as<Cursor, reader>)
-                std::tuple_element_t<First, members>::read(cursor, value, context...);
+                field<First>::read_member(cursor, value, context...);
             else
                 std::tuple_element_t<First, members>::write(cursor, value, context...);
         }
@@ -270,9 +315,18 @@ struct record_codec
         }
         if (*members != sizeof...(Members))
             throw wire_error("LuminPack positional member count does not match the codec.");
-        auto result = payload::read(next, context...);
-        input = next;
-        return result;
+        if constexpr (payload::read_owned)
+        {
+            auto result = payload::template read_value<value_type>(next, context...);
+            input = next;
+            return result;
+        }
+        else
+        {
+            auto result = payload::read(next, context...);
+            input = next;
+            return result;
+        }
     }
 
     template<class... Context>

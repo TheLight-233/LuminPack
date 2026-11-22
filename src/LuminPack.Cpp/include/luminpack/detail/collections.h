@@ -284,6 +284,23 @@ struct list_codec
                 std::memmove(record.data() + minimum_size, source.data(), source.size());
             detail::store_count(record, count);
         }
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+        else if constexpr (std::same_as<Element, string_codec<string_profile::utf16_length>>)
+        {
+            next.write(count);
+            detail::utf16_length_window window(next);
+            for (const auto& item : value)
+            {
+                if (!item || !window.try_write(*item))
+                {
+                    window.commit();
+                    Element::write(next, item);
+                    window.refresh();
+                }
+            }
+            window.commit();
+        }
+#endif
         else
         {
             next.write(count);
@@ -306,6 +323,14 @@ struct dictionary_codec
     using value_type = std::optional<dictionary_type>;
     static constexpr std::size_t minimum_size = sizeof(std::int32_t);
     static constexpr std::size_t pair_minimum_size = Key::minimum_size + Value::minimum_size;
+
+private:
+    template<class Codec>
+    static constexpr bool scalar_storage = detail::contiguous_codec<Codec> &&
+        (scalar<typename Codec::value_type> || std::is_enum_v<typename Codec::value_type>);
+
+    static constexpr bool scalar_pair = scalar_storage<Key> && scalar_storage<Value>;
+public:
 
     template<class... Context>
     [[nodiscard]] static value_type read(reader& input, Context&... context)
@@ -333,14 +358,19 @@ struct dictionary_codec
         entries.clear();
         if (static_cast<float>(entries.bucket_count()) * entries.max_load_factor() < std::min(*count, std::size_t{128}))
             entries.reserve(std::min(*count, std::size_t{128}));
-        for (std::size_t index = 0; index < *count; ++index)
+        if constexpr (scalar_pair)
+            read_scalar_pairs(next, entries, *count);
+        else
         {
-            auto key = detail::read_codec<Key>(next, context...);
-            if (detail::is_null_key(key))
-                throw wire_error("Null LuminPack dictionary key.");
-            auto value = detail::read_codec<Value>(next, context...);
-            if (!entries.try_emplace(std::move(key), std::move(value)).second)
-                throw wire_error("Duplicate LuminPack dictionary key.");
+            for (std::size_t index = 0; index < *count; ++index)
+            {
+                auto key = detail::read_codec<Key>(next, context...);
+                if (detail::is_null_key(key))
+                    throw wire_error("Null LuminPack dictionary key.");
+                auto value = detail::read_codec<Value>(next, context...);
+                if (!entries.try_emplace(std::move(key), std::move(value)).second)
+                    throw wire_error("Duplicate LuminPack dictionary key.");
+            }
         }
         input = next;
         transaction.commit();
@@ -363,15 +393,65 @@ struct dictionary_codec
         writer next = output;
         auto transaction = detail::version_transaction(context...);
         next.write(detail::collection_count(std::ranges::size(entries)));
-        for (const auto& [key, value] : entries)
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+        if constexpr (std::same_as<Entries, dictionary_type> && scalar_storage<Value> &&
+            std::same_as<Key, required_codec<string_codec<string_profile::utf16_length>>>)
+            write_utf16_scalar_pairs(next, entries);
+        else
+#endif
         {
-            if (detail::is_null_key(key))
-                throw std::invalid_argument("Null LuminPack dictionary key.");
-            detail::write_codec<Key>(next, key, context...);
-            detail::write_codec<Value>(next, value, context...);
+            for (const auto& [key, value] : entries)
+            {
+                if (detail::is_null_key(key))
+                    throw std::invalid_argument("Null LuminPack dictionary key.");
+                detail::write_codec<Key>(next, key, context...);
+                detail::write_codec<Value>(next, value, context...);
+            }
         }
         output = next;
         transaction.commit();
     }
+
+private:
+    static void read_scalar_pairs(reader& input, dictionary_type& entries, std::size_t count)
+    {
+        const auto* source = input.take(count * pair_minimum_size).data();
+        for (std::size_t index = 0; index < count; ++index, source += pair_minimum_size)
+        {
+            key_type key;
+            mapped_type value;
+            std::memcpy(&key, source, sizeof(key));
+            std::memcpy(&value, source + sizeof(key), sizeof(value));
+            if (!entries.try_emplace(key, value).second)
+                throw wire_error("Duplicate LuminPack dictionary key.");
+        }
+    }
+
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+    static void write_utf16_scalar_pairs(writer& output, const dictionary_type& entries)
+    {
+        detail::utf16_length_window window(output);
+        for (const auto& [key, value] : entries)
+        {
+            if (!window.try_write(std::u16string_view(key), std::as_bytes(std::span<const mapped_type, 1>(&value, 1))))
+            {
+                window.commit();
+                Key::write(output, key);
+                Value::write(output, value);
+                window.refresh();
+            }
+        }
+        window.commit();
+    }
+#endif
 };
+
+namespace detail
+{
+template<class Codec>
+inline constexpr bool dictionary_member_codec = false;
+
+template<class Key, class Value, class Hash, class Equal>
+inline constexpr bool dictionary_member_codec<dictionary_codec<Key, Value, Hash, Equal>> = true;
+}
 }

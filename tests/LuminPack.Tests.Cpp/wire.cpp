@@ -262,6 +262,15 @@ void utf16_length_collection_reads()
     std::array<byte, 256> storage{};
     writer output(std::span<byte>(storage).subspan(1));
     strings::write(output, expected);
+    std::array<byte, 256> scalar_storage{};
+    writer scalar_output(scalar_storage);
+    scalar_output.write(static_cast<std::int32_t>(expected->size()));
+    for (const auto& text : *expected)
+        luminpack::string_codec<>::write(scalar_output, text);
+    check(std::ranges::equal(output.written(), scalar_output.written()), "Writes a UTF-16 list as ordinary string records.");
+    writer compact_output(std::span<byte>(storage).subspan(1, scalar_output.written().size()));
+    strings::write(compact_output, expected);
+    check(std::ranges::equal(compact_output.written(), scalar_output.written()), "Writes a UTF-16 list into exact compact storage.");
     output.write<std::uint32_t>(0x01020304);
     reader input(output.written());
     check(strings::read(input) == expected, "Reads a compact UTF-16 list prefix and ordinary suffix.");
@@ -434,6 +443,61 @@ void text_list_fixture(const std::filesystem::path& directory, const char* name)
 }
 
 enum class color : std::uint16_t { blue = 1, red = 4096 };
+
+void dictionary_binary_windows()
+{
+    using integer = luminpack::scalar_codec<std::int64_t>;
+    using text = luminpack::required_codec<luminpack::string_codec<>>;
+    using text_map = luminpack::dictionary_codec<text, integer>;
+    using scalar_map = luminpack::dictionary_codec<luminpack::enum_codec<color>, integer>;
+    const text_map::value_type strings(std::in_place, text_map::dictionary_type{
+        {u"", -1}, {u"a\u00e9", 12}, {u"1234567890", 34}, {u"Raw\u0100", -4294967296},
+        {std::u16string(17, u'x'), 56}, {std::u16string(65, u'\u00ff'), 78}, {u"\U0001f600", 90}
+    });
+    const scalar_map::value_type numbers(std::in_place, scalar_map::dictionary_type{
+        {color::blue, -1}, {static_cast<color>(0xffee), 4294967296}, {color::red, 17}
+    });
+
+    const auto verify = []<class Codec, class WriteKey>(const typename Codec::value_type& entries, WriteKey write_key)
+    {
+        std::array<byte, 512> expected{};
+        writer scalar(expected);
+        scalar.write(static_cast<std::int32_t>(entries->size()));
+        for (const auto& [key, value] : *entries)
+        {
+            write_key(scalar, key);
+            scalar.write(value);
+        }
+
+        std::array<byte, 513> buffer;
+        buffer.fill(byte{0xa5});
+        auto unaligned = std::span<byte>(buffer).subspan(1);
+        for (const auto capacity : {unaligned.size(), scalar.written().size()})
+        {
+            writer output(unaligned.first(capacity));
+            Codec::write(output, entries);
+            check(std::ranges::equal(output.written(), scalar.written()), "Dictionary window matches scalar wire bytes.");
+            check(buffer.front() == byte{0xa5} && unaligned[output.written().size()] == byte{0xa5},
+                "Dictionary window writes outside the record.");
+            reader input(output.written());
+            check(Codec::read(input) == entries, "Reads an unaligned dictionary window.");
+            input.require_end();
+        }
+
+        const auto truncated = unaligned.first(scalar.written().size() - 1);
+        writer short_output(truncated);
+        expect_error<std::length_error>([&] { Codec::write(short_output, entries); }, "Writes a dictionary past available output.");
+        check(short_output.written().empty(), "Publishes an incomplete dictionary write.");
+        reader short_input(truncated);
+        expect_error<luminpack::wire_error>([&] { (void)Codec::read(short_input); }, "Reads an incomplete dictionary value.");
+        check(short_input.remaining() == truncated.size(), "Consumes a truncated dictionary.");
+    };
+
+    verify.template operator()<text_map>(strings, [](writer& output, const std::u16string& key) { text::write(output, key); });
+    verify.template operator()<scalar_map>(numbers, [](writer& output, color key) {
+        output.write(static_cast<std::uint16_t>(key));
+    });
+}
 
 void collection_contracts(const std::filesystem::path& directory)
 {
@@ -1415,6 +1479,7 @@ int main(int argc, char** argv)
         tagged_fixtures(directory);
         object_and_input_checks();
         collection_contracts(directory);
+        dictionary_binary_windows();
         string_profiles(directory);
         short_utf8_records(directory);
         long_utf8_ascii_runs();
