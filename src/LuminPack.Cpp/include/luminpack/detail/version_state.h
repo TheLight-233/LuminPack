@@ -1,6 +1,5 @@
 #pragma once
 
-#include <unordered_map>
 #include <utility>
 
 // Included by luminpack.h after the binary cursors and string profiles.
@@ -73,8 +72,9 @@ private:
     void truncate(std::size_t size) noexcept;
 
     std::vector<entry> entries_;
-    std::unordered_multimap<std::uint64_t, std::size_t> index_;
+    std::vector<std::uint32_t> index_;
     std::optional<std::size_t> last_;
+    bool indexed_ = false;
 };
 
 /// Resolves a full or ordinal Version header. A null object has no descriptors.

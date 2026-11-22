@@ -60,7 +60,7 @@ int main()
 
 用 `record_member` 和 `record_codec` 按 wire 顺序绑定 DTO 字段。Next 生成的二进制 Union 用 `union_codec` 绑定已有的 case hash 和各 case 的 payload codec。应用可通过 `custom_codec` 绑定自己实现的读写函数来复用同一份 wire 契约。成员顺序、标量类型、字符串 profile 和 Tagged 模型顺序均沿用源 wire 契约。
 
-Version rev4 和 rev5 用 `version_member` 与 `version_codec` 绑定生成的字段描述符和旧名称哈希。`read_binary_document` 和 `write_binary_document` 为每份独立文档创建 schema 注册表。同一操作中连续读写多条记录时，给 codec 传入同一个 `version_state`。开始独立记录前调用 `reset()`。
+Version rev4 和 rev5 用 `version_member` 与 `version_codec` 绑定生成的字段描述符和旧名称哈希。`read_binary_document` 和 `write_binary_document` 为每份独立文档创建 schema 注册表。同一操作中连续读写多条记录时，给 codec 传入同一个 `version_state`。开始独立记录前调用 `reset()`。写入端顺序查找前八项，在注册第九个 schema 时创建开放寻址索引。
 
 多模型 Tagged 数组支持原始字段。用 `sizeof` 和 `offsetof` 描述本地步长和字段偏移。参与原始复制的字段必须接受其对象表示的任意位模式，例如定宽整数。写出本地布局前应初始化会进入 wire 的填充字节。
 

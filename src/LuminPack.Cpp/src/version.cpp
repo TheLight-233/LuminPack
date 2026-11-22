@@ -13,6 +13,30 @@ constexpr std::size_t maximum_fields = 249;
 constexpr std::size_t small_table = 8;
 constexpr std::size_t maximum_ordinal = (1u << 30) - 1;
 
+std::size_t schema_bucket(std::uint64_t hash, std::size_t mask) noexcept
+{
+    const auto mixed = (hash ^ (hash >> 33)) * 0xff51afd7ed558ccdull;
+    return static_cast<std::size_t>((mixed ^ (mixed >> 32)) & mask);
+}
+
+void insert_ordinal(std::span<std::uint32_t> index, std::uint64_t hash, std::size_t ordinal) noexcept
+{
+    const auto mask = index.size() - 1;
+    auto slot = schema_bucket(hash, mask);
+    while (index[slot] != 0)
+        slot = (slot + 1) & mask;
+    index[slot] = static_cast<std::uint32_t>(ordinal + 1);
+}
+
+void remove_ordinal(std::span<std::uint32_t> index, std::uint64_t hash, std::size_t ordinal) noexcept
+{
+    const auto mask = index.size() - 1;
+    auto slot = schema_bucket(hash, mask);
+    while (index[slot] != ordinal + 1)
+        slot = (slot + 1) & mask;
+    index[slot] = 0;
+}
+
 std::uint8_t profile_tag(string_profile profile)
 {
     const auto tag = static_cast<std::uint8_t>(profile);
@@ -96,8 +120,7 @@ std::optional<std::size_t> version_state::find(std::uint64_t hash, std::span<con
     if (last_ && matches(*last_))
         return last_;
 
-    // Small tables use a sequential scan. Larger writer tables use a hash index and compare exact descriptors on hits.
-    if (index_.empty())
+    if (!indexed_)
     {
         for (std::size_t ordinal = 0; ordinal < entries_.size(); ++ordinal)
         {
@@ -107,11 +130,12 @@ std::optional<std::size_t> version_state::find(std::uint64_t hash, std::span<con
     }
     else
     {
-        const auto candidates = index_.equal_range(hash);
-        for (auto candidate = candidates.first; candidate != candidates.second; ++candidate)
+        const auto mask = index_.size() - 1;
+        for (auto slot = schema_bucket(hash, mask); index_[slot] != 0; slot = (slot + 1) & mask)
         {
-            if (matches(candidate->second))
-                return last_ = candidate->second;
+            const auto ordinal = static_cast<std::size_t>(index_[slot] - 1);
+            if (matches(ordinal))
+                return last_ = ordinal;
         }
     }
     return std::nullopt;
@@ -126,15 +150,26 @@ std::span<const std::uint64_t> version_state::append(
     entries_.push_back({hash, std::vector<std::uint64_t>(descriptors.begin(), descriptors.end())});
     try
     {
-        if (!index_.empty())
-            index_.emplace(hash, ordinal);
-        else if (index_for_writes && ordinal >= small_table)
+        if (indexed_ || (index_for_writes && ordinal >= small_table))
         {
-            decltype(index_) index;
-            index.reserve(entries_.size());
-            for (std::size_t current = 0; current < entries_.size(); ++current)
-                index.emplace(entries_[current].hash, current);
-            index_.swap(index);
+            if (index_.empty() || ordinal >= index_.size() / 2)
+            {
+                auto capacity = index_.empty() ? small_table * 4 : index_.size() * 2;
+                // A state used for reads may already hold more than one growth step of registrations.
+                while (ordinal >= capacity / 2)
+                    capacity *= 2;
+                std::vector<std::uint32_t> index(capacity);
+                for (std::size_t current = 0; current < ordinal; ++current)
+                    insert_ordinal(index, entries_[current].hash, current);
+                index_.swap(index);
+            }
+            else if (!indexed_)
+            {
+                for (std::size_t current = 0; current < ordinal; ++current)
+                    insert_ordinal(index_, entries_[current].hash, current);
+            }
+            insert_ordinal(index_, hash, ordinal);
+            indexed_ = true;
         }
     }
     catch (...)
@@ -151,24 +186,19 @@ void version_state::truncate(std::size_t size) noexcept
 {
     if (last_ && *last_ >= size)
         last_.reset();
-    if (size <= small_table)
-        index_.clear();
-    while (entries_.size() > size)
+    if (indexed_)
     {
-        if (!index_.empty())
+        // Remove in reverse insertion order so retained probe chains never cross a removed slot.
+        const auto end = size > small_table ? size : 0;
+        for (auto ordinal = entries_.size(); ordinal > end;)
         {
-            const auto found = index_.equal_range(entries_.back().hash);
-            for (auto item = found.first; item != found.second; ++item)
-            {
-                if (item->second == entries_.size() - 1)
-                {
-                    index_.erase(item);
-                    break;
-                }
-            }
+            --ordinal;
+            remove_ordinal(index_, entries_[ordinal].hash, ordinal);
         }
-        entries_.pop_back();
+        indexed_ = size > small_table;
     }
+    while (entries_.size() > size)
+        entries_.pop_back();
 }
 
 std::optional<std::span<const std::uint64_t>> read_version_header(

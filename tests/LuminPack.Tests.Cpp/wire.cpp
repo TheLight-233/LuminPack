@@ -705,6 +705,36 @@ void version_contracts(const std::filesystem::path& directory)
     check(luminpack::read_version_header(input, state, string_profile::utf16_length)->front() == 129,
         "Resolve a canonical two-byte Version ordinal.");
     input.require_end();
+
+    state.reset();
+    output = writer(many);
+    const auto register_schema = [&](std::uint32_t key)
+    {
+        const auto start = output.written().size();
+        const std::array fields{luminpack::version_descriptor(key, 0, 0)};
+        luminpack::write_version_header(output, state, string_profile::utf16_length, fields);
+        return output.written().subspan(start);
+    };
+    for (std::uint32_t key = 0; key < 4; ++key)
+        (void)register_schema(key);
+    {
+        luminpack::version_state::scope outer(state);
+        for (std::uint32_t key = 4; key < 12; ++key)
+            (void)register_schema(key);
+        {
+            luminpack::version_state::scope inner(state);
+            for (std::uint32_t key = 12; key < 40; ++key)
+                (void)register_schema(key);
+        }
+        constexpr std::array retained{byte{251}, byte{0x52}, byte{4}};
+        check(std::ranges::equal(register_schema(4), retained), "Retain a probe chain across Version scope growth.");
+        check(register_schema(12)[1] == byte{0x42}, "Discard the indexed Version schema in the inner scope.");
+    }
+    check(register_schema(4)[1] == byte{0x42}, "Return to a sequential table after the outer Version scope.");
+    for (std::uint32_t key = 5; key < 11; ++key)
+        (void)register_schema(key);
+    constexpr std::array reindexed{byte{251}, byte{0x52}, byte{7}};
+    check(std::ranges::equal(register_schema(7), reindexed), "Rebuild the Version index from the retained prefix.");
 }
 
 void object_and_input_checks()
