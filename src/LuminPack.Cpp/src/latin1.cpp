@@ -1,4 +1,5 @@
 #include "latin1.h"
+#include "ascii_bytes.h"
 #include "cpu_isa.h"
 
 #include <cstring>
@@ -6,6 +7,13 @@
 #if defined(LUMINPACK_CPP_SIMD) && (defined(_M_X64) || defined(__x86_64__))
 #define LUMINPACK_CPP_SSE2
 #include <emmintrin.h>
+#elif defined(LUMINPACK_CPP_SIMD) && (defined(_M_ARM64) || (defined(__aarch64__) && defined(__ARM_NEON)))
+#define LUMINPACK_CPP_TEXT_NEON
+#if defined(_MSC_VER) && !defined(__clang__)
+#include <arm64_neon.h>
+#else
+#include <arm_neon.h>
+#endif
 #endif
 #if (defined(LUMINPACK_CPP_INLINE_SSE2) || defined(LUMINPACK_CPP_AVX2) || defined(LUMINPACK_CPP_AVX512BW)) && defined(_MSC_VER)
 #include <intrin.h>
@@ -79,6 +87,13 @@ __m128i load128(const void* source) noexcept
     return value;
 }
 
+bool is_ascii_bytes_128(std::span<const std::byte> source) noexcept
+{
+    return ascii_vector_groups(source, load128,
+        [](__m128i first, __m128i second) noexcept { return _mm_or_si128(first, second); },
+        [](__m128i bytes) noexcept { return _mm_movemask_epi8(bytes) == 0; });
+}
+
 bool is_latin1(__m128i value) noexcept
 {
     const auto high = _mm_and_si128(value, _mm_set1_epi16(-256));
@@ -135,7 +150,79 @@ void widen_block(const std::byte* source, char16_t* destination) noexcept
     std::memcpy(destination, &low, sizeof(low));
     std::memcpy(destination + 8, &high, sizeof(high));
 }
+#elif defined(LUMINPACK_CPP_TEXT_NEON)
+uint8x16_t load128(const void* source) noexcept
+{
+    uint8x16_t value;
+    std::memcpy(&value, source, sizeof(value));
+    return value;
+}
+
+bool is_ascii_bytes_128(std::span<const std::byte> source) noexcept
+{
+    return ascii_vector_groups(source, load128,
+        [](uint8x16_t first, uint8x16_t second) noexcept { return vorrq_u8(first, second); },
+        [](uint8x16_t bytes) noexcept { return vmaxvq_u8(bytes) < 0x80; });
+}
+
+void widen_block(const std::byte* source, char16_t* destination) noexcept
+{
+    const auto bytes = load128(source);
+    const auto low = vmovl_u8(vget_low_u8(bytes));
+    const auto high = vmovl_high_u8(bytes);
+    std::memcpy(destination, &low, sizeof(low));
+    std::memcpy(destination + 8, &high, sizeof(high));
+}
 #endif
+
+template<class Word>
+Word load_ascii_word(const std::byte* source) noexcept
+{
+    Word value;
+    std::memcpy(&value, source, sizeof(value));
+    return value;
+}
+
+bool is_ascii_bytes_scalar(std::span<const std::byte> source) noexcept
+{
+    const auto* start = source.data();
+    const auto length = source.size();
+    if (length < 4)
+    {
+        for (const auto byte : source)
+            if (byte >= std::byte{0x80})
+                return false;
+        return true;
+    }
+
+    const auto* end = start + length;
+    if (length < 8)
+        return ((load_ascii_word<std::uint32_t>(start) | load_ascii_word<std::uint32_t>(end - 4)) & 0x80808080u) == 0;
+
+    constexpr auto high_bits = UINT64_C(0x8080808080808080);
+    if (length > 16)
+    {
+        const auto* last = end - 16;
+        for (; start < last; start += 16)
+            if (((load_ascii_word<std::uint64_t>(start) | load_ascii_word<std::uint64_t>(start + 8)) & high_bits) != 0)
+                return false;
+        start = last;
+    }
+    return ((load_ascii_word<std::uint64_t>(start) | load_ascii_word<std::uint64_t>(end - 8)) & high_bits) == 0;
+}
+}
+
+bool is_ascii_bytes(std::span<const std::byte> source) noexcept
+{
+#if defined(LUMINPACK_CPP_AVX2)
+    if (source.size() > 32 && has_avx2())
+        return is_ascii_bytes_avx2(source);
+#endif
+#if defined(LUMINPACK_CPP_SSE2) || defined(LUMINPACK_CPP_TEXT_NEON)
+    if (source.size() >= 16)
+        return is_ascii_bytes_128(source);
+#endif
+    return is_ascii_bytes_scalar(source);
 }
 
 #if defined(LUMINPACK_CPP_INLINE_SSE2)
@@ -241,7 +328,7 @@ void widen_latin1(std::span<const std::byte> source, std::span<char16_t> destina
         return;
     }
 #endif
-#if defined(LUMINPACK_CPP_SSE2)
+#if defined(LUMINPACK_CPP_SSE2) || defined(LUMINPACK_CPP_TEXT_NEON)
     if (source.size() >= 16)
     {
         const auto last = source.size() - 16;

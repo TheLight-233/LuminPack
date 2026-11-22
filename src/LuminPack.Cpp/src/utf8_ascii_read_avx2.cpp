@@ -1,4 +1,5 @@
 #include "utf8_ascii_read.h"
+#include "ascii_bytes.h"
 
 #include <immintrin.h>
 
@@ -17,6 +18,13 @@ void store_wide_ascii_32(char16_t* target, __m256i source) noexcept
     store_wide_ascii_256(target, _mm256_castsi256_si128(source));
     store_wide_ascii_256(target + 16, _mm256_extracti128_si256(source, 1));
 }
+}
+
+bool is_ascii_bytes_avx2(std::span<const std::byte> source) noexcept
+{
+    return ascii_vector_groups(source, load_ascii_word<__m256i>,
+        [](__m256i first, __m256i second) noexcept { return _mm256_or_si256(first, second); },
+        [](__m256i bytes) noexcept { return _mm256_movemask_epi8(bytes) == 0; });
 }
 
 void widen_medium_ascii_avx2(char16_t* target, std::size_t length, __m128i first, __m128i last) noexcept

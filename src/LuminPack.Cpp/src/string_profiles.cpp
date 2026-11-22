@@ -1,5 +1,6 @@
 #include <luminpack/luminpack.h>
 
+#include "ascii_bytes.h"
 #include "cpu_isa.h"
 #include "latin1.h"
 #include <luminpack/detail/unicode.h>
@@ -151,7 +152,7 @@ std::optional<text_record> read_text_record(reader& input, string_profile profil
         throw wire_error("Invalid LuminPack UTF-8 character count.");
     if (expected != 0)
         input.check_string_length(expected);
-    const auto ascii = std::ranges::all_of(payload, [](std::byte value) { return value < std::byte{0x80}; });
+    const auto ascii = detail::is_ascii_bytes(payload);
     std::size_t length = payload.size();
     if (!ascii)
     {

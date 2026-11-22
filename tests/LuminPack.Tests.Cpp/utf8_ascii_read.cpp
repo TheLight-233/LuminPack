@@ -50,7 +50,7 @@ void managed_records(const std::filesystem::path& path, std::size_t first, std::
 void check_ascii_records()
 {
     constexpr auto canary = u'\u007f';
-    for (const auto length : {1u, 2u, 3u, 4u, 7u, 8u, 15u, 16u, 17u, 31u, 32u, 33u, 63u, 64u, 65u, 96u, 129u})
+    for (const auto length : {1u, 2u, 3u, 4u, 7u, 8u, 15u, 16u, 17u, 31u, 32u, 33u, 63u, 64u, 65u, 96u, 127u, 128u, 129u, 130u, 255u, 256u, 257u, 513u})
     {
         std::u16string expected;
         for (std::size_t index = 0; index < length; ++index)
@@ -73,7 +73,7 @@ void check_ascii_records()
         buffer.require_end();
         require(output.front() == canary && output.back() == canary, "ASCII read wrote outside its destination.");
 
-        std::array<char16_t, 144> overlap{};
+        std::vector<char16_t> overlap(length + 16);
         const auto aliased = std::as_writable_bytes(std::span(overlap)).subspan(1, record.size());
         std::ranges::copy(record, aliased.begin());
         luminpack::reader overlapping(aliased);
