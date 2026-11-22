@@ -31,6 +31,10 @@ add_executable(luminpack_cpp_tagged_simd tagged_simd.cpp)
 target_link_libraries(luminpack_cpp_tagged_simd PRIVATE LuminPack::Cpp)
 add_test(NAME luminpack_cpp_tagged_simd COMMAND luminpack_cpp_tagged_simd)
 
+add_executable(luminpack_cpp_tagged_tuple_booleans tagged_tuple_booleans.cpp)
+target_link_libraries(luminpack_cpp_tagged_tuple_booleans PRIVATE LuminPack::Cpp)
+add_test(NAME luminpack_cpp_tagged_tuple_booleans COMMAND luminpack_cpp_tagged_tuple_booleans)
+
 set(LUMINPACK_CPP_MODEL_FIXTURES "" CACHE PATH "Generated benchmark headers and .NET model documents")
 if(LUMINPACK_CPP_MODEL_FIXTURES)
     add_executable(luminpack_cpp_models benchmark_models.cpp)

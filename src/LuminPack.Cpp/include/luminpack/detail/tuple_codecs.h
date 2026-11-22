@@ -98,18 +98,29 @@ template<class Codec>
 struct tuple_storage
 {
     using value_type = typename Codec::value_type;
-    static_assert(scalar<value_type> || std::is_enum_v<value_type>);
-    static_assert(Codec::minimum_size == sizeof(value_type));
-    static constexpr std::array widths{sizeof(value_type)};
+    static constexpr bool is_boolean = std::is_same_v<Codec, boolean_codec>;
+    static constexpr std::size_t width = is_boolean ? 1 : sizeof(value_type);
+    static_assert(is_boolean || scalar<value_type> || std::is_enum_v<value_type>);
+    static_assert(Codec::minimum_size == width);
+    static constexpr std::array widths{width};
+    static constexpr std::array<std::size_t, is_boolean ? 1 : 0> boolean_fields{};
 
     static void read(value_type& value, const std::byte* source, const auto& offsets, std::size_t& field)
     {
-        std::memcpy(&value, source + offsets[field++], sizeof(value_type));
+        const auto* bytes = source + offsets[field++];
+        if constexpr (is_boolean)
+            value = *bytes == std::byte{1};
+        else
+            std::memcpy(&value, bytes, width);
     }
 
     static void write(const value_type& value, std::byte* target, const auto& offsets, std::size_t& field)
     {
-        std::memcpy(target + offsets[field++], &value, sizeof(value_type));
+        auto* bytes = target + offsets[field++];
+        if constexpr (is_boolean)
+            *bytes = value ? std::byte{1} : std::byte{0};
+        else
+            std::memcpy(bytes, &value, width);
     }
 };
 
@@ -126,6 +137,19 @@ struct tuple_storage<tuple_codec<Elements...>>
                 result[next++] = width;
         };
         (append(tuple_storage<Elements>::widths), ...);
+        return result;
+    }();
+    static constexpr auto boolean_fields = [] {
+        constexpr auto count = (std::size_t{0} + ... + tuple_storage<Elements>::boolean_fields.size());
+        std::array<std::size_t, count> result{};
+        std::size_t base = 0;
+        std::size_t next = 0;
+        auto append = [&](const auto& fields, std::size_t width_count) {
+            for (const auto field : fields)
+                result[next++] = base + field;
+            base += width_count;
+        };
+        (append(tuple_storage<Elements>::boolean_fields, tuple_storage<Elements>::widths.size()), ...);
         return result;
     }();
 
@@ -187,6 +211,8 @@ public:
     {
         reader next = input;
         auto block = detail::read_tagged_block<layout>(next);
+        if (block.tag != 0)
+            detail::check_storage_booleans<storage::boolean_fields>(block.payload, *block.count, layout.wire[block.tag - 1]);
         if (block.count)
         {
             auto& items = destination ? *destination : destination.emplace();

@@ -58,7 +58,7 @@ int main()
 
 `pair_codec` 将 .NET 的 `KeyValuePair<TKey, TValue>` 字段或字典值映射为 `std::pair`。二进制按键、值顺序写入，JSON 使用 `[key,value]`。生成的一维数组和 List 支持逐元素编码、无填充的定宽键值对，以及存储方案匹配的 Packed 键值对。对于定宽数值、字符或枚举组成的多模型 Tagged 键值对，`tagged_pair_list_codec` 接受所有已导出的布局标签，写入时将字段转换到 CLR 的规范模型。含 CLR 填充的无标签键值对块需要独立的存储契约。
 
-`tuple_codec` 将受支持的 .NET `ValueTuple` 映射为 `std::tuple`。二进制沿用 CLR 的组件顺序，JSON 使用数组，第八个 `Rest` 组件保留为嵌套元组。生成的集合使用导出的 Packed 或 Tagged 布局，或经过证明的声明顺序无填充 CLR 布局。codec 用 `std::get` 访问元组组件。
+`tuple_codec` 将受支持的 .NET `ValueTuple` 映射为 `std::tuple`。二进制沿用 CLR 的组件顺序，JSON 使用数组，第八个 `Rest` 组件保留为嵌套元组。生成的集合使用导出的 Packed 或 Tagged 布局，或经过证明的声明顺序无填充 CLR 布局。Tagged 读取在发布结果前验证直接和嵌套的布尔字节。codec 用 `std::get` 访问元组组件。
 
 字符串 codec 可绑定六种 `string_profile`。Length 与 VarInt 区分 null 和空字符串。Token 使用零码元结束，null 与空字符串使用同一表示。含内嵌零码元的文本应使用长度模式。
 

@@ -20,8 +20,6 @@ internal sealed partial class CppEmitter
             if (!collection || !Flag(layout, "tagged"))
                 return tuple;
 
-            if (leaves.Any(leaf => leaf.Boolean))
-                throw Missing(label, "a Tagged ValueTuple block containing Boolean storage");
             int width = layout.GetProperty("wireSize").GetInt32();
             StorageModel[] models = StorageModels(layout, leaves, width, label, tagged: true);
             string modelType = "luminpack::storage_model<" + Integer(leaves.Count) + ">";

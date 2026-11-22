@@ -58,7 +58,7 @@ Use `nullable_codec` for a marker-prefixed `Nullable<T>` represented by `std::op
 
 `pair_codec` maps a .NET `KeyValuePair<TKey, TValue>` field or dictionary value to `std::pair`. Binary writes the key followed by the value. JSON uses `[key,value]`. Generated arrays and lists support element-wise pairs, unpadded fixed-width pairs, and Packed pairs with a matching storage plan. For multi-model Tagged pairs of fixed-width numeric, character, or enum fields, `tagged_pair_list_codec` accepts every exported layout tag and converts the fields to the canonical CLR model on write. Headerless pair blocks with CLR padding require a separate storage contract.
 
-`tuple_codec` maps a supported .NET `ValueTuple` to `std::tuple`. Binary writes the CLR component stream and JSON uses an array, with an eighth `Rest` component represented as a nested tuple. Generated collections use the exported Packed or Tagged layout, or a proven dense declaration-order CLR representation. The codec accesses tuple components through `std::get`.
+`tuple_codec` maps a supported .NET `ValueTuple` to `std::tuple`. Binary writes the CLR component stream and JSON uses an array, with an eighth `Rest` component represented as a nested tuple. Generated collections use the exported Packed or Tagged layout, or a proven dense declaration-order CLR representation. Tagged reads validate direct and nested Boolean bytes before publishing the result. The codec accesses tuple components through `std::get`.
 
 Bind a string codec to one of the six `string_profile` values. Length and VarInt preserve null separately from empty. Token terminates with a zero code unit and encodes null as empty. Use a length profile for text containing embedded zero units.
 
