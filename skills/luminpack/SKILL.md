@@ -17,6 +17,8 @@ Use a fresh export and generated C++ header to read archived Version revision-1 
 
 Match a C# built-in Binary operation profile with C++ `generate --binary-profile`, for example `--binary-profile utf8-length` for `LuminPackUtf8LengthOptions`. Member and type declarations retain precedence. Explicitly profiled roots use a namespace suffix such as `_binary_utf8_length`. JSON keeps its own document settings.
 
+Use a newly generated root's `read_root_binary` to apply the managed `RequireCompleteBinaryInput` policy, its input limits, and its graph ownership when required.
+
 Generate a modeled closed generic root with its exact manifest `id` in quotes, for example `'Example.Box<string>'`. A concrete C# serialization call can reach that type directly or through a container.
 
 Ordinary recursive C++ records own each recursive node with `std::unique_ptr`, including List and Dictionary elements. A tracked object or ordinary RTTI Union case can own an ordinary recursive subtree through a field. Use the generated root codec to apply the supported recursion context and the declared Default Binary depth.

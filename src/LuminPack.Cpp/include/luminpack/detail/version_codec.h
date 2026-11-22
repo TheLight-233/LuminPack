@@ -291,15 +291,16 @@ private:
     }
 };
 
-/// Reads one binary document with a shared Version registry and a checked document boundary.
-template<class Codec>
+/// Reads one binary value with a shared Version registry. RequireComplete checks the document boundary.
+template<class Codec, bool RequireComplete = true>
 [[nodiscard]] typename Codec::value_type read_binary_document(std::span<const std::byte> input, reader_limits limits = {})
 {
     detail::check_document_size(input.size(), limits.max_input_bytes);
     reader cursor(input, limits);
     version_state state;
     auto value = detail::read_codec<Codec>(cursor, state);
-    cursor.require_end();
+    if constexpr (RequireComplete)
+        cursor.require_end();
     return value;
 }
 

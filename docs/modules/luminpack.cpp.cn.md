@@ -145,6 +145,8 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 将生成的 `root_binary_limits` 或 `root_json_options` 传给对应的文档读取入口，就会在解码前检查声明的 `MaxInputBytes`。限制以传入文档的字节数为单位。用于连续读取的游标继续执行集合、字符串和深度检查。
 
+新生成头文件中的 `read_root_binary(bytes)` 遵循托管程序集的 `RequireCompleteBinaryInput` 设置，并使用生成的输入和深度限制。遇到启用引用跟踪的根类型时，返回值拥有整个图文档。通用的 `read_binary_document` 和 `read_binary_reference_document` 入口默认要求完整文档。
+
 对 Next Custom 注册，在包含生成头文件之前提供特化，例如 `luminpack::custom_binding<u"Example.Message">`。特化提供 `binary` codec。如果 .NET 注册包含 JSON，也提供值类型相同的 `json` codec。可以使用 `custom_codec` 和 `json_custom_codec`。wire 字节和 null 表示由应用负责。生成的 Custom JSON 使用自动注册的 UTF-16 profile。仅注册 Binary 时只需提供 `binary` codec。
 
 在 `generate` 中使用 `--rtti`，可为 Next 的精确分派和虚分派层生成 C++ 多态 DTO。精确分派的写入器将 `typeid(value)` 与声明的具体类型逐个比较。虚分派的写入器调用 case 为当前 Binary 配置或 JSON 编码生成的虚槽。同一泛型声明有多个闭合 case 时，Binary 和 JSON 共用编译期 case hash。两层的读取器都按 C# 的规范 case hash 执行 `switch`。直接 case 全是普通类时，Union 槽用 `std::unique_ptr` 持有对象。存在直接跟踪 case 时，Union 的所有槽都借用文档图中的指针，包括普通 case 和注册 case。同一个根和 profile 的 RTTI 与 variant 头文件使用相同命名空间，每种 profile 选择一种表示。

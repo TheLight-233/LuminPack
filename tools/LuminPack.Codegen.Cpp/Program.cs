@@ -27,6 +27,7 @@ catch (Exception error) when (error is IOException or UnauthorizedAccessExceptio
 internal static class ContractExport
 {
     private const string MetadataKey = "LuminPack.Cpp.Contract.v1";
+    private const string CompleteBinaryInputMetadataKey = "LuminPack.Cpp.CompleteBinaryInput.v1";
 
     /// <summary>Reads compiler-emitted metadata and replaces the manifest after validation succeeds.</summary>
     /// <param name="assemblyPath">The input managed assembly.</param>
@@ -44,12 +45,19 @@ internal static class ContractExport
 
         AssemblyDefinition definition = metadata.GetAssemblyDefinition();
         var rows = new SortedDictionary<string, JsonElement>(StringComparer.Ordinal);
+        bool? completeBinaryInput = null;
         foreach (CustomAttributeHandle attribute in definition.GetCustomAttributes())
         {
-            string? row = ReadRow(metadata, attribute);
-            if (row == null)
+            if (ReadMetadata(metadata, attribute) is not { } entry)
                 continue;
-            using JsonDocument document = JsonDocument.Parse(row);
+            if (entry.Key == CompleteBinaryInputMetadataKey)
+            {
+                if (completeBinaryInput.HasValue || entry.Value is not ("true" or "false"))
+                    throw new InvalidOperationException("Invalid LuminPack C++ complete binary input policy.");
+                completeBinaryInput = entry.Value == "true";
+                continue;
+            }
+            using JsonDocument document = JsonDocument.Parse(entry.Value);
             JsonElement data = document.RootElement;
             if (data.ValueKind != JsonValueKind.Object || !data.TryGetProperty("id", out JsonElement identity) ||
                 identity.ValueKind != JsonValueKind.String || string.IsNullOrEmpty(identity.GetString()))
@@ -67,6 +75,8 @@ internal static class ContractExport
             writer.WriteStartObject();
             writer.WriteNumber("version", 1);
             writer.WriteString("assembly", metadata.GetString(definition.Name));
+            if (completeBinaryInput.HasValue)
+                writer.WriteBoolean("requireCompleteBinaryInput", completeBinaryInput.Value);
             writer.WriteStartArray("contracts");
             foreach (JsonElement row in rows.Values)
                 row.WriteTo(writer);
@@ -77,11 +87,11 @@ internal static class ContractExport
         });
     }
 
-    /// <summary>Reads only the standard AssemblyMetadataAttribute constructor and the versioned LuminPack key.</summary>
+    /// <summary>Reads only standard assembly metadata with a recognized versioned LuminPack key.</summary>
     /// <param name="metadata">The input assembly's metadata reader.</param>
     /// <param name="handle">A candidate assembly custom attribute.</param>
-    /// <returns>The JSON row or null when the attribute is unrelated.</returns>
-    private static string? ReadRow(MetadataReader metadata, CustomAttributeHandle handle)
+    /// <returns>The name and contents of the metadata, or null when the attribute is unrelated.</returns>
+    private static (string Key, string Value)? ReadMetadata(MetadataReader metadata, CustomAttributeHandle handle)
     {
         CustomAttribute attribute = metadata.GetCustomAttribute(handle);
         if (attribute.Constructor.Kind != HandleKind.MemberReference)
@@ -95,11 +105,14 @@ internal static class ContractExport
             return null;
 
         BlobReader blob = metadata.GetBlobReader(attribute.Value);
-        if (blob.ReadUInt16() != 1 || blob.ReadSerializedString() != MetadataKey)
+        if (blob.ReadUInt16() != 1)
+            return null;
+        string? key = blob.ReadSerializedString();
+        if (key is not (MetadataKey or CompleteBinaryInputMetadataKey))
             return null;
         string? row = blob.ReadSerializedString();
         if (row == null || blob.ReadUInt16() != 0 || blob.RemainingBytes != 0)
             throw new BadImageFormatException("Invalid LuminPack C++ contract attribute.");
-        return row;
+        return (key, row);
     }
 }

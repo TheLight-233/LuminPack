@@ -130,8 +130,8 @@ struct tracked_binary_codec
     }
 };
 
-/// Reads an independent binary document and owns every tracked shell reachable through its value.
-template<class Codec>
+/// Reads a binary value and owns every tracked shell. RequireComplete checks the document boundary.
+template<class Codec, bool RequireComplete = true>
 [[nodiscard]] reference_document<typename Codec::value_type> read_binary_reference_document(
     std::span<const std::byte> input, reader_limits limits = {}, std::size_t max_depth = default_binary_reference_depth)
 {
@@ -141,7 +141,8 @@ template<class Codec>
     version_state version;
     reference_read_state references(result.graph, max_depth);
     result.value = detail::read_codec<Codec>(cursor, version, references);
-    cursor.require_end();
+    if constexpr (RequireComplete)
+        cursor.require_end();
     return result;
 }
 

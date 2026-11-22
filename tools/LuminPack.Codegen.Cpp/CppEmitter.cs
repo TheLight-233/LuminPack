@@ -64,6 +64,7 @@ internal sealed partial class CppEmitter
         Binding binding = emitter.BindContract(declaration, binaryProfile ?? profile.GetProperty("binary").GetInt32());
         emitter.EmitDeferredRecordsAndRttiUnions();
         emitter.EmitRoot(binding, profile);
+        emitter.EmitRootBinaryReadFacade(manifest.RootElement);
         emitter.code.Append("}\n");
         OutputFile.Replace(manifestPath, headerPath, stream =>
         {
