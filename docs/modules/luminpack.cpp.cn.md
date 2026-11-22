@@ -191,12 +191,25 @@ dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release --no-build -- 
 
 ## 对比原生性能
 
-先完成上面的模型互通验证，再用本地的 yalantinglibs 0.5.8 和 RapidJSON 1.1.0 源码配置独立基准。.NET 测试数据由默认重载生成。可执行程序用生成的模型与 `struct_pack` 对比二进制性能，并按 LuminPack 默认编码与 RapidJSON 对比 UTF-16 JSON 性能。RapidJSON 适配器用 `Writer` 编码类型化数据，从 RapidJSON DOM 还原相同的 DTO。
+先完成上面的模型互通验证，再用本地的 yalantinglibs 0.5.8 和 RapidJSON 1.1.0 源码配置独立基准。.NET 测试数据由默认重载生成。可执行程序用生成的模型与 `struct_pack` 对比二进制性能，并与 RapidJSON 对比 UTF-16 和 UTF-8 JSON。UTF-16 是 LuminPack 的默认 JSON 编码。RapidJSON 适配器用 `Writer` 编码类型化数据，从 RapidJSON DOM 还原相同的 DTO。
+
+可分别设置额外的依赖路径，加入 Bitsery 5.2.5（`v5.2.5`）、cereal 1.3.2（`v1.3.2`）或 MessagePack-C++ 7.0.0（`cpp-7.0.0`）。Bitsery 使用带检查的缓冲区读取器和紧凑集合长度。cereal 通过内存流使用 `BinaryArchive`。MessagePack-C++ 将记录写成数组，用 BIN 保存模型的 UTF-16LE 文本，再从解析结果还原 DTO。二进制适配器的计时不含字符转码。
+
+UTF-8 可另加 jsoncons 1.3.2（`v1.3.2`）、nlohmann/json 3.12.0（`v3.12.0`）和 simdjson 3.12.3（`v3.12.3`）。jsoncons 使用紧凑流式编码器。nlohmann/json 构造 DOM 后调用 `dump()`，包括分配输出字符串的耗时。两者都通过 DOM 还原 DTO。simdjson 只测读取，复用 DOM 解析器并使用提前填充的输入。适配器计入 UTF-8 与生成 DTO 内 UTF-16 字符串之间的转换耗时。
 
 ```sh
-cmake -S benchmarks/LuminPack.Benchmark.Cpp -B .tmp/cpp-bench -DCMAKE_BUILD_TYPE=Release -DLUMINPACK_CPP_MODEL_FIXTURES=/absolute/path/to/.tmp/cpp-models -DLUMINPACK_CPP_YALANTINGLIBS=/absolute/path/to/yalantinglibs -DLUMINPACK_CPP_RAPIDJSON=/absolute/path/to/rapidjson
+cmake -S benchmarks/LuminPack.Benchmark.Cpp -B .tmp/cpp-bench -DCMAKE_BUILD_TYPE=Release \
+  -DLUMINPACK_CPP_MODEL_FIXTURES=/absolute/path/to/.tmp/cpp-models \
+  -DLUMINPACK_CPP_YALANTINGLIBS=/absolute/path/to/yalantinglibs \
+  -DLUMINPACK_CPP_RAPIDJSON=/absolute/path/to/rapidjson \
+  -DLUMINPACK_CPP_BITSERY=/absolute/path/to/bitsery \
+  -DLUMINPACK_CPP_CEREAL=/absolute/path/to/cereal \
+  -DLUMINPACK_CPP_MSGPACK=/absolute/path/to/msgpack-c \
+  -DLUMINPACK_CPP_JSONCONS=/absolute/path/to/jsoncons \
+  -DLUMINPACK_CPP_NLOHMANN_JSON=/absolute/path/to/nlohmann-json \
+  -DLUMINPACK_CPP_SIMDJSON=/absolute/path/to/simdjson
 cmake --build .tmp/cpp-bench --config Release
 .tmp/cpp-bench/Release/luminpack_cpp_benchmark .tmp/cpp-models > .tmp/cpp-bench/results.csv
 ```
 
-使用单配置生成器时，在 `.tmp/cpp-bench` 下直接运行可执行程序。基准在计时前校验模型内容，写入复用缓冲区，每次读取新建对象。两边的 JSON 读取共用同一份 .NET UTF-16 文档。二进制读取使用同一个模型各自的线格式。CSV 记录负载字节数、七轮计时的中位数和样本变异系数，以及同轮耗时除以对照库耗时。每次操作的分配请求次数和请求字节数单独采样，覆盖 C++ `new` 和 RapidJSON 分配器适配器。
+使用单配置生成器时，在 `.tmp/cpp-bench` 下直接运行可执行程序。基准在计时前校验模型内容，写入复用库所支持的缓冲区，每次读取新建对象。UTF-16 读取共用同一份 .NET 文档，UTF-8 读取共用该文档在计时前转码得到的字节。二进制读取使用同一个模型各自的线格式。CSV 记录负载字节数、七轮计时的中位数和样本变异系数。`ratio_to_reference` 以同一轮、同一模型和方向的耗时为分母，二进制用 `struct_pack`，JSON 用同编码的 RapidJSON。每次操作的分配请求次数和字节数单独采样，覆盖 C++ `new` 和 RapidJSON 分配器适配器。MessagePack-C++ 的 zone 另有 C 堆分配，未计入这两列。

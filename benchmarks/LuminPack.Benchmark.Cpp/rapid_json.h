@@ -12,7 +12,7 @@ namespace rapid_reference
 inline void require(bool valid)
 {
     if (!valid)
-        throw std::runtime_error("Unexpected RapidJSON benchmark data.");
+        throw std::runtime_error("Unexpected JSON benchmark data.");
 }
 
 struct allocator : rapidjson::CrtAllocator
@@ -71,7 +71,7 @@ struct binding<luminpack::json_codec<luminpack::scalar_codec<T>>>
         return static_cast<T>(parsed);
     }
 
-    static void write(writer& output, T data)
+    static void write(auto& output, T data)
     {
         if constexpr (std::is_floating_point_v<T>)
             require(output.Double(data));
@@ -91,7 +91,7 @@ struct binding<luminpack::json_codec<luminpack::boolean_codec>>
         return input.GetBool();
     }
 
-    static void write(writer& output, bool data) { output.Bool(data); }
+    static void write(auto& output, bool data) { output.Bool(data); }
 };
 
 template<class Enum>
@@ -100,7 +100,7 @@ struct binding<luminpack::json_codec<luminpack::enum_codec<Enum>>>
     using underlying = std::underlying_type_t<Enum>;
     using scalar = binding<luminpack::json_codec<luminpack::scalar_codec<underlying>>>;
     static Enum read(const value& input) { return static_cast<Enum>(scalar::read(input)); }
-    static void write(writer& output, Enum data) { scalar::write(output, static_cast<underlying>(data)); }
+    static void write(auto& output, Enum data) { scalar::write(output, static_cast<underlying>(data)); }
 };
 
 template<class Codec>
@@ -115,7 +115,7 @@ struct binding<luminpack::json_optional_codec<Codec>>
         return binding<Codec>::read(input);
     }
 
-    static void write(writer& output, const optional& data)
+    static void write(auto& output, const optional& data)
     {
         if (data)
             binding<Codec>::write(output, *data);
@@ -133,7 +133,7 @@ struct binding<luminpack::json_string_codec>
         return {input.GetString(), input.GetStringLength()};
     }
 
-    static void write(writer& output, const std::u16string& data)
+    static void write(auto& output, const std::u16string& data)
     {
         require(output.String(data.data(), static_cast<rapidjson::SizeType>(data.size())));
     }
@@ -164,7 +164,7 @@ struct binding<luminpack::json_list_codec<Element>>
         return result;
     }
 
-    static void write(writer& output, const list& data)
+    static void write(auto& output, const list& data)
     {
         if (!data)
         {
@@ -213,7 +213,7 @@ struct binding<luminpack::json_dictionary_codec<Key, Item, Hash, Equal>>
         return result;
     }
 
-    static void write(writer& output, const dictionary& data)
+    static void write(auto& output, const dictionary& data)
     {
         if (!data)
         {
@@ -226,12 +226,28 @@ struct binding<luminpack::json_dictionary_codec<Key, Item, Hash, Equal>>
             output.StartArray();
         for (const auto& [key, item] : *data)
         {
-            if constexpr (!codec::string_keys)
+            if constexpr (codec::string_keys)
+            {
+                const auto text = [&]() -> std::u16string_view
+                {
+                    if constexpr (std::same_as<typename codec::key_type, std::u16string>)
+                        return key;
+                    else
+                    {
+                        require(key.has_value());
+                        return *key;
+                    }
+                }();
+                require(output.Key(text.data(), static_cast<rapidjson::SizeType>(text.size())));
+                binding<Item>::write(output, item);
+            }
+            else
+            {
                 output.StartArray();
-            binding<Key>::write(output, key);
-            binding<Item>::write(output, item);
-            if constexpr (!codec::string_keys)
+                binding<Key>::write(output, key);
+                binding<Item>::write(output, item);
                 output.EndArray();
+            }
         }
         if constexpr (codec::string_keys)
             output.EndObject();
@@ -255,10 +271,13 @@ struct binding<luminpack::json_record_member<Name, Field, Codec, Aliases...>>
         return true;
     }
 
-    static void write(writer& output, const auto& data)
+    static void write(auto& output, const auto& data)
     {
         constexpr auto name = Name.view();
-        require(output.Key(name.data(), static_cast<rapidjson::SizeType>(name.size())));
+        if constexpr (requires { output.template property<Name>(); })
+            output.template property<Name>();
+        else
+            require(output.Key(name.data(), static_cast<rapidjson::SizeType>(name.size())));
         binding<Codec>::write(output, data.*Field);
     }
 };
@@ -284,7 +303,7 @@ struct binding<luminpack::json_record_body<T, Fields...>>
         return result;
     }
 
-    static void write(writer& output, const T& data)
+    static void write(auto& output, const T& data)
     {
         output.StartObject();
         (binding<Fields>::write(output, data), ...);
@@ -318,7 +337,7 @@ struct binding<luminpack::json_union_codec<Cases...>>
         return result;
     }
 
-    static void write(writer& output, const selection& data)
+    static void write(auto& output, const selection& data)
     {
         if (!data)
         {
@@ -345,7 +364,7 @@ private:
     }
 
     template<std::size_t Index>
-    static bool write_case(writer& output, const selection& data)
+    static bool write_case(auto& output, const selection& data)
     {
         using entry = std::tuple_element_t<Index, cases>;
         if (data->index() != Index)
@@ -380,5 +399,35 @@ public:
 private:
     buffer storage_;
     writer target_{storage_};
+};
+
+using utf8 = rapidjson::UTF8<>;
+
+template<class Codec>
+typename Codec::value_type read_utf8(const char* input)
+{
+    document parsed;
+    parsed.Parse<rapidjson::kParseValidateEncodingFlag | rapidjson::kParseFullPrecisionFlag, utf8>(input);
+    require(!parsed.HasParseError());
+    return binding<Codec>::read(parsed);
+}
+
+class reusable_utf8_writer
+{
+public:
+    template<class Codec>
+    std::string_view write(const typename Codec::value_type& data)
+    {
+        storage_.Clear();
+        target_.Reset(storage_);
+        binding<Codec>::write(target_, data);
+        require(target_.IsComplete());
+        return {storage_.GetString(), storage_.GetSize()};
+    }
+
+private:
+    using utf8_buffer = rapidjson::GenericStringBuffer<utf8, allocator>;
+    utf8_buffer storage_;
+    rapidjson::Writer<utf8_buffer, encoding, utf8, allocator> target_{storage_};
 };
 }

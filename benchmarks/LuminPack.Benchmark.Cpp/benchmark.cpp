@@ -1,6 +1,25 @@
 #include "simple-benchmark.hpp"
 #include "serialize-benchmark.hpp"
-#include "rapid_json.h"
+#include "json_dom.h"
+
+#ifdef LUMINPACK_BENCHMARK_BITSERY
+#include "bitsery_reference.h"
+#endif
+#ifdef LUMINPACK_BENCHMARK_CEREAL
+#include "cereal_reference.h"
+#endif
+#ifdef LUMINPACK_BENCHMARK_MSGPACK
+#include "msgpack_reference.h"
+#endif
+#ifdef LUMINPACK_BENCHMARK_JSONCONS
+#include "jsoncons_reference.h"
+#endif
+#ifdef LUMINPACK_BENCHMARK_NLOHMANN_JSON
+#include "nlohmann_reference.h"
+#endif
+#ifdef LUMINPACK_BENCHMARK_SIMDJSON
+#include "simdjson_reference.h"
+#endif
 
 #include <ylt/struct_pack.hpp>
 
@@ -14,6 +33,7 @@
 #include <iomanip>
 #include <iostream>
 #include <numeric>
+#include <string_view>
 
 namespace simple = luminpack_generated::root_LuminPackBenchmark_x002eSimpleClass;
 namespace save = luminpack_generated::root_LuminPackBenchmark_x002eCharacterSaveData;
@@ -115,11 +135,12 @@ struct job
     const char* direction;
     std::size_t bytes;
     operation run;
+    bool reference = false;
 };
 
-void report(const char* model, std::array<job, 8> jobs)
+void report(const char* model, const std::vector<job>& jobs)
 {
-    std::array<std::array<double, repetitions>, jobs.size()> samples{};
+    std::vector<std::array<double, repetitions>> samples(jobs.size());
     for (auto& current : jobs)
         time_sample(current.run);
     for (int repetition = 0; repetition < repetitions; ++repetition)
@@ -130,17 +151,28 @@ void report(const char* model, std::array<job, 8> jobs)
             samples[index][repetition] = time_sample(jobs[index].run);
         }
     }
+    std::vector<statistics> results;
+    results.reserve(samples.size());
+    for (const auto& sample : samples)
+        results.push_back(summarize(sample));
     for (std::size_t index = 0; index < jobs.size(); ++index)
     {
         const auto& current = jobs[index];
-        const auto result = summarize(samples[index]);
-        const auto reference = summarize(samples[index | 1u]);
+        const auto result = results[index];
+        const auto reference = std::ranges::find_if(jobs, [&](const job& candidate)
+        {
+            return candidate.reference && std::string_view(candidate.format) == current.format
+                && std::string_view(candidate.direction) == current.direction;
+        });
+        if (reference == jobs.end())
+            throw std::logic_error("Missing reference for benchmark group.");
+        const auto reference_time = results[reference - jobs.begin()].median;
         start_allocation_sample();
         for (int iteration = 0; iteration < allocation_iterations; ++iteration)
             current.run();
         const auto allocated = stop_allocation_sample();
         std::cout << model << ',' << current.format << ',' << current.direction << ',' << current.library << ','
-            << current.bytes << ',' << result.median << ',' << result.cv << ',' << result.median / reference.median << ','
+            << current.bytes << ',' << result.median << ',' << result.cv << ',' << result.median / reference_time << ','
             << static_cast<double>(allocated.calls) / allocation_iterations << ','
             << static_cast<double>(allocated.bytes) / allocation_iterations << '\n';
     }
@@ -155,12 +187,13 @@ void benchmark_model(const path& directory, const char* name, const char* fixtur
     if (json.find(u'\0') != std::u16string::npos)
         throw std::runtime_error("Embedded zero code unit in benchmark JSON.");
     const auto json_input = std::as_bytes(std::span(json));
+    const auto utf8_json = json_dom::to_utf8(json);
+    const auto utf8_input = std::as_bytes(std::span(utf8_json));
     const auto model = luminpack::read_binary_document<Binary>(std::as_bytes(std::span(binary)));
     if (!model)
         throw std::runtime_error("Unexpected null benchmark model.");
 
     std::vector<char> output(1u << 20);
-    auto writable = std::as_writable_bytes(std::span(output));
     std::vector<char16_t> json_output(1u << 19);
     auto json_writable = std::as_writable_bytes(std::span(json_output).first(json_output.size() - 1));
     auto render_check_value = [&](const model_type& data)
@@ -191,26 +224,112 @@ void benchmark_model(const path& directory, const char* name, const char* fixtur
     const auto rapid_decoded = rapid_reference::read<Json>(rapid_output.data());
     verify(rapid_decoded, "RapidJSON round trip");
     verify(rapid_reference::read<Json>(json.c_str()), "RapidJSON UTF-16");
-    const auto lumin_binary_size = luminpack::write_binary_document<Binary>(writable, model).size();
+    const auto lumin_binary_size = luminpack::write_binary_document<Binary>(std::as_writable_bytes(std::span(output)), model).size();
 
-    report(name, {{
+    constexpr auto utf8 = luminpack::json_encoding::utf8;
+    std::vector<std::byte> utf8_output(1u << 20);
+    const auto lumin_utf8 = luminpack::write_json_document<Json, utf8>(utf8_output, model);
+    verify(luminpack::read_json_document<Json, utf8>(lumin_utf8), "LuminPack UTF-8 round trip");
+    verify(luminpack::read_json_document<Json, utf8>(utf8_input), "LuminPack UTF-8 fixture");
+    rapid_reference::reusable_utf8_writer rapid_utf8_writer;
+    const auto rapid_utf8 = rapid_utf8_writer.write<Json>(model);
+    verify(rapid_reference::read_utf8<Json>(rapid_utf8.data()), "RapidJSON UTF-8 round trip");
+    verify(rapid_reference::read_utf8<Json>(utf8_json.c_str()), "RapidJSON UTF-8 fixture");
+
+    std::vector<job> jobs{
         {"luminpack", "binary", "write", lumin_binary_size, [&]
-            { const auto written = luminpack::write_binary_document<Binary>(writable, model); observe(written.data() + written.size()); }},
+            {
+                const auto written = luminpack::write_binary_document<Binary>(std::as_writable_bytes(std::span(output)), model);
+                observe(written.data() + written.size());
+            }},
         {"struct_pack", "binary", "write", sp_size, [&]
-            { observe(output.data() + pack(output, model)); }},
+            { observe(output.data() + pack(output, model)); }, true},
         {"luminpack", "binary", "read", binary.size(), [&]
             { auto object = luminpack::read_binary_document<Binary>(std::as_bytes(std::span(binary))); observe(&object); }},
         {"struct_pack", "binary", "read", sp_input.size(), [&]
-            { auto object = unpack<model_type>(sp_input); observe(&object); }},
+            { auto object = unpack<model_type>(sp_input); observe(&object); }, true},
         {"luminpack", "json-utf16", "write", lumin_json_size, [&]
             { const auto written = luminpack::write_json_document<Json>(json_writable, model); observe(written.data() + written.size()); }},
         {"rapidjson", "json-utf16", "write", rapid_size, [&]
-            { const auto written = rapid_writer.write<Json>(model); observe(written.data() + written.size()); }},
+            { const auto written = rapid_writer.write<Json>(model); observe(written.data() + written.size()); }, true},
         {"luminpack", "json-utf16", "read", json_input.size(), [&]
             { auto object = luminpack::read_json_document<Json>(json_input); observe(&object); }},
         {"rapidjson", "json-utf16", "read", json_input.size(), [&]
-            { auto object = rapid_reference::read<Json>(json.c_str()); observe(&object); }}
+            { auto object = rapid_reference::read<Json>(json.c_str()); observe(&object); }, true},
+        {"luminpack", "json-utf8", "write", lumin_utf8.size(), [&]
+            { const auto written = luminpack::write_json_document<Json, utf8>(utf8_output, model); observe(written.data() + written.size()); }},
+        {"rapidjson", "json-utf8", "write", rapid_utf8.size(), [&]
+            { const auto written = rapid_utf8_writer.write<Json>(model); observe(written.data() + written.size()); }, true},
+        {"luminpack", "json-utf8", "read", utf8_input.size(), [&]
+            { auto object = luminpack::read_json_document<Json, utf8>(utf8_input); observe(&object); }},
+        {"rapidjson", "json-utf8", "read", utf8_input.size(), [&]
+            { auto object = rapid_reference::read_utf8<Json>(utf8_json.c_str()); observe(&object); }, true}
+    };
+
+#if defined(LUMINPACK_BENCHMARK_BITSERY) || defined(LUMINPACK_BENCHMARK_CEREAL) || defined(LUMINPACK_BENCHMARK_MSGPACK)
+    auto add_binary = [&](const char* library, auto write, auto read)
+    {
+        const auto size = write(output, model);
+        std::vector<char> input(output.begin(), output.begin() + size);
+        verify(read(input), library);
+        jobs.push_back({library, "binary", "write", size, [&, write]
+        {
+            const auto written = write(output, model);
+            observe(output.data() + written);
+        }});
+        jobs.push_back({library, "binary", "read", size, [read, input = std::move(input)]
+        {
+            auto object = read(input);
+            observe(&object);
+        }});
+    };
+#endif
+#ifdef LUMINPACK_BENCHMARK_BITSERY
+    add_binary("bitsery", bitsery_reference::write<model_type>, bitsery_reference::read<model_type>);
+#endif
+#ifdef LUMINPACK_BENCHMARK_CEREAL
+    add_binary("cereal", cereal_reference::write<model_type>, cereal_reference::read<model_type>);
+#endif
+#ifdef LUMINPACK_BENCHMARK_MSGPACK
+    add_binary("msgpack-cxx", msgpack_reference::write<model_type>, msgpack_reference::read<model_type>);
+#endif
+
+#if defined(LUMINPACK_BENCHMARK_JSONCONS) || defined(LUMINPACK_BENCHMARK_NLOHMANN_JSON)
+    auto add_json = [&](const char* library, auto& writer, auto read)
+    {
+        const auto written = writer.template write<Json>(model);
+        verify(read(written), library);
+        verify(read(utf8_json), library);
+        jobs.push_back({library, "json-utf8", "write", written.size(), [&, writer = &writer]
+        {
+            const auto result = writer->template write<Json>(model);
+            observe(result.data() + result.size());
+        }});
+        jobs.push_back({library, "json-utf8", "read", utf8_input.size(), [&, read]
+        {
+            auto object = read(utf8_json);
+            observe(&object);
+        }});
+    };
+#endif
+#ifdef LUMINPACK_BENCHMARK_JSONCONS
+    jsoncons_reference::reusable_writer jsoncons_writer;
+    add_json("jsoncons", jsoncons_writer, jsoncons_reference::read<Json>);
+#endif
+#ifdef LUMINPACK_BENCHMARK_NLOHMANN_JSON
+    nlohmann_reference::reusable_writer nlohmann_writer;
+    add_json("nlohmann-json", nlohmann_writer, nlohmann_reference::read<Json>);
+#endif
+#ifdef LUMINPACK_BENCHMARK_SIMDJSON
+    simdjson_reference::reusable_reader simdjson_reader(utf8_json);
+    verify(simdjson_reader.template read<Json>(), "simdjson");
+    jobs.push_back({"simdjson", "json-utf8", "read", utf8_input.size(), [&]
+    {
+        auto object = simdjson_reader.template read<Json>();
+        observe(&object);
     }});
+#endif
+    report(name, jobs);
 }
 }
 

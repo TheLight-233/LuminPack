@@ -191,12 +191,25 @@ To exercise the RTTI model gate, generate both headers with `generate --rtti` an
 
 ## Compare native performance
 
-After building the fixture gate above, configure the standalone benchmark with local checkouts of yalantinglibs 0.5.8 and RapidJSON 1.1.0. The fixture producer calls the .NET serializer's default overloads. The executable compares the generated models with `struct_pack` for binary and RapidJSON for UTF-16 JSON using the default LuminPack encoding. The RapidJSON adapter writes typed values with `Writer` and materializes the same DTOs from the RapidJSON DOM.
+After building the fixture gate above, configure the standalone benchmark with local checkouts of yalantinglibs 0.5.8 and RapidJSON 1.1.0. The fixture producer calls the .NET serializer's default overloads. The executable compares the generated models with `struct_pack` for binary and RapidJSON for UTF-16 and UTF-8 JSON. UTF-16 is the default LuminPack JSON encoding. The RapidJSON adapter writes typed values with `Writer` and materializes the same DTOs from the RapidJSON DOM.
+
+Set any of the additional binary dependency paths to add Bitsery 5.2.5 (`v5.2.5`), cereal 1.3.2 (`v1.3.2`), or MessagePack-C++ 7.0.0 (`cpp-7.0.0`). Bitsery uses its checked buffer reader and compact collection lengths. cereal uses `BinaryArchive` over memory streams. The MessagePack-C++ adapter writes records as arrays, stores the input UTF-16LE text in BIN values, and materializes the DTO from the parsed object. No text transcoding is timed for those binary adapters.
+
+The optional UTF-8 rows use jsoncons 1.3.2 (`v1.3.2`), nlohmann/json 3.12.0 (`v3.12.0`), and simdjson 3.12.3 (`v3.12.3`). jsoncons uses its compact streaming encoder. nlohmann/json builds a DOM before `dump()`, including the returned string allocation. Both readers parse to a DOM and materialize the DTO. The simdjson row measures reading only with a reusable DOM parser and pre-padded input. The timed adapters include conversions between UTF-8 input or output and the generated DTO's UTF-16 strings.
 
 ```sh
-cmake -S benchmarks/LuminPack.Benchmark.Cpp -B .tmp/cpp-bench -DCMAKE_BUILD_TYPE=Release -DLUMINPACK_CPP_MODEL_FIXTURES=/absolute/path/to/.tmp/cpp-models -DLUMINPACK_CPP_YALANTINGLIBS=/absolute/path/to/yalantinglibs -DLUMINPACK_CPP_RAPIDJSON=/absolute/path/to/rapidjson
+cmake -S benchmarks/LuminPack.Benchmark.Cpp -B .tmp/cpp-bench -DCMAKE_BUILD_TYPE=Release \
+  -DLUMINPACK_CPP_MODEL_FIXTURES=/absolute/path/to/.tmp/cpp-models \
+  -DLUMINPACK_CPP_YALANTINGLIBS=/absolute/path/to/yalantinglibs \
+  -DLUMINPACK_CPP_RAPIDJSON=/absolute/path/to/rapidjson \
+  -DLUMINPACK_CPP_BITSERY=/absolute/path/to/bitsery \
+  -DLUMINPACK_CPP_CEREAL=/absolute/path/to/cereal \
+  -DLUMINPACK_CPP_MSGPACK=/absolute/path/to/msgpack-c \
+  -DLUMINPACK_CPP_JSONCONS=/absolute/path/to/jsoncons \
+  -DLUMINPACK_CPP_NLOHMANN_JSON=/absolute/path/to/nlohmann-json \
+  -DLUMINPACK_CPP_SIMDJSON=/absolute/path/to/simdjson
 cmake --build .tmp/cpp-bench --config Release
 .tmp/cpp-bench/Release/luminpack_cpp_benchmark .tmp/cpp-models > .tmp/cpp-bench/results.csv
 ```
 
-For a single-configuration generator, run the executable directly under `.tmp/cpp-bench`. The benchmark verifies values before measuring, reuses writer storage, and materializes a fresh object on each read. Both JSON readers receive the same managed UTF-16 document. Each binary reader receives its format's wire bytes for the same model. The CSV includes the wire size, median and sample coefficient of variation across seven timed samples, same-run time divided by the reference time, and per-operation allocation requests and requested bytes from a separate sampling pass. Allocation sampling covers C++ `new` and the RapidJSON allocator adapter.
+For a single-configuration generator, run the executable directly under `.tmp/cpp-bench`. The benchmark verifies values before measuring, reuses supported writer buffers, and materializes a fresh object on each read. The UTF-16 readers receive the same managed document. The UTF-8 readers receive its identical transcoding prepared outside the timing loop. Each binary reader receives its format's wire bytes for the same model. The CSV includes the wire size, median and sample coefficient of variation across seven timed samples, and per-operation allocation requests and requested bytes from a separate sampling pass. `ratio_to_reference` divides each median by the matching `struct_pack` binary or RapidJSON JSON median of the same encoding from the same run. Allocation sampling covers C++ `new` and the RapidJSON allocator adapter. The MessagePack-C++ zone uses additional C heap allocations beyond the reported count and bytes.
