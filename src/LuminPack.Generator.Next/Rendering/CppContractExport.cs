@@ -22,14 +22,14 @@ internal static class CppContractExport
     /// <param name="roots">The complete payloads already analyzed by Next.</param>
     /// <param name="options">The compiled generator profile and target capabilities.</param>
     /// <param name="getNativeStorage">The optional native layout analysis for raw structs.</param>
-    /// <param name="hasDenseTupleStorage">The layout proof for raw CLR tuple formatters.</param>
+    /// <param name="getRawCompoundStorage">The layout proof for headerless framework storage.</param>
     /// <param name="custom">The validated registrations whose representations are application-owned.</param>
     /// <param name="assemblyPolicy">The document policy for the registered fallback.</param>
     /// <param name="cancellationToken">Cancels the projection.</param>
     /// <returns>Source containing assembly metadata only.</returns>
     internal static string Render(IEnumerable<TypeModel> roots, GeneratorOptions options,
         Func<StructModel, (int Strategy, FormatterStorageModel Layout)?> getNativeStorage,
-        Func<FormatterModel, bool> hasDenseTupleStorage,
+        Func<FormatterModel, FormatterStorageModel?> getRawCompoundStorage,
         IEnumerable<(string Id, string Type, bool Reference, bool Json)> custom, WirePolicy assemblyPolicy,
         CancellationToken cancellationToken)
     {
@@ -49,7 +49,7 @@ internal static class CppContractExport
                 RenderModelFactory.Create(model, options, json: true) is { } jsonModel
                     ? JsonEmitter.FindGeneratedInt32Runs(jsonModel)
                     : null;
-            Append(Contract(model, model is StructModel value ? getNativeStorage(value) : null, orderedRuns, hasDenseTupleStorage));
+            Append(Contract(model, model is StructModel value ? getNativeStorage(value) : null, orderedRuns, getRawCompoundStorage));
         }
         var ids = new HashSet<string>(contracts.Keys, StringComparer.Ordinal);
         foreach (var declaration in custom.OrderBy(item => item.Id, StringComparer.Ordinal))
@@ -141,10 +141,10 @@ internal static class CppContractExport
     /// <param name="model">The declaration facts.</param>
     /// <param name="native">The independent tag-free layout facts, when available.</param>
     /// <param name="orderedRuns">The proven generated JSON Int32 runs by start ordinal.</param>
-    /// <param name="hasDenseTupleStorage">The layout proof for raw CLR tuple formatters.</param>
+    /// <param name="getRawCompoundStorage">The layout proof for headerless framework storage.</param>
     /// <returns>The JSON properties for the contract row.</returns>
     private static object Contract(TypeModel model, (int Strategy, FormatterStorageModel Layout)? native, int[]? orderedRuns,
-        Func<FormatterModel, bool> hasDenseTupleStorage)
+        Func<FormatterModel, FormatterStorageModel?> getRawCompoundStorage)
     {
         var record = model as RecordModel;
         var value = model as StructModel;
@@ -157,21 +157,22 @@ internal static class CppContractExport
             ("storageKind", value?.Storage.ToString()), ("storage", Storage(value?.StoragePlan)),
             ("nativeStrategy", native?.Strategy), ("nativeStorage", Storage(native?.Layout)),
             ("jsonInt32Runs", orderedRuns),
-            ("sequenceBase", record?.SequenceBase), ("collectionBase", Formatter(record?.CollectionBase, hasDenseTupleStorage)),
+            ("sequenceBase", record?.SequenceBase), ("collectionBase", Formatter(record?.CollectionBase, getRawCompoundStorage)),
             ("cases", union?.Cases.Select(static item => Object(("id", item.Type.MetadataName), ("type", item.Type.GlobalName),
                 ("hash", item.NameHash), ("tag", item.Tag), ("ownEntry", item.OwnEntry)))),
-            ("members", model.Members.Select((member, index) => Member(member, version, index, hasDenseTupleStorage))));
+            ("members", model.Members.Select((member, index) => Member(member, version, index, getRawCompoundStorage))));
     }
 
     /// <summary>Projects one member in the declaration's existing wire order.</summary>
     /// <param name="member">The normalized member.</param>
     /// <param name="version">The declaration's Version descriptor table or null.</param>
     /// <param name="index">The member's position in the declaration.</param>
-    /// <param name="hasDenseTupleStorage">The layout proof for raw CLR tuple formatters.</param>
+    /// <param name="getRawCompoundStorage">The layout proof for headerless framework storage.</param>
     /// <returns>The JSON properties for the member.</returns>
-    private static object Member(MemberModel member, VersionSchemaModel? version, int index, Func<FormatterModel, bool> hasDenseTupleStorage) =>
+    private static object Member(MemberModel member, VersionSchemaModel? version, int index,
+        Func<FormatterModel, FormatterStorageModel?> getRawCompoundStorage) =>
         Object(("name", member.Name), ("profile", Profile(member.Policy)), ("compressed", member.Compressed),
-            ("shape", Shape(member, hasDenseTupleStorage)), ("descriptor", version?.Descriptors[index].ToString("X16", CultureInfo.InvariantCulture)),
+            ("shape", Shape(member, getRawCompoundStorage)), ("descriptor", version?.Descriptors[index].ToString("X16", CultureInfo.InvariantCulture)),
             ("oldNames", version?.OldNames[index]), ("nameKeys", version?.NameKeys[index]),
             ("fixedNullable", version?.FixedNullable[index]));
 
@@ -193,9 +194,9 @@ internal static class CppContractExport
 
     /// <summary>Projects a typed member edge using its actual Next representation.</summary>
     /// <param name="member">The normalized member or null.</param>
-    /// <param name="hasDenseTupleStorage">The layout proof for raw CLR tuple formatters.</param>
+    /// <param name="getRawCompoundStorage">The layout proof for headerless framework storage.</param>
     /// <returns>The JSON shape to serialize.</returns>
-    private static object? Shape(MemberModel? member, Func<FormatterModel, bool> hasDenseTupleStorage) => member switch
+    private static object? Shape(MemberModel? member, Func<FormatterModel, FormatterStorageModel?> getRawCompoundStorage) => member switch
     {
         null => null,
         ScalarMember scalar => Object(("kind", scalar.EnumType == null ? "scalar" : "enum"), ("type", scalar.EnumType ?? scalar.Scalar),
@@ -205,11 +206,11 @@ internal static class CppContractExport
             ("framing", payload.Shape.ToString()), ("nullable", payload.Type.Nullable)),
         CollectionMember sequence => Object(("kind", sequence.Kind.ToString()), ("type", sequence.DeclaredType),
             ("element", sequence.Element.GlobalName), ("rank", sequence.ArrayRank), ("raw", sequence.Raw),
-            ("forwardedElement", Shape(sequence.ForwardedElement, hasDenseTupleStorage))),
+            ("forwardedElement", Shape(sequence.ForwardedElement, getRawCompoundStorage))),
         DictionaryMember dictionary => Object(("kind", dictionary.Kind.ToString()), ("type", dictionary.DeclaredType),
             ("key", dictionary.Key.GlobalName), ("value", dictionary.Value.GlobalName), ("sparseValue", dictionary.Sparse),
-            ("forwardedValue", Shape(dictionary.ForwardedValue, hasDenseTupleStorage))),
-        SpecialMember special => Object(("kind", "formatter"), ("type", special.Declared), ("formatter", Formatter(special.Formatter, hasDenseTupleStorage))),
+            ("forwardedValue", Shape(dictionary.ForwardedValue, getRawCompoundStorage))),
+        SpecialMember special => Object(("kind", "formatter"), ("type", special.Declared), ("formatter", Formatter(special.Formatter, getRawCompoundStorage))),
         CultureInfoMember culture => Object(("kind", "formatter"), ("type", culture.Declared)),
         TypeParameterMember parameter => Object(("kind", "parameter"), ("type", parameter.ParameterName)),
         _ => Object(("kind", "unsupported"), ("details", member.GetType().Name))
@@ -217,21 +218,25 @@ internal static class CppContractExport
 
     /// <summary>Projects a closed formatter's typed arguments and block-storage descriptions.</summary>
     /// <param name="formatter">The formatter to export or null.</param>
-    /// <param name="hasDenseTupleStorage">The layout proof for raw CLR tuple formatters.</param>
+    /// <param name="getRawCompoundStorage">The layout proof for headerless framework storage.</param>
     /// <returns>The JSON formatter description.</returns>
-    private static object? Formatter(FormatterModel? formatter, Func<FormatterModel, bool> hasDenseTupleStorage)
+    private static object? Formatter(FormatterModel? formatter, Func<FormatterModel, FormatterStorageModel?> getRawCompoundStorage)
     {
         if (formatter == null)
             return null;
         var fields = Object(("type", formatter.Type), ("definition", formatter.Definition),
-            ("arguments", formatter.Arguments.Select(argument => Formatter(argument, hasDenseTupleStorage))),
+            ("arguments", formatter.Arguments.Select(argument => Formatter(argument, getRawCompoundStorage))),
             ("underlying", formatter.Underlying), ("rank", formatter.Rank), ("raw", formatter.Raw),
             ("rawCollection", formatter.RawCollection), ("layout", Storage(formatter.Layout)),
             ("nullableLayout", Storage(formatter.NullableStorage)), ("nullableEncoding", formatter.NullableEncoding),
             ("nativeNullableElement", formatter.NativeNullableElement));
-        return formatter.Definition == GenericIdentity.ValueTuple && formatter.Raw && hasDenseTupleStorage(formatter)
-            ? fields.Append(("denseTupleStorage", (object)true)).ToArray()
-            : fields;
+        if (formatter.Definition is not (GenericIdentity.ValueTuple or GenericIdentity.KeyValuePair) ||
+            !formatter.RawCollection || getRawCompoundStorage(formatter) is not { } storage)
+            return fields;
+        if (storage.ModelSizes[0] != storage.WireSize || !storage.ModelOffsets[0].SequenceEqual(Enumerable.Range(0, storage.WireSize)))
+            return fields.Append(("rawCompoundStorage", Storage(storage))).ToArray();
+        return formatter.Definition == GenericIdentity.ValueTuple && formatter.Raw
+            ? fields.Append(("denseTupleStorage", (object?)true)).ToArray() : fields;
     }
 
     /// <summary>Projects one native layout and its modeled Tagged wire offsets.</summary>

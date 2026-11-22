@@ -10,57 +10,62 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 
 internal static partial class TypeModelFactory
 {
-    /// <summary>Reuses the CLR layout analysis for raw tuples in the opt-in C++ projection.</summary>
+    /// <summary>Reuses the CLR layout analysis for headerless framework values in the opt-in C++ projection.</summary>
     /// <param name="compilation">The consuming compilation.</param>
     /// <param name="options">The normalized project facts.</param>
-    /// <returns>A per-export proof for a dense tuple in declaration order.</returns>
-    internal static Func<FormatterModel, bool> CreateCppDenseTupleProof(Compilation compilation, GeneratorOptions options)
+    /// <returns>A per-export lookup of identical modeled CLR storage layouts.</returns>
+    internal static Func<FormatterModel, FormatterStorageModel?> CreateCppRawCompoundStorage(Compilation compilation, GeneratorOptions options)
     {
         Compilation view = Complete(compilation);
         Session session = Sessions.GetValue(view, item => new Session(item, options));
         if (!session.Options.Equals(options))
             session = new Session(view, options);
 
-        var dense = new Dictionary<string, bool>(StringComparer.Ordinal);
+        var layouts = new Dictionary<string, FormatterStorageModel?>(StringComparer.Ordinal);
         return formatter =>
         {
-            if (!dense.TryGetValue(formatter.Type, out bool proven))
-                dense.Add(formatter.Type, proven = session.CppDenseTuple(formatter));
-            return proven;
+            if (!layouts.TryGetValue(formatter.Type, out FormatterStorageModel? storage))
+                layouts.Add(formatter.Type, storage = session.CppRawCompoundStorage(formatter));
+            return storage;
         };
     }
 
     private sealed partial class Session
     {
-        /// <summary>Proves that the raw CLR tuple is the exact concatenation of its scalar leaves in all models.</summary>
-        /// <param name="formatter">The closed tuple formatter.</param>
-        /// <returns>Whether all modeled storage is dense and in declaration order.</returns>
-        internal bool CppDenseTuple(FormatterModel formatter)
+        /// <summary>Proves one untagged storage layout under all of the existing native models.</summary>
+        /// <param name="formatter">The closed framework formatter.</param>
+        /// <returns>The unique nonoverlapping CLR storage layout, or null when the layouts differ.</returns>
+        internal FormatterStorageModel? CppRawCompoundStorage(FormatterModel formatter)
         {
-            if (!formatter.Raw || CppTupleStorageType(formatter) is not { } tuple ||
-                AnalyzePortable(tuple, strict: true) is not { WireSize: > 0 } plan || HasVolatile(plan))
-                return false;
+            if (!formatter.RawCollection || formatter.Layout != null || CppCompoundStorageType(formatter) is not { } value ||
+                AnalyzePortable(value, strict: true) is not { WireSize: > 0 } plan || HasVolatile(plan))
+                return null;
 
-            PortableStorageModel[] models = BuildModels(plan);
-            return models.Length == 1 && models[0].Size == plan.WireSize &&
-                models[0].Offsets.SequenceEqual(Enumerable.Range(0, plan.WireSize));
+            plan.Models = BuildModels(plan);
+            if (plan.Models.Length != 1)
+                return null;
+            PortableStorageModel model = plan.Models[0];
+            if (model.Size <= 0 || model.Offsets.Length != plan.WireSize ||
+                model.Offsets.Any(offset => (uint)offset >= (uint)model.Size) || model.Offsets.Distinct().Count() != plan.WireSize)
+                return null;
+            return NormalizeStorage(plan);
         }
 
-        /// <summary>Resolves the framework tuple and scalar symbols from their normalized formatter arguments.</summary>
-        /// <param name="formatter">A closed tuple or scalar formatter.</param>
+        /// <summary>Resolves framework and scalar symbols from their normalized formatter arguments.</summary>
+        /// <param name="formatter">A closed framework or scalar formatter.</param>
         /// <returns>The resolved storage symbol, or null for an unsupported component.</returns>
-        private ITypeSymbol? CppTupleStorageType(FormatterModel formatter)
+        private ITypeSymbol? CppCompoundStorageType(FormatterModel formatter)
         {
-            if (formatter.Definition == GenericIdentity.ValueTuple)
+            if (formatter.Definition is GenericIdentity.ValueTuple or GenericIdentity.KeyValuePair)
             {
                 var arguments = new ITypeSymbol[formatter.Arguments.Length];
                 for (int index = 0; index < arguments.Length; index++)
                 {
-                    if (CppTupleStorageType(formatter.Arguments[index]) is not { } argument)
+                    if (CppCompoundStorageType(formatter.Arguments[index]) is not { } argument)
                         return null;
                     arguments[index] = argument;
                 }
-                return _compilation.GetTypeByMetadataName("System.ValueTuple`" + arguments.Length.ToString(CultureInfo.InvariantCulture))?.Construct(arguments);
+                return _compilation.GetTypeByMetadataName(formatter.Definition + "`" + arguments.Length.ToString(CultureInfo.InvariantCulture))?.Construct(arguments);
             }
 
             if (formatter.Definition != FormatterDefinitions.Scalar)

@@ -56,9 +56,11 @@ int main()
 
 `nullable_codec` 用 `std::optional<T>` 表示带标记的 `Nullable<T>` 字段。定宽 Version 字段的第二个模板参数是描述符给出的总宽度。`nullable_storage_codec` 和 `nullable_list_codec` 用 CLR 的步长和偏移描述原生字典值与连续可空集合。读取先校验整个范围及布尔标记，再转换为 C++ 值。多模型 Tagged 集合接受导出的每个标签，并以规范模型写出。Native 集合要求两端的 CLR 布局一致。
 
-`pair_codec` 将 .NET 的 `KeyValuePair<TKey, TValue>` 字段或字典值映射为 `std::pair`。二进制按键、值顺序写入，JSON 使用 `[key,value]`。生成的一维数组和 List 支持逐元素编码、无填充的定宽键值对，以及存储方案匹配的 Packed 键值对。对于定宽数值、字符或枚举组成的多模型 Tagged 键值对，`tagged_pair_list_codec` 接受所有已导出的布局标签，写入时将字段转换到 CLR 的规范模型。含 CLR 填充的无标签键值对块需要独立的存储契约。
+`pair_codec` 将 .NET 的 `KeyValuePair<TKey, TValue>` 字段或字典值映射为 `std::pair`。二进制按键、值顺序写入，JSON 使用 `[key,value]`。生成的一维数组和 List 支持逐元素编码、无填充的定宽键值对，以及存储方案匹配的 Packed 键值对。对于定宽数值、字符或枚举组成的多模型 Tagged 键值对，`tagged_pair_list_codec` 接受所有已导出的布局标签，写入时将字段转换到 CLR 的规范模型。
 
 `tuple_codec` 将受支持的 .NET `ValueTuple` 映射为 `std::tuple`。二进制沿用 CLR 的组件顺序，JSON 使用数组，第八个 `Rest` 组件保留为嵌套元组。生成的集合使用导出的 Packed 或 Tagged 布局，或经过证明的声明顺序无填充 CLR 布局。Tagged 读取在发布结果前验证直接和嵌套的布尔字节。codec 用 `std::get` 访问元组组件。
+
+对已证明且带填充的无标签 CLR pair 或 tuple 布局，生成器会发出带显式填充字段的结构体，并在编译期检查 C++ 的偏移和步长。二进制复制保留包括填充在内的完整表示。JSON 沿用 pair 或 tuple 的组件，读取时将额外填充置零。
 
 字符串 codec 可绑定六种 `string_profile`。Length 与 VarInt 区分 null 和空字符串。Token 使用零码元结束，null 与空字符串使用同一表示。含内嵌零码元的文本应使用长度模式。
 

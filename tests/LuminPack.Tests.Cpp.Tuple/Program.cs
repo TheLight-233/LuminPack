@@ -94,7 +94,7 @@ public partial class TuplePacket
 #endif
 }
 
-/// <summary>Exercises the diagnostic for a raw CLR tuple with headerless padding.</summary>
+/// <summary>Contains a raw CLR scalar tuple with headerless padding.</summary>
 [LuminPackable]
 public partial class PaddedTuplePacket
 {
