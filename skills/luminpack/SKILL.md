@@ -37,7 +37,7 @@ If a generated C++ root sets `root_requires_reference_graph`, use `read_binary_r
 
 Generated rectangular arrays carry rank-sized lengths and lower bounds plus a row-major vector. Match the vector size to the shape. Use zero lower bounds for Binary. JSON preserves the CLR's nonzero bounds.
 
-For an exported C# Custom registration, define `luminpack::custom_binding<u"Namespace.Type">` before the generated header. Bind the application-owned wire with a `binary` codec and a matching `json` codec if the C# automatic registration exposes JSON. Its JSON profile is UTF-16.
+For an exported C# Custom registration, bind the application-owned Binary payload and supply matching JSON callbacks if the automatic registration exposes JSON. Its JSON profile is UTF-16. In C++, define `luminpack::custom_binding<u"Namespace.Type">` before the generated header. Registered Union case callbacks separately support the selected JSON encoding and use app tags outside the generated case reservations.
 
 Use `json_record_member` for named C++ DTO properties. The stock reader and writer share the `constexpr` heads of ordinary ASCII names and keep the name parser available for aliases and reordered fields. C++ codegen selects a length or seed-zero XXH3 switch independently for UTF-8 and UTF-16 and checks complete names in both cases. Use a fresh Next export to enable its verified ordered Int32 runs in generated C++ codecs. Hand-written codecs use direct comparisons.
 

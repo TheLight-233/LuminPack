@@ -78,7 +78,8 @@ dotnet run --project tools/LuminPack.Codegen -c Release -- project .tmp/contract
 
 - 两端使用相同的根类型和二进制配置，默认是 UTF-16 Length。Length 和 VarInt 区分 `null` 与空字符串。Token 使用零码元作为终止符，将 `null` 写成空字符串。需要保留内嵌零码元时，使用 Length 或 VarInt。
 - 两端使用相同的 JSON 编码。JSON 契约还定义成员名、枚举值、集合形状和 Union 类型标识。[数据格式](formats.cn.md)
-- 需要演进并读取旧数据的模型使用 `GeneratorType.Version`。两端的 Union 分支和注册 tag 保持一致。Custom 格式化器定义自己的数据负载，两端需要匹配的应用绑定。[版本容忍](versioning.cn.md)、[Union 多态](polymorphism.cn.md)、[自定义格式化器](custom-formatters.cn.md)
+- 需要演进并读取旧数据的模型使用 `GeneratorType.Version`。两端的 Union 分支和注册 tag 保持一致。应用注册分支的 tag 应符合导出的宽度，并避开生成分支保留的值。[版本容忍](versioning.cn.md)、[Union 多态](polymorphism.cn.md)
+- Custom 格式化器定义自己的数据负载，两端需要匹配的应用绑定。导出的自动 Custom 注册包含 JSON 操作时，使用 UTF-16。仅注册 Binary 时只需提供二进制回调。注册式 Union 的分支回调处理当前 JSON 编码。[自定义格式化器](custom-formatters.cn.md)
 - 构建启用引用跟踪的对象图时，复用同一对象或记录实例。在 C++ 中使用借用指针期间，保持引用文档存活。[引用跟踪](versioning.cn.md#引用跟踪)
 - 跨架构传输可以选择支持的 Packed 或 Tagged 布局。Native 二进制要求 CLR 布局匹配，包括填充和对齐，原生整数宽度需单独匹配。二进制矩形数组使用零下界，JSON 支持非零下界。[结构体布局选项](options.cn.md#3264-位结构体布局)
 

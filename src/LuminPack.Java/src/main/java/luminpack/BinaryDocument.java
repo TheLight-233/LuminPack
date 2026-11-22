@@ -142,7 +142,7 @@ final class BinaryDocument {
         long hash = Integer.toUnsignedLong(input.readI32());
         if (hash == 0) return null;
         if (hash == MAX_UINT32) {
-            if (!Schema.flag(union.metadata, "unionRegistration")) throw fail("Union registration is disabled");
+            if (!union.unionRegistration) throw fail("Union registration is disabled");
             int tag = input.readU8();
             if (union.wideTags) {
                 if (tag == 250) tag = input.readU16();
@@ -160,9 +160,9 @@ final class BinaryDocument {
     private void writeUnion(BinaryCursor.Writer output, Schema.Contract union, Object value, int profile, int depth) {
         if (value == null) { output.writeI32(0); return; }
         if (value instanceof LuminPack.RegisteredUnionValue item) {
-            if (!Schema.flag(union.metadata, "unionRegistration")) throw fail("Union registration is disabled");
+            if (!union.unionRegistration) throw fail("Union registration is disabled");
             int tag = item.tag();
-            if (tag < 0 || tag > (union.wideTags ? 65535 : 255)) throw fail("Registered Union tag is out of range");
+            if (tag < 0 || tag > union.maximumRegisteredTag()) throw fail("Registered Union tag is out of range");
             output.writeI32(-1);
             if (union.wideTags && tag >= 250) { output.writeU8(250); output.writeU16(tag); }
             else output.writeU8(tag);

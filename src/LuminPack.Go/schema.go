@@ -116,6 +116,7 @@ type contract struct {
 	ID, Type, Kind, StorageKind      string
 	Profile                          profile
 	Versioned                        bool
+	CustomJSON                       bool
 	Storage, NativeStorage           *valueLayout
 	Members                          []member
 	Cases                            []unionCase
@@ -286,8 +287,9 @@ func (s *Schema) operation(typeID string) (*contract, *descriptor, profile) {
 	return c, nil, c.Profile
 }
 
-// CustomCodec supplies application behavior for a GeneratorType.Custom contract.
-// ReadBinary reports the number of consumed bytes in the provided input window.
+// CustomCodec supplies application behavior for a Custom contract or registered
+// Union case. ReadBinary reports the consumed bytes in its input window.
+// Binary-only Custom contracts do not require JSON callbacks.
 type CustomCodec struct {
 	ReadBinary  func([]byte) (value any, consumed int, err error)
 	WriteBinary func(any) ([]byte, error)
@@ -302,7 +304,8 @@ func (s *Schema) WithCustom(typeID string, codec CustomCodec) (*Schema, error) {
 	if c == nil || c.Kind != "Custom" {
 		return nil, fmt.Errorf("luminpack: unknown custom contract %s", typeID)
 	}
-	if !codec.complete() {
+	if codec.ReadBinary == nil || codec.WriteBinary == nil ||
+		c.CustomJSON && (codec.ReadJSON == nil || codec.WriteJSON == nil) {
 		return nil, fmt.Errorf("luminpack: incomplete custom binding for %s", typeID)
 	}
 	next := *s

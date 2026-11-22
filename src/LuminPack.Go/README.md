@@ -59,7 +59,7 @@ Reuse the same `Record` map for repeated nodes in tracked graphs. Native integer
 
 ## Load a schema or attach application codecs
 
-Pass the bytes from `project` to `luminpack.LoadSchema` to use a contract directly. Use `WithCustom(typeID, codec)` for Custom contracts and `WithRegisteredUnion(unionType, tag, caseType, codec)` for registered cases. Both return a new schema. A `CustomCodec` provides Binary and JSON functions. Its Binary reader returns the consumed byte count, and its JSON functions exchange `json.RawMessage` payloads.
+Pass the bytes from `project` to `luminpack.LoadSchema` to use a contract directly. Use `WithCustom(typeID, codec)` for Custom contracts and `WithRegisteredUnion(unionType, tag, caseType, codec)` for registered cases. Both return a new schema. The Binary reader returns the consumed byte count. Supply the JSON functions when the Custom contract exports JSON or when binding a registered Union case. These functions exchange `json.RawMessage` payloads. Automatic Custom JSON uses UTF-16.
 
 ## SIMD and scalar builds
 

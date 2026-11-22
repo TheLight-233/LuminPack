@@ -104,7 +104,7 @@ interface Member {
     compressed?: boolean;
 }
 
-interface UnionCase { id: string; type?: string; hash: number; }
+interface UnionCase { id: string; type?: string; hash: number; tag?: number; }
 
 interface Contract {
     id: string;
@@ -285,7 +285,8 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             })));
             const plan: Plan = { contract, byHash: new Map(), byId: new Map(), registeredByTag: new Map(),
                 registeredByType: new Map(), jsonByName, jsonHeads };
-            for (const entry of contract.cases ?? []) {
+            const declaredCases = contract.cases ?? [];
+            for (const entry of declaredCases) {
                 if (!Number.isInteger(entry.hash) || entry.hash <= 0 || entry.hash >= 0xffff_ffff ||
                     plan.byHash.has(entry.hash) || plan.byId.has(identity(entry.id)))
                     throw new WireError("Invalid LuminPack Union case.");
@@ -298,6 +299,8 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                     entry.tag < 0 || entry.tag > (contract.unionWideTags ? 65535 : 255) ||
                     plan.registeredByTag.has(entry.tag) || plan.registeredByType.has(identity(entry.type)) ||
                     plan.byId.has(identity(entry.type))) throw new WireError("Invalid registered LuminPack Union case.");
+                if (plan.byHash.has(entry.tag) || declaredCases.some(item => item.tag === entry.tag))
+                    throw new WireError("This LuminPack Union tag belongs to a generated case.");
                 plan.registeredByTag.set(entry.tag, entry);
                 plan.registeredByType.set(identity(entry.type), entry);
             }

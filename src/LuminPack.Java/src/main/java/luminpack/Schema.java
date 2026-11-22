@@ -18,6 +18,7 @@ final class Schema {
     final int nativeScalarAlignment;
     final boolean completeBinaryInput;
     final boolean directJson;
+    final Map<String, Contract> contractsByIdentity;
     final Map<String, Map<?, ?>> valueLayouts = new HashMap<>();
 
     Schema(String manifest) {
@@ -49,6 +50,7 @@ final class Schema {
         else rootWire.resolve(contracts);
         directJson = contracts.values().stream().filter(contract -> contract.resolved)
             .noneMatch(contract -> contract.profile.track() || contract.kind.equals("Custom"));
+        contractsByIdentity = Map.copyOf(contracts);
     }
 
     record Profile(int binary, boolean declared, int json, boolean track, int input, int collection,
@@ -71,6 +73,8 @@ final class Schema {
         final Profile profile;
         final boolean versioned;
         final boolean wideTags;
+        final boolean unionRegistration;
+        final boolean customJson;
         final List<Field> members = new ArrayList<>();
         final Field[] jsonFields;
         final Map<String, Field> names = new HashMap<>();
@@ -91,6 +95,8 @@ final class Schema {
             profile = Profile.from(object(metadata.get("profile")));
             versioned = flag(metadata, "versioned");
             wideTags = flag(metadata, "unionWideTags");
+            unionRegistration = flag(metadata, "unionRegistration");
+            customJson = flag(metadata, "customJson");
             for (Object item : list(metadata.get("members"))) {
                 Field field = new Field(object(item));
                 members.add(field);
@@ -128,16 +134,25 @@ final class Schema {
             for (Object item : list(metadata.get("cases"))) {
                 Map<?, ?> row = object(item);
                 long hash = longValue(row.get("hash"));
+                long tag = row.get("tag") == null ? -1 : longValue(row.get("tag"));
                 Contract target = contracts.get(normalize(string(row.get("type"))));
                 if (target == null) target = contracts.get(normalize(string(row.get("id"))));
-                if (target == null || hash <= 0 || hash >= 0xffff_ffffL || cases.putIfAbsent(hash, new UnionCase(target)) != null)
+                if (target == null || hash <= 0 || hash >= 0xffff_ffffL || cases.putIfAbsent(hash, new UnionCase(target, tag)) != null)
                     throw fail("Invalid LuminPack Union case in " + id);
                 target.resolve(contracts);
             }
         }
+
+        int maximumRegisteredTag() { return wideTags ? 65535 : 255; }
+
+        void checkRegistrationTag(int tag) {
+            if (tag < 0 || tag > maximumRegisteredTag()) throw fail("Registered LuminPack Union tag is out of range");
+            if (cases.containsKey((long) tag) || cases.values().stream().anyMatch(item -> item.tag == tag))
+                throw fail("This LuminPack Union tag belongs to a generated case");
+        }
     }
 
-    record UnionCase(Contract contract) {}
+    record UnionCase(Contract contract, long tag) {}
 
     static final class Field {
         final String name;

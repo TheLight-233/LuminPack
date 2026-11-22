@@ -44,7 +44,7 @@ final class JsonDocument {
     }
 
     Object readContract(Schema.Contract type, Object value) {
-        if (type.kind.equals("Custom")) return bindings.custom(type).readJson(value);
+        if (type.kind.equals("Custom")) return customJson(type).readJson(value);
         if (value == null) {
             if (type.kind.equals("Struct")) throw fail("Missing LuminPack JSON struct");
             return null;
@@ -77,7 +77,7 @@ final class JsonDocument {
     }
 
     private Object writeContract(Schema.Contract type, Object value) {
-        if (type.kind.equals("Custom")) return bindings.custom(type).writeJson(value);
+        if (type.kind.equals("Custom")) return customJson(type).writeJson(value);
         if (value == null) {
             if (type.kind.equals("Struct")) throw fail("Missing LuminPack JSON struct");
             return null;
@@ -99,13 +99,19 @@ final class JsonDocument {
         return result;
     }
 
+    private LuminPack.CustomCodec customJson(Schema.Contract type) {
+        if (!type.customJson || encoding != LuminPack.UTF16)
+            throw fail("No LuminPack Custom JSON formatter for this encoding in " + type.id);
+        return bindings.custom(type);
+    }
+
     private Object readUnion(Schema.Contract union, Map<?, ?> envelope) {
         long hash = BinaryDocument.checkedInteger(envelope.get("$type"), 0, 0xffff_ffffL);
         if (!envelope.containsKey("$value")) throw fail("Missing LuminPack JSON Union payload");
         Schema.UnionCase item = union.cases.get(hash);
         Object value = envelope.get("$value");
         if (item == null) {
-            if (!Schema.flag(union.metadata, "unionRegistration") || hash > 65535) throw fail("Unknown LuminPack JSON Union case");
+            if (!union.unionRegistration || hash > union.maximumRegisteredTag()) throw fail("Unknown LuminPack JSON Union case");
             return new LuminPack.RegisteredUnionValue((int) hash, bindings.registered(union, (int) hash).readJson(value));
         }
         Object payload = readContract(item.contract(), value);
@@ -115,7 +121,7 @@ final class JsonDocument {
     Object writeUnion(Schema.Contract union, Object value) {
         var result = new LinkedHashMap<Json.Name, Object>(2);
         if (value instanceof LuminPack.RegisteredUnionValue registered) {
-            if (!Schema.flag(union.metadata, "unionRegistration")) throw fail("LuminPack Union registration is disabled");
+            if (!union.unionRegistration) throw fail("LuminPack Union registration is disabled");
             result.put(TYPE, registered.tag());
             result.put(VALUE, bindings.registered(union, registered.tag()).writeJson(registered.value()));
             return result;

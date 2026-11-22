@@ -59,7 +59,7 @@ func transcode(binary []byte) ([]byte, error) {
 
 ## 加载 schema 和绑定应用 codec
 
-将 `project` 输出的字节传给 `luminpack.LoadSchema` 可直接使用契约。使用 `WithCustom(typeID, codec)` 绑定 Custom，使用 `WithRegisteredUnion(unionType, tag, caseType, codec)` 绑定注册分支。两者都返回新 schema。`CustomCodec` 提供二进制和 JSON 回调。二进制读回调返回消耗的字节数，JSON 回调通过 `json.RawMessage` 交换数据。
+将 `project` 输出的字节传给 `luminpack.LoadSchema` 可直接使用契约。使用 `WithCustom(typeID, codec)` 绑定 Custom，使用 `WithRegisteredUnion(unionType, tag, caseType, codec)` 绑定注册分支。两者都返回新 schema。二进制读回调返回消耗的字节数。Custom 契约导出 JSON 或绑定注册式 Union 时，提供通过 `json.RawMessage` 交换数据的 JSON 回调。自动 Custom JSON 使用 UTF-16。
 
 ## SIMD 与 Go 回退实现
 

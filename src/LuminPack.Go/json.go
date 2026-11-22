@@ -47,13 +47,15 @@ func array(value any) []any {
 }
 
 type jsonReader struct {
-	s    *Schema
-	refs map[uint32]reference
+	s        *Schema
+	encoding JSONEncoding
+	refs     map[uint32]reference
 }
 type jsonWriter struct {
 	s               *Schema
 	data            []byte
 	depth, maxDepth int
+	encoding        JSONEncoding
 	refs            map[uintptr]reference
 }
 
@@ -85,7 +87,7 @@ func (s *Schema) decodeJSON(typeID string, data []byte, encoding JSONEncoding) (
 	if depth <= 0 {
 		depth = 1024
 	}
-	r := jsonReader{s: s}
+	r := jsonReader{s: s, encoding: encoding}
 	scanner := jsonScanner{data: data}
 	depth = min(depth, 1024)
 	if !p.StrictJSON && len(s.custom) == 0 && len(s.registered) == 0 &&
@@ -129,7 +131,7 @@ func (s *Schema) encodeJSON(typeID string, value any, encoding JSONEncoding) (da
 	if depth <= 0 {
 		depth = 1024
 	}
-	w := jsonWriter{s: s, maxDepth: min(depth, 1024)}
+	w := jsonWriter{s: s, maxDepth: min(depth, 1024), encoding: encoding}
 	if shape != nil {
 		w.shape(shape, value)
 	} else {
@@ -146,6 +148,7 @@ func (s *Schema) encodeJSON(typeID string, value any, encoding JSONEncoding) (da
 
 func (r *jsonReader) contract(c *contract, value any) any {
 	if c.Kind == "Custom" {
+		c.requireCustomJSON(r.encoding)
 		return readCustomJSON(r.s.custom[normalize(c.ID)], c.ID, value)
 	}
 	if value == nil {
@@ -402,6 +405,7 @@ func (w *jsonWriter) contract(c *contract, data any) {
 		data = native.Value
 	}
 	if c.Kind == "Custom" {
+		c.requireCustomJSON(w.encoding)
 		w.writeCustomJSON(w.s.custom[normalize(c.ID)], c.ID, data)
 		return
 	}
@@ -476,6 +480,12 @@ func (w *jsonWriter) contract(c *contract, data any) {
 		}
 	}
 	w.byte('}')
+}
+
+func (c *contract) requireCustomJSON(encoding JSONEncoding) {
+	if !c.CustomJSON || encoding != UTF16 {
+		fail(-1, "no Custom JSON formatter for this encoding: "+c.ID)
+	}
 }
 
 func readCustomJSON(codec CustomCodec, name string, value any) any {

@@ -35,9 +35,12 @@ public final class LuminPack {
 
     /** Registers a formatter for an application Union case. */
     public LuminPack withUnionCase(String unionType, int tag, CustomCodec codec) {
-        if (tag < 0 || tag > 65535) throw Schema.fail("Invalid registered LuminPack Union tag");
+        Schema.Contract type = schema.contractsByIdentity.get(Schema.normalize(unionType));
+        if (type == null || !type.kind.equals("Union") || !type.unionRegistration)
+            throw Schema.fail("Unknown registrable LuminPack Union " + unionType);
+        type.checkRegistrationTag(tag);
         var registered = new HashMap<>(bindings.registered());
-        registered.put(new Registration(Schema.normalize(unionType), tag), Objects.requireNonNull(codec));
+        registered.put(new Registration(type.id, tag), Objects.requireNonNull(codec));
         return new LuminPack(schema, new Bindings(bindings.custom(), Map.copyOf(registered)));
     }
 

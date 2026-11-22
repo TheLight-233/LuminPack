@@ -279,10 +279,13 @@ def java_runner(args, work):
     modules = []
     if args.java_vector:
         modules = ["--add-modules", "jdk.incubator.vector"]
+        fast_checks = source / "test/java/luminpack"
         invoke([javac, *modules, "-cp", classes, "-d", classes,
-                *sorted((source / "vector/java").rglob("*.java")), source / "test/java/luminpack/FastPathChecks.java"])
+                *sorted((source / "vector/java").rglob("*.java")), fast_checks / "FastPathChecks.java",
+                fast_checks / "RegistrationChecks.java"])
         shutil.copytree(source / "vector/resources", classes, dirs_exist_ok=True)
         invoke([java, *modules, "-cp", classes, "luminpack.FastPathChecks", "vector"])
+        invoke([java, *modules, "-cp", classes, "luminpack.RegistrationChecks"])
     return [java, *modules, "-cp", classes, "PortableRoundTrip"]
 
 
