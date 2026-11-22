@@ -113,6 +113,21 @@ void dotnet_fixtures(const std::filesystem::path& directory)
         bytes("{\"$value\":{\"Value\":123,\"skip\":[{}]}, \"ignore\": {}, \"$type\":4012061332}"));
     require(reversed == tagged, "Read a deferred Union payload before the type property.");
     require(!read_json_document<choice, utf8>(bytes("null")), "Read a null JSON Union.");
+
+    constexpr auto utf16 = json_encoding::utf16;
+    require(read_json_document<choice, utf8>(
+        bytes(R"({"$typeof":12,"\u0024value":{"Value":123},"$valuE":0,"$ty\u0070e":4012061332})")) == tagged,
+        "Match the complete decoded UTF-8 Union names.");
+    require(read_json_document<choice, utf16>(
+        bytes(uR"({"$typeof":12,"\u0024value":{"Value":123},"$valuE":0,"$ty\u0070e":4012061332})")) == tagged,
+        "Match the complete decoded UTF-16 Union names.");
+    require(std::ranges::equal(write_json_document<choice, utf16>(output, tagged),
+        bytes(uR"({"$type":4012061332,"$value":{"Value":123}})")),
+        "Write the exact UTF-16 envelope and unsigned Union hash.");
+    malformed([] {
+        (void)read_json_document<choice, utf16>(
+            bytes(uR"({"$type":4012061332,"\u0024type":4012061332,"$value":{"Value":123}})"));
+    }, "Reject an escaped duplicate Union discriminator.");
 }
 
 enum class choice_code : std::uint16_t { enabled = 256 };

@@ -489,6 +489,18 @@ struct registered_custom_json_codec
     }
 };
 
+inline constexpr auto json_union_type_name = json_name{u"$type"};
+inline constexpr auto json_union_value_name = json_name{u"$value"};
+
+template<auto Name>
+bool matches_json_union_name(const auto& name)
+{
+    if constexpr (requires { name.template matches<Name>(); })
+        return name.template matches<Name>();
+    else
+        return name.matches(Name.view());
+}
+
 template<class Value, class ReadCase>
 Value read_json_union_envelope(auto& input, ReadCase read_case)
 {
@@ -504,13 +516,13 @@ Value read_json_union_envelope(auto& input, ReadCase read_case)
     {
         const auto name = input.read_name();
         input.expect(':');
-        if (name.matches(u"$type"))
+        if (matches_json_union_name<json_union_type_name>(name))
         {
             if (hash)
                 throw wire_error("Duplicate LuminPack JSON Union type.");
             hash = input.template read_number<std::uint32_t>();
         }
-        else if (name.matches(u"$value"))
+        else if (matches_json_union_name<json_union_value_name>(name))
         {
             if (deferred || result)
                 throw wire_error("Duplicate LuminPack JSON Union payload.");
@@ -593,10 +605,10 @@ private:
         if (value.index() != Index)
             return false;
         output.token('{');
-        output.template write_property<json_name{u"$type"}>();
+        output.template write_property<detail::json_union_type_name>();
         output.write_number(item::hash);
         output.token(',');
-        output.template write_property<json_name{u"$value"}>();
+        output.template write_property<detail::json_union_value_name>();
         item::codec::write(output, std::get<Index>(value));
         output.token('}');
         return true;

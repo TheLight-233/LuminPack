@@ -118,10 +118,10 @@ internal sealed partial class CppEmitter
             if (json)
             {
                 code.Append("            output.token('{');\n")
-                    .Append("            output.template write_property<luminpack::json_name{u\"$type\"}>();\n")
+                    .Append("            output.template write_property<luminpack::detail::json_union_type_name>();\n")
                     .Append("            output.write_number(").Append(item.Hash).Append(");\n")
                     .Append("            output.token(',');\n")
-                    .Append("            output.template write_property<luminpack::json_name{u\"$value\"}>();\n")
+                    .Append("            output.template write_property<luminpack::detail::json_union_value_name>();\n")
                     .Append("            ").Append(item.Json).Append("::write(output, static_cast<const case_").Append(item.Hash).Append("&>(value));\n")
                     .Append("            output.token('}');\n");
             }
