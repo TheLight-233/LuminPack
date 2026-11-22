@@ -9,7 +9,7 @@ LuminPack generates a dedicated binary and JSON formatter for every type at comp
 
 This skill is about using the library. It does not describe how to maintain the LuminPack repository.
 
-For C++ binary interoperability, include the public runtime header and link the CMake target. Supply a closed codec matching the .NET member order and binary profiles. See the [C++ runtime](../../src/LuminPack.Cpp/README.md) for the supported wire operations.
+For C++ binary interoperability, include the public runtime header and link the CMake target. Supply a closed codec matching the .NET member order and binary profiles. Use the binary document entry points to share Version schema registrations across nested codecs, or pass one version_state through an explicitly framed operation. See the [C++ runtime](../../src/LuminPack.Cpp/README.md) for the supported wire operations.
 
 Generated models do not require a runtime plan or formatter witness supplied by the caller. Operation plans are internal source-generator data; they do not add a runtime API or dispatch layer.
 

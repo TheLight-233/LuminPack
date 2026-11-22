@@ -12,8 +12,17 @@ struct record_member
 {
     static constexpr auto minimum_size = Codec::minimum_size;
 
-    static void read(reader& input, auto& object) { object.*Field = Codec::read(input); }
-    static void write(writer& output, const auto& object) { Codec::write(output, object.*Field); }
+    template<class... Context>
+    static void read(reader& input, auto& object, Context&... context)
+    {
+        object.*Field = detail::read_codec<Codec>(input, context...);
+    }
+
+    template<class... Context>
+    static void write(writer& output, const auto& object, Context&... context)
+    {
+        detail::write_codec<Codec>(output, object.*Field, context...);
+    }
 };
 
 /// The ordered fields following an existing framing boundary, such as a generated Union tag.
@@ -23,22 +32,28 @@ struct record_payload_codec
     using value_type = T;
     static constexpr auto minimum_size = (std::size_t{0} + ... + Members::minimum_size);
 
-    static T read(reader& input)
+    template<class... Context>
+    static T read(reader& input, Context&... context)
     {
         reader next = input;
+        auto transaction = detail::version_transaction(context...);
         if (minimum_size > next.remaining())
             detail::truncated_input();
         T result{};
-        (Members::read(next, result), ...);
+        (Members::read(next, result, context...), ...);
         input = next;
+        transaction.commit();
         return result;
     }
 
-    static void write(writer& output, const T& value)
+    template<class... Context>
+    static void write(writer& output, const T& value, Context&... context)
     {
         writer next = output;
-        (Members::write(next, value), ...);
+        auto transaction = detail::version_transaction(context...);
+        (Members::write(next, value, context...), ...);
         output = next;
+        transaction.commit();
     }
 };
 
@@ -51,7 +66,8 @@ struct record_codec
     static constexpr std::size_t minimum_size = 1;
     static_assert(sizeof...(Members) <= 249);
 
-    static value_type read(reader& input)
+    template<class... Context>
+    static value_type read(reader& input, Context&... context)
     {
         reader next = input;
         const auto members = read_object_header(next);
@@ -62,18 +78,19 @@ struct record_codec
         }
         if (*members != sizeof...(Members))
             throw wire_error("LuminPack positional member count does not match the codec.");
-        auto result = payload::read(next);
+        auto result = payload::read(next, context...);
         input = next;
         return result;
     }
 
-    static void write(writer& output, const value_type& value)
+    template<class... Context>
+    static void write(writer& output, const value_type& value, Context&... context)
     {
         writer next = output;
         if (value)
         {
             write_object_header(next, static_cast<std::uint8_t>(sizeof...(Members)));
-            payload::write(next, *value);
+            payload::write(next, *value, context...);
         }
         else
             write_object_header(next, std::nullopt);
@@ -118,7 +135,8 @@ struct union_codec
     using value_type = std::optional<variant_type>;
     static constexpr auto minimum_size = sizeof(std::uint32_t);
 
-    static value_type read(reader& input)
+    template<class... Context>
+    static value_type read(reader& input, Context&... context)
     {
         reader next = input;
         const auto hash = next.read<std::uint32_t>();
@@ -127,12 +145,15 @@ struct union_codec
             input = next;
             return std::nullopt;
         }
-        auto result = read_case(hash, next, indices{});
+        auto transaction = detail::version_transaction(context...);
+        auto result = read_case(hash, next, indices{}, context...);
         input = next;
+        transaction.commit();
         return result;
     }
 
-    static void write(writer& output, const value_type& value)
+    template<class... Context>
+    static void write(writer& output, const value_type& value, Context&... context)
     {
         if (!value)
         {
@@ -141,9 +162,11 @@ struct union_codec
         }
 
         writer next = output;
-        if (!write_case(next, *value, indices{}))
+        auto transaction = detail::version_transaction(context...);
+        if (!write_case(next, *value, indices{}, context...))
             throw std::invalid_argument("LuminPack Union does not have an active case.");
         output = next;
+        transaction.commit();
     }
 
 private:
@@ -168,40 +191,40 @@ private:
 
     static_assert(valid_tags(), "LuminPack Union hashes must be unique and outside the reserved markers.");
 
-    template<std::size_t Index>
-    static bool read_if(value_type& result, std::uint32_t hash, reader& input)
+    template<std::size_t Index, class... Context>
+    static bool read_if(value_type& result, std::uint32_t hash, reader& input, Context&... context)
     {
         using item = std::tuple_element_t<Index, cases>;
         if (hash != item::hash)
             return false;
-        result.emplace(std::in_place_index<Index>, item::codec::read(input));
+        result.emplace(std::in_place_index<Index>, detail::read_codec<typename item::codec>(input, context...));
         return true;
     }
 
-    template<std::size_t... Index>
-    static value_type read_case(std::uint32_t hash, reader& input, std::index_sequence<Index...>)
+    template<std::size_t... Index, class... Context>
+    static value_type read_case(std::uint32_t hash, reader& input, std::index_sequence<Index...>, Context&... context)
     {
         value_type result;
-        if (!(read_if<Index>(result, hash, input) || ...))
+        if (!(read_if<Index>(result, hash, input, context...) || ...))
             throw wire_error("Unknown LuminPack Union case hash.");
         return result;
     }
 
-    template<std::size_t Index>
-    static bool write_if(writer& output, const variant_type& value)
+    template<std::size_t Index, class... Context>
+    static bool write_if(writer& output, const variant_type& value, Context&... context)
     {
         using item = std::tuple_element_t<Index, cases>;
         if (value.index() != Index)
             return false;
         output.write(item::hash);
-        item::codec::write(output, std::get<Index>(value));
+        detail::write_codec<typename item::codec>(output, std::get<Index>(value), context...);
         return true;
     }
 
-    template<std::size_t... Index>
-    static bool write_case(writer& output, const variant_type& value, std::index_sequence<Index...>)
+    template<std::size_t... Index, class... Context>
+    static bool write_case(writer& output, const variant_type& value, std::index_sequence<Index...>, Context&... context)
     {
-        return (write_if<Index>(output, value) || ...);
+        return (write_if<Index>(output, value, context...) || ...);
     }
 };
 }

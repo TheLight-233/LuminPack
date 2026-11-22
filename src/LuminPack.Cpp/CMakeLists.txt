@@ -9,7 +9,7 @@ if(NOT LUMINPACK_CPP_MAX_SIMD_BITS MATCHES "^(128|256|512)$")
     message(FATAL_ERROR "LUMINPACK_CPP_MAX_SIMD_BITS must be 128, 256, or 512.")
 endif()
 
-add_library(luminpack_cpp STATIC src/luminpack.cpp src/latin1.cpp src/string_profiles.cpp)
+add_library(luminpack_cpp STATIC src/luminpack.cpp src/latin1.cpp src/string_profiles.cpp src/version.cpp)
 add_library(LuminPack::Cpp ALIAS luminpack_cpp)
 target_compile_features(luminpack_cpp PUBLIC cxx_std_20)
 target_include_directories(luminpack_cpp PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")

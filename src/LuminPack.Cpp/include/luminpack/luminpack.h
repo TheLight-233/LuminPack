@@ -101,6 +101,9 @@ public:
         return result;
     }
 
+    /// Restricts a child reader to a validated member payload while inheriting the current limits.
+    [[nodiscard]] reader subrecord(std::size_t size) { return reader(take(size), limits_); }
+
     /// Reads one unaligned scalar after validating its complete storage.
     template<scalar T>
     [[nodiscard]] T read()
@@ -200,6 +203,9 @@ enum class string_profile : std::uint8_t
 
 /// Decodes a string into owned UTF-16 storage.
 [[nodiscard]] std::optional<std::u16string> read_string(reader& input, string_profile profile);
+
+/// Validates and consumes a string without allocating, for an unknown Version field.
+void skip_string(reader& input, string_profile profile);
 
 /// Writes a UTF-16 value using the selected wire profile.
 void write_string(writer& output, string_profile profile, std::optional<std::u16string_view> value);
@@ -404,5 +410,7 @@ void write_tagged_array(writer& output, std::optional<std::span<const T>> value)
 }
 }
 
+#include "detail/version_state.h"
 #include "detail/collections.h"
 #include "detail/records.h"
+#include "detail/version_codec.h"

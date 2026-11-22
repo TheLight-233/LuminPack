@@ -149,17 +149,20 @@ struct list_codec
     using value_type = std::optional<std::vector<element_type>>;
     static constexpr std::size_t minimum_size = sizeof(std::int32_t);
 
-    [[nodiscard]] static value_type read(reader& input)
+    template<class... Context>
+    [[nodiscard]] static value_type read(reader& input, Context&... context)
     {
         value_type result;
-        read_into(input, result);
+        read_into(input, result, context...);
         return result;
     }
 
     /// Reuses the vector allocation. Element-wise decoding can publish a prefix on error.
-    static void read_into(reader& input, value_type& destination)
+    template<class... Context>
+    static void read_into(reader& input, value_type& destination, Context&... context)
     {
         reader next = input;
+        auto transaction = detail::version_transaction(context...);
         const auto count = next.read_collection_count(Element::minimum_size);
         if (!count)
         {
@@ -187,12 +190,14 @@ struct list_codec
             items.clear();
             items.reserve(std::min(*count, std::size_t{128}));
             for (std::size_t index = 0; index < *count; ++index)
-                items.emplace_back(Element::read(next));
+                items.emplace_back(detail::read_codec<Element>(next, context...));
         }
         input = next;
+        transaction.commit();
     }
 
-    static void write(writer& output, const value_type& value)
+    template<class... Context>
+    static void write(writer& output, const value_type& value, Context&... context)
     {
         if (!value)
         {
@@ -202,6 +207,7 @@ struct list_codec
 
         writer next = output;
         const auto count = detail::collection_count(value->size());
+        auto transaction = detail::version_transaction(context...);
         if constexpr (detail::contiguous_codec<Element>)
         {
             const auto source = std::as_bytes(std::span(*value));
@@ -216,9 +222,10 @@ struct list_codec
         {
             next.write(count);
             for (const auto& item : *value)
-                Element::write(next, item);
+                detail::write_codec<Element>(next, item, context...);
         }
         output = next;
+        transaction.commit();
     }
 };
 
@@ -234,17 +241,20 @@ struct dictionary_codec
     static constexpr std::size_t minimum_size = sizeof(std::int32_t);
     static constexpr std::size_t pair_minimum_size = Key::minimum_size + Value::minimum_size;
 
-    [[nodiscard]] static value_type read(reader& input)
+    template<class... Context>
+    [[nodiscard]] static value_type read(reader& input, Context&... context)
     {
         value_type result;
-        read_into(input, result);
+        read_into(input, result, context...);
         return result;
     }
 
     /// Reuses the dictionary's existing buckets and validates null and duplicate keys.
-    static void read_into(reader& input, value_type& destination)
+    template<class... Context>
+    static void read_into(reader& input, value_type& destination, Context&... context)
     {
         reader next = input;
+        auto transaction = detail::version_transaction(context...);
         const auto count = next.read_collection_count(pair_minimum_size);
         if (!count)
         {
@@ -259,39 +269,43 @@ struct dictionary_codec
             entries.reserve(std::min(*count, std::size_t{128}));
         for (std::size_t index = 0; index < *count; ++index)
         {
-            auto key = Key::read(next);
+            auto key = detail::read_codec<Key>(next, context...);
             if (detail::is_null_key(key))
                 throw wire_error("Null LuminPack dictionary key.");
-            auto value = Value::read(next);
+            auto value = detail::read_codec<Value>(next, context...);
             if (!entries.try_emplace(std::move(key), std::move(value)).second)
                 throw wire_error("Duplicate LuminPack dictionary key.");
         }
         input = next;
+        transaction.commit();
     }
 
-    static void write(writer& output, const value_type& value)
+    template<class... Context>
+    static void write(writer& output, const value_type& value, Context&... context)
     {
         if (value)
-            write_entries(output, *value);
+            write_entries(output, *value, context...);
         else
             output.write<std::int32_t>(-1);
     }
 
     /// Writes existing unique entries in traversal order, including a caller-defined order.
-    template<class Entries>
+    template<class Entries, class... Context>
     requires std::ranges::sized_range<const Entries>
-    static void write_entries(writer& output, const Entries& entries)
+    static void write_entries(writer& output, const Entries& entries, Context&... context)
     {
         writer next = output;
+        auto transaction = detail::version_transaction(context...);
         next.write(detail::collection_count(std::ranges::size(entries)));
         for (const auto& [key, value] : entries)
         {
             if (detail::is_null_key(key))
                 throw std::invalid_argument("Null LuminPack dictionary key.");
-            Key::write(next, key);
-            Value::write(next, value);
+            detail::write_codec<Key>(next, key, context...);
+            detail::write_codec<Value>(next, value, context...);
         }
         output = next;
+        transaction.commit();
     }
 };
 }

@@ -520,6 +520,154 @@ void record_and_union_codecs()
     expect_error<luminpack::wire_error>([&] { (void)tagged::read(input); }, "Accepts an unknown registered Union case.");
 }
 
+struct version_one
+{
+    std::int32_t id = -1;
+    std::optional<std::u16string> name;
+    std::int64_t removed = -1;
+};
+
+struct version_two
+{
+    std::int32_t added = -1;
+    std::optional<std::u16string> display;
+    std::int32_t id = -1;
+};
+
+using luminpack::version_codec;
+using luminpack::version_member;
+using luminpack::string_profile;
+constexpr auto v_id = 0x040bf85f36e8b900ull;
+constexpr auto v_name = 0xfe0bfeab0fe07306ull;
+constexpr auto v_removed = 0x080bf53970a26e7bull;
+constexpr auto v_added = 0x040bf85fb35c3185ull;
+using v1 = version_codec<version_one, string_profile::utf16_length,
+    version_member<&version_one::id, luminpack::scalar_codec<std::int32_t>, v_id>,
+    version_member<&version_one::name, luminpack::string_codec<>, v_name>,
+    version_member<&version_one::removed, luminpack::scalar_codec<std::int64_t>, v_removed>>;
+using v2 = version_codec<version_two, string_profile::utf16_length,
+    version_member<&version_two::added, luminpack::scalar_codec<std::int32_t>, v_added>,
+    version_member<&version_two::display, luminpack::string_codec<>, v_name, luminpack::union_name_hash("DisplayName")>,
+    version_member<&version_two::id, luminpack::scalar_codec<std::int32_t>, v_id>>;
+using version_list = luminpack::list_codec<v1>;
+
+struct incompatible_version
+{
+    float id;
+};
+
+using conflicting = version_codec<incompatible_version, string_profile::utf16_length,
+    version_member<&incompatible_version::id, luminpack::scalar_codec<float>, v_id ^ (1ull << 32)>>;
+
+struct version_scopes
+{
+    version_list::value_type first;
+    version_list::value_type second;
+};
+
+using scope_codec = version_codec<version_scopes, string_profile::utf16_length,
+    version_member<&version_scopes::first, version_list, 0xff753e67ee3d49e1ull>,
+    version_member<&version_scopes::second, version_list, 0xff753e67f486b7fdull>>;
+
+void version_contracts(const std::filesystem::path& directory)
+{
+    const auto complete = fixture(directory, "version-complete.bin");
+    const auto evolved = fixture(directory, "version-evolved.bin");
+    const auto sequence = fixture(directory, "version-short-collection.bin");
+    const auto scopes = fixture(directory, "version-scopes.bin");
+
+    reader input(complete);
+    const auto renamed = v2::read(input);
+    check(renamed && renamed->id == 13 && renamed->display == u"player" && renamed->added == 0,
+        "Map the .NET original Version schema to the evolved DTO.");
+    input.require_end();
+    input = reader(complete);
+    expect_error<luminpack::wire_error>([&] { (void)conflicting::read(input); },
+        "Accepts a known Version name with a different type contract.");
+
+    input = reader(evolved);
+    const auto older = v1::read(input);
+    check(older && older->id == 19 && older->name == u"renamed" && older->removed == 0,
+        "Map the .NET evolved Version schema to the original DTO.");
+    input.require_end();
+
+    std::array<byte, 512> bytes{};
+    writer output(bytes);
+    const version_one original{13, u"player", 17};
+    const version_one second{29, u"next", 31};
+    v1::write(output, original);
+    check(std::ranges::equal(output.written(), complete), "Write .NET Version full header and fields.");
+    output = writer(bytes);
+    v2::write(output, version_two{23, u"renamed", 19});
+    check(std::ranges::equal(output.written(), evolved), "Write .NET evolved Version schema.");
+
+    luminpack::version_state state;
+    input = reader(sequence);
+    const auto items = version_list::read(input, state);
+    check(items && items->size() == 2 && (*items)[1] && (*items)[1]->id == 29,
+        "Read a Version list with a short second header.");
+    input.require_end();
+    state.reset();
+    output = writer(bytes);
+    const version_list::value_type values = std::vector<v1::value_type>{original, second};
+    version_list::write(output, values, state);
+    check(std::ranges::equal(output.written(), sequence), "Write .NET short-record schema ordinal.");
+    check(luminpack::read_binary_document<version_list>(sequence)->size() == 2,
+        "Document API shares a registry between Revision-4 and Revision-5 elements.");
+    check(std::ranges::equal(luminpack::write_binary_document<version_list>(bytes, values), sequence),
+        "Document API writes a shared Version ordinal.");
+
+    output = writer(bytes);
+    state.reset();
+    scope_codec::write(output, version_scopes{values, values}, state);
+    check(std::ranges::equal(output.written(), scopes), "Write .NET nested Version registration scopes.");
+    input = reader(scopes);
+    state.reset();
+    const auto scoped = scope_codec::read(input, state);
+    check(scoped && scoped->first && scoped->second && (*scoped->first)[0]->id == 13 &&
+        (*scoped->second)[1]->id == 29, "Read .NET nested Version registration scopes.");
+    input.require_end();
+
+    constexpr std::array child_ordinal{byte{251}, byte{0x52}, byte{1}};
+    input = reader(child_ordinal);
+    expect_error<luminpack::wire_error>([&] { (void)v1::read(input, state); },
+        "Retains a schema from a closed member scope.");
+
+    auto bad_schema = complete;
+    bad_schema[3] ^= byte{1};
+    input = reader(bad_schema);
+    state.reset();
+    expect_error<luminpack::wire_error>([&] { (void)v1::read(input, state); }, "Accepts a wrong Version schema fingerprint.");
+    input = reader(std::span<const byte>(complete).first(complete.size() - 1));
+    expect_error<luminpack::wire_error>([&] { (void)v1::read(input, state); }, "Accepts a truncated Version body.");
+    constexpr std::array first_ordinal{byte{251}, byte{0x52}, byte{0}};
+    input = reader(first_ordinal);
+    expect_error<luminpack::wire_error>([&] {
+        (void)luminpack::read_version_header(input, state, string_profile::utf16_length);
+    }, "Keeps a schema from a failed Version body.");
+
+    // Cross the small-table boundary and the single-byte ordinal boundary.
+    std::array<byte, 4096> many{};
+    output = writer(many);
+    for (std::uint32_t index = 0; index < 130; ++index)
+    {
+        const std::array fields{luminpack::version_descriptor(index, 0, 0)};
+        luminpack::write_version_header(output, state, string_profile::utf16_length, fields);
+    }
+    const std::array last{luminpack::version_descriptor(129, 0, 0)};
+    luminpack::write_version_header(output, state, string_profile::utf16_length, last);
+    constexpr std::array last_ordinal{byte{251}, byte{0x52}, byte{0x81}, byte{1}};
+    check(std::ranges::equal(output.written().last(4), last_ordinal), "Write a canonical two-byte Version ordinal.");
+    state.reset();
+    input = reader(output.written());
+    for (std::uint32_t index = 0; index < 130; ++index)
+        check(luminpack::read_version_header(input, state, string_profile::utf16_length)->front() == index,
+            "Read a distinct Version descriptor.");
+    check(luminpack::read_version_header(input, state, string_profile::utf16_length)->front() == 129,
+        "Resolve a canonical two-byte Version ordinal.");
+    input.require_end();
+}
+
 void object_and_input_checks()
 {
     // The same direct calls that a generated positional codec will use.
@@ -584,6 +732,7 @@ int main(int argc, char** argv)
         collection_contracts(directory);
         string_profiles(directory);
         record_and_union_codecs();
+        version_contracts(directory);
         std::cout << "LuminPack C++ wire checks passed.\n";
         return 0;
     }

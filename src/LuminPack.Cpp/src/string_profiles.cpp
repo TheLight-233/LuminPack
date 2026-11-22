@@ -155,7 +155,7 @@ std::span<const std::byte> read_token_payload(reader& input, bool utf8)
     throw wire_error("Missing LuminPack string token terminator.");
 }
 
-std::optional<text_record> read_text_record(reader& input, string_profile profile)
+std::optional<text_record> read_text_record(reader& input, string_profile profile, bool strict_skip = false)
 {
     const auto utf8 = uses_utf8(profile);
     const auto token = uses_token(profile);
@@ -190,8 +190,8 @@ std::optional<text_record> read_text_record(reader& input, string_profile profil
     if (payload.empty())
         return text_record{payload, 0, true, false, false, true};
 
-    const bool replace = character_header <= 0;
-    const auto expected = replace ? 0u : static_cast<std::size_t>(character_header);
+    const bool replace = character_header <= 0 && !strict_skip;
+    const auto expected = character_header > 0 ? static_cast<std::size_t>(character_header) : 0u;
     if (expected > payload.size())
         throw wire_error("Invalid LuminPack UTF-8 character count.");
     if (expected != 0)
@@ -338,6 +338,13 @@ std::optional<std::u16string> read_string(reader& input, string_profile profile)
     decode_text(result, *record);
     input = next;
     return result;
+}
+
+void skip_string(reader& input, string_profile profile)
+{
+    reader next = input;
+    (void)read_text_record(next, profile, true);
+    input = next;
 }
 
 void write_string(writer& output, string_profile profile, std::optional<std::u16string_view> value)

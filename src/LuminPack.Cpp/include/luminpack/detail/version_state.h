@@ -1,0 +1,120 @@
+#pragma once
+
+#include <unordered_map>
+#include <utility>
+
+// Included by luminpack.h after the binary cursors and string profiles.
+namespace luminpack
+{
+class version_state;
+
+namespace detail
+{
+constexpr std::uint64_t version_schema_hash(std::span<const std::uint64_t> descriptors) noexcept
+{
+    constexpr auto basis = std::uint64_t{14695981039346656037ull};
+    constexpr auto prime = std::uint64_t{1099511628211ull};
+    auto hash = (basis ^ descriptors.size()) * prime;
+    for (auto descriptor : descriptors)
+    {
+        for (std::size_t byte = 0; byte < sizeof(descriptor); ++byte)
+        {
+            hash = (hash ^ (descriptor & 0xffu)) * prime;
+            descriptor >>= 8;
+        }
+    }
+    return hash;
+}
+
+void write_version_prehashed(writer& output, version_state& state, string_profile profile,
+    std::uint64_t hash, std::span<const std::uint64_t> descriptors);
+}
+
+/// Schema registrations for one Version read or write operation.
+class version_state
+{
+public:
+    /// Discards registrations between independent documents.
+    void reset() noexcept;
+
+    class scope
+    {
+    public:
+        explicit scope(version_state& state) noexcept : state_(state), size_(state.entries_.size()) {}
+        ~scope() { if (!keep_) state_.truncate(size_); }
+        scope(const scope&) = delete;
+        scope& operator=(const scope&) = delete;
+
+        /// Retains the registrations accumulated by a completed enclosing operation.
+        void commit() noexcept { keep_ = true; }
+
+    private:
+        version_state& state_;
+        std::size_t size_;
+        bool keep_ = false;
+    };
+
+private:
+    struct entry
+    {
+        std::uint64_t hash;
+        std::vector<std::uint64_t> descriptors;
+    };
+
+    friend std::optional<std::span<const std::uint64_t>> read_version_header(
+        reader& input, version_state& state, string_profile profile);
+    friend void detail::write_version_prehashed(writer& output, version_state& state, string_profile profile,
+        std::uint64_t hash, std::span<const std::uint64_t> descriptors);
+
+    [[nodiscard]] std::span<const std::uint64_t> get(std::uint32_t ordinal) const;
+    [[nodiscard]] std::optional<std::size_t> find(std::uint64_t hash, std::span<const std::uint64_t> descriptors);
+    [[nodiscard]] std::span<const std::uint64_t> append(
+        std::uint64_t hash, std::span<const std::uint64_t> descriptors, bool index_for_writes);
+    void truncate(std::size_t size) noexcept;
+
+    std::vector<entry> entries_;
+    std::unordered_multimap<std::uint64_t, std::size_t> index_;
+    std::optional<std::size_t> last_;
+};
+
+/// Resolves a full or ordinal Version header. A null object has no descriptors.
+[[nodiscard]] std::optional<std::span<const std::uint64_t>> read_version_header(
+    reader& input, version_state& state, string_profile profile);
+
+/// Emits a full Version header or an ordinal for an exact descriptor already in scope.
+void write_version_header(writer& output, version_state& state, string_profile profile,
+    std::span<const std::uint64_t> descriptors);
+
+namespace detail
+{
+struct no_version_scope
+{
+    void commit() const noexcept {}
+};
+
+inline no_version_scope version_transaction() noexcept { return {}; }
+
+inline version_state::scope version_transaction(version_state& state) noexcept
+{
+    return version_state::scope(state);
+}
+
+template<class Codec, class... Context>
+decltype(auto) read_codec(reader& input, Context&... context)
+{
+    if constexpr (requires { Codec::read(input, context...); })
+        return Codec::read(input, context...);
+    else
+        return Codec::read(input);
+}
+
+template<class Codec, class Value, class... Context>
+void write_codec(writer& output, const Value& value, Context&... context)
+{
+    if constexpr (requires { Codec::write(output, value, context...); })
+        Codec::write(output, value, context...);
+    else
+        Codec::write(output, value);
+}
+}
+}
