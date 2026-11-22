@@ -59,6 +59,7 @@ internal sealed partial class CppEmitter
         var hashes = new HashSet<uint>();
         foreach (JsonElement item in cases.EnumerateArray().OrderBy(static item => item.GetProperty("tag").GetInt32()))
         {
+            RejectOpaqueUnionCase(item);
             string type = Normalize(Text(item, "type"));
             if (!contracts.TryGetValue(type, out JsonElement declaration) || Text(declaration, "kind") != "Record")
                 throw Missing(Text(item, "id"), "an RTTI case without a class DTO");

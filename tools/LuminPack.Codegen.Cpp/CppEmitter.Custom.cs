@@ -26,4 +26,13 @@ internal sealed partial class CppEmitter
         code.Append('\n');
         return new Binding(value, binary, json);
     }
+
+    /// <summary>Rejects an opaque Custom formatter in a declared hash-based Union case table.</summary>
+    /// <param name="item">The case projected by the manifest.</param>
+    private void RejectOpaqueUnionCase(JsonElement item)
+    {
+        string type = Normalize(Text(item, "type"));
+        if (contracts.TryGetValue(type, out JsonElement declaration) && Text(declaration, "kind") == "Custom")
+            throw Missing(Text(item, "id"), "the opaque Custom formatter has no compiler-generated Union payload");
+    }
 }

@@ -249,6 +249,7 @@ internal sealed partial class CppEmitter
         var jsonMembers = new List<string>();
         foreach (JsonElement item in contract.GetProperty("cases").EnumerateArray())
         {
+            RejectOpaqueUnionCase(item);
             Binding member = BindType(Text(item, "type"), profile, Text(contract, "id"), false);
             string hash = item.GetProperty("hash").GetUInt32().ToString(CultureInfo.InvariantCulture) + "u";
             if (member.Payload == null || member.JsonPayload == null)

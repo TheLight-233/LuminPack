@@ -38,6 +38,7 @@ internal static class Program
 
         Reject(() => LuminPackSerializer.SerializeJson(value));
         Reject(() => LuminPackSerializer.SerializeJson<Shifted, LuminPackUtf8LengthOptions>(data));
+        Reject(() => LuminPackSerializer.Serialize<IClosedCustomUnion>(new ClosedCustomCase { Payload = data }));
         if (!write)
         {
             string alias = Encoding.Unicode.GetString(File.ReadAllBytes(Path.Combine(directory, "custom-version.json")))
@@ -173,4 +174,47 @@ public sealed partial class Versioned
     [LuminPackableObject, LuminPackOldName("Previous")]
     public Shifted? Data;
     public int Marker;
+}
+
+/// <summary>A declared Union cannot derive a hash case body from an opaque Custom registration.</summary>
+[LuminPackable, LuminPackUnion(10, typeof(ClosedCustomCase))]
+public partial interface IClosedCustomUnion
+{
+}
+
+/// <summary>Provides both Custom operation pairs without a generated Union payload.</summary>
+[LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Custom)]
+public sealed class ClosedCustomCase : IClosedCustomUnion
+{
+    public Shifted Payload = new();
+
+    /// <summary>Writes the complete Custom Binary payload.</summary>
+    /// <param name="writer">The Binary output cursor.</param>
+    /// <param name="value">The source case.</param>
+    public static void Serialize(ref LuminPackWriter writer, in ClosedCustomCase value)
+        => Shifted.Serialize(ref writer, in value.Payload);
+
+    /// <summary>Reads the complete Custom Binary payload.</summary>
+    /// <param name="reader">The Binary input cursor.</param>
+    /// <param name="value">The decoded case.</param>
+    public static void Deserialize(ref LuminPackReader reader, ref ClosedCustomCase value)
+    {
+        value = new ClosedCustomCase();
+        Shifted.Deserialize(ref reader, ref value.Payload);
+    }
+
+    /// <summary>Writes the complete Custom JSON payload.</summary>
+    /// <param name="writer">The JSON output cursor.</param>
+    /// <param name="value">The source case.</param>
+    public static void SerializeJson(ref LuminPackJsonWriter writer, in ClosedCustomCase value)
+        => Shifted.SerializeJson(ref writer, in value.Payload);
+
+    /// <summary>Reads the complete Custom JSON payload.</summary>
+    /// <param name="reader">The JSON input cursor.</param>
+    /// <param name="value">The decoded case.</param>
+    public static void DeserializeJson(ref LuminPackJsonReader reader, ref ClosedCustomCase value)
+    {
+        value = new ClosedCustomCase();
+        Shifted.DeserializeJson(ref reader, ref value.Payload);
+    }
 }
