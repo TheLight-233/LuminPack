@@ -13,6 +13,8 @@ For C++ binary interoperability, include the public runtime header and link the 
 
 Use `generate --rtti` when the C++ DTO needs Next's closed exact-type Union dispatch. The owning Union slot is a `std::unique_ptr`. Its writer uses the concrete RTTI type, and its reader switches on the C# wire hash.
 
+For C++ struct interchange, generate from Next's storage plan. Packed values and standalone values from multi-model Tagged contracts use the packed field order. Nonempty multi-model Tagged arrays and lists carry a layout tag. Match the target's C++ size and offsets to the exported CLR model before copying Native bytes, including padding.
+
 Generated models do not require a runtime plan or formatter witness supplied by the caller. Operation plans are internal source-generator data; they do not add a runtime API or dispatch layer.
 
 JSON property-name lookup is generated automatically: sparse length groups use exact comparisons, and dense groups use a shared seed-zero hash followed by exact comparison. Generated hash calls use `XxHash3.Hash64(ref byte, uint)` over a validated range, without pointers or pinning. Do not persist these internal hashes; rebuild generated consumers with the matching Core after an algorithm change. See [JSON name lookup](../../docs/json-name-lookup.md).

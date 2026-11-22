@@ -64,6 +64,8 @@ For Version revision 4 and 5, bind the emitted field descriptors and former name
 
 Multi-model Tagged arrays support raw fields. Describe local Tagged strides and offsets with `sizeof` and `offsetof`. Each copied field's object representation must admit every bit pattern, as fixed-width integer fields do. Initialize any padding that a native write would expose.
 
+The generator uses Next's storage plan to bind recursively Packed fields and multi-model Tagged arrays and lists. A multi-model Tagged value uses the packed field order when it stands alone or appears as a dictionary value. Nonempty multi-model Tagged blocks carry the exported one-based tag. The writer copies matching C++ layouts directly and converts unmatched layouts to the first exported model. A tag-free raw aggregate can use the Native path when the exported CLR offsets and stride match the target's C++ layout. Generated padding fields preserve those raw bytes across DTO copies.
+
 The reader checks input ranges in Release builds. Use `reader_limits` to bound collection counts and decoded UTF-16 lengths. Buffer-oriented read-into calls borrow the supplied storage. Keep that storage alive while using a returned view. Overlapping layout conversions or string transforms stage their input on the heap.
 
 The x64 Latin-1 path selects AVX-512BW, AVX2, or SSE2 based on support and complete block size. Other targets use the portable implementation. Set `LUMINPACK_CPP_MAX_SIMD_BITS` to `128`, `256`, or `512` to cap the compiled width. The CMake option `LUMINPACK_CPP_SIMD=OFF` selects the portable implementation on x64 as well.
@@ -105,7 +107,7 @@ The export is a compiler projection of the resolved member order, binary profile
 
 Pass `--rtti` immediately after `generate` to use C++ polymorphic DTOs for Next's closed exact-dispatch Union tier. This mode accepts up to 32 positional class cases. Each Union slot owns its case with `std::unique_ptr`. Writers compare `typeid(value)` with the declared concrete types, and readers switch on the canonical C# case hash. The option applies to Binary and JSON. The generated RTTI and variant headers for the same root use the same namespace, so choose one representation for each program.
 
-The emitter supports acyclic positional and Version class contracts, closed class or interface Unions, enums, fixed-width primitives, text, one-dimensional arrays, List, Dictionary, and sequential raw structs whose field order and same-width storage are provable. Nullable primitives and enums also work as Version fields, array or List elements, and dictionary values. The raw struct path is selected only when the generated C++ offsets and stride also match. A field-wise codec supplies the local fallback. Generation reports the member or type when its model needs an unimplemented representation.
+The emitter supports acyclic positional and Version class contracts, closed class or interface Unions, enums, fixed-width primitives, text, one-dimensional arrays, List, Dictionary, Packed and Tagged aggregates with generated field contracts, and sequential raw structs with proven storage. Nullable primitives and enums also work as Version fields, array or List elements, and dictionary values. Generation reports the member or type when its model needs an unimplemented representation.
 
 ## Verify the benchmark models
 

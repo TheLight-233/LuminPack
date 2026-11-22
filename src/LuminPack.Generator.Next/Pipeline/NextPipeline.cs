@@ -81,9 +81,11 @@ internal static partial class NextPipeline
         var cppExport = context.AnalyzerConfigOptionsProvider.Select(static (options, _) =>
             options.GlobalOptions.TryGetValue("build_property.LuminPackExportCppContract", out string? value) &&
             string.Equals(value, "true", StringComparison.OrdinalIgnoreCase));
-        context.RegisterSourceOutput(declared.Combine(cppExport), static (production, input) =>
+        var cppCompilation = context.CompilationProvider.Combine(cppExport)
+            .Select(static (input, _) => input.Right ? input.Left : null);
+        context.RegisterSourceOutput(declared.Combine(cppCompilation), static (production, input) =>
         {
-            if (!input.Right)
+            if (input.Right is not { } compilation)
                 return;
 
             var roots = new List<TypeModel>();
@@ -92,8 +94,10 @@ internal static partial class NextPipeline
                     roots.Add(model);
             if (roots.Count != 0)
             {
+                GeneratorOptions options = GeneratorOptionsFactory.From(compilation);
                 production.AddSource("LuminPackGen.CppContracts.g.cs",
-                    CppContractExport.Render(roots, production.CancellationToken));
+                    CppContractExport.Render(roots, model => TypeModelFactory.TryCreateCppNativeStorage(model, compilation, options),
+                        production.CancellationToken));
             }
         });
         var report = context.AnalyzerConfigOptionsProvider.Select(static (options, _) =>

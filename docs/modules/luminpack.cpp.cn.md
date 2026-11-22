@@ -64,6 +64,8 @@ Version rev4 和 rev5 用 `version_member` 与 `version_codec` 绑定生成的�
 
 多模型 Tagged 数组支持原始字段。用 `sizeof` 和 `offsetof` 描述本地步长和字段偏移。参与原始复制的字段必须接受其对象表示的任意位模式，例如定宽整数。写出本地布局前应初始化会进入 wire 的填充字节。
 
+生成器沿用 Next 的存储方案绑定递归 Packed 字段以及多模型 Tagged 数组和 List。多模型 Tagged 值独立出现或作为字典值时，使用紧凑字段顺序。非空的多模型 Tagged 集合携带导出模型的从 1 开始的标签。C++ 字段偏移与步长匹配模型时直接复制，否则转换到导出的第一个模型。无需标签的原始结构体可在 CLR 与目标 C++ 的字段偏移和步长一致时走 Native 路径。生成的填充字段让 DTO 复制保留这些原始字节。
+
 Reader 在 Release 构建中也会校验输入范围。用 `reader_limits` 限制集合元素数量和解码后的 UTF-16 码元数量。读入缓冲区的操作返回借用目标存储的视图，在使用视图期间保持缓冲区有效。跨布局转换或字符串转换遇到输入输出重叠时，会在堆上暂存输入。
 
 x64 的 Latin-1 内核按 CPU 支持和完整块大小选择 AVX-512BW、AVX2 或 SSE2。其他目标使用可移植实现。设置 `LUMINPACK_CPP_MAX_SIMD_BITS` 为 `128`、`256` 或 `512` 可限制编译的最大向量宽度。设置 `LUMINPACK_CPP_SIMD=OFF` 可在 x64 上也使用可移植实现。
@@ -105,7 +107,7 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 在 `generate` 后加 `--rtti`，可为 Next 的封闭精确分派层生成 C++ 多态 DTO，支持最多 32 个位置类 case。每个 Union 用 `std::unique_ptr` 持有具体对象。写入将 `typeid(value)` 与声明的具体类型逐个比较，读取按 C# 的规范 case hash 执行 `switch`。该选项同时适用于 Binary 和 JSON。同一个根的 RTTI 和 variant 头文件使用相同命名空间，每个程序按需选择一种表示。
 
-生成器支持无环的位置类和 Version 类、封闭的类或接口 Union、枚举、定宽标量、文本、一维数组、List、Dictionary，以及可证明字段顺序与等宽存储的顺序布局结构体。可空原生类型和枚举也可以用作 Version 字段、数组或 List 元素和字典值。C++ 结构体字段偏移和步长也匹配时才走整块复制，否则使用逐字段读写。遇到尚未实现的 wire 表示时，生成器会报告对应成员或类型。
+生成器支持无环的位置类和 Version 类、封闭的类或接口 Union、枚举、定宽标量、文本、一维数组、List、Dictionary，以及具有已生成字段契约的 Packed 和 Tagged 聚合和存储经过验证的顺序布局原始结构体。可空原生类型和枚举也可以用作 Version 字段、数组或 List 元素和字典值。遇到尚未实现的 wire 表示时，生成器会报告对应成员或类型。
 
 ## 验证基准模型
 

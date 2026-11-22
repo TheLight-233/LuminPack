@@ -14,7 +14,11 @@ internal sealed partial class CppEmitter
     /// <returns>The typed C++ binding.</returns>
     private Binding BindFormatter(JsonElement formatter, int profile, string label, bool required = false, int nullableWidth = 0)
     {
-        if (formatter.GetProperty("layout").ValueKind != JsonValueKind.Null)
+        JsonElement layout = formatter.GetProperty("layout");
+        string type = Text(formatter, "type");
+        if (layout.ValueKind != JsonValueKind.Null &&
+            (!contracts.TryGetValue(Normalize(type), out JsonElement contract) ||
+                Text(contract, "kind") != "Struct" || !JsonElement.DeepEquals(contract.GetProperty("storage"), layout)))
             throw Missing(label, "a specialized layout block");
 
         string definition = Text(formatter, "definition");
@@ -54,7 +58,7 @@ internal sealed partial class CppEmitter
             }
             return Dictionary(key, value);
         }
-        return BindType(Text(formatter, "type"), profile, label, required);
+        return BindType(type, profile, label, required);
     }
 
     /// <summary>Maps nullable fields to the marker and payload form, with optional Version null padding.</summary>

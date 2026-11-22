@@ -18,9 +18,11 @@ internal static class CppContractExport
 
     /// <summary>Renders contract rows in a stable type-identity order.</summary>
     /// <param name="roots">The complete payloads already analyzed by Next.</param>
+    /// <param name="getNativeStorage">The optional native layout analysis for raw structs.</param>
     /// <param name="cancellationToken">Cancels the projection.</param>
     /// <returns>Source containing assembly metadata only.</returns>
-    internal static string Render(IEnumerable<TypeModel> roots, CancellationToken cancellationToken)
+    internal static string Render(IEnumerable<TypeModel> roots,
+        Func<StructModel, (int Strategy, FormatterStorageModel Layout)?> getNativeStorage, CancellationToken cancellationToken)
     {
         TypeModel[] declarations = roots.ToArray();
         var contracts = new SortedDictionary<string, TypeModel>(StringComparer.Ordinal);
@@ -35,7 +37,7 @@ internal static class CppContractExport
         {
             cancellationToken.ThrowIfCancellationRequested();
             json.Clear();
-            Value(json, Contract(model));
+            Value(json, Contract(model, model is StructModel value ? getNativeStorage(value) : null));
             source.Append("[assembly: global::System.Reflection.AssemblyMetadataAttribute(\"")
                 .Append(MetadataKey).Append("\", ")
                 .Append(SymbolDisplay.FormatLiteral(json.ToString(), true)).Append(")]\n");
@@ -110,8 +112,9 @@ internal static class CppContractExport
 
     /// <summary>Projects one declaration without referring to its generated C# formatter text.</summary>
     /// <param name="model">The declaration facts.</param>
+    /// <param name="native">The independent tag-free layout facts, when available.</param>
     /// <returns>The JSON properties for the contract row.</returns>
-    private static object Contract(TypeModel model)
+    private static object Contract(TypeModel model, (int Strategy, FormatterStorageModel Layout)? native)
     {
         var record = model as RecordModel;
         var value = model as StructModel;
@@ -122,6 +125,7 @@ internal static class CppContractExport
             ("typeParameters", model.Identity.TypeParameters), ("kind", model.Kind.ToString()),
             ("profile", Profile(model.Policy)), ("versioned", version != null), ("dynamicVersion", version?.Dynamic),
             ("storageKind", value?.Storage.ToString()), ("storage", Storage(value?.StoragePlan)),
+            ("nativeStrategy", native?.Strategy), ("nativeStorage", Storage(native?.Layout)),
             ("sequenceBase", record?.SequenceBase), ("collectionBase", Formatter(record?.CollectionBase)),
             ("cases", union?.Cases.Select(static item => Object(("id", item.Type.MetadataName), ("type", item.Type.GlobalName),
                 ("hash", item.NameHash), ("tag", item.Tag), ("ownEntry", item.OwnEntry)))),

@@ -171,8 +171,15 @@ internal sealed partial class CppEmitter
     /// <returns>The binary and JSON value codecs.</returns>
     private Binding EmitStruct(JsonElement contract, string name, int profile)
     {
+        if (Text(contract, "storageKind") == "PortableUnmanaged")
+            return EmitPortableStruct(contract, name, profile);
+
         string owner = Text(contract, "id");
         string type = Normalize(Text(contract, "type"));
+        if (contract.TryGetProperty("nativeStorage", out JsonElement native) && native.ValueKind == JsonValueKind.Object &&
+            !CanUseDenseNativeBinding(type, native))
+            return EmitNativeStruct(contract, native, name, profile);
+
         if (Text(contract, "storageKind") != "RawUnmanaged" ||
             contract.GetProperty("storage").ValueKind != JsonValueKind.Null ||
             !layouts.TryGetValue(type, out JsonElement layout))
@@ -404,7 +411,7 @@ internal sealed partial class CppEmitter
     /// <returns>The array or list bindings.</returns>
     private static Binding Sequence(Binding item)
     {
-        string binary = "luminpack::list_codec<" + item.Binary + ">";
+        string binary = item.SequenceBinary ?? "luminpack::list_codec<" + item.Binary + ">";
         return new Binding(binary + "::value_type", binary, "luminpack::json_list_codec<" + item.Json + ">");
     }
 
@@ -532,5 +539,5 @@ internal sealed partial class CppEmitter
         new InvalidOperationException("Cannot emit C++ for " + label + ": " + reason + ".");
 
     private readonly record struct Binding(string Type, string Binary, string Json, string? Payload = null,
-        string? JsonPayload = null);
+        string? JsonPayload = null, string? SequenceBinary = null);
 }

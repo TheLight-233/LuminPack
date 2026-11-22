@@ -264,6 +264,28 @@ struct storage_model
     constexpr bool operator==(const storage_model&) const = default;
 };
 
+namespace detail
+{
+template<std::size_t Fields>
+[[nodiscard]] constexpr bool valid_storage_model(const std::array<std::size_t, Fields>& widths,
+    const storage_model<Fields>& model) noexcept
+{
+    for (std::size_t field = 0; field < Fields; ++field)
+    {
+        const auto offset = model.offsets[field];
+        if (widths[field] == 0 || offset > model.stride || widths[field] > model.stride - offset)
+            return false;
+        for (std::size_t previous = 0; previous < field; ++previous)
+        {
+            const auto previous_offset = model.offsets[previous];
+            if (offset < previous_offset + widths[previous] && previous_offset < offset + widths[field])
+                return false;
+        }
+    }
+    return true;
+}
+}
+
 /// Compile-time input to a generated Tagged array codec. Wire order defines tags starting at one.
 template<std::size_t Fields, std::size_t Models>
 struct tagged_layout
@@ -275,11 +297,11 @@ struct tagged_layout
     /// Checks storage descriptors and guarantees that conversion only accesses complete fields.
     [[nodiscard]] constexpr bool valid() const noexcept
     {
-        if (Fields == 0 || Models < 2 || Models > 250 || !valid_model(local))
+        if (Fields == 0 || Models < 2 || Models > 250 || !detail::valid_storage_model(widths, local))
             return false;
         for (const auto& model : wire)
         {
-            if (!valid_model(model))
+            if (!detail::valid_storage_model(widths, model))
                 return false;
         }
         return true;
@@ -296,23 +318,6 @@ struct tagged_layout
         return 0;
     }
 
-private:
-    [[nodiscard]] constexpr bool valid_model(const storage_model<Fields>& model) const noexcept
-    {
-        for (std::size_t field = 0; field < Fields; ++field)
-        {
-            const auto offset = model.offsets[field];
-            if (widths[field] == 0 || offset > model.stride || widths[field] > model.stride - offset)
-                return false;
-            for (std::size_t previous = 0; previous < field; ++previous)
-            {
-                const auto previous_offset = model.offsets[previous];
-                if (offset < previous_offset + widths[previous] && previous_offset < offset + widths[field])
-                    return false;
-            }
-        }
-        return true;
-    }
 };
 
 namespace detail
@@ -337,6 +342,39 @@ void convert_layout(std::span<const std::byte> input, std::span<std::byte> outpu
             std::memcpy(to + destination.offsets[field], from + source.offsets[field], Layout.widths[field]);
     }
 }
+
+struct tagged_block
+{
+    std::optional<std::size_t> count;
+    std::span<const std::byte> payload;
+    std::uint8_t tag = 0;
+};
+
+template<auto Layout>
+[[nodiscard]] tagged_block read_tagged_block(reader& input)
+{
+    tagged_block block{input.read_collection_count(), {}};
+    if (block.count && *block.count != 0)
+    {
+        block.tag = input.read<std::uint8_t>();
+        if (block.tag == 0 || block.tag > Layout.wire.size())
+            throw wire_error("Unknown LuminPack storage layout tag.");
+        const auto& model = Layout.wire[block.tag - 1];
+        block.payload = input.take(checked_input_width(*block.count, model.stride, input.remaining()));
+    }
+    return block;
+}
+
+template<auto Layout>
+void transfer_tagged_block(const tagged_block& block, std::span<std::byte> destination)
+{
+    if (block.payload.empty())
+        return;
+    if (block.tag == Layout.local_tag())
+        std::memmove(destination.data(), block.payload.data(), block.payload.size());
+    else
+        convert_layout<Layout>(block.payload, destination, *block.count, Layout.wire[block.tag - 1], Layout.local, false);
+}
 }
 
 /// Reads a Tagged array with multiple storage models. Use sizeof and offsetof for the local model.
@@ -348,29 +386,17 @@ template<class T, auto Layout>
     static_assert(Layout.valid() && Layout.local.stride == sizeof(T));
 
     reader next = input;
-    const auto count = next.read_collection_count();
-    if (!count || *count == 0)
+    const auto block = detail::read_tagged_block<Layout>(next);
+    if (!block.count)
     {
         input = next;
-        if (!count)
-            return std::nullopt;
-        return destination.first(0);
+        return std::nullopt;
     }
 
-    const auto length = *count;
-    const auto tag = next.read<std::uint8_t>();
-    if (tag == 0 || tag > Layout.wire.size())
-        throw wire_error("Unknown LuminPack storage layout tag.");
-    const auto& model = Layout.wire[tag - 1];
-    const auto payload = next.take(detail::checked_input_width(length, model.stride, next.remaining()));
-    if (length > destination.size())
+    if (*block.count > destination.size())
         detail::short_output();
-    const auto result = destination.first(length);
-    const auto bytes = std::as_writable_bytes(result);
-    if (tag == Layout.local_tag())
-        std::memmove(bytes.data(), payload.data(), payload.size());
-    else
-        detail::convert_layout<Layout>(payload, bytes, length, model, Layout.local, false);
+    const auto result = destination.first(*block.count);
+    detail::transfer_tagged_block<Layout>(block, std::as_writable_bytes(result));
     input = next;
     return result;
 }
@@ -412,6 +438,7 @@ void write_tagged_array(writer& output, std::optional<std::span<const T>> value)
 
 #include "detail/version_state.h"
 #include "detail/collections.h"
+#include "detail/storage_codecs.h"
 #include "detail/nullable.h"
 #include "detail/records.h"
 #include "detail/version_codec.h"
