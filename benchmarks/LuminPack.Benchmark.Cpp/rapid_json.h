@@ -38,16 +38,15 @@ using encoding = rapidjson::UTF16<char16_t>;
 using pool = rapidjson::MemoryPoolAllocator<allocator>;
 using value = rapidjson::GenericValue<encoding, pool>;
 using document = rapidjson::GenericDocument<encoding, pool, allocator>;
-using buffer = rapidjson::GenericStringBuffer<rapidjson::UTF8<>, allocator>;
-using writer = rapidjson::Writer<buffer, encoding, rapidjson::UTF8<>, allocator>;
+using buffer = rapidjson::GenericStringBuffer<encoding, allocator>;
+using writer = rapidjson::Writer<buffer, encoding, encoding, allocator>;
 
-inline document parse(std::span<const char> input)
+inline document parse(const char16_t* input)
 {
     document result;
-    result.Parse<rapidjson::kParseValidateEncodingFlag | rapidjson::kParseFullPrecisionFlag,
-        rapidjson::UTF8<>>(input.data(), input.size());
+    result.Parse<rapidjson::kParseValidateEncodingFlag | rapidjson::kParseFullPrecisionFlag>(input);
     if (result.HasParseError())
-        throw std::runtime_error("RapidJSON parse error at byte " + std::to_string(result.GetErrorOffset()) + ".");
+        throw std::runtime_error("RapidJSON parse error at code unit " + std::to_string(result.GetErrorOffset()) + ".");
     return result;
 }
 
@@ -350,7 +349,7 @@ private:
 };
 
 template<class Codec>
-typename Codec::value_type read(std::span<const char> input)
+typename Codec::value_type read(const char16_t* input)
 {
     return binding<Codec>::read(parse(input));
 }
@@ -359,13 +358,13 @@ class reusable_writer
 {
 public:
     template<class Codec>
-    std::span<const char> write(const typename Codec::value_type& data)
+    std::u16string_view write(const typename Codec::value_type& data)
     {
         storage_.Clear();
         target_.Reset(storage_);
         binding<Codec>::write(target_, data);
         require(target_.IsComplete());
-        return {storage_.GetString(), storage_.GetSize()};
+        return {storage_.GetString(), storage_.GetSize() / sizeof(char16_t)};
     }
 
 private:

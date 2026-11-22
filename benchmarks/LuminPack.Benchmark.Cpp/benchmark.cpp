@@ -27,15 +27,16 @@ constexpr int repetitions = 7;
 constexpr auto sample_duration = std::chrono::milliseconds(25);
 constexpr int allocation_iterations = 32;
 
-std::vector<char> load(const path& name)
+template<class Unit>
+std::basic_string<Unit> load(const path& name)
 {
     std::ifstream file(name, std::ios::binary | std::ios::ate);
-    const auto length = file.tellg();
-    if (length < 0)
-        throw std::runtime_error("Missing benchmark fixture: " + name.string());
-    std::vector<char> data(static_cast<std::size_t>(length));
+    const auto length = static_cast<std::streamoff>(file.tellg());
+    if (length < 0 || length % sizeof(Unit) != 0)
+        throw std::runtime_error("Missing benchmark fixture or incomplete code unit: " + name.string());
+    std::basic_string<Unit> data(static_cast<std::size_t>(length) / sizeof(Unit), Unit{});
     file.seekg(0);
-    file.read(data.data(), static_cast<std::streamsize>(data.size()));
+    file.read(reinterpret_cast<char*>(data.data()), length);
     if (!file)
         throw std::runtime_error("Failed to read fixture: " + name.string());
     return data;
@@ -149,37 +150,47 @@ template<class Binary, class Json>
 void benchmark_model(const path& directory, const char* name, const char* fixture, const char16_t* dictionary)
 {
     using model_type = typename Binary::value_type;
-    constexpr auto utf8 = luminpack::json_encoding::utf8;
-    const auto binary = load(directory / (std::string(fixture) + ".bin"));
-    const auto json = load(directory / (std::string(fixture) + ".utf8.json"));
+    const auto binary = load<char>(directory / (std::string(fixture) + ".bin"));
+    const auto json = load<char16_t>(directory / (std::string(fixture) + ".json"));
+    if (json.find(u'\0') != std::u16string::npos)
+        throw std::runtime_error("Embedded zero code unit in benchmark JSON.");
+    const auto json_input = std::as_bytes(std::span(json));
     const auto model = luminpack::read_binary_document<Binary>(std::as_bytes(std::span(binary)));
     if (!model)
         throw std::runtime_error("Unexpected null benchmark model.");
 
     std::vector<char> output(1u << 20);
     auto writable = std::as_writable_bytes(std::span(output));
-    const auto lumin_json_size = luminpack::write_json_document<Json, utf8>(writable, model).size();
-    auto reference_output = rapid_reference::parse(std::span(output).first(lumin_json_size));
+    std::vector<char16_t> json_output(1u << 19);
+    auto json_writable = std::as_writable_bytes(std::span(json_output).first(json_output.size() - 1));
+    auto render_check_value = [&](const model_type& data)
+    {
+        const auto size = luminpack::write_json_document<Json>(json_writable, data).size();
+        json_output[size / sizeof(char16_t)] = u'\0';
+        return size;
+    };
+    const auto lumin_json_size = render_check_value(model);
+    auto reference_output = rapid_reference::parse(json_output.data());
     order_dictionary(reference_output, dictionary);
     auto verify = [&](const model_type& data, const char* reader)
     {
-        const auto size = luminpack::write_json_document<Json, utf8>(writable, data).size();
-        auto parsed = rapid_reference::parse(std::span(output).first(size));
+        render_check_value(data);
+        auto parsed = rapid_reference::parse(json_output.data());
         order_dictionary(parsed, dictionary);
         if (!(parsed == reference_output))
             throw std::runtime_error(std::string(reader) + " did not recover the original " + name + " model.");
     };
 
-    verify(luminpack::read_json_document<Json, utf8>(std::as_bytes(std::span(json))), "LuminPack UTF-8");
+    verify(luminpack::read_json_document<Json>(json_input), "LuminPack default JSON");
     const auto sp_size = pack(output, model);
     const std::vector<char> sp_input(output.begin(), output.begin() + sp_size);
     verify(unpack<model_type>(sp_input), "struct_pack");
     rapid_reference::reusable_writer rapid_writer;
     const auto rapid_output = rapid_writer.write<Json>(model);
-    const auto rapid_size = rapid_output.size();
-    const auto rapid_decoded = rapid_reference::read<Json>(rapid_output);
+    const auto rapid_size = rapid_output.size() * sizeof(char16_t);
+    const auto rapid_decoded = rapid_reference::read<Json>(rapid_output.data());
     verify(rapid_decoded, "RapidJSON round trip");
-    verify(rapid_reference::read<Json>(json), "RapidJSON UTF-8");
+    verify(rapid_reference::read<Json>(json.c_str()), "RapidJSON UTF-16");
     const auto lumin_binary_size = luminpack::write_binary_document<Binary>(writable, model).size();
 
     report(name, {{
@@ -191,14 +202,14 @@ void benchmark_model(const path& directory, const char* name, const char* fixtur
             { auto object = luminpack::read_binary_document<Binary>(std::as_bytes(std::span(binary))); observe(&object); }},
         {"struct_pack", "binary", "read", sp_input.size(), [&]
             { auto object = unpack<model_type>(sp_input); observe(&object); }},
-        {"luminpack", "json-utf8", "write", lumin_json_size, [&]
-            { const auto written = luminpack::write_json_document<Json, utf8>(writable, model); observe(written.data() + written.size()); }},
-        {"rapidjson", "json-utf8", "write", rapid_size, [&]
+        {"luminpack", "json-utf16", "write", lumin_json_size, [&]
+            { const auto written = luminpack::write_json_document<Json>(json_writable, model); observe(written.data() + written.size()); }},
+        {"rapidjson", "json-utf16", "write", rapid_size, [&]
             { const auto written = rapid_writer.write<Json>(model); observe(written.data() + written.size()); }},
-        {"luminpack", "json-utf8", "read", json.size(), [&]
-            { auto object = luminpack::read_json_document<Json, utf8>(std::as_bytes(std::span(json))); observe(&object); }},
-        {"rapidjson", "json-utf8", "read", json.size(), [&]
-            { auto object = rapid_reference::read<Json>(json); observe(&object); }}
+        {"luminpack", "json-utf16", "read", json_input.size(), [&]
+            { auto object = luminpack::read_json_document<Json>(json_input); observe(&object); }},
+        {"rapidjson", "json-utf16", "read", json_input.size(), [&]
+            { auto object = rapid_reference::read<Json>(json.c_str()); observe(&object); }}
     }});
 }
 }

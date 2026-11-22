@@ -1,7 +1,6 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using LuminPack;
-using LuminPack.Option;
 using LuminPackBenchmark;
 
 if (args is not ["read" or "write", var directory])
@@ -31,22 +30,21 @@ internal static class BenchmarkFixture
     internal static void Exchange<T>(string directory, bool writing, string name, T model, string pairs)
     {
         string path = Path.Combine(directory, name);
-        string original = LuminPackSerializer.SerializeJson<T, LuminPackUtf16LengthOptions>(model);
+        string original = LuminPackSerializer.SerializeJson(model);
         if (writing)
         {
-            File.WriteAllBytes(path + ".bin", LuminPackSerializer.Serialize<T, LuminPackUtf16LengthOptions>(model));
+            File.WriteAllBytes(path + ".bin", LuminPackSerializer.Serialize(model));
             File.WriteAllBytes(path + ".json", Encoding.Unicode.GetBytes(original));
-            File.WriteAllBytes(path + ".utf8.json", Encoding.UTF8.GetBytes(original));
             return;
         }
 
-        T binary = LuminPackSerializer.Deserialize<T, LuminPackUtf16LengthOptions>(File.ReadAllBytes(path + ".bin"));
+        T binary = LuminPackSerializer.Deserialize<T>(File.ReadAllBytes(path + ".bin"));
         T json = default!;
-        LuminPackSerializer.DeserializeJson<T, LuminPackUtf16LengthOptions>(File.ReadAllBytes(path + ".json"), ref json);
+        LuminPackSerializer.DeserializeJson(File.ReadAllBytes(path + ".json"), ref json);
         JsonNode expected = Canonical(original, pairs);
-        if (!JsonNode.DeepEquals(expected, Canonical(LuminPackSerializer.SerializeJson<T, LuminPackUtf16LengthOptions>(binary), pairs)))
+        if (!JsonNode.DeepEquals(expected, Canonical(LuminPackSerializer.SerializeJson(binary), pairs)))
             throw new InvalidDataException("The C++ binary differs from the benchmark model " + name + ".");
-        if (!JsonNode.DeepEquals(expected, Canonical(LuminPackSerializer.SerializeJson<T, LuminPackUtf16LengthOptions>(json), pairs)))
+        if (!JsonNode.DeepEquals(expected, Canonical(LuminPackSerializer.SerializeJson(json), pairs)))
             throw new InvalidDataException("The C++ JSON differs from the benchmark model " + name + ".");
     }
 
