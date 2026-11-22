@@ -137,13 +137,15 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 导出内容取自 Next 实际解析的成员顺序、二进制 profile、布局、Version 描述符和 Union 哈希。工具读取程序集元数据并生成包含 `<luminpack/luminpack.h>` 的头文件。每个生成根类型有自己的命名空间，提供 `root_value`、`root_binary`、`root_json`，以及声明的 JSON 编码和读取限制。`Example.Message` 的命名空间为 `luminpack_generated::root_Example_x002eMessage`。
 
+使用 `generate --binary-profile utf8-length` 可以匹配 C# 的显式 Binary 操作，例如 `Serialize<Message, LuminPackUtf8LengthOptions>`。其余内置选项为 `utf8-token`、`utf16-length`、`utf16-token`、`utf8-varint` 和 `utf16-varint`。成员声明的设置优先于所属类型声明的 profile，操作 profile 为继承设置提供默认值。JSON 使用文档声明的选项。显式 profile 会在命名空间后附加后缀，例如 `_binary_utf8_length`，可同时包含默认头文件和其他 profile 的头文件。`--binary-profile` 可以与 `--rtti` 一起使用。
+
 当具体的 C# 序列化调用直接使用封闭泛型，或通过容器间接使用它时，可以导出 Next 已建模的封闭类型。从清单复制准确的 `id`，传给 `generate` 时加上引号，例如 `generate .tmp/contracts.json 'Example.Box<string>' .tmp/box.h`。
 
 将生成的 `root_binary_limits` 或 `root_json_options` 传给对应的文档读取入口，就会在解码前检查声明的 `MaxInputBytes`。限制以传入文档的字节数为单位。用于连续读取的游标继续执行集合、字符串和深度检查。
 
 对 Next Custom 注册，在包含生成头文件之前提供特化，例如 `luminpack::custom_binding<u"Example.Message">`。特化提供 `binary` codec。如果 .NET 注册包含 JSON，也提供值类型相同的 `json` codec。可以使用 `custom_codec` 和 `json_custom_codec`。wire 字节和 null 表示由应用负责。生成的 Custom JSON 使用自动注册的 UTF-16 profile。仅注册 Binary 时只需提供 `binary` codec。
 
-在 `generate` 后加 `--rtti`，可为 Next 的精确分派和虚分派层生成 C++ 多态 DTO。精确分派的写入器将 `typeid(value)` 与声明的具体类型逐个比较。虚分派的写入器调用 case 为当前 Binary 配置或 JSON 编码生成的虚槽。同一泛型声明有多个闭合 case 时，Binary 和 JSON 共用编译期 case hash。两层的读取器都按 C# 的规范 case hash 执行 `switch`。直接 case 全是普通类时，Union 槽用 `std::unique_ptr` 持有对象。存在直接跟踪 case 时，Union 的所有槽都借用文档图中的指针，包括普通 case 和注册 case。同一个根的 RTTI 和 variant 头文件使用相同命名空间，每个程序按需选择一种表示。
+在 `generate` 中使用 `--rtti`，可为 Next 的精确分派和虚分派层生成 C++ 多态 DTO。精确分派的写入器将 `typeid(value)` 与声明的具体类型逐个比较。虚分派的写入器调用 case 为当前 Binary 配置或 JSON 编码生成的虚槽。同一泛型声明有多个闭合 case 时，Binary 和 JSON 共用编译期 case hash。两层的读取器都按 C# 的规范 case hash 执行 `switch`。直接 case 全是普通类时，Union 槽用 `std::unique_ptr` 持有对象。存在直接跟踪 case 时，Union 的所有槽都借用文档图中的指针，包括普通 case 和注册 case。同一个根和 profile 的 RTTI 与 variant 头文件使用相同命名空间，每种 profile 选择一种表示。
 
 从启用了注册的程序集导出的 RTTI Union 提供 `root_binary::registry`。应用 case 继承自 `registry::base_type`，通过 `registry::register_case<Case, Binding>(tag)` 注册。绑定提供读取 payload 的 `read_binary` 和 `read_json`，以及写入带标签 case 的 `write_binary` 和 `write_json`。JSON 方法支持 UTF-8 和 UTF-16 writer。Binary codec 在调用绑定前写入转义哈希，Binary 绑定可用 `write_registered_union_tag<registry::wide_tags>(output, tag)` 写入标签。JSON 绑定写入数字 `$type`，并用 `$value` 包装应用 payload。C# 与 C++ 使用相同的标签和表示。生成的 case 仍优先按哈希分派。
 

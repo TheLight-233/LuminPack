@@ -6,14 +6,12 @@ try
 {
     if (args is ["export", var assemblyPath, var manifestPath])
         ContractExport.Write(assemblyPath, manifestPath);
-    else if (args is ["generate", var inputPath, var root, var headerPath])
-        CppEmitter.Generate(inputPath, root, headerPath);
-    else if (args is ["generate", "--rtti", var rttiInput, var rttiRoot, var rttiHeader])
-        CppEmitter.Generate(rttiInput, rttiRoot, rttiHeader, useRtti: true);
+    else if (args is ["generate", ..] && CppGenerateCommand.TryRun(args.AsSpan(1)))
+        return 0;
     else
     {
         Console.Error.WriteLine("Usage: LuminPack.Codegen.Cpp export <assembly.dll> <manifest.json>");
-        Console.Error.WriteLine("       LuminPack.Codegen.Cpp generate [--rtti] <manifest.json> <root-type> <output.h>");
+        Console.Error.WriteLine("       LuminPack.Codegen.Cpp generate [--binary-profile <profile>] [--rtti] <manifest.json> <root-type> <output.h>");
         return 2;
     }
     return 0;

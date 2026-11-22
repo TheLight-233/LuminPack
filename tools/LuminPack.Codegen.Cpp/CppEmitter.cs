@@ -46,7 +46,8 @@ internal sealed partial class CppEmitter
     /// <param name="root">The explicit root's CLR metadata name.</param>
     /// <param name="headerPath">The generated C++ header destination.</param>
     /// <param name="useRtti">Whether to emit polymorphic class Unions with C#-style dispatch.</param>
-    internal static void Generate(string manifestPath, string root, string headerPath, bool useRtti = false)
+    /// <param name="binaryProfile">The explicit operation profile, or null for the declared default.</param>
+    internal static void Generate(string manifestPath, string root, string headerPath, bool useRtti = false, int? binaryProfile = null)
     {
         using JsonDocument manifest = JsonDocument.Parse(File.ReadAllBytes(manifestPath));
         var emitter = new CppEmitter(manifest.RootElement, useRtti);
@@ -54,9 +55,12 @@ internal sealed partial class CppEmitter
         if (declaration.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("No LuminPack C++ contract for root " + root + ".");
 
-        emitter.code.Append("namespace luminpack_generated::root_").Append(Identifier(root)).Append("\n{\n");
+        emitter.code.Append("namespace luminpack_generated::root_").Append(Identifier(root));
+        if (binaryProfile.HasValue)
+            emitter.code.Append("_binary_").Append(Profiles[binaryProfile.Value]);
+        emitter.code.Append("\n{\n");
         JsonElement profile = declaration.GetProperty("profile");
-        Binding binding = emitter.BindContract(declaration, profile.GetProperty("binary").GetInt32());
+        Binding binding = emitter.BindContract(declaration, binaryProfile ?? profile.GetProperty("binary").GetInt32());
         emitter.EmitDeferredRecordsAndRttiUnions();
         emitter.EmitRoot(binding, profile);
         emitter.code.Append("}\n");
@@ -65,6 +69,18 @@ internal sealed partial class CppEmitter
             using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true);
             writer.Write(emitter.code.ToString());
         });
+    }
+
+    /// <summary>Resolves a CLI option to the existing compiler profile ordinal.</summary>
+    /// <param name="name">The requested built-in profile name.</param>
+    /// <returns>The binary profile index used by generated codecs.</returns>
+    internal static int ParseBinaryProfile(string name)
+    {
+        int profile = Array.IndexOf(Profiles, name.Replace('-', '_'));
+        if (profile < 0)
+            throw new ArgumentException("Unknown Binary profile " + name + ". Choose " +
+                string.Join(", ", Profiles.Select(static value => value.Replace('_', '-'))) + ".");
+        return profile;
     }
 
     /// <summary>Binds a normalized contract and emits its dependencies before its own definitions.</summary>
