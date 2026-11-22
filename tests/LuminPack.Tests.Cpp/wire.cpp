@@ -670,6 +670,91 @@ void long_utf8_ascii_runs()
     }
 }
 
+void homogeneous_two_byte_utf8_runs()
+{
+    constexpr auto profile = luminpack::string_profile::utf8_length;
+    constexpr std::size_t header_size = 8;
+    constexpr std::array<std::size_t, 13> lengths{31, 32, 33, 39, 40, 47, 48, 63, 64, 65, 79, 96, 129};
+
+    for (const auto length : lengths)
+    {
+        alignas(64) std::array<char16_t, 130> characters{};
+        const auto units = std::span(characters).subspan(1, length);
+        const auto text = std::u16string_view(units.data(), units.size());
+        units.front() = 0x80;
+        units.back() = 0x7ff;
+        for (std::size_t index = 1; index + 1 < length; ++index)
+            units[index] = static_cast<char16_t>(0x80 + (index * 67) % 0x780);
+
+        std::vector<byte> payload;
+        for (const auto unit : text)
+        {
+            payload.push_back(static_cast<byte>(0xc0 | unit / 64));
+            payload.push_back(static_cast<byte>(0x80 | unit % 64));
+        }
+
+        std::array<byte, header_size + 2 * 129 + 3> storage;
+        const auto check_record = [&](std::span<const byte> record, std::span<const byte> expected)
+        {
+            reader input(record);
+            check(input.read<std::int32_t>() == static_cast<std::int32_t>(expected.size()), "Homogeneous UTF-8 byte count.");
+            check(input.read<std::int32_t>() == static_cast<std::int32_t>(length), "Homogeneous UTF-8 code-unit count.");
+            check(std::ranges::equal(input.take(expected.size()), expected), "Homogeneous UTF-8 exact payload.");
+            input.require_end();
+        };
+        const auto verify_write = [&](std::span<const byte> expected)
+        {
+            storage.fill(byte{204});
+            const auto window = std::span(storage).subspan(1, header_size + expected.size());
+            writer output(window);
+            luminpack::write_string(output, profile, text);
+            check_record(output.written(), expected);
+            check(storage.front() == byte{204} && storage[1 + window.size()] == byte{204}, "Homogeneous UTF-8 write bounds.");
+        };
+        verify_write(payload);
+
+        const std::array<std::size_t, 11> positions{7, 8, 15, 16, 31, 32, 47, 48, 63, 64, length - 1};
+        for (const auto index : positions)
+        {
+            if (index >= length)
+                continue;
+            const auto original = units[index];
+            units[index] = 0x800;
+            auto mixed = payload;
+            mixed[index * 2] = byte{0xe0};
+            mixed[index * 2 + 1] = byte{0xa0};
+            mixed.insert(mixed.begin() + static_cast<std::ptrdiff_t>(index * 2 + 2), byte{0x80});
+            verify_write(mixed);
+            units[index] = original;
+        }
+
+        // A supplementary scalar consumes two UTF-16 units and produces four bytes.
+        units[length - 2] = 0xd83d;
+        units[length - 1] = 0xde00;
+        auto supplementary = payload;
+        std::ranges::copy(std::array{byte{0xf0}, byte{0x9f}, byte{0x98}, byte{0x80}}, supplementary.end() - 4);
+        verify_write(supplementary);
+
+        std::array<char16_t, 140> alias{};
+        std::ranges::copy(text, alias.begin() + 1);
+        writer output(std::as_writable_bytes(std::span(alias)).subspan(1, header_size + supplementary.size()));
+        luminpack::write_string(output, profile, std::u16string_view(alias.data() + 1, length));
+        check_record(output.written(), supplementary);
+
+        storage.fill(byte{204});
+        output = writer(std::span(storage).first(header_size + supplementary.size() - 1));
+        expect_error<std::length_error>([&] { luminpack::write_string(output, profile, text); }, "Writes a short homogeneous UTF-8 window.");
+        check(output.written().empty() && std::ranges::all_of(storage, [](byte value) { return value == byte{204}; }),
+            "Publishes a short homogeneous UTF-8 write.");
+
+        units.back() = 0xd800;
+        output = writer(storage);
+        expect_error<std::invalid_argument>([&] { luminpack::write_string(output, profile, text); }, "Writes an invalid homogeneous UTF-8 tail.");
+        check(output.written().empty() && std::ranges::all_of(storage, [](byte value) { return value == byte{204}; }),
+            "Publishes an invalid homogeneous UTF-8 write.");
+    }
+}
+
 struct point
 {
     std::int32_t x;
@@ -982,6 +1067,7 @@ int main(int argc, char** argv)
         string_profiles(directory);
         short_utf8_records(directory);
         long_utf8_ascii_runs();
+        homogeneous_two_byte_utf8_runs();
         record_and_union_codecs();
         version_contracts(directory);
         std::cout << "LuminPack C++ wire checks passed.\n";

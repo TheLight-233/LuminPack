@@ -10,7 +10,7 @@ if(NOT LUMINPACK_CPP_MAX_SIMD_BITS MATCHES "^(128|256|512)$")
 endif()
 
 add_library(luminpack_cpp STATIC
-    src/luminpack.cpp src/latin1.cpp src/string_profiles.cpp src/version.cpp
+    src/luminpack.cpp src/latin1.cpp src/string_profiles.cpp src/utf8_runs.cpp src/version.cpp
     src/json.cpp src/json_scan.cpp src/xxhash3.cpp)
 add_library(LuminPack::Cpp ALIAS luminpack_cpp)
 target_compile_features(luminpack_cpp PUBLIC cxx_std_20)
@@ -37,15 +37,15 @@ if(LUMINPACK_CPP_SIMD)
             set(luminpack_avx512_flags -mavx512f -mavx512bw)
         endif()
         if(luminpack_avx2_flag AND LUMINPACK_CPP_MAX_SIMD_BITS GREATER_EQUAL 256)
-            target_sources(luminpack_cpp PRIVATE src/latin1_avx2.cpp src/json_scan_avx2.cpp src/xxhash3_avx2.cpp)
-            set_source_files_properties(src/latin1_avx2.cpp src/json_scan_avx2.cpp src/xxhash3_avx2.cpp
-                PROPERTIES COMPILE_OPTIONS "${luminpack_avx2_flag}")
+            set(luminpack_avx2_sources src/latin1_avx2.cpp src/json_scan_avx2.cpp src/utf8_runs_avx2.cpp src/xxhash3_avx2.cpp)
+            target_sources(luminpack_cpp PRIVATE ${luminpack_avx2_sources})
+            set_source_files_properties(${luminpack_avx2_sources} PROPERTIES COMPILE_OPTIONS "${luminpack_avx2_flag}")
             target_compile_definitions(luminpack_cpp PRIVATE LUMINPACK_CPP_AVX2)
         endif()
         if(luminpack_avx512_flags AND LUMINPACK_CPP_MAX_SIMD_BITS EQUAL 512)
-            target_sources(luminpack_cpp PRIVATE src/latin1_avx512.cpp src/json_scan_avx512.cpp)
-            set_source_files_properties(src/latin1_avx512.cpp src/json_scan_avx512.cpp
-                PROPERTIES COMPILE_OPTIONS "${luminpack_avx512_flags}")
+            set(luminpack_avx512_sources src/latin1_avx512.cpp src/json_scan_avx512.cpp src/utf8_runs_avx512.cpp)
+            target_sources(luminpack_cpp PRIVATE ${luminpack_avx512_sources})
+            set_source_files_properties(${luminpack_avx512_sources} PROPERTIES COMPILE_OPTIONS "${luminpack_avx512_flags}")
             target_compile_definitions(luminpack_cpp PRIVATE LUMINPACK_CPP_AVX512BW)
         endif()
     endif()

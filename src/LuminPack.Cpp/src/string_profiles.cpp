@@ -3,6 +3,7 @@
 #include "cpu_isa.h"
 #include "latin1.h"
 #include "unicode.h"
+#include "utf8_runs.h"
 
 #include <algorithm>
 
@@ -424,12 +425,23 @@ void write_string(writer& output, string_profile profile, std::optional<std::u16
         if (utf8)
         {
             std::size_t prefix = 0;
+            std::size_t bytes_written = 0;
 #if defined(LUMINPACK_CPP_AVX2)
             if (profile == string_profile::utf8_length && text.size() > 32 && text.front() < 0x80 && detail::has_avx2())
+            {
                 prefix = detail::encode_ascii_prefix_avx2(std::span(text.data(), text.size()), destination);
+                bytes_written = prefix;
+            }
+#endif
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+            if (profile == string_profile::utf8_length && text.size() >= 32 && text.front() >= 0x80 && text.front() < 0x800)
+            {
+                prefix = detail::encode_two_byte_prefix(std::span(text.data(), text.size()), destination);
+                bytes_written = prefix * 2;
+            }
 #endif
             if (prefix < text.size())
-                encode_utf8(text.substr(prefix), destination.subspan(prefix));
+                encode_utf8(text.substr(prefix), destination.subspan(bytes_written));
         }
         else if (latin1)
             detail::narrow_latin1(std::span(text.data(), text.size()), destination);

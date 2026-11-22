@@ -7,7 +7,7 @@
 #define LUMINPACK_CPP_SSE2
 #include <emmintrin.h>
 #endif
-#if (defined(LUMINPACK_CPP_AVX2) || defined(LUMINPACK_CPP_AVX512BW)) && defined(_MSC_VER)
+#if (defined(LUMINPACK_CPP_INLINE_SSE2) || defined(LUMINPACK_CPP_AVX2) || defined(LUMINPACK_CPP_AVX512BW)) && defined(_MSC_VER)
 #include <intrin.h>
 #endif
 
@@ -124,6 +124,25 @@ void widen_block(const std::byte* source, char16_t* destination) noexcept
 }
 #endif
 }
+
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+bool has_ssse3() noexcept
+{
+#if defined(_MSC_VER)
+    static const bool supported = []
+    {
+        int registers[4];
+        __cpuid(registers, 1);
+        return (registers[2] & (1 << 9)) != 0;
+    }();
+    return supported;
+#elif defined(__GNUC__) || defined(__clang__)
+    return __builtin_cpu_supports("ssse3") != 0;
+#else
+    return false;
+#endif
+}
+#endif
 
 #if defined(LUMINPACK_CPP_AVX2)
 bool has_avx2() noexcept
