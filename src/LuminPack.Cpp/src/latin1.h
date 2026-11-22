@@ -24,6 +24,9 @@ void widen_latin1(std::span<const std::byte> source, std::span<char16_t> destina
 /// On false, the destination is untouched.
 bool try_encode_medium_ascii(std::span<const char16_t> source, std::span<std::byte> destination) noexcept;
 bool try_encode_medium_ascii_avx2(std::span<const char16_t> source, std::span<std::byte> destination) noexcept;
+/// Writes complete leading ASCII blocks from a source longer than 32 code units.
+/// Returns both the consumed code-unit count and the equal produced byte count.
+std::size_t encode_ascii_prefix_avx2(std::span<const char16_t> source, std::span<std::byte> destination) noexcept;
 bool narrow_latin1_avx2(std::span<const char16_t> source, std::span<std::byte> destination) noexcept;
 std::int32_t write_medium_utf16_payload_avx2(std::span<const char16_t> source, std::span<std::byte> destination) noexcept;
 void widen_latin1_avx2(std::span<const std::byte> source, std::span<char16_t> destination) noexcept;

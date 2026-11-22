@@ -597,6 +597,79 @@ void short_utf8_records(const std::filesystem::path& directory)
     }
 }
 
+void long_utf8_ascii_runs()
+{
+    constexpr auto profile = luminpack::string_profile::utf8_length;
+    constexpr std::size_t header_size = 8;
+    constexpr std::array<std::size_t, 18> lengths{32, 33, 63, 64, 65, 95, 96, 97, 127, 128, 129, 159, 160, 161, 191, 192, 193, 257};
+
+    for (const auto length : lengths)
+    {
+        alignas(32) std::array<char16_t, 258> characters{};
+        const auto units = std::span(characters).subspan(1, length);
+        const auto text = std::u16string_view(units.data(), units.size());
+        std::vector<byte> ascii(length);
+        for (std::size_t index = 0; index < length; ++index)
+        {
+            units[index] = static_cast<char16_t>((index * 17 + index / 8) & 0x7f);
+            ascii[index] = static_cast<byte>(units[index]);
+        }
+
+        const auto check_record = [&](std::span<const byte> record, std::span<const byte> payload)
+        {
+            reader input(record);
+            check(input.read<std::int32_t>() == static_cast<std::int32_t>(payload.size()), "Long UTF-8 byte count.");
+            check(input.read<std::int32_t>() == static_cast<std::int32_t>(length), "Long UTF-8 code-unit count.");
+            check(std::ranges::equal(input.take(payload.size()), payload), "Long UTF-8 exact payload.");
+            input.require_end();
+        };
+
+        std::array<byte, header_size + 257 + 3> storage;
+        const auto verify_write = [&](std::span<const byte> payload)
+        {
+            storage.fill(byte{204});
+            const auto window = std::span(storage).subspan(1, header_size + payload.size());
+            writer output(window);
+            luminpack::write_string(output, profile, text);
+            check_record(output.written(), payload);
+            check(storage.front() == byte{204} && storage[1 + window.size()] == byte{204}, "Long UTF-8 write bounds.");
+        };
+        verify_write(ascii);
+
+        const std::array<std::size_t, 12> positions{1, 31, 32, 63, 64, 95, 96, 127, 128, 191, 192, length - 1};
+        for (const auto index : positions)
+        {
+            if (index >= length)
+                continue;
+            const auto original = units[index];
+            units[index] = 0x80;
+            auto mixed = ascii;
+            mixed[index] = byte{0xc2};
+            mixed.insert(mixed.begin() + static_cast<std::ptrdiff_t>(index + 1), byte{0x80});
+            verify_write(mixed);
+            units[index] = original;
+        }
+
+        std::array<char16_t, 258> alias{};
+        std::ranges::copy(text, alias.begin() + 1);
+        writer output(std::as_writable_bytes(std::span(alias)).subspan(1, header_size + length));
+        luminpack::write_string(output, profile, std::u16string_view(alias.data() + 1, length));
+        check_record(output.written(), ascii);
+
+        storage.fill(byte{204});
+        output = writer(std::span(storage).first(header_size + length - 1));
+        expect_error<std::length_error>([&] { luminpack::write_string(output, profile, text); }, "Writes a short UTF-8 window.");
+        check(output.written().empty() && std::ranges::all_of(storage, [](byte value) { return value == byte{204}; }),
+            "Publishes a short long-ASCII write.");
+
+        units.back() = 0xd800;
+        output = writer(storage);
+        expect_error<std::invalid_argument>([&] { luminpack::write_string(output, profile, text); }, "Writes an invalid UTF-8 tail.");
+        check(output.written().empty() && std::ranges::all_of(storage, [](byte value) { return value == byte{204}; }),
+            "Publishes an invalid long-ASCII write.");
+    }
+}
+
 struct point
 {
     std::int32_t x;
@@ -908,6 +981,7 @@ int main(int argc, char** argv)
         collection_contracts(directory);
         string_profiles(directory);
         short_utf8_records(directory);
+        long_utf8_ascii_runs();
         record_and_union_codecs();
         version_contracts(directory);
         std::cout << "LuminPack C++ wire checks passed.\n";

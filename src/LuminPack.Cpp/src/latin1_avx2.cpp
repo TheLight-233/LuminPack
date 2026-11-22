@@ -1,5 +1,6 @@
 #include "latin1.h"
 
+#include <algorithm>
 #include <cstring>
 #include <immintrin.h>
 
@@ -17,6 +18,11 @@ __m256i load256(const void* source) noexcept
 bool is_latin1(__m256i value) noexcept
 {
     return _mm256_testz_si256(value, _mm256_set1_epi16(-256)) != 0;
+}
+
+bool is_ascii(__m256i value) noexcept
+{
+    return _mm256_testz_si256(value, _mm256_set1_epi16(-128)) != 0;
 }
 
 __m256i narrow_validated(__m256i first, __m256i second) noexcept
@@ -65,10 +71,55 @@ bool try_encode_medium_ascii_avx2(std::span<const char16_t> source, std::span<st
     const auto tail = source.size() - 16;
     const auto first = load256(source.data());
     const auto last = load256(source.data() + tail);
-    if (_mm256_testz_si256(_mm256_or_si256(first, last), _mm256_set1_epi16(-128)) == 0)
+    if (!is_ascii(_mm256_or_si256(first, last)))
         return false;
     store_narrowed_halves(destination.data(), tail, first, last);
     return true;
+}
+
+std::size_t encode_ascii_prefix_avx2(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    const auto length = source.size();
+    const auto limit = std::min(length, destination.size());
+    const auto* chars = source.data();
+    auto* output = destination.data();
+    std::size_t index = 0;
+
+    // Core enters the 64-character loop only with at least 128 slots left.
+    for (; limit - index >= 128; index += 64)
+    {
+        const auto first = load256(chars + index);
+        const auto second = load256(chars + index + 16);
+        const auto third = load256(chars + index + 32);
+        const auto fourth = load256(chars + index + 48);
+        if (!is_ascii(_mm256_or_si256(_mm256_or_si256(first, second), _mm256_or_si256(third, fourth))))
+            break;
+        store_narrowed(output + index, first, second);
+        store_narrowed(output + index + 32, third, fourth);
+    }
+
+    for (; limit - index >= 32; index += 32)
+    {
+        const auto first = load256(chars + index);
+        const auto second = load256(chars + index + 16);
+        if (!is_ascii(_mm256_or_si256(first, second)))
+            break;
+        store_narrowed(output + index, first, second);
+    }
+
+    if (index < length && limit == length && length - index < 32)
+    {
+        // The final block can overwrite only already validated bytes with the same values.
+        const auto tail = length - 32;
+        const auto first = load256(chars + tail);
+        const auto second = load256(chars + tail + 16);
+        if (is_ascii(_mm256_or_si256(first, second)))
+        {
+            store_narrowed(output + tail, first, second);
+            index = length;
+        }
+    }
+    return index;
 }
 
 bool narrow_latin1_avx2(std::span<const char16_t> source, std::span<std::byte> destination) noexcept

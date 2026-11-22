@@ -1,5 +1,6 @@
 #include <luminpack/luminpack.h>
 
+#include "cpu_isa.h"
 #include "latin1.h"
 #include "unicode.h"
 
@@ -421,7 +422,15 @@ void write_string(writer& output, string_profile profile, std::optional<std::u16
             text = scratch;
         }
         if (utf8)
-            encode_utf8(text, destination);
+        {
+            std::size_t prefix = 0;
+#if defined(LUMINPACK_CPP_AVX2)
+            if (profile == string_profile::utf8_length && text.size() > 32 && text.front() < 0x80 && detail::has_avx2())
+                prefix = detail::encode_ascii_prefix_avx2(std::span(text.data(), text.size()), destination);
+#endif
+            if (prefix < text.size())
+                encode_utf8(text.substr(prefix), destination.subspan(prefix));
+        }
         else if (latin1)
             detail::narrow_latin1(std::span(text.data(), text.size()), destination);
         else
