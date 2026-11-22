@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <new>
 
-#if defined(_MSC_VER)
+#if defined(_WIN32)
 #include <malloc.h>
 #endif
 
@@ -34,7 +34,7 @@ void* allocate_aligned(std::size_t size, std::size_t alignment)
     for (;;)
     {
         const auto nonempty = size != 0 ? size : 1;
-#if defined(_MSC_VER)
+#if defined(_WIN32)
         auto* result = _aligned_malloc(nonempty, alignment);
 #else
         void* result = nullptr;
@@ -55,7 +55,7 @@ void* allocate_aligned(std::size_t size, std::size_t alignment)
 
 void free_aligned(void* address) noexcept
 {
-#if defined(_MSC_VER)
+#if defined(_WIN32)
     _aligned_free(address);
 #else
     std::free(address);

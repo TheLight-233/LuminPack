@@ -1158,7 +1158,7 @@ void fixed_record_batches()
     {
         std::array<byte, 16> too_short;
         too_short.fill(byte{0x7d});
-        writer bounded(std::span(too_short).first(length));
+        writer bounded{std::span(too_short).first(length)};
         expect_error<std::length_error>([&] { dense_codec::write(bounded, dense_record{1, 2, true, false}); },
             "Accepts a short output window for a fixed record.");
         check(bounded.written().empty() && std::ranges::all_of(too_short, [](byte value) { return value == byte{0x7d}; }),

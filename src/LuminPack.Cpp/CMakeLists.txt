@@ -3,6 +3,7 @@ project(LuminPackCpp LANGUAGES CXX)
 
 option(LUMINPACK_CPP_SIMD "Enable CPU-dispatched text and layout acceleration" ON)
 option(LUMINPACK_CPP_TESTS "Build the C++ wire tests" ${PROJECT_IS_TOP_LEVEL})
+find_package(Threads REQUIRED)
 set(LUMINPACK_CPP_MAX_SIMD_BITS 512 CACHE STRING "Maximum compiled x64 SIMD width")
 set_property(CACHE LUMINPACK_CPP_MAX_SIMD_BITS PROPERTY STRINGS 128 256 512)
 if(NOT LUMINPACK_CPP_MAX_SIMD_BITS MATCHES "^(128|256|512)$")
@@ -15,6 +16,7 @@ add_library(luminpack_cpp STATIC
 add_library(LuminPack::Cpp ALIAS luminpack_cpp)
 target_compile_features(luminpack_cpp PUBLIC cxx_std_20)
 target_include_directories(luminpack_cpp PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(luminpack_cpp PUBLIC Threads::Threads)
 
 # Keep the baseline translation units free of AVX instructions.
 if(LUMINPACK_CPP_SIMD)

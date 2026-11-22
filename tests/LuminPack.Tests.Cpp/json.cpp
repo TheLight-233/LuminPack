@@ -528,7 +528,7 @@ void json_characters()
         "The managed UTF-8 reader checks the two-unit conversion destination.");
 
     output.fill(std::byte{0xa4});
-    luminpack::basic_json_writer<utf8> bounded(std::span(output).first<7>());
+    luminpack::basic_json_writer<utf8> bounded{std::span(output).first<7>()};
     try
     {
         bounded.write_character(char16_t{0xd800});

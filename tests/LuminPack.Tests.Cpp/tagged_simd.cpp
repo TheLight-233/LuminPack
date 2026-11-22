@@ -69,7 +69,7 @@ void check_models(std::size_t count, std::size_t offset)
     constexpr tagged_layout<3, 2> to{widths, Destination, {Source, Destination}};
     auto input = make_records<Source>(count);
     std::vector<std::byte> wire(offset + header_size + Source.stride * count, untouched);
-    writer output(std::span(wire).subspan(offset));
+    writer output{std::span(wire).subspan(offset)};
     write_tagged_array<record<Source>, from>(output, std::span<const record<Source>>(input));
     const auto encoded = output.written();
     check(encoded[sizeof(std::int32_t)] == std::byte{1}, "Matching writer did not keep its native tag.");
