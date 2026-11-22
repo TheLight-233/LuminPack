@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 
 	luminpack "github.com/TheLight-233/LuminPack/src/LuminPack.Go"
 )
@@ -29,8 +30,13 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	fixture := ""
 	if len(args) == 6 {
-		schema, err = bind(schema, args[5])
+		fixture = args[5]
+	}
+	edit := strings.HasPrefix(fixture, "edit-")
+	if fixture != "" && !edit {
+		schema, err = bind(schema, fixture)
 		if err != nil {
 			return err
 		}
@@ -53,6 +59,9 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	if edit {
+		editLayout(model.(luminpack.Record), fixture)
+	}
 	var output []byte
 	switch args[2] {
 	case "binary":
@@ -68,6 +77,21 @@ func run(args []string) error {
 		return err
 	}
 	return os.WriteFile(args[4], output, 0666)
+}
+
+func editLayout(record luminpack.Record, fixture string) {
+	switch fixture {
+	case "edit-packed":
+		nested := record["Nested"].([]any)[0].(luminpack.Record)
+		nested["Data"].(luminpack.Record)["End"] = int16(1234)
+	case "edit-tagged":
+		record["Values"].([]any)[0].(luminpack.Record)["Code"] = int32(0x01234567)
+	case "edit-native":
+		native := record["Items"].([]any)[0].(luminpack.NativeValue)
+		native.Value.(luminpack.Record)["Code"] = int32(0x01234567)
+	default:
+		panic("unknown layout edit: " + fixture)
+	}
 }
 
 func bind(schema *luminpack.Schema, fixture string) (*luminpack.Schema, error) {

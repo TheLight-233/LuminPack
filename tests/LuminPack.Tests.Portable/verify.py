@@ -20,6 +20,10 @@ UTF16_FIXTURE = ("json-utf16", ".json")
 BINARY_AND_UTF16 = (FORMATS[0], UTF16_FIXTURE)
 LEGACY_FORMATS = (FORMATS[0], FORMATS[1], UTF16_FIXTURE)
 PROFILES = ("utf8-length", "utf8-token", "utf16-length", "utf16-token", "utf8-varint", "utf16-varint")
+ORDERED_JSON_ROOT = "LuminPackPortableFixtures.OrderedJsonDocument"
+PACKED_LAYOUT_ROOT = "LuminPackCppLayoutFixtures.LayoutPackedPacket"
+TAGGED_LAYOUT_ROOT = "LuminPackCppLayoutFixtures.LayoutTaggedPacket"
+NATIVE_LAYOUT_ROOT = "LuminPackCppLayoutFixtures.LayoutNativePaddedPacket"
 SUITES = {
     "profiles": "BinaryProfile",
     "version-union": "VersionUnion",
@@ -65,6 +69,7 @@ class Route:
     max_input: int | None = None
     reject_trailing: bool = False
     cpp_case: str | None = None
+    expected_failure: bool = False
 
 
 def suite_routes(suite):
@@ -89,6 +94,24 @@ def suite_routes(suite):
             for fmt, suffix in FORMATS[1:]:
                 filename = "strings" + suffix
                 yield Route(root, filename, filename, fmt, fmt, reject=True)
+        case "ordered-json":
+            fmt = "json-utf8"
+            container = "LuminPackPortableFixtures.OrderedJsonContainer"
+            limited = "LuminPackPortableFixtures.OrderedJsonLimitedDocument"
+            valid = ((ORDERED_JSON_ROOT, "ordered", ("ordered", "whitespace", "reordered", "escaped", "unknown", "duplicate", "negative-zero")),
+                     (container, "nested", ("nested", "alias")),
+                     (limited, "limited", ("limited", "at-limit")))
+            for root, canonical, names in valid:
+                for name in names:
+                    filename = name + ".json"
+                    yield Route(root, filename, filename, fmt, fmt, exact=canonical + ".json")
+            yield Route(ORDERED_JSON_ROOT, "ordered.bin", "from-binary.json", "binary", fmt, exact="ordered.json")
+            invalid = ((ORDERED_JSON_ROOT, ("overflow", "underflow", "missing-comma", "missing-colon", "leading-zero", "truncated-value")),
+                       (limited, ("over-limit", "depth-limit")))
+            for root, names in invalid:
+                for name in names:
+                    filename = name + ".json"
+                    yield Route(root, filename, filename + ".invalid", fmt, fmt, expected_failure=True)
         case "profiles":
             root = "LuminPackCppBinaryProfileFixtures.ProfileDocument"
             for profile in PROFILES:
@@ -162,15 +185,14 @@ def suite_routes(suite):
             })
             yield from documents(namespace, {"mixed-graph": "GraphDocument"}, binding="large-graph-external")
         case "layout":
-            namespace = "LuminPackCppLayoutFixtures"
-            yield from documents(namespace, {"layout-packed": "LayoutPackedPacket", "layout-tagged": "LayoutTaggedPacket"},
-                                 BINARY_AND_UTF16)
-            yield Route(f"{namespace}.LayoutTaggedPacket", "layout-tagged.bin", "layout-tagged-alternate.bin", "binary", "binary",
-                        cpp_case="layout-tagged-alternate.bin")
+            yield from document(PACKED_LAYOUT_ROOT, "layout-packed", BINARY_AND_UTF16)
+            yield from document(TAGGED_LAYOUT_ROOT, "layout-tagged", BINARY_AND_UTF16)
+            yield Route(PACKED_LAYOUT_ROOT, "layout-packed.bin", "layout-packed-raw.bin", "binary", "binary", exact="layout-packed.bin")
+            yield Route(TAGGED_LAYOUT_ROOT, "layout-tagged.bin", "layout-tagged-alternate.bin", "binary", "binary",
+                        cpp_case="layout-tagged-alternate.bin", exact="layout-tagged.bin")
         case "native-layout":
-            root = "LuminPackCppLayoutFixtures.LayoutNativePaddedPacket"
-            yield from documents("LuminPackCppLayoutFixtures", {"layout-native-padded": "LayoutNativePaddedPacket"}, BINARY_AND_UTF16)
-            yield Route(root, "layout-native-padded.bin", "layout-native-padded-preserved.bin", "binary", "binary",
+            yield from document(NATIVE_LAYOUT_ROOT, "layout-native-padded", BINARY_AND_UTF16)
+            yield Route(NATIVE_LAYOUT_ROOT, "layout-native-padded.bin", "layout-native-padded-preserved.bin", "binary", "binary",
                         exact="layout-native-padded.bin")
         case "memory":
             yield from documents("LuminPackCppMemoryFixtures", {
@@ -297,7 +319,7 @@ def typescript_runner(args):
 
 
 def prepare_inputs(args, work, codegen, routes):
-    if args.suite in ("benchmarks", "strings"):
+    if args.suite in ("benchmarks", "strings", "ordered-json"):
         project = HERE / "LuminPack.Tests.Portable.csproj"
     else:
         name = "LuminPack.Tests.Cpp." + SUITES[args.suite]
@@ -310,7 +332,7 @@ def prepare_inputs(args, work, codegen, routes):
     managed = (args.managed_dll.resolve() if args.managed_dll else
                build_dotnet(project, work / "managed", export=True, properties=properties.get(args.suite, ())))
     inputs = work / "managed-models"
-    operation = {"native-layout": "write-native", "strings": "write-strings"}.get(args.suite, "write")
+    operation = {"native-layout": "write-native", "strings": "write-strings", "ordered-json": "write-ordered-json"}.get(args.suite, "write")
     write = [args.managed_dotnet, managed, operation, inputs]
     if args.suite == "version-archive":
         write.append(ROOT / "tests/LuminPack.Tests.Aot/Fixtures/version-revision-1.bin")
@@ -343,8 +365,22 @@ def prepare_inputs(args, work, codegen, routes):
         if args.native_scalar_alignment:
             flags += ["--native-scalar-alignment", str(args.native_scalar_alignment)]
         invoke(["dotnet", codegen, "project", *flags, manifest, root, schema])
+        if args.suite == "ordered-json" and root == ORDERED_JSON_ROOT:
+            assert_ordered_json_contract(schema)
         schemas[(root, profile)] = schema
     return managed, inputs, schemas
+
+
+def assert_ordered_json_contract(schema):
+    projected = json.loads(schema.read_text(encoding="utf-8"))
+    root = next(contract for contract in projected["contracts"] if contract["id"] == ORDERED_JSON_ROOT)
+    run_lengths = root.get("jsonInt32Runs") or []
+    if max(run_lengths, default=0) <= 16:
+        raise RuntimeError("The ordered JSON fixture requires an exported Int32 run longer than one cursor chunk.")
+    generated = root.get("jsonGeneratedIntegerProperties") or []
+    names = {member["name"] for member, enabled in zip(root["members"], generated) if enabled}
+    if not {"FirstInt", "Unsigned32", "Signed64", "Unsigned64"}.issubset(names):
+        raise RuntimeError("The ordered JSON fixture requires generated UTF-8 writers for the tested integer widths.")
 
 
 def validate_rejection(command, schema, data, output, fmt, reason):
@@ -365,6 +401,9 @@ def exchange(command, inputs, outputs, schemas, routes, cpp_outputs):
                 original = cpp_document.resolve()
         binding = [route.binding] if route.binding else []
         output = outputs / route.output
+        if route.expected_failure:
+            validate_rejection(command, schema, original.read_bytes(), output, route.read, original.stem)
+            continue
         invoke([*command, schema, route.read, route.write, original, output, *binding])
         if route.exact and (inputs / route.exact).read_bytes() != output.read_bytes():
             raise RuntimeError(f"Native output differs from managed {route.exact}: {output}")
@@ -379,9 +418,63 @@ def exchange(command, inputs, outputs, schemas, routes, cpp_outputs):
                 validate_rejection(command, schema, oversized, invalid, route.read, "oversized")
 
 
+def verify_layout_edits(suite, command, inputs, outputs, schemas):
+    if suite == "layout":
+        packed = inputs / "layout-packed.bin"
+        tagged = inputs / "layout-tagged.bin"
+        packed_schema = schemas[(PACKED_LAYOUT_ROOT, None)]
+        tagged_schema = schemas[(TAGGED_LAYOUT_ROOT, None)]
+        # The Packed list starts after the 12-byte scalar and four-byte count.
+        # Its first entry is an Int32 followed by the 12-byte nested Packed value.
+        assert_layout_edit(command, packed_schema, packed, outputs, "edit-packed", 31, 2, 127, 1234)
+        # The Tagged array starts after the 13-byte scalar, count, and layout tag.
+        assert_layout_edit(command, tagged_schema, tagged, outputs, "edit-tagged", 19, 4, -2, 0x01234567)
+        packed_data = packed.read_bytes()
+        if packed_data[30] != 0:
+            raise RuntimeError("The Packed collection fixture changed its first Boolean field.")
+        validate_rejection(command, packed_schema, packed_data[:30] + b"\x02" + packed_data[31:],
+                           outputs / "layout-packed.invalid", "binary", "invalid-boolean")
+        validate_rejection(command, packed_schema, packed_data[:47], outputs / "layout-packed.invalid", "binary", "truncated-slot")
+        verify_alternate_tagged(command, tagged_schema, tagged.read_bytes(), outputs)
+    elif suite == "native-layout":
+        native = inputs / "layout-native-padded.bin"
+        # The first 16-byte Native slot has an eight-byte amount, four-byte code, one-byte flag, and dirty padding.
+        if native.read_bytes()[18:21] != bytes([0xa1]) * 3:
+            raise RuntimeError("The Native layout fixture lost its distinguishable padding bytes.")
+        assert_layout_edit(command, schemas[(NATIVE_LAYOUT_ROOT, None)], native, outputs, "edit-native", 13, 4, -31, 0x01234567)
+
+
+def assert_layout_edit(command, schema, original, outputs, edit, offset, width, previous, value):
+    data = original.read_bytes()
+    if int.from_bytes(data[offset:offset + width], "little", signed=True) != previous:
+        raise RuntimeError(f"The layout fixture changed the edited field in {original}.")
+    expected = data[:offset] + value.to_bytes(width, "little", signed=True) + data[offset + width:]
+    output = outputs / (edit + ".bin")
+    invoke([*command, schema, "binary", "binary", original, output, edit])
+    if output.read_bytes() != expected:
+        raise RuntimeError(f"The Binary rewrite failed to update only the selected layout field: {output}")
+
+
+def verify_alternate_tagged(command, schema, canonical, outputs):
+    # The first two elements use the 24-byte canonical model and also fit the exported 16-byte model.
+    count = int.from_bytes(canonical[14:18], "little")
+    if count != 2 or canonical[18] != 1:
+        raise RuntimeError("The Tagged layout fixture changed its canonical array header.")
+    start = 19
+    stride = 24
+    slots = (canonical[index:index + stride] for index in range(start, start + count * stride, stride))
+    alternate = b"".join(slot[:4] + slot[8:17] + b"\0\0\0" for slot in slots)
+    source = outputs / "layout-tagged-model-2.input"
+    source.write_bytes(canonical[:18] + b"\x02" + alternate + canonical[start + count * stride:])
+    output = outputs / "layout-tagged-model-2.bin"
+    invoke([*command, schema, "binary", "binary", source, output])
+    if output.read_bytes() != canonical:
+        raise RuntimeError(f"The Tagged collection did not normalize to its canonical model: {output}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("benchmarks", "strings", *SUITES), default="benchmarks")
+    parser.add_argument("--suite", choices=("benchmarks", "strings", "ordered-json", *SUITES), default="benchmarks")
     parser.add_argument("--language", choices=LANGUAGES, action="append", help="Repeat to select multiple runtimes. The default runs all three.")
     parser.add_argument("--fixtures", type=Path, help="Reuse a manifest and documents emitted by the selected managed suite.")
     parser.add_argument("--manifest", type=Path, help="Use this manifest for reused fixtures stored separately from their manifest.")
@@ -424,7 +517,8 @@ def main():
             backend = "typescript (WebAssembly disabled)" if args.typescript_no_wasm else language
         outputs = Path(tempfile.mkdtemp(prefix=f"{language}-", dir=work))
         exchange(command, inputs, outputs, schemas, routes, args.fixtures / "out" if args.fixtures else None)
-        operation = {"native-layout": "read-native", "strings": "read-strings"}.get(args.suite, "read")
+        verify_layout_edits(args.suite, command, inputs, outputs, schemas)
+        operation = {"native-layout": "read-native", "strings": "read-strings", "ordered-json": "read-ordered-json"}.get(args.suite, "read")
         invoke([args.managed_dotnet, managed, operation, outputs])
         print(f"{backend}: verified {args.suite} managed round trips.", flush=True)
 

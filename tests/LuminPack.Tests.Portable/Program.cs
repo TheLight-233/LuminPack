@@ -17,9 +17,19 @@ if (args is ["write-strings" or "read-strings", var stringsDirectory])
     return 0;
 }
 
+if (args is ["write-ordered-json" or "read-ordered-json", var orderedJsonDirectory])
+{
+    if (args[0] == "write-ordered-json")
+        OrderedJsonFixtures.Write(orderedJsonDirectory);
+    else
+        OrderedJsonFixtures.Verify(orderedJsonDirectory);
+    Console.WriteLine(args[0] == "write-ordered-json" ? ".NET emitted ordered JSON documents." : ".NET verified ordered JSON documents.");
+    return 0;
+}
+
 if (args is not ["read" or "write", var directory])
 {
-    Console.Error.WriteLine("Usage: LuminPack.Tests.Portable <read|write|read-strings|write-strings> <directory>");
+    Console.Error.WriteLine("Usage: LuminPack.Tests.Portable <read|write|read-strings|write-strings|read-ordered-json|write-ordered-json> <directory>");
     return 2;
 }
 

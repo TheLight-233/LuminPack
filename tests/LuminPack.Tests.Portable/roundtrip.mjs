@@ -8,10 +8,12 @@ if (!output) {
 
 const { createCodec, JsonNumber } = await import(pathToFileURL(runtime).href);
 const minimumInt64 = -(1n << 63n);
-const codec = createCodec(JSON.parse(readFileSync(schema, "utf8")), bindingOptions(fixtureBinding));
+const edit = fixtureBinding?.startsWith("edit-");
+const codec = createCodec(JSON.parse(readFileSync(schema, "utf8")), bindingOptions(edit ? undefined : fixtureBinding));
 const encodings = new Map([["json-utf8", "utf8"], ["json-utf16", "utf16"]]);
 const bytes = readFileSync(input);
 const model = readFormat === "binary" ? codec.readBinary(bytes) : codec.readJson(bytes, encoding(readFormat));
+if (edit) editLayout(model, fixtureBinding);
 const result = writeFormat === "binary" ? codec.writeBinary(model) : codec.writeJson(model, encoding(writeFormat));
 writeFileSync(output, result);
 
@@ -20,6 +22,22 @@ function encoding(format) {
         throw new Error(`Invalid format: ${format}`);
     }
     return encodings.get(format);
+}
+
+function editLayout(model, fixture) {
+    switch (fixture) {
+        case "edit-packed":
+            model.Nested[0].Data.End = 1234;
+            break;
+        case "edit-tagged":
+            model.Values[0].Code = 0x01234567;
+            break;
+        case "edit-native":
+            model.Items[0].Code = 0x01234567;
+            break;
+        default:
+            throw new Error(`Unknown layout edit: ${fixture}`);
+    }
 }
 
 function bindingOptions(fixture) {

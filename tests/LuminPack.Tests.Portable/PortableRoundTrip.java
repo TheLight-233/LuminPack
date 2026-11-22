@@ -1,5 +1,7 @@
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import luminpack.LuminPack;
 
 /** Exchanges a single compiled contract between two encodings. */
@@ -11,7 +13,9 @@ public final class PortableRoundTrip {
             throw new IllegalArgumentException("Expected schema, input format, output format, input path, output path and optional fixture binding.");
         }
         LuminPack codec = LuminPack.fromManifest(Files.readString(Path.of(args[0])));
-        if (args.length == 6) codec = bind(codec, args[5]);
+        String fixture = args.length == 6 ? args[5] : "";
+        boolean edit = fixture.startsWith("edit-");
+        if (!fixture.isEmpty() && !edit) codec = bind(codec, fixture);
         byte[] input = Files.readAllBytes(Path.of(args[3]));
         Object model = switch (args[1]) {
             case "binary" -> codec.readBinary(input);
@@ -19,6 +23,7 @@ public final class PortableRoundTrip {
             case "json-utf16" -> codec.readJson(input, LuminPack.UTF16);
             default -> throw new IllegalArgumentException("Invalid input format: " + args[1]);
         };
+        if (edit) editLayout(model, fixture);
         byte[] output = switch (args[2]) {
             case "binary" -> codec.writeBinary(model);
             case "json-utf8" -> codec.writeJson(model, LuminPack.UTF8);
@@ -26,6 +31,20 @@ public final class PortableRoundTrip {
             default -> throw new IllegalArgumentException("Invalid output format: " + args[2]);
         };
         Files.write(Path.of(args[4]), output);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void editLayout(Object model, String fixture) {
+        var record = (Map<String, Object>) model;
+        switch (fixture) {
+            case "edit-packed" -> {
+                var nested = (Map<String, Object>) ((List<?>) record.get("Nested")).get(0);
+                ((Map<String, Object>) nested.get("Data")).put("End", (short) 1234);
+            }
+            case "edit-tagged" -> ((Map<String, Object>) ((List<?>) record.get("Values")).get(0)).put("Code", 0x01234567);
+            case "edit-native" -> ((Map<String, Object>) ((List<?>) record.get("Items")).get(0)).put("Code", 0x01234567);
+            default -> throw new IllegalArgumentException("Unknown layout edit: " + fixture);
+        }
     }
 
     private static LuminPack bind(LuminPack codec, String fixture) {
