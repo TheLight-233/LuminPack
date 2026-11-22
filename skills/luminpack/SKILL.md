@@ -13,7 +13,7 @@ For C++ binary interoperability, include the public runtime header and link the 
 
 Use `generate --rtti` when the C++ DTO needs Next's closed exact-type Union dispatch. The owning Union slot is a `std::unique_ptr`. Its writer uses the concrete RTTI type, and its reader switches on the C# wire hash.
 
-Use `json_record_member` for named C++ DTO properties. The stock reader and writer share the `constexpr` heads of ordinary ASCII names and keep the name parser available for aliases and reordered fields. C++ codegen emits a length switch with exact comparisons for sparse names, selecting the path independently for UTF-8 and UTF-16. Hand-written codecs and dense name groups use direct comparisons.
+Use `json_record_member` for named C++ DTO properties. The stock reader and writer share the `constexpr` heads of ordinary ASCII names and keep the name parser available for aliases and reordered fields. C++ codegen selects a length or seed-zero XXH3 switch independently for UTF-8 and UTF-16 and checks complete names in both cases. Hand-written codecs use direct comparisons.
 
 For C++ struct interchange, generate from Next's storage plan. Packed values and standalone values from multi-model Tagged contracts use the packed field order. Nonempty multi-model Tagged arrays and lists carry a layout tag. Match the target's C++ size and offsets to the exported CLR model before copying Native bytes, including padding.
 

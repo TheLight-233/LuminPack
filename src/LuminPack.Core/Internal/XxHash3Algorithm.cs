@@ -1,15 +1,21 @@
 // Copyright (c) .NET Foundation and Contributors. Licensed under the MIT license.
 // Adapted from dotnet/runtime v10.0.0 System.IO.Hashing XxHash3.cs and XxHashShared.cs.
 // Based on xxHash by Yann Collet. See docs/xxhash-LICENSE.txt for both upstream licenses.
+#if NETSTANDARD2_0 || LUMINPACK_XXHASH3_SCALAR
+#define LUMINPACK_XXHASH3_PORTABLE
+#endif
+#if NET8_0_OR_GREATER && !LUMINPACK_XXHASH3_SCALAR
+#define LUMINPACK_XXHASH3_MODERN
+#endif
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-#if !NETSTANDARD2_0
+#if !LUMINPACK_XXHASH3_PORTABLE
 using System.Buffers.Binary;
 using LuminPack.Code;
 #endif
-#if NET8_0_OR_GREATER
+#if LUMINPACK_XXHASH3_MODERN
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
@@ -351,7 +357,7 @@ internal static class XxHash3Algorithm
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong Multiply64To128(ulong left, ulong right, out ulong lower)
     {
-    #if NET8_0_OR_GREATER
+    #if LUMINPACK_XXHASH3_MODERN
         return Math.BigMul(left, right, out lower);
     #else
         ulong lowerLow = Multiply32To64((uint)left, (uint)right);
@@ -405,7 +411,7 @@ internal static class XxHash3Algorithm
         ref byte secretForAccumulate = ref secret;
         ref byte secretForScramble = ref Unsafe.Add(ref secret, SecretLengthBytes - StripeLengthBytes);
 
-    #if NET8_0_OR_GREATER
+    #if LUMINPACK_XXHASH3_MODERN
         if (IntPtr.Size == 8 && Avx2.IsSupported && BitConverter.IsLittleEndian)
         {
             Vector256<ulong> acc1 = Vector256.LoadUnsafe(ref MemoryMarshal.GetReference(accumulators));
@@ -518,7 +524,7 @@ internal static class XxHash3Algorithm
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void Accumulate512Inlined(Span<ulong> accumulators, ref byte source, ref byte secret)
     {
-    #if NET8_0_OR_GREATER
+    #if LUMINPACK_XXHASH3_MODERN
         if (IntPtr.Size == 8 && Avx2.IsSupported && BitConverter.IsLittleEndian)
         {
             for (int i = 0; i < AccumulatorCount / Vector256<ulong>.Count; i++)
@@ -562,7 +568,7 @@ internal static class XxHash3Algorithm
     /// <param name="secret">The validated secret range.</param>
     private static void ScrambleAccumulators(Span<ulong> accumulators, ref byte secret)
     {
-    #if NET8_0_OR_GREATER
+    #if LUMINPACK_XXHASH3_MODERN
         if (IntPtr.Size == 8 && Avx2.IsSupported && BitConverter.IsLittleEndian)
         {
             for (int i = 0; i < AccumulatorCount / Vector256<ulong>.Count; i++)
@@ -599,7 +605,7 @@ internal static class XxHash3Algorithm
         }
     }
 
-    #if NET8_0_OR_GREATER
+    #if LUMINPACK_XXHASH3_MODERN
     /// <summary>Accumulates four lanes using AVX2.</summary>
     /// <param name="accVec">The current accumulator lanes.</param>
     /// <param name="source">The complete validated input range.</param>
@@ -623,7 +629,7 @@ internal static class XxHash3Algorithm
     }
     #endif
 
-    #if NET8_0_OR_GREATER
+    #if LUMINPACK_XXHASH3_MODERN
     /// <summary>Accumulates two lanes using SSE2 or ARM64 AdvSimd.</summary>
     /// <param name="accVec">The current accumulator lanes.</param>
     /// <param name="source">The complete validated input range.</param>
@@ -644,7 +650,7 @@ internal static class XxHash3Algorithm
     }
     #endif
 
-    #if NET8_0_OR_GREATER
+    #if LUMINPACK_XXHASH3_MODERN
     /// <summary>Multiplies the low and high 32-bit halves of two lanes.</summary>
     /// <param name="source">The complete validated input range.</param>
     /// <returns>The computed value.</returns>
@@ -667,7 +673,7 @@ internal static class XxHash3Algorithm
     }
     #endif
 
-    #if NET8_0_OR_GREATER
+    #if LUMINPACK_XXHASH3_MODERN
     /// <summary>Scrambles four AVX2 lanes.</summary>
     /// <param name="accVec">The current accumulator lanes.</param>
     /// <param name="secret">The validated secret range.</param>
@@ -682,7 +688,7 @@ internal static class XxHash3Algorithm
     }
     #endif
 
-    #if NET8_0_OR_GREATER
+    #if LUMINPACK_XXHASH3_MODERN
     /// <summary>Scrambles two SSE2 or ARM64 AdvSimd lanes.</summary>
     /// <param name="accVec">The current accumulator lanes.</param>
     /// <param name="secret">The validated secret range.</param>
@@ -740,7 +746,7 @@ internal static class XxHash3Algorithm
     private static uint ReadUInt32LE(ref byte source)
     {
         uint value = Unsafe.ReadUnaligned<uint>(ref source);
-    #if NETSTANDARD2_0
+    #if LUMINPACK_XXHASH3_PORTABLE
         if (!BitConverter.IsLittleEndian)
             value = (value >> 24) | ((value >> 8) & 0x0000FF00u) | ((value << 8) & 0x00FF0000u) | (value << 24);
         return value;
@@ -755,7 +761,7 @@ internal static class XxHash3Algorithm
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong ReadUInt64LE(ref byte source)
     {
-    #if NETSTANDARD2_0
+    #if LUMINPACK_XXHASH3_PORTABLE
         return ReadUInt32LE(ref source) | ((ulong)ReadUInt32LE(ref Unsafe.Add(ref source, 4)) << 32);
     #else
         ulong value;
@@ -776,7 +782,7 @@ internal static class XxHash3Algorithm
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong ReverseBytes(ulong value)
     {
-    #if NETSTANDARD2_0
+    #if LUMINPACK_XXHASH3_PORTABLE
         value = ((value & 0x00FF00FF00FF00FFUL) << 8) | ((value >> 8) & 0x00FF00FF00FF00FFUL);
         value = ((value & 0x0000FFFF0000FFFFUL) << 16) | ((value >> 16) & 0x0000FFFF0000FFFFUL);
         return (value << 32) | (value >> 32);

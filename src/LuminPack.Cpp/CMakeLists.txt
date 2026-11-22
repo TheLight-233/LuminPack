@@ -11,7 +11,7 @@ endif()
 
 add_library(luminpack_cpp STATIC
     src/luminpack.cpp src/latin1.cpp src/string_profiles.cpp src/version.cpp
-    src/json.cpp src/json_scan.cpp)
+    src/json.cpp src/json_scan.cpp src/xxhash3.cpp)
 add_library(LuminPack::Cpp ALIAS luminpack_cpp)
 target_compile_features(luminpack_cpp PUBLIC cxx_std_20)
 target_include_directories(luminpack_cpp PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -37,8 +37,8 @@ if(LUMINPACK_CPP_SIMD)
             set(luminpack_avx512_flags -mavx512f -mavx512bw)
         endif()
         if(luminpack_avx2_flag AND LUMINPACK_CPP_MAX_SIMD_BITS GREATER_EQUAL 256)
-            target_sources(luminpack_cpp PRIVATE src/latin1_avx2.cpp src/json_scan_avx2.cpp)
-            set_source_files_properties(src/latin1_avx2.cpp src/json_scan_avx2.cpp
+            target_sources(luminpack_cpp PRIVATE src/latin1_avx2.cpp src/json_scan_avx2.cpp src/xxhash3_avx2.cpp)
+            set_source_files_properties(src/latin1_avx2.cpp src/json_scan_avx2.cpp src/xxhash3_avx2.cpp
                 PROPERTIES COMPILE_OPTIONS "${luminpack_avx2_flag}")
             target_compile_definitions(luminpack_cpp PRIVATE LUMINPACK_CPP_AVX2)
         endif()

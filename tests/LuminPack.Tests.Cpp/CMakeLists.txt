@@ -14,6 +14,10 @@ target_compile_definitions(luminpack_cpp_json_scan PRIVATE $<$<BOOL:${LUMINPACK_
 target_link_libraries(luminpack_cpp_json_scan PRIVATE LuminPack::Cpp)
 add_test(NAME luminpack_cpp_json_scan COMMAND luminpack_cpp_json_scan)
 
+add_executable(luminpack_cpp_xxhash3 xxhash3.cpp)
+target_link_libraries(luminpack_cpp_xxhash3 PRIVATE LuminPack::Cpp)
+add_test(NAME luminpack_cpp_xxhash3 COMMAND luminpack_cpp_xxhash3)
+
 set(LUMINPACK_CPP_MODEL_FIXTURES "" CACHE PATH "Generated benchmark headers and .NET model documents")
 if(LUMINPACK_CPP_MODEL_FIXTURES)
     add_executable(luminpack_cpp_models benchmark_models.cpp)

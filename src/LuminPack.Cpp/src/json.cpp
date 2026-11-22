@@ -1,4 +1,5 @@
 #include <luminpack/luminpack.h>
+#include <luminpack/detail/xxhash3.h>
 
 #include "json_scan.h"
 #include "latin1.h"
@@ -134,6 +135,36 @@ std::size_t detail::json_utf8_encoded_length(std::u16string_view name) noexcept
         length += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
     }
     return length;
+}
+
+namespace
+{
+std::uint64_t hash_json_utf8_name(std::u16string_view name)
+{
+    const auto hash = [name](std::span<std::byte> encoded) {
+        auto* target = encoded.data();
+        for (std::size_t index = 0; index < name.size();)
+            store_utf8_scalar(target, detail::read_utf16_scalar(name, index, true));
+        return detail::xxhash3(encoded);
+    };
+    const auto size = detail::json_utf8_encoded_length(name);
+    std::array<std::byte, 256> scratch;
+    if (size <= scratch.size())
+        return hash(std::span(scratch).first(size));
+    std::vector<std::byte> large_name(size);
+    return hash(large_name);
+}
+}
+
+template<json_encoding Encoding>
+std::uint64_t json_property_name<Encoding>::encoded_hash() const
+{
+    if (!decoded_)
+        return detail::xxhash3(raw_);
+    if constexpr (Encoding == json_encoding::utf16)
+        return detail::xxhash3(std::as_bytes(std::span(*decoded_)));
+    else
+        return hash_json_utf8_name(*decoded_);
 }
 
 template<json_encoding Encoding>

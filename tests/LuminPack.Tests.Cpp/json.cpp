@@ -283,6 +283,66 @@ void sparse_property_lookup()
     }, "An exact-match miss still validates the skipped JSON value.");
 }
 
+// These 16-byte UTF-16 names collide under seed-zero XXH3.
+constexpr auto first_collision = luminpack::json_name{u"\u39b9\uea42\u737b\u6782\u523a\u0996\ubc3b\uae56"};
+constexpr auto second_collision = luminpack::json_name{u"\u39b8\uea42\u737b\u6782\u523a\u0996\ubc3b\uaf56"};
+constexpr auto unknown_collision = luminpack::json_name{u"\u39b8\uea42\u737b\u6782\u523a\u0996\ubc3b\u2f56"};
+constexpr auto collision_hash = 0x9af36ad529ccf545ull;
+
+struct dense_name_index
+{
+    static std::size_t find(const luminpack::json_property_name<json_encoding::utf16>& name)
+    {
+        switch (name.encoded_hash())
+        {
+        case collision_hash:
+            if (name.matches<first_collision>())
+                return 0;
+            if (name.matches<second_collision>())
+                return 1;
+            break;
+        }
+        return 2;
+    }
+};
+
+void dense_property_lookup()
+{
+    const auto hash_utf8 = [](std::string_view quoted) {
+        basic_json_reader<json_encoding::utf8> reader(quoted);
+        const auto hash = reader.read_name().encoded_hash();
+        reader.require_end();
+        return hash;
+    };
+    require(hash_utf8("\"\"") == 0x2d06800538d394c2ull &&
+        hash_utf8("\"DisplayName\"") == 0xdbfb57cbde200beaull &&
+        hash_utf8("\"\xe5\x90\x8d\xe7\xa7\xb0\xf0\x9f\x9a\x80\"") == 0x1843da27ff5a8226ull &&
+        hash_utf8("\"\\u540d\\u79f0\\ud83d\\ude80\"") == 0x1843da27ff5a8226ull,
+        "UTF-8 JSON property hashes match the managed vectors before and after decoding.");
+    const auto long_name = std::string(299, 'a');
+    constexpr auto long_name_hash = 0xc1d17581d8eb7e21ull;
+    require(hash_utf8("\"a" + long_name + "\"") == long_name_hash &&
+        hash_utf8("\"\\u0061" + long_name + "\"") == long_name_hash,
+        "Long literal and escaped UTF-8 names match the managed XXH3 hash.");
+
+    using dense_row = luminpack::json_lookup_record_body<row, dense_name_index,
+        json_record_member<u"Kind", &row::kind, enum_value, first_collision>,
+        json_record_member<u"Flag", &row::flag, boolean, second_collision>>;
+    for (const auto name : {first_collision.view(), second_collision.view(), unknown_collision.view()})
+    {
+        std::u16string quoted = u"\"";
+        quoted.append(name).append(u"\"");
+        basic_json_reader<json_encoding::utf16> reader{std::u16string_view(quoted)};
+        require(reader.read_name().encoded_hash() == collision_hash, "The UTF-16 collision vectors share one hash.");
+    }
+    std::u16string document = u"{\"";
+    document.append(second_collision.view()).append(u"\":true,\"")
+        .append(unknown_collision.view()).append(u"\":{\"ignored\":[{}]},\"")
+        .append(first_collision.view()).append(u"\":256}");
+    const auto value = read_json_document<dense_row>(bytes(std::u16string_view(document)));
+    require(value.kind == choice_code::enabled && value.flag, "Dense JSON lookup compares every colliding name exactly.");
+}
+
 void profiles_and_strings()
 {
     constexpr auto utf8 = json_encoding::utf8;
@@ -419,6 +479,7 @@ int main(int argc, char** argv)
         profiles_and_strings();
         ordered_property_heads();
         sparse_property_lookup();
+        dense_property_lookup();
         validation();
         custom_json();
         std::cout << "LuminPack C++ JSON wire checks passed.\n";

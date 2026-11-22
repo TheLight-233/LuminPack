@@ -429,7 +429,7 @@ private:
     }
 };
 
-/// A generated object with compiled fallback name lookup for its sparse encodings.
+/// A generated object with compiled fallback name lookup.
 template<class T, class Lookup, class... Members>
 struct json_lookup_record_body : json_record_body<T, Members...>
 {

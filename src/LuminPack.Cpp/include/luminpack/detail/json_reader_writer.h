@@ -63,6 +63,9 @@ class json_property_name
 public:
     [[nodiscard]] bool matches(std::u16string_view expected) const noexcept;
 
+    /// Hashes the decoded property name in its document encoding.
+    [[nodiscard]] std::uint64_t encoded_hash() const;
+
     [[nodiscard]] std::size_t encoded_length() const noexcept
     {
         if (!decoded_)

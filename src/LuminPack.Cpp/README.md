@@ -87,7 +87,7 @@ The reader validates JSON grammar and the document boundary. Set `json_read_opti
 
 JSON readers scan complete literal runs before decoding escapes or non-ASCII UTF-8. The UTF-16 writer uses the same bounded scan for long literal runs. On x64 the scan selects AVX-512BW, AVX2, or SSE2 under the existing SIMD cap. ARM64 uses NEON when SIMD is enabled. Each scan finishes with a scalar tail.
 
-For ordinary DTO properties with ASCII names, the stock codecs store the UTF-8 and UTF-16 property heads as `constexpr` data. The ordered reader compares the complete head in a validated range before advancing. The writer shares the same static bytes. The name parser handles escapes, former names, out-of-order properties and unknown members. After parsing a name, generated codecs use a length switch and exact comparisons when the encoding has at most eight candidates or every length bucket has at most four. They select this path separately for UTF-8 and UTF-16. Dense buckets and hand-written codecs use direct comparisons.
+For ordinary DTO properties with ASCII names, the stock codecs store the UTF-8 and UTF-16 property heads as `constexpr` data. The ordered reader compares the complete head in a validated range before advancing. The writer shares the same static bytes. The name parser handles escapes, former names, out-of-order properties and unknown members. Generated codecs use a length switch when the encoding has at most eight candidates or every length bucket has at most four. Dense tables use a switch on the same seed-zero XXH3 as C#. Both strategies compare the complete name before accepting a match. The generator chooses independently for UTF-8 and UTF-16. Hand-written record codecs use direct comparisons.
 
 ## Generate C++ DTOs and codecs
 

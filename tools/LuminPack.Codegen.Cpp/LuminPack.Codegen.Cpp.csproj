@@ -4,8 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <DefineConstants>$(DefineConstants);LUMINPACK_XXHASH3_SCALAR</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/LuminPack.Generator/Core/Json/JsonNameDispatch.cs" Link="JsonNameDispatch.cs" />
+    <Compile Include="../../src/LuminPack.Core/Internal/XxHash3Algorithm.cs" Link="XxHash3Algorithm.cs" />
   </ItemGroup>
 </Project>
