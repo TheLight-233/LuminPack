@@ -93,6 +93,23 @@ type NumberArray = Int8Array | Uint8Array | Int16Array | Uint16Array | Int32Arra
 type Integer64Array = BigInt64Array | BigUint64Array;
 type NumericView = NumberArray | Integer64Array;
 
+export function scalarCollectionView(value: unknown, type: string, nativeBytes: number): NumericView | undefined {
+    if (!ArrayBuffer.isView(value)) return undefined;
+    switch (nativeScalar(type, nativeBytes)) {
+        case "sbyte": return value instanceof Int8Array ? value : undefined;
+        case "byte": return value instanceof Uint8Array ? value : undefined;
+        case "short": return value instanceof Int16Array ? value : undefined;
+        case "ushort": return value instanceof Uint16Array ? value : undefined;
+        case "int": return value instanceof Int32Array ? value : undefined;
+        case "uint": return value instanceof Uint32Array ? value : undefined;
+        case "float": return value instanceof Float32Array ? value : undefined;
+        case "double": return value instanceof Float64Array ? value : undefined;
+        case "long": return value instanceof BigInt64Array ? value : undefined;
+        case "ulong": return value instanceof BigUint64Array ? value : undefined;
+        default: return undefined;
+    }
+}
+
 function numericView(bytes: Uint8Array, count: number, type: string): NumericView | undefined {
     const { buffer, byteOffset } = bytes;
     switch (type) {
@@ -114,6 +131,56 @@ function nativeScalar(type: string, nativeBytes: number): string {
     if (type === "nint") return nativeBytes === 8 ? "long" : "int";
     if (type === "nuint") return nativeBytes === 8 ? "ulong" : "uint";
     return type;
+}
+
+export type FixedScalarRead = (view: DataView, offset: number) => unknown;
+export type FixedScalarWrite = (view: DataView, offset: number, value: unknown) => void;
+
+const fixedScalarReads: Readonly<Record<string, FixedScalarRead>> = Object.assign(Object.create(null), {
+    bool: (view: DataView, offset: number) => {
+        const value = view.getUint8(offset);
+        if (value > 1) throw new WireError("Invalid LuminPack Boolean marker.");
+        return value === 1;
+    },
+    byte: (view: DataView, offset: number) => view.getUint8(offset),
+    sbyte: (view: DataView, offset: number) => view.getInt8(offset),
+    short: (view: DataView, offset: number) => view.getInt16(offset, true),
+    ushort: (view: DataView, offset: number) => view.getUint16(offset, true),
+    char: (view: DataView, offset: number) => String.fromCharCode(view.getUint16(offset, true)),
+    int: (view: DataView, offset: number) => view.getInt32(offset, true),
+    uint: (view: DataView, offset: number) => view.getUint32(offset, true),
+    long: (view: DataView, offset: number) => view.getBigInt64(offset, true),
+    ulong: (view: DataView, offset: number) => view.getBigUint64(offset, true),
+    float: (view: DataView, offset: number) => view.getFloat32(offset, true),
+    double: (view: DataView, offset: number) => view.getFloat64(offset, true),
+} satisfies Record<string, FixedScalarRead>);
+
+export function fixedScalarRead(type: string, nativeBytes: number): FixedScalarRead {
+    const read = fixedScalarReads[nativeScalar(type, nativeBytes)];
+    if (!read) throw new WireError("Unsupported LuminPack scalar " + type + ".");
+    return read;
+}
+
+export function fixedScalarWrite(type: string, nativeBytes: number): FixedScalarWrite {
+    if (type === "bool") return (view, offset, value) => {
+        if (typeof value !== "boolean") throw new WireError("Expected a LuminPack Boolean.");
+        view.setUint8(offset, Number(value));
+    };
+    if (type === "char") return (view, offset, value) => view.setUint16(offset,
+        typeof value === "string" && value.length === 1 ? value.charCodeAt(0) : smallInteger(value, "ushort"), true);
+    if (type === "float" || type === "double") {
+        const store = type === "float" ? DataView.prototype.setFloat32 : DataView.prototype.setFloat64;
+        return (view, offset, value) => {
+            if (typeof value !== "number") throw new WireError("Expected a LuminPack floating-point value.");
+            store.call(view, offset, value, true);
+        };
+    }
+    if (isWide(type, nativeBytes))
+        return (view, offset, value) => view.setBigUint64(offset, wideInteger(value, type), true);
+    const width = scalarWidth(type, nativeBytes);
+    const store = width === 1 ? DataView.prototype.setUint8 :
+        width === 2 ? DataView.prototype.setUint16 : DataView.prototype.setInt32;
+    return (view, offset, value) => store.call(view, offset, smallInteger(value, type), true);
 }
 
 function readRows<T>(count: number, width: number, get: (offset: number) => T): T[] {
@@ -205,29 +272,33 @@ export function readJsonScalar(value: JsonValue, type: string, nativeBytes: numb
         return value[0] ?? "\0";
     }
     if (!(value instanceof JsonNumber)) throw new WireError("Expected a LuminPack JSON number.");
+    return readJsonNumericScalar(value.text, type, nativeBytes);
+}
+
+export function readJsonNumericScalar(text: string, type: string, nativeBytes: number): number | bigint {
     if (type === "float" || type === "double") {
-        const decoded = Number(value.text);
+        const decoded = Number(text);
         const rounded = type === "float" ? Math.fround(decoded) : decoded;
         if (!Number.isFinite(rounded)) throw new WireError("Invalid LuminPack JSON floating-point value.");
         return rounded;
     }
-    if (/[.eE]/.test(value.text)) throw new WireError("Expected a LuminPack JSON integer.");
-    if (isWide(type, nativeBytes)) return wideInteger(BigInt(value.text), type);
-    return smallInteger(Number(value.text), type);
+    if (/[.eE]/.test(text)) throw new WireError("Expected a LuminPack JSON integer.");
+    if (isWide(type, nativeBytes)) return wideInteger(BigInt(text), type);
+    return smallInteger(Number(text), type);
 }
 
-export function writeJsonScalar(type: string, value: unknown, nativeBytes: number): JsonValue {
+export function writeJsonScalar(type: string, value: unknown, nativeBytes: number): string {
     if (type === "bool") {
         if (typeof value !== "boolean") throw new WireError("Expected a LuminPack Boolean.");
-        return value;
+        return value ? "true" : "false";
     }
     if (type === "char") {
-        if (typeof value === "string" && value.length === 1) return value;
-        return String.fromCharCode(smallInteger(value, "ushort"));
+        if (typeof value === "string" && value.length === 1) return JSON.stringify(value);
+        return JSON.stringify(String.fromCharCode(smallInteger(value, "ushort")));
     }
     if (type === "float" || type === "double") {
         if (typeof value !== "number") throw new WireError("Expected a LuminPack floating-point value.");
         return formatJsonNumber(type === "float" ? Math.fround(value) : value, type === "float");
     }
-    return new JsonNumber(String(isWide(type, nativeBytes) ? wideInteger(value, type) : smallInteger(value, type)));
+    return String(isWide(type, nativeBytes) ? wideInteger(value, type) : smallInteger(value, type));
 }

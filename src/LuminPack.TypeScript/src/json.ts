@@ -26,6 +26,76 @@ export function jsonArray(value: JsonValue, max: number): JsonValue[] {
     return value;
 }
 
+export const orderedJsonMiss = Symbol("LuminPack ordered JSON fallback");
+const escapedJsonUnit = /[\\\x00-\x1f]/;
+
+/** A bounded cursor for the canonical heads emitted by the contract. */
+export class OrderedJsonCursor {
+    private readonly numberPattern = /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/y;
+    private position = 0;
+
+    constructor(private readonly text: string, private readonly maxDepth: number) {}
+
+    consume(token: string): boolean {
+        if (!this.text.startsWith(token, this.position)) return false;
+        this.position += token.length;
+        return true;
+    }
+
+    expect(token: string): void {
+        if (!this.consume(token)) throw orderedJsonMiss;
+    }
+
+    depth(depth: number): void {
+        if (depth > this.maxDepth) throw orderedJsonMiss;
+    }
+
+    end(): void {
+        if (this.position !== this.text.length) throw orderedJsonMiss;
+    }
+
+    string(): string {
+        if (this.text.charCodeAt(this.position) !== 34) throw orderedJsonMiss;
+        const start = this.position + 1;
+        const end = this.text.indexOf('"', start);
+        if (end < 0) throw orderedJsonMiss;
+        const value = this.text.slice(start, end);
+        if (escapedJsonUnit.test(value)) throw orderedJsonMiss;
+        this.position = end + 1;
+        return value;
+    }
+
+    number(): string {
+        this.numberPattern.lastIndex = this.position;
+        const match = this.numberPattern.exec(this.text);
+        if (!match) throw orderedJsonMiss;
+        this.position = this.numberPattern.lastIndex;
+        return match[0];
+    }
+
+    int32(): number {
+        let cursor = this.position;
+        const negative = this.text.charCodeAt(cursor) === 45;
+        if (negative) cursor++;
+        const first = this.text.charCodeAt(cursor) - 48;
+        if (!(first >= 0 && first <= 9)) throw orderedJsonMiss;
+        let number = first;
+        cursor++;
+        if (number !== 0) {
+            for (;;) {
+                const digit = this.text.charCodeAt(cursor) - 48;
+                if (!(digit >= 0 && digit <= 9)) break;
+                number = number * 10 + digit;
+                if (number > 2147483648) throw orderedJsonMiss;
+                cursor++;
+            }
+        }
+        if (!negative && number === 2147483648) throw orderedJsonMiss;
+        this.position = cursor;
+        return negative ? -number : number;
+    }
+}
+
 /** Retains number lexemes until the member codec knows their CLR width. */
 export function parseJson(text: string, maxDepth: number, maxCollection: number): JsonValue {
     let index = 0;
@@ -105,16 +175,16 @@ export function parseJson(text: string, maxDepth: number, maxCollection: number)
     return result;
 }
 
-export function formatJsonNumber(value: number, single: boolean): JsonNumber {
+export function formatJsonNumber(value: number, single: boolean): string {
     if (!Number.isFinite(value)) throw new WireError("LuminPack JSON numbers must be finite.");
-    if (Object.is(value, -0)) return new JsonNumber("-0");
-    if (single) {
+    if (Object.is(value, -0)) return "-0";
+    if (single && !(Number.isInteger(value) && Math.abs(value) < 10_000_000)) {
         for (let digits = 1; digits <= 9; digits++) {
             const rounded = Number(value.toPrecision(digits));
-            if (Math.fround(rounded) === value) return new JsonNumber(String(rounded));
+            if (Math.fround(rounded) === value) return String(rounded);
         }
     }
-    return new JsonNumber(String(value));
+    return String(value);
 }
 
 export function stringifyJson(value: JsonValue, encodedNames: ReadonlyMap<string, string>): string {

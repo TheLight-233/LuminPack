@@ -13,6 +13,8 @@ For standalone C++ LUM2 frames, use `luminpack::compression` with non-overlappin
 
 Enable `LuminPackExportContract` in the Next model build. Run `LuminPack.Codegen export` on the assembly and `LuminPack.Codegen generate --language <cpp|java|go|typescript>` on the resulting manifest. Java and Go use records keyed by .NET member name. TypeScript emits model types and uses `bigint` for 64-bit integers. Use `LuminPack.Codegen project` for a runtime-loadable JSON contract in Java, Go, or TypeScript. Match the Binary profile and JSON encoding across endpoints. [Cross-language contracts](../../docs/portable-runtime.md)
 
+For a TypeScript fixed-width numeric array or List, pass the matching TypedArray to use a checked Binary block copy on little-endian platforms. For example, write a C# `int[]` field using `Int32Array`. The usual array representation remains available. [TypeScript runtime](../../src/LuminPack.TypeScript/README.md)
+
 For C++ interoperability, include the public runtime header and link the CMake target. Generate supported codecs from the shared contract or compose a codec matching the exported member order and profiles. Nullable primitives and enums map to `std::optional`. Bind the exact Version width or CLR storage model when the wire uses padding or a contiguous block. Use document entry points to share Version schema registrations across nested codecs. For JSON, select UTF-8 or UTF-16 at the document entry and bind properties using the exported names. [C++ runtime](../../src/LuminPack.Cpp/README.md)
 
 Use a fresh export and generated C++ header to read archived Version revision-1 Binary records. The reader validates complete legacy names and type contracts. Re-encoding sends the decoded value in the current Version format.

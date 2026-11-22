@@ -1,8 +1,11 @@
-import { BinaryReader, BinaryWriter, WireError, decodeUtf16, decodeUtf8, defaultLimits, encodeUtf8,
+import { BinaryReader, BinaryWriter, WireError, decodeUtf16, decodeUtf8, defaultLimits, encodeUtf8, littleEndian,
     readString, writeString, type Limits } from "./binary.ts";
-import { JsonNumber, jsonArray, jsonObject, parseJson, put, stringifyJson, type JsonObject, type JsonValue } from "./json.ts";
+import { JsonNumber, OrderedJsonCursor, jsonArray, jsonObject, orderedJsonMiss, parseJson, put, stringifyJson,
+    type JsonValue } from "./json.ts";
 import { compressLum2, decompressLum2 } from "./lum2.ts";
-import { defaultScalar, readJsonScalar, readScalar, readScalars, scalarWidth, writeJsonScalar, writeScalar, writeScalars } from "./scalar.ts";
+import { defaultScalar, fixedScalarRead, fixedScalarWrite, readJsonNumericScalar, readJsonScalar, readScalar, readScalars,
+    scalarCollectionView, scalarWidth, writeJsonScalar, writeScalar, writeScalars,
+    type FixedScalarRead, type FixedScalarWrite } from "./scalar.ts";
 import { VersionState, nameKey, readLegacyMetadata, readReferenceNumber, schemaHash, typeKey, widthCode,
     writeReferenceNumber } from "./version.ts";
 
@@ -42,11 +45,11 @@ export interface CodecOptions {
     limits?: Partial<Limits>;
 }
 
-export interface Codec<T> {
+export interface Codec<T, TInput = T> {
     readBinary(input: Uint8Array): T;
-    writeBinary(value: T): Uint8Array;
+    writeBinary(value: TInput): Uint8Array;
     readJson(input: Uint8Array, encoding?: JsonEncoding): T;
-    writeJson(value: T, encoding?: JsonEncoding): Uint8Array;
+    writeJson(value: TInput, encoding?: JsonEncoding): Uint8Array;
 }
 
 type BinaryProfile = { binary: number; declared?: boolean; jsonEncoding?: number; jsonDepth?: number; trusted?: boolean;
@@ -60,8 +63,14 @@ interface Storage {
     fields: { name: string; storage: Storage }[];
 }
 
-interface StorageLeaf { path: (string | number)[]; type: string; width: number; }
-interface StorageModel { stride: number; offsets: number[]; order: number[]; }
+interface StorageLeaf {
+    path: (string | number)[];
+    type: string;
+    width: number;
+    read: FixedScalarRead;
+    write: FixedScalarWrite;
+}
+interface StorageModel { stride: number; offsets: number[]; order: number[]; nativeKey?: string; }
 interface StoragePlan {
     packed: StorageModel;
     models: StorageModel[];
@@ -70,7 +79,7 @@ interface StoragePlan {
     native: boolean;
     tagged: boolean;
 }
-interface NullableModel { stride: number; presence: number; payload: number; }
+interface NullableModel { stride: number; presence: number; payload: number; read: FixedScalarRead; }
 
 type Wire = { rawCollection?: boolean; layout?: Storage } & (
     | { kind: "scalar"; type: string }
@@ -135,6 +144,7 @@ interface Plan {
     registeredByTag: Map<number, RegisteredCase>;
     registeredByType: Map<string, RegisteredCase>;
     jsonByName: Map<string, Member>;
+    jsonHeads: readonly { member: Member; head: string; next: string }[];
     descriptors?: bigint[];
     versionHash?: bigint;
 }
@@ -229,13 +239,13 @@ function limit(projected: number | undefined, configured: number | undefined, fa
     return checked;
 }
 
-class CompiledCodec<T> implements Codec<T> {
+class CompiledCodec<T, TInput> implements Codec<T, TInput> {
     private readonly plans = new Map<string, Plan>();
     private readonly encodedJsonNames = new Map(
         ["$id", "$ref", "$type", "$value", "Lengths", "LowerBounds", "Values"].map(name => [name, JSON.stringify(name) + ":"]));
     private readonly storagePlans = new WeakMap<Storage, StoragePlan>();
     private readonly nullableModels = new WeakMap<Storage, NullableModel[]>();
-    private readonly nativeRows = new WeakMap<object, Uint8Array>();
+    private readonly nativeRows = new WeakMap<object, { model: StorageModel; bytes: Uint8Array }>();
     private readonly manifest: Manifest;
     private readonly options: CodecOptions;
     private readonly root: Plan | undefined;
@@ -246,6 +256,7 @@ class CompiledCodec<T> implements Codec<T> {
     private readonly limits: Limits;
     private readonly jsonDepth: number;
     private readonly jsonEncoding: JsonEncoding;
+    private readonly orderedJson: boolean;
 
     constructor(manifest: unknown, options: CodecOptions) {
         this.manifest = manifest as Manifest;
@@ -257,17 +268,23 @@ class CompiledCodec<T> implements Codec<T> {
         this.nativeScalarAlignment = this.manifest.nativeScalarAlignment ?? 8;
         if (this.nativeScalarAlignment !== 4 && this.nativeScalarAlignment !== 8)
             throw new WireError("Invalid LuminPack native scalar alignment.");
+        let orderedJson = true;
         for (const contract of this.manifest.contracts) {
             const type = identity(contract.id);
             if (this.plans.has(type)) throw new WireError("Duplicate LuminPack contract " + type + ".");
+            const members = contract.members ?? [];
             const jsonByName = new Map<string, Member>();
-            for (const member of contract.members) {
+            for (const member of members) {
                 if (!this.encodedJsonNames.has(member.name)) this.encodedJsonNames.set(member.name, JSON.stringify(member.name) + ":");
                 jsonByName.set(member.name, member);
                 for (const alias of member.oldNames ?? []) if (!jsonByName.has(alias)) jsonByName.set(alias, member);
             }
+            const jsonHeads = Object.values(Object.fromEntries(members.map(member => {
+                const name = this.encodedJsonNames.get(member.name)!;
+                return [member.name, { member, head: "{" + name, next: "," + name }];
+            })));
             const plan: Plan = { contract, byHash: new Map(), byId: new Map(), registeredByTag: new Map(),
-                registeredByType: new Map(), jsonByName };
+                registeredByType: new Map(), jsonByName, jsonHeads };
             for (const entry of contract.cases ?? []) {
                 if (!Number.isInteger(entry.hash) || entry.hash <= 0 || entry.hash >= 0xffff_ffff ||
                     plan.byHash.has(entry.hash) || plan.byId.has(identity(entry.id)))
@@ -284,9 +301,12 @@ class CompiledCodec<T> implements Codec<T> {
                 plan.registeredByTag.set(entry.tag, entry);
                 plan.registeredByType.set(identity(entry.type), entry);
             }
+            if (contract.kind === "Custom" || contract.profile.trackReferences || plan.registeredByTag.size !== 0)
+                orderedJson = false;
             this.plans.set(type, plan);
             this.plans.set(identity((contract as Contract & { type?: string }).type ?? type), plan);
         }
+        this.orderedJson = orderedJson;
         this.rootWire = this.manifest.rootWire;
         this.root = this.rootWire ? undefined : this.plan(this.manifest.root);
         const profile = this.root?.contract.profile ?? this.manifest.rootProfile ??
@@ -305,7 +325,7 @@ class CompiledCodec<T> implements Codec<T> {
     }
 
     private plan(type: string): Plan {
-        const plan = this.plans.get(identity(type));
+        const plan = this.plans.get(type) ?? this.plans.get(identity(type));
         if (!plan) throw new WireError("Unknown LuminPack type " + type + ".");
         return plan;
     }
@@ -326,7 +346,7 @@ class CompiledCodec<T> implements Codec<T> {
         return value as T;
     }
 
-    writeBinary(value: T): Uint8Array {
+    writeBinary(value: TInput): Uint8Array {
         const output = new BinaryWriter();
         const state = new WriteState();
         if (this.rootWire) this.writeWire(this.rootWire, output, value, this.binaryProfile, state);
@@ -337,17 +357,30 @@ class CompiledCodec<T> implements Codec<T> {
     readJson(bytes: Uint8Array, encoding: JsonEncoding = this.jsonEncoding): T {
         if (bytes.length > this.limits.maxInput) throw new WireError("LuminPack JSON exceeds its input limit.");
         const text = encoding === "utf8" ? decodeUtf8(bytes, true) : decodeUtf16(bytes);
+        // The ordered attempt has no callbacks or reference registrations to replay.
+        if (this.orderedJson) {
+            const input = new OrderedJsonCursor(text, this.jsonDepth);
+            try {
+                const value = this.rootWire ? this.readOrderedJsonWire(this.rootWire, input, encoding === "utf8", 1) :
+                    this.readOrderedJsonContract(this.root!, input, encoding === "utf8", 1);
+                input.end();
+                return value as T;
+            } catch (error) {
+                if (error !== orderedJsonMiss && !(error instanceof WireError)) throw error;
+            }
+        }
         const value = parseJson(text, this.jsonDepth, this.limits.maxCollection);
         const state = new ReadState();
         return (this.rootWire ? this.readJsonWire(this.rootWire, value, encoding, state) :
             this.readJsonContract(this.root!, value, encoding, state)) as T;
     }
 
-    writeJson(value: T, encoding: JsonEncoding = this.jsonEncoding): Uint8Array {
+    writeJson(value: TInput, encoding: JsonEncoding = this.jsonEncoding): Uint8Array {
         const state = new WriteState();
-        const encoded = this.rootWire ? this.writeJsonWire(this.rootWire, value, encoding, state) :
-            this.writeJsonContract(this.root!, value, encoding, state);
-        const text = stringifyJson(encoded, this.encodedJsonNames);
+        const parts: string[] = [];
+        if (this.rootWire) this.writeJsonWire(this.rootWire, value, encoding, state, parts);
+        else this.writeJsonContract(this.root!, value, encoding, state, parts);
+        const text = parts.join("");
         if (encoding === "utf8") return encodeUtf8(text);
         const output = new BinaryWriter(text.length * 2);
         output.utf16(text, false);
@@ -406,7 +439,8 @@ class CompiledCodec<T> implements Codec<T> {
         const leaves: StorageLeaf[] = [];
         const collect = (shape: Storage, item: Wire, path: (string | number)[]): void => {
             if (item.kind === "scalar" && shape.fields.length === 0 && scalarWidth(item.type, this.nativeBytes) === shape.wireSize) {
-                leaves.push({ path, type: item.type, width: shape.wireSize });
+                leaves.push({ path, type: item.type, width: shape.wireSize, read: fixedScalarRead(item.type, this.nativeBytes),
+                    write: fixedScalarWrite(item.type, this.nativeBytes) });
                 return;
             }
             let children: { key: string | number; wire: Wire }[];
@@ -449,7 +483,10 @@ class CompiledCodec<T> implements Codec<T> {
                         throw new WireError("Invalid LuminPack scalar storage offsets.");
                 return first;
             });
-            return { stride, offsets: modelOffsets, order: [...order].sort((a, b) => modelOffsets[a] - modelOffsets[b]) };
+            const wireOrder = [...order].sort((a, b) => modelOffsets[a] - modelOffsets[b]);
+            const nativeKey = native && stride > packedWidth
+                ? `${stride}:${wireOrder.map(field => `${modelOffsets[field]}+${leaves[field].width}`).join(",")}` : undefined;
+            return { stride, offsets: modelOffsets, order: wireOrder, nativeKey };
         });
         const plan = { packed: { stride: packedWidth, offsets, order }, models, leaves,
             array: wire.kind === "pair" || wire.kind === "tuple", native, tagged: layout.tagged };
@@ -473,29 +510,38 @@ class CompiledCodec<T> implements Codec<T> {
     }
 
     private readStorage(input: BinaryReader, plan: StoragePlan, model: StorageModel): object {
-        const row = input.subrecord(model.stride);
+        return this.readStorageAt(input, input.reserve(model.stride), plan, model);
+    }
+
+    private readStorageAt(input: BinaryReader, offset: number, plan: StoragePlan, model: StorageModel,
+        nativeRow?: Uint8Array): object {
         const result = plan.array ? [] : {};
         for (const index of model.order) {
-            row.reserve(model.offsets[index] - row.position);
             const leaf = plan.leaves[index];
-            storageSet(result, leaf.path, readScalar(row, leaf.type, this.nativeBytes));
+            storageSet(result, leaf.path, leaf.read(input.view, offset + model.offsets[index]));
         }
-        if (plan.native && model.stride > plan.packed.stride) this.nativeRows.set(result, Uint8Array.from(row.bytes));
+        if (plan.native && model.stride > plan.packed.stride) {
+            const bytes = nativeRow ?? new Uint8Array(input.bytes.subarray(offset, offset + model.stride));
+            this.nativeRows.set(result, { model, bytes });
+        }
         return result;
     }
 
     private writeStorage(output: BinaryWriter, value: unknown, plan: StoragePlan, model: StorageModel): void {
+        const bytes = output.writable(model.stride);
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        this.writeStorageAt(bytes, view, 0, value, plan, model);
+    }
+
+    private writeStorageAt(bytes: Uint8Array, view: DataView, offset: number, value: unknown,
+        plan: StoragePlan, model: StorageModel): void {
         const data = plan.array ? sequence(value, this.limits.maxCollection) : object(value);
-        const previous = plan.native ? this.nativeRows.get(data) : undefined;
-        const start = output.position;
-        const padTo = (offset: number): void => {
-            const from = output.position - start;
-            if (offset === from) return;
-            if (previous) output.append(previous.subarray(from, offset));
-            else output.clear(offset - from);
-        };
+        if (model.stride > plan.packed.stride) {
+            const previous = plan.native ? this.nativeRows.get(data) : undefined;
+            if (previous && previous.model.nativeKey === model.nativeKey) bytes.set(previous.bytes, offset);
+            else bytes.fill(0, offset, offset + model.stride);
+        }
         for (const index of model.order) {
-            padTo(model.offsets[index]);
             const leaf = plan.leaves[index];
             let current: unknown = data;
             for (const key of leaf.path) {
@@ -503,9 +549,8 @@ class CompiledCodec<T> implements Codec<T> {
                 if (current === null || typeof current !== "object") throw new WireError("Expected a LuminPack storage value.");
                 current = storageField(current, key);
             }
-            writeScalar(output, leaf.type, current ?? defaultScalar(leaf.type, this.nativeBytes), this.nativeBytes);
+            leaf.write(view, offset + model.offsets[index], current ?? defaultScalar(leaf.type, this.nativeBytes));
         }
-        padTo(model.stride);
     }
 
     private nullableStorage(wire: Extract<Wire, { kind: "nullable" }>): NullableModel[] {
@@ -514,13 +559,14 @@ class CompiledCodec<T> implements Codec<T> {
         const width = scalarWidth(element.type, this.nativeBytes);
         let models = this.nullableModels.get(nullableLayout);
         if (!models) {
+            const read = fixedScalarRead(element.type, this.nativeBytes);
             models = nullableLayout.modelSizes.map((stride, index) => {
                 const offsets = nullableLayout.modelOffsets[index];
                 if (!offsets || offsets.length !== width + 1 || new Set(offsets).size !== offsets.length ||
                     offsets.some(offset => !Number.isInteger(offset) || offset < 0 || offset >= stride) ||
                     offsets.slice(1).some((offset, index) => offset !== offsets[1] + index))
                     throw new WireError("Invalid LuminPack nullable storage model.");
-                return { stride, presence: offsets[0], payload: offsets[1] };
+                return { stride, presence: offsets[0], payload: offsets[1], read };
             });
             if (models.length === 0) throw new WireError("Missing LuminPack nullable storage models.");
             this.nullableModels.set(nullableLayout, models);
@@ -536,14 +582,17 @@ class CompiledCodec<T> implements Codec<T> {
     }
 
     private readNullableStorage(input: BinaryReader, model: NullableModel, wire: Extract<Wire, { kind: "nullable" }>): unknown {
-        const row = input.subrecord(model.stride);
-        const flag = row.bytes[model.presence];
+        return this.readNullableStorageAt(input, input.reserve(model.stride), model, wire);
+    }
+
+    private readNullableStorageAt(input: BinaryReader, offset: number, model: NullableModel,
+        wire: Extract<Wire, { kind: "nullable" }>): unknown {
+        const flag = input.bytes[offset + model.presence];
         const type = (wire.element as Extract<Wire, { kind: "scalar" }>).type;
-        if (flag > 1 || (type === "bool" && row.bytes[model.payload] > 1))
+        if (flag > 1 || (type === "bool" && input.bytes[offset + model.payload] > 1))
             throw new WireError("Invalid LuminPack nullable storage flag.");
         if (flag === 0) return null;
-        row.reserve(model.payload);
-        return readScalar(row, type, this.nativeBytes);
+        return model.read(input.view, offset + model.payload);
     }
 
     private writeNullableStorage(output: BinaryWriter, value: unknown, model: NullableModel,
@@ -627,12 +676,23 @@ class CompiledCodec<T> implements Codec<T> {
     private readElements(wire: Wire, count: number, input: BinaryReader, profile: number, state: ReadState): unknown[] {
         if (wire.kind === "scalar") return readScalars(input, count, wire.type, this.nativeBytes);
         const values: unknown[] = [];
-        for (let index = 0; index < count; index++) values.push(this.readWire(wire, input, profile, state));
+        if (wire.kind === "contract") {
+            const plan = this.plan(wire.type);
+            for (let index = 0; index < count; index++) values.push(this.readContract(plan, input, profile, state));
+        } else {
+            for (let index = 0; index < count; index++) values.push(this.readWire(wire, input, profile, state));
+        }
         return values;
     }
 
     private segmentedElements(wire: Extract<Wire, { kind: "sequence" }>): boolean {
         return wire.family === "System.Buffers.ReadOnlySequence" && (!wire.element.rawCollection || !!wire.element.layout);
+    }
+
+    private primitiveCollectionValues(element: Wire, value: unknown, max: number): ArrayLike<unknown> & Iterable<unknown> {
+        const typed = element.kind === "scalar" ? scalarCollectionView(value, element.type, this.nativeBytes) : undefined;
+        if (typed && typed.length <= max) return typed;
+        return sequence(value, max);
     }
 
     private readSequence(wire: Wire, input: BinaryReader, profile: number, state: ReadState, fixed?: number,
@@ -648,12 +708,17 @@ class CompiledCodec<T> implements Codec<T> {
         if (nullable) {
             const models = this.nullableStorage(nullable);
             const model = segmented ? models[0] : this.readLayout(input, models);
-            if (count > Math.floor(input.remaining / model.stride)) throw new WireError("Truncated LuminPack nullable array.");
-            for (let index = 0; index < count; index++) values.push(this.readNullableStorage(input, model, nullable));
+            let offset = input.reserve(count * model.stride);
+            for (let index = 0; index < count; index++, offset += model.stride)
+                values.push(this.readNullableStorageAt(input, offset, model, nullable));
         } else if (plan) {
             const model = plan.tagged ? this.readLayout(input, plan.models) : this.standaloneModel(plan);
-            if (count > Math.floor(input.remaining / model.stride)) throw new WireError("Truncated LuminPack storage array.");
-            for (let index = 0; index < count; index++) values.push(this.readStorage(input, plan, model));
+            const width = count * model.stride;
+            const offset = input.reserve(width);
+            const owned = plan.native && model.stride > plan.packed.stride
+                ? new Uint8Array(input.bytes.subarray(offset, offset + width)) : undefined;
+            for (let row = 0; row < width; row += model.stride)
+                values.push(this.readStorageAt(input, offset + row, plan, model, owned?.subarray(row, row + model.stride)));
         } else return this.readElements(wire, count, input, profile, state);
         return values;
     }
@@ -678,8 +743,12 @@ class CompiledCodec<T> implements Codec<T> {
                 return;
             case "sequence": {
                 if (value === null && !defaultMemory(wire.family)) { output.i32(-1); return; }
-                const elements = sequence(value ?? [], this.limits.maxCollection);
-                this.writeElements(wire.element, output, elements, profile, state, this.segmentedElements(wire));
+                const elements = this.primitiveCollectionValues(wire.element, value ?? [], this.limits.maxCollection);
+                if (Array.isArray(elements)) {
+                    this.writeElements(wire.element, output, elements, profile, state, this.segmentedElements(wire));
+                } else if (littleEndian && ArrayBuffer.isView(elements)) {
+                    output.appendCountedBlock(elements.length, new Uint8Array(elements.buffer, elements.byteOffset, elements.byteLength));
+                } else this.writeElements(wire.element, output, Array.from(elements), profile, state);
                 return;
             }
             case "dictionary": {
@@ -729,7 +798,13 @@ class CompiledCodec<T> implements Codec<T> {
         if (plan) {
             if (plan.tagged) output.u8(1);
             const model = plan.tagged ? plan.models[0] : this.standaloneModel(plan);
-            for (const item of elements) this.writeStorage(output, item, plan, model);
+            const bytes = output.writable(elements.length * model.stride);
+            const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            let offset = 0;
+            for (const item of elements) {
+                this.writeStorageAt(bytes, view, offset, item, plan, model);
+                offset += model.stride;
+            }
             return;
         }
         for (const item of elements) this.writeWire(wire, output, item, profile, state);
@@ -850,7 +925,7 @@ class CompiledCodec<T> implements Codec<T> {
     private writeCompressed(wire: Wire, output: BinaryWriter, value: unknown, profile: number, state: WriteState): void {
         if (wire.kind !== "sequence") throw new WireError("Expected a LuminPack compressed sequence.");
         if (value === null) { output.i32(-1); return; }
-        const elements = sequence(value, this.limits.maxCollection);
+        const elements = this.primitiveCollectionValues(wire.element, value, this.limits.maxCollection);
         output.i32(elements.length);
         if (!elements.length) return;
         if (wire.element.kind === "sequence") {
@@ -860,11 +935,18 @@ class CompiledCodec<T> implements Codec<T> {
         const width = this.compressedWidth(wire.element, profile);
         if (width === 0 || elements.length > Math.floor(this.limits.maxInput / width))
             throw new WireError("LuminPack compressed field exceeds its decompressed size limit.");
-        const raw = new BinaryWriter(width * elements.length);
-        if (wire.element.kind === "scalar") writeScalars(raw, elements, wire.element.type, this.nativeBytes);
-        else for (const item of elements) this.writeWire(wire.element, raw, item, profile, state);
-        if (raw.position !== width * elements.length) throw new WireError("Invalid LuminPack compressed storage width.");
-        const frame = compressLum2(raw.finish());
+        let storage: Uint8Array;
+        if (littleEndian && ArrayBuffer.isView(elements)) {
+            storage = new Uint8Array(elements.buffer, elements.byteOffset, elements.byteLength);
+        } else {
+            const raw = new BinaryWriter(width * elements.length);
+            if (wire.element.kind === "scalar")
+                writeScalars(raw, Array.isArray(elements) ? elements : Array.from(elements), wire.element.type, this.nativeBytes);
+            else for (const item of elements) this.writeWire(wire.element, raw, item, profile, state);
+            storage = raw.finish();
+        }
+        if (storage.length !== width * elements.length) throw new WireError("Invalid LuminPack compressed storage width.");
+        const frame = compressLum2(storage);
         output.i32(frame.length);
         output.append(frame);
     }
@@ -1032,6 +1114,119 @@ class CompiledCodec<T> implements Codec<T> {
         }
     }
 
+    private jsonPlan(type: string): Plan {
+        return this.plans.get(type) ?? this.plan(type);
+    }
+
+    private readOrderedJsonContract(plan: Plan, input: OrderedJsonCursor, utf8: boolean, depth: number): unknown {
+        const { contract, jsonHeads } = plan;
+        if (contract.kind !== "Struct" && input.consume("null")) return null;
+        input.depth(depth);
+        if (contract.kind === "Union") {
+            input.expect('{"$type":');
+            const discriminator = input.number();
+            if (!/^\d+$/.test(discriminator)) throw orderedJsonMiss;
+            const type = plan.byHash.get(Number(discriminator));
+            if (!type) throw orderedJsonMiss;
+            input.expect(',"$value":');
+            const value = this.readOrderedJsonContract(this.jsonPlan(type), input, utf8, depth + 1);
+            input.expect("}");
+            return value === null ? null : { type, value };
+        }
+        const value: Target = {};
+        if (jsonHeads.length === 0) input.expect("{");
+        for (let index = 0; index < jsonHeads.length; index++) {
+            const { member, head, next } = jsonHeads[index];
+            input.expect(index === 0 ? head : next);
+            put(value, member.name, this.readOrderedJsonWire(member.wire, input, utf8, depth + 1));
+        }
+        input.expect("}");
+        return value;
+    }
+
+    private readOrderedJsonWire(wire: Wire, input: OrderedJsonCursor, utf8: boolean, depth: number): unknown {
+        const maximum = this.limits.maxCollection;
+        switch (wire.kind) {
+            case "scalar":
+                if (wire.type === "int") return input.int32();
+                if (wire.type === "char") return readJsonScalar(input.string(), "char", this.nativeBytes, utf8);
+                if (wire.type === "bool") {
+                    if (input.consume("true")) return true;
+                    input.expect("false");
+                    return false;
+                }
+                return readJsonNumericScalar(input.number(), wire.type, this.nativeBytes);
+            case "string": {
+                if (input.consume("null")) return null;
+                const value = input.string();
+                if (value.length > this.limits.maxString) throw orderedJsonMiss;
+                return value;
+            }
+            case "contract": return this.readOrderedJsonContract(this.jsonPlan(wire.type), input, utf8, depth);
+            case "nullable": return input.consume("null") ? null : this.readOrderedJsonWire(wire.element, input, utf8, depth);
+            case "sequence": {
+                if (input.consume("null")) return defaultMemory(wire.family) ? [] : null;
+                input.depth(depth);
+                input.expect("[");
+                const values: unknown[] = [];
+                if (input.consume("]")) return values;
+                do {
+                    if (values.length === maximum) throw orderedJsonMiss;
+                    values.push(this.readOrderedJsonWire(wire.element, input, utf8, depth + 1));
+                } while (input.consume(","));
+                input.expect("]");
+                return values;
+            }
+            case "pair": case "tuple": {
+                input.depth(depth);
+                if (wire.elements.length > maximum) throw orderedJsonMiss;
+                input.expect("[");
+                const values = [];
+                for (const element of wire.elements) {
+                    if (values.length !== 0) input.expect(",");
+                    values.push(this.readOrderedJsonWire(element, input, utf8, depth + 1));
+                }
+                input.expect("]");
+                return values;
+            }
+            case "dictionary": {
+                if (input.consume("null")) return null;
+                input.depth(depth);
+                if (wire.key.kind === "string" && input.consume("{")) {
+                    const values: Target = {};
+                    let count = 0;
+                    if (input.consume("}")) return new Map();
+                    do {
+                        const key = input.string();
+                        if (key.length > this.limits.maxString || (!own(values, key) && ++count > maximum))
+                            throw orderedJsonMiss;
+                        input.expect(":");
+                        put(values, key, this.readOrderedJsonWire(wire.value, input, utf8, depth + 1));
+                    } while (input.consume(","));
+                    input.expect("}");
+                    return new Map(Object.entries(values));
+                }
+                const values = new Map();
+                input.expect("[");
+                if (input.consume("]")) return values;
+                let count = 0;
+                do {
+                    if (++count > maximum || maximum < 2) throw orderedJsonMiss;
+                    input.depth(depth + 1);
+                    input.expect("[");
+                    const key = this.readOrderedJsonWire(wire.key, input, utf8, depth + 2);
+                    if (key === null) throw orderedJsonMiss;
+                    input.expect(",");
+                    values.set(key, this.readOrderedJsonWire(wire.value, input, utf8, depth + 2));
+                    input.expect("]");
+                } while (input.consume(","));
+                input.expect("]");
+                return values;
+            }
+            default: throw orderedJsonMiss;
+        }
+    }
+
     private readJsonWire(wire: Wire, value: JsonValue, encoding: JsonEncoding, state: ReadState): unknown {
         switch (wire.kind) {
             case "scalar": return readJsonScalar(value, wire.type, this.nativeBytes, encoding === "utf8");
@@ -1082,39 +1277,81 @@ class CompiledCodec<T> implements Codec<T> {
         }
     }
 
-    private writeJsonWire(wire: Wire, value: unknown, encoding: JsonEncoding, state: WriteState): JsonValue {
+    private writeJsonElements(wire: Wire, values: ArrayLike<unknown>, encoding: JsonEncoding, state: WriteState, parts: string[]): void {
+        parts.push("[");
+        for (let index = 0; index < values.length; index++) {
+            if (index !== 0) parts.push(",");
+            this.writeJsonWire(wire, values[index], encoding, state, parts);
+        }
+        parts.push("]");
+    }
+
+    private writeJsonWire(wire: Wire, value: unknown, encoding: JsonEncoding, state: WriteState, parts: string[]): void {
         switch (wire.kind) {
-            case "scalar": return writeJsonScalar(wire.type, value, this.nativeBytes);
+            case "scalar": parts.push(writeJsonScalar(wire.type, value, this.nativeBytes)); return;
             case "string":
                 if (value !== null && typeof value !== "string") throw new WireError("Invalid LuminPack JSON string.");
-                return value;
-            case "contract": return this.writeJsonContract(this.plan(wire.type), value, encoding, state);
-            case "nullable": return value === null ? null : this.writeJsonWire(wire.element, value, encoding, state);
-            case "sequence": return value === null && !defaultMemory(wire.family) ? null :
-                sequence(value ?? [], this.limits.maxCollection).map(item => this.writeJsonWire(wire.element, item, encoding, state));
+                parts.push(value === null ? "null" : JSON.stringify(value));
+                return;
+            case "contract": this.writeJsonContract(this.jsonPlan(wire.type), value, encoding, state, parts); return;
+            case "nullable":
+                if (value === null) parts.push("null");
+                else this.writeJsonWire(wire.element, value, encoding, state, parts);
+                return;
+            case "sequence":
+                if (value === null && !defaultMemory(wire.family)) parts.push("null");
+                else this.writeJsonElements(wire.element, this.primitiveCollectionValues(wire.element,
+                    value ?? [], this.limits.maxCollection), encoding, state, parts);
+                return;
             case "pair": case "tuple": {
                 const values = sequence(value, wire.elements.length);
                 if (values.length !== wire.elements.length) throw new WireError("Incorrect LuminPack JSON tuple length.");
-                return wire.elements.map((item, index) => this.writeJsonWire(item, values[index], encoding, state));
+                parts.push("[");
+                for (let index = 0; index < values.length; index++) {
+                    if (index !== 0) parts.push(",");
+                    this.writeJsonWire(wire.elements[index], values[index], encoding, state, parts);
+                }
+                parts.push("]");
+                return;
             }
             case "dictionary": {
-                if (value === null) return null;
+                if (value === null) { parts.push("null"); return; }
                 if (!(value instanceof Map) || value.size > this.limits.maxCollection)
                     throw new WireError("Expected a LuminPack JSON dictionary Map.");
-                const items: JsonValue[] = [];
-                const named: JsonObject = {};
-                const namedKeys = wire.key.kind === "string";
-                for (const [key, item] of value) {
-                    if (key === null) throw new WireError("Null LuminPack JSON dictionary key.");
-                    const member = this.writeJsonWire(wire.value, item, encoding, state);
-                    const encoded = this.writeJsonWire(wire.key, key, encoding, state);
-                    if (namedKeys) put(named, encoded as string, member);
-                    else items.push([encoded, member]);
+                if (wire.key.kind === "string") {
+                    const properties: Record<string, string> = {};
+                    for (const [key, item] of value) {
+                        if (typeof key !== "string") throw new WireError("Invalid LuminPack JSON dictionary key.");
+                        const member = [JSON.stringify(key) + ":"];
+                        this.writeJsonWire(wire.value, item, encoding, state, member);
+                        put(properties, key, member.join(""));
+                    }
+                    parts.push("{", Object.values(properties).join(","), "}");
+                } else {
+                    parts.push("[");
+                    let first = true;
+                    for (const [key, item] of value) {
+                        if (key === null) throw new WireError("Null LuminPack JSON dictionary key.");
+                        if (wire.key.kind === "scalar") {
+                            parts.push(first ? "[" : ",[", writeJsonScalar(wire.key.type, key, this.nativeBytes), ",");
+                            this.writeJsonWire(wire.value, item, encoding, state, parts);
+                            parts.push("]");
+                        } else {
+                            // Preserve the reference-registration order for keyed records.
+                            const keyParts: string[] = [];
+                            const itemParts: string[] = [];
+                            this.writeJsonWire(wire.value, item, encoding, state, itemParts);
+                            this.writeJsonWire(wire.key, key, encoding, state, keyParts);
+                            parts.push(first ? "[" : ",[", keyParts.join(""), ",", itemParts.join(""), "]");
+                        }
+                        first = false;
+                    }
+                    parts.push("]");
                 }
-                return namedKeys ? named : items;
+                return;
             }
             case "rectangular": {
-                if (value === null) return null;
+                if (value === null) { parts.push("null"); return; }
                 const rect = object(value);
                 const lengths = dimensions(rect.lengths, wire.rank);
                 const lowerBounds = dimensions(rect.lowerBounds, wire.rank);
@@ -1122,8 +1359,10 @@ class CompiledCodec<T> implements Codec<T> {
                 if (rectangularSize(lengths, this.limits.maxCollection) !== items.length)
                     throw new WireError("LuminPack JSON rectangular dimensions differ from its element count.");
                 rectangularBounds(lengths, lowerBounds);
-                return { Lengths: lengths.map(item => new JsonNumber(String(item))), LowerBounds: lowerBounds.map(item => new JsonNumber(String(item))),
-                    Values: items.map(item => this.writeJsonWire(wire.element, item, encoding, state)) };
+                parts.push('{"Lengths":[', lengths.join(","), '],"LowerBounds":[', lowerBounds.join(","), '],"Values":');
+                this.writeJsonElements(wire.element, items, encoding, state, parts);
+                parts.push("}");
+                return;
             }
             default: throw new WireError("Unsupported LuminPack JSON shape.");
         }
@@ -1174,7 +1413,7 @@ class CompiledCodec<T> implements Codec<T> {
         return result;
     }
 
-    private writeJsonContract(plan: Plan, value: unknown, encoding: JsonEncoding, state: WriteState): JsonValue {
+    private writeJsonContract(plan: Plan, value: unknown, encoding: JsonEncoding, state: WriteState, parts: string[]): void {
         if (state.depth++ >= this.jsonDepth) throw new WireError("LuminPack JSON nesting exceeds its limit.");
         try {
             const { contract } = plan;
@@ -1182,35 +1421,47 @@ class CompiledCodec<T> implements Codec<T> {
                 const codec = this.custom(plan);
                 if (!contract.customJson || encoding !== "utf16" || !codec.writeJson)
                     throw new WireError("No Custom JSON formatter is registered for this encoding.");
-                return codec.writeJson(value, encoding);
+                parts.push(stringifyJson(codec.writeJson(value, encoding), this.encodedJsonNames));
+                return;
             }
-            if (value === null && contract.kind !== "Struct") return null;
+            if (value === null && contract.kind !== "Struct") { parts.push("null"); return; }
             const record = object(value);
             if (contract.kind === "Union") {
                 if (typeof record.type !== "string" || record.value == null) throw new WireError("Invalid LuminPack JSON Union value.");
-                const type = identity(record.type);
+                const type = plan.byId.has(record.type) || plan.registeredByType.has(record.type) ? record.type : identity(record.type);
                 const hash = plan.byId.get(type);
-                if (hash !== undefined) return { $type: new JsonNumber(String(hash)),
-                    $value: this.writeJsonContract(this.plan(type), record.value, encoding, state) };
-                const registered = plan.registeredByType.get(type);
-                if (!registered) throw new WireError("Unknown LuminPack JSON Union type.");
-                if (!registered.codec.writeJson) throw new WireError("No registered LuminPack Union JSON writer.");
-                return { $type: new JsonNumber(String(registered.tag)), $value: registered.codec.writeJson(record.value, encoding) };
+                if (hash !== undefined) {
+                    parts.push('{"$type":', String(hash), ',"$value":');
+                    this.writeJsonContract(this.jsonPlan(type), record.value, encoding, state, parts);
+                } else {
+                    const registered = plan.registeredByType.get(type);
+                    if (!registered) throw new WireError("Unknown LuminPack JSON Union type.");
+                    if (!registered.codec.writeJson) throw new WireError("No registered LuminPack Union JSON writer.");
+                    parts.push('{"$type":', String(registered.tag), ',"$value":',
+                        stringifyJson(registered.codec.writeJson(record.value, encoding), this.encodedJsonNames));
+                }
+                parts.push("}");
+                return;
             }
-            const encoded: JsonObject = {};
+            let first = true;
             if (contract.profile.trackReferences === true) {
                 const reference = this.referenceIndex(state, record, contract.id);
-                if (reference.existing) return { $ref: new JsonNumber(String(reference.id)) };
-                encoded.$id = new JsonNumber(String(reference.id));
+                if (reference.existing) { parts.push('{"$ref":', String(reference.id), "}"); return; }
+                parts.push('{"$id":', String(reference.id));
+                first = false;
             }
-            for (const member of contract.members)
-                put(encoded, member.name, this.writeJsonWire(member.wire, this.field(record, member), encoding, state));
-            return encoded;
+            for (const { member, head, next } of plan.jsonHeads) {
+                parts.push(first ? head : next);
+                this.writeJsonWire(member.wire, this.field(record, member), encoding, state, parts);
+                first = false;
+            }
+            if (first) parts.push("{");
+            parts.push("}");
         } finally { state.depth--; }
     }
 }
 
 /** Compiles the shared portable contract to a checked Binary and JSON codec. */
-export function createCodec<T = unknown>(manifest: unknown, options: CodecOptions = {}): Codec<T> {
-    return new CompiledCodec<T>(manifest, options);
+export function createCodec<T = unknown, TInput = T>(manifest: unknown, options: CodecOptions = {}): Codec<T, TInput> {
+    return new CompiledCodec<T, TInput>(manifest, options);
 }

@@ -38,7 +38,7 @@ const fromJson = codec.readJson(json, "utf8");
 | 契约值 | TypeScript 值 |
 | --- | --- |
 | 记录或已建模的结构体 | 使用导出成员名的对象。 |
-| 数组或 List | 采用生成的元素类型的数组。 |
+| 数组或 List | 采用生成的元素类型的数组。写入定宽数值元素时也接受匹配的 TypedArray。 |
 | 字典 | `Map<K, V>`。 |
 | 64 位有符号或无符号整数 | `bigint`。32 位原生整数使用 `number`。 |
 | Pair 或 Tuple | 具有对应元素类型的元组。 |
@@ -47,13 +47,15 @@ const fromJson = codec.readJson(json, "utf8");
 
 启用引用跟踪的对象图使用同一个 JavaScript 对象表示重复节点。LuminPack JSON 读写保留整数精度。
 
+生成的绑定以 `Root` 表示读出的值，以 `RootInput` 表示写入值。`RootInput` 也允许匹配的数值 TypedArray。直接加载投影契约时，可通过 `createCodec<Root, RootInput>(manifest)` 指定相同的类型。
+
 ## 加载契约和绑定应用 codec
 
 调用 `createCodec<MyRoot>(manifest)` 可使用解析后的 `project` 输出。传入 `{ custom, registered }` 选项绑定应用数据。生成文件也提供 `bindCodec(options)`。Custom 绑定以完整类型标识为键。Union 注册按 Union 类型标识组织列表，每项设置具体 `type`、数字 `tag` 和数据 `codec`。
 
 ## WebAssembly SIMD 和 JavaScript 回退
 
-运行时通过带边界检查的 TypedArray 路径处理连续标量。环境支持时，长文本扫描使用内嵌的 WebAssembly SIMD 模块。JavaScript 实现负责回退。测试覆盖两种实现。
+运行时通过带边界检查的 TypedArray 路径处理连续标量。在小端平台，Binary 写入会直接复制匹配的数值 TypedArray 字节，压缩字段也使用这段字节作为输入。布尔和字符集合使用普通数组。二进制结构体块先校验完整范围，再按导出的 Packed、Tagged 或 Native 偏移访问字段。重新写入已读取的 Native 值时，会复制保存的字节并写入当前字段，从而保留 padding。环境支持时，长文本扫描使用内嵌的 WebAssembly SIMD 模块，并保留经测试的 JavaScript 回退路径。
 
 ```sh
 npm test --prefix src/LuminPack.TypeScript

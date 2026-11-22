@@ -126,6 +126,12 @@ export class BinaryWriter {
         this.#buffer.set(value, start);
     }
 
+    appendCountedBlock(count: number, bytes: Uint8Array): void {
+        const position = this.reserve(4 + bytes.length);
+        this.#buffer.set(bytes, position + 4);
+        this.#view.setInt32(position, count, true);
+    }
+
     writable(width: number): Uint8Array {
         const start = this.reserve(width);
         return this.#buffer.subarray(start, start + width);
@@ -137,7 +143,21 @@ export class BinaryWriter {
     }
 
     utf16(value: string, latin1: boolean): void {
-        let position = this.reserve(value.length * (latin1 ? 1 : 2));
+        const position = this.reserve(value.length * (latin1 ? 1 : 2));
+        this.#writeUtf16(position, value, latin1);
+    }
+
+    utf16Length(value: string | null): void {
+        if (value === null) { this.i32(-1); return; }
+        const text = value ?? "";
+        if (typeof text !== "string" || text.length > 0x3fff_ffff) throw new WireError("Invalid LuminPack string.");
+        const latin1 = text.length !== 0 && isLatin1(text);
+        const position = this.reserve(4 + text.length * (latin1 ? 1 : 2));
+        this.#view.setInt32(position, text.length * 2 + Number(latin1), true);
+        this.#writeUtf16(position + 4, text, latin1);
+    }
+
+    #writeUtf16(position: number, value: string, latin1: boolean): void {
         let index = 0;
         if (latin1) {
             for (; index + 4 <= value.length; index += 4, position += 4) {
@@ -242,7 +262,42 @@ function writeLength(output: BinaryWriter, value: number, variable: boolean): vo
     output.u8(value);
 }
 
+function readUtf16Length(input: BinaryReader): string | null {
+    const header = input.i32();
+    if (header < 0) {
+        if (header === -1) return null;
+        throw new WireError("Invalid LuminPack string length.");
+    }
+    const length = header >>> 1;
+    const latin1 = (header & 1) !== 0;
+    const width = latin1 ? length : header;
+    const position = input.reserve(width);
+    if (length > input.limits.maxString) throw new WireError("Invalid LuminPack string character count.");
+    if (length <= 64) return readShortUtf16(input, position, length, latin1);
+    return decodeUtf16(input.bytes.subarray(position, position + width), latin1);
+}
+
+function readShortUtf16(input: BinaryReader, start: number, count: number, latin1: boolean): string {
+    const { bytes, view } = input;
+    let value = "";
+    let index = start;
+    if (latin1) {
+        const end = start + count;
+        for (; index + 4 <= end; index += 4)
+            value += String.fromCharCode(bytes[index], bytes[index + 1], bytes[index + 2], bytes[index + 3]);
+        for (; index < end; index++) value += String.fromCharCode(bytes[index]);
+    } else {
+        const end = start + count * 2;
+        for (; index + 8 <= end; index += 8)
+            value += String.fromCharCode(view.getUint16(index, true), view.getUint16(index + 2, true),
+                view.getUint16(index + 4, true), view.getUint16(index + 6, true));
+        for (; index < end; index += 2) value += String.fromCharCode(view.getUint16(index, true));
+    }
+    return value;
+}
+
 export function readString(input: BinaryReader, profile: number, strictSkip = false): string | null {
+    if (profile === 2) return readUtf16Length(input);
     const utf8 = profile === 0 || profile === 1 || profile === 4;
     const token = profile === 1 || profile === 3;
     const variable = profile === 4 || profile === 5;
@@ -277,6 +332,7 @@ export function readString(input: BinaryReader, profile: number, strictSkip = fa
 }
 
 export function writeString(output: BinaryWriter, value: string | null, profile: number): void {
+    if (profile === 2) { output.utf16Length(value); return; }
     const utf8 = profile === 0 || profile === 1 || profile === 4;
     const token = profile === 1 || profile === 3;
     const variable = profile === 4 || profile === 5;

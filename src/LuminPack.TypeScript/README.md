@@ -38,7 +38,7 @@ const fromJson = codec.readJson(json, "utf8");
 | Contract value | TypeScript value |
 | --- | --- |
 | Record or modeled struct | Object with the exported member names. |
-| Array or List | Array with the generated element type. |
+| Array or List | Array with the generated element type. Writes also accept a matching TypedArray for fixed-width numeric elements. |
 | Dictionary | `Map<K, V>`. |
 | Signed or unsigned 64-bit integer | `bigint`. 32-bit native integers use `number`. |
 | Pair or tuple | Tuple with the corresponding element types. |
@@ -47,13 +47,15 @@ const fromJson = codec.readJson(json, "utf8");
 
 Reuse the same JavaScript object for repeated nodes in tracked graphs. The runtime keeps integer precision while reading and writing LuminPack JSON.
 
+Generated bindings expose `Root` for decoded values and `RootInput` for writes. `RootInput` also permits the matching numeric TypedArray. For a projected manifest, `createCodec<Root, RootInput>(manifest)` accepts the same pair of types.
+
 ## Load a contract or attach application codecs
 
 Use `createCodec<MyRoot>(manifest)` with the parsed output from `project`. Pass `{ custom, registered }` as options to bind application payloads. The generated file also exposes `bindCodec(options)`. Custom bindings are keyed by full type identity. For registered Union cases, key the list by the Union identity and give each entry its concrete `type`, numeric `tag`, and payload `codec`.
 
 ## WebAssembly SIMD and JavaScript fallback
 
-The runtime uses checked typed-array paths for contiguous scalar values. Long text scans use the embedded WebAssembly SIMD module when supported. JavaScript handles the fallback. Tests exercise both implementations.
+The runtime uses checked typed-array paths for contiguous scalars. Little-endian Binary writers copy matching numeric TypedArray inputs directly, including compressed field payloads. Boolean and character collections use their usual array values. Binary struct blocks validate the full window, then access the exported Packed, Tagged, or Native offsets. Rewriting a decoded Native value copies its saved bytes and stores the current fields, preserving padding. Long text scans use the embedded WebAssembly SIMD module when supported, with a tested JavaScript fallback.
 
 ```sh
 npm test --prefix src/LuminPack.TypeScript
