@@ -1,5 +1,6 @@
 #include "utf8_runs.h"
 #include "utf8_bmp_shuffle.h"
+#include "utf8_latin1_shuffle.h"
 
 namespace luminpack::detail
 {
@@ -47,5 +48,27 @@ std::size_t encode_bmp_ssse3(std::span<const char16_t> source, std::span<std::by
         bmp::store_lane(destination.data() + index * 3, first, second);
     }
     return index;
+}
+
+utf8_prefix encode_mixed_latin1_ssse3(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    utf8_prefix prefix{};
+    while (source.size() - prefix.consumed >= 8 && destination.size() - prefix.written >= 16)
+    {
+        const auto chars = load128(source.data() + prefix.consumed);
+        const auto high = _mm_and_si128(chars, _mm_set1_epi16(static_cast<short>(0xff00)));
+        if (_mm_movemask_epi8(_mm_cmpeq_epi16(high, _mm_setzero_si128())) != 0xffff)
+            break;
+
+        const auto ascii = _mm_cmpeq_epi16(_mm_and_si128(chars, _mm_set1_epi16(0x80)), _mm_setzero_si128());
+        const auto mask = static_cast<std::uint8_t>(~_mm_movemask_epi8(_mm_packs_epi16(ascii, ascii)));
+        const auto lead = _mm_or_si128(_mm_srli_epi16(chars, 6), _mm_set1_epi16(0xc0));
+        const auto trail = _mm_slli_epi16(_mm_or_si128(_mm_and_si128(chars, _mm_set1_epi16(63)), _mm_set1_epi16(0x80)), 8);
+        const auto pairs = _mm_or_si128(_mm_and_si128(ascii, chars), _mm_andnot_si128(ascii, _mm_or_si128(lead, trail)));
+        const auto packed = _mm_shuffle_epi8(pairs, mixed_latin1::load_shuffle(mask));
+        prefix.written += mixed_latin1::store_lane(destination.data() + prefix.written, packed, mask);
+        prefix.consumed += 8;
+    }
+    return prefix;
 }
 }

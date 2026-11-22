@@ -490,7 +490,7 @@ void write_string(writer& output, string_profile profile, std::optional<std::u16
 #if defined(LUMINPACK_CPP_INLINE_SSE2)
             if (profile == string_profile::utf8_length && text.size() >= 32 && text.front() >= 0x80)
             {
-                const auto run = detail::encode_homogeneous_utf8_prefix(std::span(text.data(), text.size()), destination);
+                const auto run = detail::encode_non_ascii_utf8_prefix(std::span(text.data(), text.size()), destination);
                 prefix = run.consumed;
                 bytes_written = run.written;
             }

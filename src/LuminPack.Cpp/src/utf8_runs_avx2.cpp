@@ -2,6 +2,7 @@
 
 #if defined(LUMINPACK_CPP_SSSE3)
 #include "utf8_bmp_shuffle.h"
+#include "utf8_latin1_shuffle.h"
 #endif
 
 #include <cstring>
@@ -98,6 +99,33 @@ std::size_t encode_bmp_avx2(std::span<const char16_t> source, std::span<std::byt
         bmp::store_lane(output + 24, _mm256_extracti128_si256(first, 1), _mm256_extracti128_si256(second, 1));
     }
     return index;
+}
+
+utf8_prefix encode_mixed_latin1_avx2(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    utf8_prefix prefix{};
+    while (source.size() - prefix.consumed >= 16 && destination.size() - prefix.written >= 32)
+    {
+        const auto chars = load256(source.data() + prefix.consumed);
+        if (_mm256_testz_si256(chars, _mm256_set1_epi16(static_cast<short>(0xff00))) == 0)
+            break;
+
+        const auto ascii = _mm256_cmpeq_epi16(_mm256_and_si256(chars, _mm256_set1_epi16(0x80)), _mm256_setzero_si256());
+        // The pack duplicates each eight-character flag group in its own 128-bit lane.
+        const auto doubled_mask = static_cast<std::uint32_t>(~_mm256_movemask_epi8(_mm256_packs_epi16(ascii, ascii)));
+        const auto first_mask = static_cast<std::uint8_t>(doubled_mask);
+        const auto last_mask = static_cast<std::uint8_t>(doubled_mask >> 16);
+        const auto lead = _mm256_or_si256(_mm256_srli_epi16(chars, 6), _mm256_set1_epi16(0xc0));
+        const auto trail = _mm256_slli_epi16(_mm256_or_si256(_mm256_and_si256(chars, _mm256_set1_epi16(63)), _mm256_set1_epi16(0x80)), 8);
+        const auto pairs = _mm256_blendv_epi8(_mm256_or_si256(lead, trail), chars, ascii);
+        const auto controls = _mm256_inserti128_si256(_mm256_castsi128_si256(mixed_latin1::load_shuffle(first_mask)),
+            mixed_latin1::load_shuffle(last_mask), 1);
+        const auto packed = _mm256_shuffle_epi8(pairs, controls);
+        prefix.written += mixed_latin1::store_lane(destination.data() + prefix.written, _mm256_castsi256_si128(packed), first_mask);
+        prefix.written += mixed_latin1::store_lane(destination.data() + prefix.written, _mm256_extracti128_si256(packed, 1), last_mask);
+        prefix.consumed += 16;
+    }
+    return prefix;
 }
 #endif
 }

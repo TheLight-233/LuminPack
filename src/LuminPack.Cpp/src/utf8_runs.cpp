@@ -90,27 +90,69 @@ std::size_t encode_bmp_blocks(std::span<const char16_t> source, std::span<std::b
 #endif
     return consumed + encode_bmp_ssse3(source.subspan(consumed), destination.subspan(consumed * 3));
 }
+
+utf8_prefix encode_mixed_latin1_prefix(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    utf8_prefix prefix{};
+#if defined(LUMINPACK_CPP_AVX512BW)
+    if (has_avx512bw())
+        prefix = encode_mixed_latin1_avx512(source, destination);
+#endif
+#if defined(LUMINPACK_CPP_AVX2)
+    if (has_avx2())
+    {
+        const auto next = encode_mixed_latin1_avx2(source.subspan(prefix.consumed), destination.subspan(prefix.written));
+        prefix.consumed += next.consumed;
+        prefix.written += next.written;
+    }
+#endif
+    const auto next = encode_mixed_latin1_ssse3(source.subspan(prefix.consumed), destination.subspan(prefix.written));
+    prefix.consumed += next.consumed;
+    prefix.written += next.written;
+
+    while (prefix.consumed < source.size())
+    {
+        const auto unit = source[prefix.consumed];
+        if (unit > 0xff)
+            break;
+        const std::size_t width = unit < 0x80 ? 1 : 2;
+        if (destination.size() - prefix.written < width)
+            break;
+        destination[prefix.written++] = static_cast<std::byte>(width == 1 ? unit : 0xc0 | (unit >> 6));
+        if (width == 2)
+            destination[prefix.written++] = static_cast<std::byte>(0x80 | (unit & 63));
+        ++prefix.consumed;
+    }
+    return prefix;
+}
 #endif
 }
 
-utf8_prefix encode_homogeneous_utf8_prefix(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+utf8_prefix encode_non_ascii_utf8_prefix(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
 {
-    if (source.size() < 32 || destination.size() < 24 || !has_ssse3())
+    if (source.size() < 32 || !has_ssse3())
         return {};
 
     utf8_prefix prefix{};
     const auto lead = source.front();
     if (lead >= 0x80 && lead < 0x800)
     {
-        if (!is_two_byte_sample(source.first<16>()))
+        if (destination.size() < 24 || !is_two_byte_sample(source.first<16>()))
+        {
+#if defined(LUMINPACK_CPP_SSSE3)
+            // Core admits mixed Latin-1 only after the homogeneous probe declines.
+            if (lead <= 0xff)
+                return encode_mixed_latin1_prefix(source, destination);
+#endif
             return {};
+        }
         prefix.consumed = encode_two_byte_blocks(source, destination);
         prefix.written = prefix.consumed * 2;
     }
 #if defined(LUMINPACK_CPP_SSSE3)
     else
     {
-        if (!is_three_byte_bmp(lead) || !is_bmp_sample(source.first<16>()))
+        if (destination.size() < 24 || !is_three_byte_bmp(lead) || !is_bmp_sample(source.first<16>()))
             return {};
         prefix.consumed = encode_bmp_blocks(source, destination);
         prefix.written = prefix.consumed * 3;

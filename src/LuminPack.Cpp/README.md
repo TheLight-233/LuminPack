@@ -74,6 +74,8 @@ With SIMD enabled on x64, UTF-16 Length writes of 1–16 code units use the same
 
 Fixed UTF-8 Length also uses the C# AVX2 path for long ASCII prefixes and the C# SIMD paths for runs of two-byte or three-byte UTF-8 code points. These paths sample the prefix and consume only complete validated groups. Three-byte BMP runs use constant shuffle tables and can resume after one ASCII separator.
 
+When the homogeneous probe declines a Latin-1-leading string, the writer can use the C# mixed ASCII and Latin-1 path. All 256 lane masks and exact write widths are compile-time constants. The general UTF-8 encoder resumes at the first code unit outside Latin-1.
+
 Fixed UTF-8 Length reads use bounded ASCII widening when both length headers agree. The short path checks every byte before storing. The long AVX2 path validates while widening into an unpublished string. Other inputs use the validating decoder.
 
 ## JSON

@@ -2,6 +2,7 @@
 
 #if defined(LUMINPACK_CPP_SSSE3)
 #include "utf8_bmp_shuffle.h"
+#include "utf8_latin1_shuffle.h"
 #endif
 
 #include <cstring>
@@ -57,6 +58,38 @@ std::size_t encode_bmp_avx512(std::span<const char16_t> source, std::span<std::b
         bmp::store_lane(output + 72, _mm512_extracti32x4_epi32(first, 3), _mm512_extracti32x4_epi32(second, 3));
     }
     return index;
+}
+
+utf8_prefix encode_mixed_latin1_avx512(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    utf8_prefix prefix{};
+    while (source.size() - prefix.consumed >= 32 && destination.size() - prefix.written >= 64)
+    {
+        __m512i chars;
+        std::memcpy(&chars, source.data() + prefix.consumed, sizeof(chars));
+        if (_mm512_test_epi16_mask(chars, _mm512_set1_epi16(static_cast<short>(0xff00))) != 0)
+            break;
+
+        const auto mask = _mm512_test_epi16_mask(chars, _mm512_set1_epi16(0x80));
+        const auto mask0 = static_cast<std::uint8_t>(mask);
+        const auto mask1 = static_cast<std::uint8_t>(mask >> 8);
+        const auto mask2 = static_cast<std::uint8_t>(mask >> 16);
+        const auto mask3 = static_cast<std::uint8_t>(mask >> 24);
+        const auto lead = _mm512_or_si512(_mm512_srli_epi16(chars, 6), _mm512_set1_epi16(0xc0));
+        const auto trail = _mm512_slli_epi16(_mm512_or_si512(_mm512_and_si512(chars, _mm512_set1_epi16(63)), _mm512_set1_epi16(0x80)), 8);
+        const auto pairs = _mm512_mask_blend_epi16(mask, chars, _mm512_or_si512(lead, trail));
+        auto controls = _mm512_castsi128_si512(mixed_latin1::load_shuffle(mask0));
+        controls = _mm512_inserti32x4(controls, mixed_latin1::load_shuffle(mask1), 1);
+        controls = _mm512_inserti32x4(controls, mixed_latin1::load_shuffle(mask2), 2);
+        controls = _mm512_inserti32x4(controls, mixed_latin1::load_shuffle(mask3), 3);
+        const auto packed = _mm512_shuffle_epi8(pairs, controls);
+        prefix.written += mixed_latin1::store_lane(destination.data() + prefix.written, _mm512_castsi512_si128(packed), mask0);
+        prefix.written += mixed_latin1::store_lane(destination.data() + prefix.written, _mm512_extracti32x4_epi32(packed, 1), mask1);
+        prefix.written += mixed_latin1::store_lane(destination.data() + prefix.written, _mm512_extracti32x4_epi32(packed, 2), mask2);
+        prefix.written += mixed_latin1::store_lane(destination.data() + prefix.written, _mm512_extracti32x4_epi32(packed, 3), mask3);
+        prefix.consumed += 32;
+    }
+    return prefix;
 }
 #endif
 }

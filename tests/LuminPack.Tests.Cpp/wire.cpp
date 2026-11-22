@@ -859,6 +859,86 @@ void homogeneous_bmp_utf8_runs()
     }
 }
 
+void mixed_latin1_utf8_masks()
+{
+    constexpr auto profile = luminpack::string_profile::utf8_length;
+    constexpr std::size_t header_size = 8;
+    constexpr std::size_t length = 128;
+    constexpr std::array suffix{char16_t{0x100}, char16_t{0x4e2d}, char16_t{0xd83d}, char16_t{0xde00}, u'?'};
+    constexpr std::array suffix_bytes{
+        byte{0xc4}, byte{0x80}, byte{0xe4}, byte{0xb8}, byte{0xad},
+        byte{0xf0}, byte{0x9f}, byte{0x98}, byte{0x80}, byte{'?'}
+    };
+
+    for (unsigned mask = 0; mask < 256; ++mask)
+    {
+        alignas(64) std::array<char16_t, length + suffix.size() + 1> characters{};
+        const auto units = std::span(characters).subspan(1, length);
+        for (std::size_t index = 0; index < length; ++index)
+        {
+            const auto high_bit = ((mask >> (index % 8)) & 1u) * 128;
+            units[index] = static_cast<char16_t>(high_bit + ((index * 19 + mask * 31) & 0x7f));
+        }
+        // Lead with Latin-1 and reject the homogeneous sample even for mask 255.
+        units[0] = 0xff;
+        units[1] = u'\0';
+        const auto text = std::u16string_view(units.data(), length);
+
+        std::vector<byte> expected;
+        for (const auto unit : text)
+        {
+            if (unit < 128)
+                expected.push_back(static_cast<byte>(unit));
+            else
+            {
+                expected.push_back(static_cast<byte>(192 + unit / 64));
+                expected.push_back(static_cast<byte>(128 + unit % 64));
+            }
+        }
+
+        const auto check_record = [](std::span<const byte> record, std::span<const byte> payload, std::size_t unit_count)
+        {
+            reader input(record);
+            check(input.read<std::int32_t>() == static_cast<std::int32_t>(payload.size()), "Mixed Latin-1 UTF-8 byte count.");
+            check(input.read<std::int32_t>() == static_cast<std::int32_t>(unit_count), "Mixed Latin-1 UTF-8 code-unit count.");
+            check(std::ranges::equal(input.take(payload.size()), payload), "Mixed Latin-1 UTF-8 exact payload.");
+            input.require_end();
+        };
+        std::array<byte, header_size + length * 2 + suffix_bytes.size() + 2> storage;
+        storage.fill(byte{204});
+        const auto window = std::span(storage).subspan(1, header_size + expected.size());
+        writer output(window);
+        luminpack::write_string(output, profile, text);
+        check_record(output.written(), expected, text.size());
+        check(storage.front() == byte{204} && storage[1 + window.size()] == byte{204}, "Mixed Latin-1 UTF-8 write bounds.");
+
+        std::array<char16_t, length + 8> alias{};
+        std::ranges::copy(text, alias.begin() + 1);
+        output = writer(std::as_writable_bytes(std::span(alias)).subspan(1, window.size()));
+        luminpack::write_string(output, profile, std::u16string_view(alias.data() + 1, length));
+        check_record(output.written(), expected, text.size());
+
+        std::ranges::copy(suffix, characters.begin() + 1 + length);
+        const auto with_suffix = std::u16string_view(units.data(), length + suffix.size());
+        expected.insert(expected.end(), suffix_bytes.begin(), suffix_bytes.end());
+        output = writer(std::span(storage).subspan(1, header_size + expected.size()));
+        luminpack::write_string(output, profile, with_suffix);
+        check_record(output.written(), expected, with_suffix.size());
+
+        storage.fill(byte{204});
+        output = writer(std::span(storage).first(header_size + expected.size() - 1));
+        expect_error<std::length_error>([&] { luminpack::write_string(output, profile, with_suffix); }, "Writes a short mixed Latin-1 UTF-8 window.");
+        check(output.written().empty() && std::ranges::all_of(storage, [](byte value) { return value == byte{204}; }),
+            "Publishes a short mixed Latin-1 UTF-8 write.");
+
+        characters.back() = 0xd800;
+        output = writer(storage);
+        expect_error<std::invalid_argument>([&] { luminpack::write_string(output, profile, with_suffix); }, "Writes an invalid mixed Latin-1 UTF-8 tail.");
+        check(output.written().empty() && std::ranges::all_of(storage, [](byte value) { return value == byte{204}; }),
+            "Publishes an invalid mixed Latin-1 UTF-8 write.");
+    }
+}
+
 struct point
 {
     std::int32_t x;
@@ -1173,6 +1253,7 @@ int main(int argc, char** argv)
         long_utf8_ascii_runs();
         homogeneous_two_byte_utf8_runs();
         homogeneous_bmp_utf8_runs();
+        mixed_latin1_utf8_masks();
         record_and_union_codecs();
         version_contracts(directory);
         std::cout << "LuminPack C++ wire checks passed.\n";
