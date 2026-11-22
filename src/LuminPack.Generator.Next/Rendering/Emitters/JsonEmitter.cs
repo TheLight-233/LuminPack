@@ -201,6 +201,29 @@ internal static class JsonEmitter
     /// <returns>The resulting text.</returns>
     private static string Head(PayloadRenderModel model, int index) => (index == 0 ? "{" : ",") + "\"" + model.Members[index].Name + "\":";
 
+    /// <summary>Determines whether the generated body combines a native-word property head with an integer.</summary>
+    /// <param name="model">The normalized JSON render model.</param>
+    /// <param name="member">The member whose value follows the head.</param>
+    /// <param name="utf8Bytes">The encoded width of the complete property head.</param>
+    /// <returns>Whether the managed UTF-8 branch uses the generated integer writer.</returns>
+    private static bool UsesGeneratedInteger(PayloadRenderModel model, RenderMember member, int utf8Bytes) =>
+        model.Net8 && !member.Mirrored && member.FieldType is ScalarKind.Int or ScalarKind.UInt or ScalarKind.Long or ScalarKind.ULong &&
+        utf8Bytes is >= 8 and <= 16;
+
+    /// <summary>Finds members whose managed UTF-8 branch combines the property head and integer.</summary>
+    /// <param name="model">The normalized JSON render model.</param>
+    /// <returns>The eligible field ordinals as flags, or null when no field uses the fast path.</returns>
+    internal static bool[]? FindGeneratedIntegerProperties(PayloadRenderModel model)
+    {
+        if (!model.Net8)
+            return null;
+
+        var properties = Enumerable.Range(0, model.Members.Length)
+            .Select(index => UsesGeneratedInteger(model, model.Members[index], Encoding.UTF8.GetByteCount(Head(model, index))))
+            .ToArray();
+        return properties.Any(static eligible => eligible) ? properties : null;
+    }
+
     /// <summary>Names the locals and exit labels of one JSON write method.</summary>
     /// <remarks>An inline object copies the child's whole write body into the parent method, so every repeated role takes the
     /// occurrence count as a suffix and every copied return becomes a jump to a label placed where the copy closes.</remarks>
@@ -265,8 +288,7 @@ internal static class JsonEmitter
             string owner = member.Mirrored ? "local" : value;
             byte[] utf8Bytes = Encoding.UTF8.GetBytes(head);
             // The fused head-and-integer write applies to a directly named field only.
-            if (model.Net8 && !member.Mirrored && member.FieldType is ScalarKind.Int or ScalarKind.UInt or ScalarKind.Long or ScalarKind.ULong &&
-                utf8Bytes.Length >= 8 && utf8Bytes.Length <= 16)
+            if (UsesGeneratedInteger(model, member, utf8Bytes.Length))
             {
                 var (first, last) = Words(utf8Bytes);
                 body.Add("if (" + isUtf8 + " && global::System.BitConverter.IsLittleEndian)");

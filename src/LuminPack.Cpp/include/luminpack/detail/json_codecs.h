@@ -351,6 +351,37 @@ private:
     }
 };
 
+namespace detail
+{
+/// Binds one member whose managed UTF-8 writer emits an integer in the same window as its property head.
+template<json_name Name, auto Field, class Codec, json_name... FormerNames>
+struct generated_json_integer_member : json_record_member<Name, Field, Codec, FormerNames...>
+{
+    using member = json_record_member<Name, Field, Codec, FormerNames...>;
+
+    static void write(auto& output, const auto& object, bool& first)
+    {
+        if constexpr (requires { output.template try_write_generated_integer<Name, ','>(object.*Field); })
+        {
+            if (!first && output.template try_write_generated_integer<Name, ','>(object.*Field))
+                return;
+        }
+        member::write(output, object, first);
+    }
+
+    static void write_opening(auto& output, const auto& object)
+        requires requires { member::write_opening(output, object); }
+    {
+        if constexpr (requires { output.template try_write_generated_integer<Name, '{'>(object.*Field); })
+        {
+            if (output.template try_write_generated_integer<Name, '{'>(object.*Field))
+                return;
+        }
+        member::write_opening(output, object);
+    }
+};
+}
+
 /// A non-null JSON object, including a Union case body or value-type DTO.
 template<class T, class... Members>
 struct json_record_body

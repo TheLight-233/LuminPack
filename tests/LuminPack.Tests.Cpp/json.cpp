@@ -791,6 +791,76 @@ using json_graph_envelope_codec = json_record_body<json_graph_envelope,
     json_record_member<u"Choice", &json_graph_envelope::choice, graph_json_union>,
     json_record_member<u"Other", &json_graph_envelope::other, other_graph_node_codec>>;
 
+struct generated_integer_row
+{
+    std::int32_t signed32 = std::numeric_limits<std::int32_t>::min();
+    std::uint32_t unsigned32 = std::numeric_limits<std::uint32_t>::max();
+    std::int64_t signed64 = std::numeric_limits<std::int64_t>::min();
+    std::uint64_t unsigned64 = std::numeric_limits<std::uint64_t>::max();
+
+    bool operator==(const generated_integer_row&) const = default;
+};
+
+template<auto Field>
+using integer_field_codec = json_codec<luminpack::scalar_codec<
+    std::remove_cvref_t<decltype(std::declval<generated_integer_row>().*Field)>>>;
+
+template<bool Fused, luminpack::json_name Name, auto Field, luminpack::json_name... FormerNames>
+using integer_field = std::conditional_t<Fused,
+    luminpack::detail::generated_json_integer_member<Name, Field, integer_field_codec<Field>, FormerNames...>,
+    json_record_member<Name, Field, integer_field_codec<Field>, FormerNames...>>;
+
+template<bool Fused>
+using generated_integer_body = luminpack::json_lookup_record_body<generated_integer_row, void,
+    integer_field<Fused, u"Abcd", &generated_integer_row::signed32>,
+    integer_field<Fused, u"Sequence", &generated_integer_row::unsigned32>,
+    integer_field<Fused, u"Delta", &generated_integer_row::signed64>,
+    integer_field<Fused, u"Abcdefghijkl", &generated_integer_row::unsigned64, u"OldTotal">>;
+
+void generated_integer_writes()
+{
+    constexpr auto utf8 = json_encoding::utf8;
+    constexpr auto utf16 = json_encoding::utf16;
+    const generated_integer_row value;
+    const auto verify = []<json_encoding Encoding>(std::span<const std::byte> wire, const generated_integer_row& value) {
+        for (std::size_t capacity = 0; capacity <= wire.size(); ++capacity)
+        {
+            constexpr auto canary = std::byte{0xa5};
+            std::vector<std::byte> plain(wire.size() + 16, canary);
+            auto generated = plain;
+            const auto write = [&]<bool Fused>(std::integral_constant<bool, Fused>, auto& buffer) {
+                basic_json_writer<Encoding> output(std::span<std::byte>(buffer).subspan(1, capacity));
+                try
+                {
+                    generated_integer_body<Fused>::write(output, value);
+                    require(capacity == wire.size(), "Reject a short generated integer document.");
+                }
+                catch (const std::length_error&)
+                {
+                    require(capacity < wire.size(), "Accept an exact-sized generated integer document.");
+                }
+                return output.written();
+            };
+            const auto ordinary = write(std::false_type{}, plain);
+            const auto fused = write(std::true_type{}, generated);
+            require(ordinary.size() == fused.size() && plain == generated,
+                "Preserve separate integer writer bytes at each capacity.");
+            if (capacity == wire.size())
+                require(std::ranges::equal(fused, wire), "Write exact signed and unsigned integer text.");
+        }
+        require(read_json_document<generated_integer_body<true>, Encoding>(wire) == value,
+            "Keep the generated integer fields in normal property lookup.");
+    };
+    verify.template operator()<utf8>(bytes(
+        R"({"Abcd":-2147483648,"Sequence":4294967295,"Delta":-9223372036854775808,"Abcdefghijkl":18446744073709551615})"), value);
+    verify.template operator()<utf16>(bytes(
+        uR"({"Abcd":-2147483648,"Sequence":4294967295,"Delta":-9223372036854775808,"Abcdefghijkl":18446744073709551615})"), value);
+    verify.template operator()<utf8>(bytes(R"({"Abcd":-1,"Sequence":2,"Delta":-3,"Abcdefghijkl":4})"),
+        generated_integer_row{-1, 2, -3, 4});
+    require(read_json_document<generated_integer_body<true>, utf8>(
+        bytes(R"({"OldTotal":103})")).unsigned64 == 103, "Keep the former name of a generated integer property.");
+}
+
 void utf16_string_writes()
 {
     constexpr auto utf16 = json_encoding::utf16;
@@ -996,6 +1066,7 @@ int main(int argc, char** argv)
         validation();
         custom_json();
         generated_opening_heads();
+        generated_integer_writes();
         utf16_string_writes();
         tracked_json_graphs();
         std::cout << "LuminPack C++ JSON wire checks passed.\n";

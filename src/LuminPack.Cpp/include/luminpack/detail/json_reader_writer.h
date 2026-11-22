@@ -436,6 +436,35 @@ public:
             write_property_separately<Name>(first);
     }
 
+    /// Writes a complete generated UTF-8 property head and its integer when the worst-case width fits.
+    template<auto Name, char Prefix, class T>
+    requires (Encoding == json_encoding::utf8 && (Prefix == '{' || Prefix == ',') &&
+        detail::plain_json_property_name<Name> && (std::same_as<T, std::int32_t> || std::same_as<T, std::uint32_t> ||
+            std::same_as<T, std::int64_t> || std::same_as<T, std::uint64_t>))
+    [[nodiscard]] bool try_write_generated_integer(T value)
+    {
+        constexpr const auto& head = detail::json_property_head<Encoding, Name, Prefix>;
+        constexpr auto width = head.size();
+        static_assert(width >= 8 && width <= 16);
+        constexpr auto bound = std::numeric_limits<T>::digits10 + 1 + std::is_signed_v<T>;
+        constexpr auto capacity = width + bound;
+        if (capacity > output_.remaining())
+            return false;
+
+        writer next = output_;
+        auto reserved = next.reserve(capacity);
+        auto* first = reinterpret_cast<char*>(reserved.data());
+        constexpr auto native_word = sizeof(std::uint64_t);
+        constexpr auto tail = width - native_word;
+        std::memcpy(first, head.data(), native_word);
+        std::memcpy(first + tail, head.data() + tail, native_word);
+        const auto result = std::to_chars(first + width, first + capacity, value);
+        if (result.ec != std::errc{})
+            throw std::invalid_argument("Cannot format LuminPack JSON number.");
+        (void)output_.reserve(static_cast<std::size_t>(result.ptr - first));
+        return true;
+    }
+
     template<class T>
     requires scalar<T> && (!std::same_as<T, char16_t>)
     void write_number(T value)

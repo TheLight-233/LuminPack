@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using LuminPack.Internal;
 using LuminPack.SourceGenerator;
 
@@ -16,16 +17,26 @@ internal sealed partial class CppEmitter
     /// <param name="members">The fields in contract order, including former names.</param>
     /// <param name="orderedRuns">The Next JSON integer run lengths indexed by start ordinal.</param>
     /// <param name="tracked">Whether the lookup includes the reference envelope's metadata names.</param>
+    /// <param name="generatedIntegerProperties">The eligible managed UTF-8 integer fields by ordinal.</param>
     private void EmitJsonBody(string codec, string type, IReadOnlyList<JsonMember> members, int[]? orderedRuns = null,
-        bool tracked = false)
+        bool tracked = false, bool[]? generatedIntegerProperties = null)
     {
+        if (generatedIntegerProperties != null && generatedIntegerProperties.Length != members.Count)
+            throw new InvalidOperationException("Invalid generated JSON integer property table for " + type + ".");
+
         // Keep the first matching member when a former name conflicts with a later member.
         JsonCandidate[] candidates = members.SelectMany((member, index) => new[] { member.Name }
             .Concat(member.FormerNames).Select(name => new JsonCandidate(name, index))).ToArray();
         if (tracked)
             candidates = [.. candidates, new("$id", members.Count + 1), new("$ref", members.Count + 2)];
-        IEnumerable<string> bindings = members.Select(member => Apply("luminpack::json_record_member",
-            new[] { Literal(member.Name), member.Pointer, member.Codec }.Concat(member.FormerNames.Select(Literal))));
+        IEnumerable<string> bindings = members.Select((member, index) =>
+        {
+            string memberCodec = generatedIntegerProperties?[index] == true
+                ? "luminpack::detail::generated_json_integer_member"
+                : "luminpack::json_record_member";
+            return Apply(memberCodec, new[] { Literal(member.Name), member.Pointer, member.Codec }
+                .Concat(member.FormerNames.Select(Literal)));
+        });
         if (candidates.Length == 0)
         {
             Alias(codec, "luminpack::json_record_body", new[] { type }.Concat(bindings));
@@ -42,6 +53,15 @@ internal sealed partial class CppEmitter
         Alias(codec, tracked ? "luminpack::tracked_json_codec" : "luminpack::json_lookup_record_body",
             new[] { type, lookup }.Concat(bindings));
     }
+
+    /// <summary>Reads the managed JSON integer write plan when the export includes it.</summary>
+    /// <param name="contract">The generated C++ contract row.</param>
+    /// <returns>The eligible field ordinals as flags, or null for an ordinary write.</returns>
+    private static bool[]? ReadGeneratedJsonIntegerProperties(JsonElement contract) =>
+        contract.TryGetProperty("jsonGeneratedIntegerProperties", out JsonElement properties) &&
+        properties.ValueKind == JsonValueKind.Array
+            ? properties.EnumerateArray().Select(static item => item.GetBoolean()).ToArray()
+            : null;
 
     /// <summary>Emits the Next run's bounded chunks, publishing each chunk before ordinary property lookup.</summary>
     /// <param name="type">The generated object type.</param>

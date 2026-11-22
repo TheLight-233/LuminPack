@@ -48,11 +48,12 @@ internal static class CppContractExport
         foreach (TypeModel model in contracts.Values)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var orderedRuns = model is RecordModel && !model.Policy.TrackReferences &&
-                RenderModelFactory.Create(model, options, json: true) is { } jsonModel
-                    ? JsonEmitter.FindGeneratedInt32Runs(jsonModel)
-                    : null;
-            Append(Contract(model, model is StructModel value ? getNativeStorage(value) : null, orderedRuns,
+            var jsonModel = model is RecordModel && !model.Policy.TrackReferences
+                ? RenderModelFactory.Create(model, options, json: true)
+                : null;
+            var orderedRuns = jsonModel == null ? null : JsonEmitter.FindGeneratedInt32Runs(jsonModel);
+            var generatedIntegerProperties = jsonModel == null ? null : JsonEmitter.FindGeneratedIntegerProperties(jsonModel);
+            Append(Contract(model, model is StructModel value ? getNativeStorage(value) : null, orderedRuns, generatedIntegerProperties,
                 options.RegisterMode != RegisterMode.Disabled, getRawCompoundStorage));
         }
         var ids = new HashSet<string>(contracts.Keys, StringComparer.Ordinal);
@@ -149,11 +150,12 @@ internal static class CppContractExport
     /// <param name="model">The declaration facts.</param>
     /// <param name="native">The independent tag-free layout facts, when available.</param>
     /// <param name="orderedRuns">The proven generated JSON Int32 runs by start ordinal.</param>
+    /// <param name="generatedIntegerProperties">Members with a generated UTF-8 head and integer write.</param>
     /// <param name="registration">Whether the consuming assembly enables runtime registration.</param>
     /// <param name="getRawCompoundStorage">The layout proof for headerless framework storage.</param>
     /// <returns>The JSON properties for the contract row.</returns>
-    private static object Contract(TypeModel model, (int Strategy, FormatterStorageModel Layout)? native, int[]? orderedRuns, bool registration,
-        Func<FormatterModel, FormatterStorageModel?> getRawCompoundStorage)
+    private static object Contract(TypeModel model, (int Strategy, FormatterStorageModel Layout)? native, int[]? orderedRuns,
+        bool[]? generatedIntegerProperties, bool registration, Func<FormatterModel, FormatterStorageModel?> getRawCompoundStorage)
     {
         var record = model as RecordModel;
         var value = model as StructModel;
@@ -165,7 +167,7 @@ internal static class CppContractExport
             ("profile", Profile(model.Policy)), ("versioned", version != null), ("dynamicVersion", version?.Dynamic),
             ("storageKind", value?.Storage.ToString()), ("storage", Storage(value?.StoragePlan)),
             ("nativeStrategy", native?.Strategy), ("nativeStorage", Storage(native?.Layout)),
-            ("jsonInt32Runs", orderedRuns),
+            ("jsonInt32Runs", orderedRuns), ("jsonGeneratedIntegerProperties", generatedIntegerProperties),
             ("sequenceBase", record?.SequenceBase), ("collectionBase", Formatter(record?.CollectionBase, getRawCompoundStorage)),
             ("unionWideTags", union?.WideTags), ("unionRegistration", union != null && registration),
             ("unionTier", union?.ClosedWriteSlot != null ? UnionDispatchTier.Exact.ToString() : union?.Tier.ToString()),
