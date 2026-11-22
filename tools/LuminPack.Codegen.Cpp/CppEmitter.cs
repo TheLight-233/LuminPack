@@ -163,7 +163,13 @@ internal sealed partial class CppEmitter
                 binaryMembers.Add(Apply("luminpack::version_member", new[] { pointer, member.Binary, Hex(descriptor) }.Concat(aliases)));
             }
             else
-                binaryMembers.Add(Apply("luminpack::record_member", new[] { pointer, member.Binary }));
+            {
+                JsonElement shape = field.GetProperty("shape");
+                bool batch = Text(shape, "kind") is ("scalar" or "enum") && !Flag(shape, "volatile");
+                binaryMembers.Add(Apply("luminpack::record_member", batch
+                    ? new[] { pointer, member.Binary, "true" }
+                    : new[] { pointer, member.Binary }));
+            }
 
             string[] names = field.GetProperty("oldNames").ValueKind == JsonValueKind.Array
                 ? field.GetProperty("oldNames").EnumerateArray().Select(static item => item.GetString()!).ToArray()

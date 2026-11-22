@@ -1064,6 +1064,83 @@ void record_and_union_codecs()
     expect_error<luminpack::wire_error>([&] { (void)tagged::read(input); }, "Accepts an unknown registered Union case.");
 }
 
+void fixed_record_batches()
+{
+    struct dense_record
+    {
+        std::uint32_t sequence;
+        std::uint16_t kind;
+        bool active;
+        bool hidden;
+    };
+    using luminpack::boolean_codec;
+    using luminpack::record_codec;
+    using luminpack::record_member;
+    using luminpack::scalar_codec;
+    using dense_codec = record_codec<dense_record,
+        record_member<&dense_record::sequence, scalar_codec<std::uint32_t>, true>,
+        record_member<&dense_record::kind, scalar_codec<std::uint16_t>, true>,
+        record_member<&dense_record::active, boolean_codec, true>,
+        record_member<&dense_record::hidden, boolean_codec, true>>;
+
+    std::array<byte, 32> storage{};
+    writer output(std::span<byte>(storage).subspan(1));
+    dense_codec::write(output, dense_record{0x11223344u, 0x5566u, true, false});
+    const auto wire = output.written();
+    const std::array expected{byte{4}, byte{0x44}, byte{0x33}, byte{0x22}, byte{0x11},
+        byte{0x66}, byte{0x55}, byte{1}, byte{0}};
+    check(std::ranges::equal(wire, expected), "Keep the fixed record's exact unaligned wire.");
+    auto input = reader(wire);
+    const auto dense = dense_codec::read(input);
+    check(dense && dense->sequence == 0x11223344u && dense->kind == 0x5566u &&
+        dense->active && !dense->hidden, "Read the fixed numeric and Boolean fields.");
+    input.require_end();
+
+    dense_record reused{17, 23, false, true};
+    for (std::size_t length = 0; length < wire.size(); ++length)
+    {
+        input = reader(wire.first(length));
+        expect_error<luminpack::wire_error>([&] { dense_codec::read_into(input, reused); },
+            "Accepts a truncated fixed record.");
+        check(input.remaining() == length && reused.sequence == 17 && reused.kind == 23 &&
+            !reused.active && reused.hidden, "Keep the cursor and destination on a truncated fixed record.");
+    }
+    storage[wire.size()] = byte{2};
+    input = reader(wire);
+    expect_error<luminpack::wire_error>([&] { dense_codec::read_into(input, reused); },
+        "Accepts an invalid Boolean in a complete fixed record.");
+    check(input.remaining() == wire.size() && reused.sequence == 17 && reused.kind == 23 &&
+        !reused.active && reused.hidden, "Validate Boolean markers before publishing a fixed batch.");
+
+    struct reordered_record
+    {
+        alignas(8) std::uint32_t sequence;
+        bool active;
+        std::uint16_t kind;
+    };
+    using reordered_codec = record_codec<reordered_record,
+        record_member<&reordered_record::kind, scalar_codec<std::uint16_t>, true>,
+        record_member<&reordered_record::active, boolean_codec, true>,
+        record_member<&reordered_record::sequence, scalar_codec<std::uint32_t>, true>>;
+    output = writer(storage);
+    reordered_codec::write(output, reordered_record{0xabcdef01u, true, 0x2345u});
+    input = reader(output.written());
+    const auto reordered = reordered_codec::read(input);
+    check(reordered && reordered->sequence == 0xabcdef01u && reordered->active && reordered->kind == 0x2345u,
+        "Read each field when the destination addresses differ from wire order.");
+    input.require_end();
+
+    struct nonbatch_record
+    {
+        volatile std::uint16_t declared_volatile;
+        std::uint16_t excluded;
+    };
+    using volatile_field = record_member<&nonbatch_record::declared_volatile, scalar_codec<std::uint16_t>, true>;
+    using excluded_field = record_member<&nonbatch_record::excluded, scalar_codec<std::uint16_t>>;
+    static_assert(luminpack::detail::record_read_field<nonbatch_record, volatile_field>::width == 0);
+    static_assert(luminpack::detail::record_read_field<nonbatch_record, excluded_field>::width == 0);
+}
+
 struct version_one
 {
     std::int32_t id = -1;
@@ -1313,6 +1390,7 @@ int main(int argc, char** argv)
         homogeneous_bmp_utf8_runs();
         mixed_latin1_utf8_masks();
         record_and_union_codecs();
+        fixed_record_batches();
         version_contracts(directory);
         std::cout << "LuminPack C++ wire checks passed.\n";
         return 0;

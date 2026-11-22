@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <tuple>
 #include <variant>
 
@@ -7,7 +8,8 @@
 namespace luminpack
 {
 /// Binds a DTO field to the codec selected by its .NET wire contract.
-template<auto Field, class Codec>
+/// The generator enables batching for eligible fields in its own DTO layouts.
+template<auto Field, class Codec, bool AllowBatch = false>
 struct record_member
 {
     static constexpr auto minimum_size = Codec::minimum_size;
@@ -25,6 +27,65 @@ struct record_member
     }
 };
 
+namespace detail
+{
+template<class T, class Member>
+struct record_read_field
+{
+    static constexpr std::size_t width = 0;
+};
+
+template<class T, auto Field, class Codec, bool AllowBatch>
+struct record_read_field<T, record_member<Field, Codec, AllowBatch>>
+{
+    using field_type = std::remove_reference_t<decltype(std::declval<T&>().*Field)>;
+    static constexpr bool boolean = std::same_as<Codec, boolean_codec>;
+    static constexpr std::size_t width = []
+    {
+        if constexpr (AllowBatch && (contiguous_codec<Codec> || boolean))
+        {
+            if constexpr (std::same_as<field_type, typename Codec::value_type> &&
+                (boolean || Codec::minimum_size == sizeof(field_type)))
+                return Codec::minimum_size;
+        }
+        return std::size_t{0};
+    }();
+    static constexpr bool copy_representation = []
+    {
+        if constexpr (!boolean)
+            return width == sizeof(field_type);
+        else if constexpr (sizeof(field_type) == 1)
+            return std::bit_cast<std::byte>(field_type{false}) == std::byte{0} &&
+                std::bit_cast<std::byte>(field_type{true}) == std::byte{1};
+        else
+            return false;
+    }();
+
+    static const std::byte* address(T& value) noexcept
+    {
+        return reinterpret_cast<const std::byte*>(std::addressof(value.*Field));
+    }
+
+    static void validate(const std::byte* source)
+    {
+        if constexpr (boolean)
+            if (std::to_integer<unsigned>(*source) > 1)
+                throw wire_error("Invalid LuminPack Boolean.");
+    }
+
+    static void read(const std::byte* source, T& value)
+    {
+        if constexpr (boolean)
+        {
+            validate(source);
+            value.*Field = *source != std::byte{0};
+        }
+        else
+            std::memcpy(std::addressof(value.*Field), source, width);
+    }
+};
+}
+
 /// The ordered fields following an existing framing boundary, such as a generated Union tag.
 template<class T, class... Members>
 struct record_payload_codec
@@ -40,7 +101,10 @@ struct record_payload_codec
         if (minimum_size > next.remaining())
             detail::truncated_input();
         T result{};
-        (Members::read(next, result, context...), ...);
+        if constexpr (has_batch)
+            read_fields(next, result, std::index_sequence_for<Members...>{}, context...);
+        else
+            (Members::read(next, result, context...), ...);
         input = next;
         transaction.commit();
         return result;
@@ -54,6 +118,79 @@ struct record_payload_codec
         (Members::write(next, value, context...), ...);
         output = next;
         transaction.commit();
+    }
+
+private:
+    using members = std::tuple<Members...>;
+    template<std::size_t Index>
+    using field = detail::record_read_field<T, std::tuple_element_t<Index, members>>;
+
+    static constexpr std::array widths{detail::record_read_field<T, Members>::width..., std::size_t{0}};
+    static constexpr bool has_batch = []
+    {
+        for (std::size_t index = 1; index < sizeof...(Members); ++index)
+            if (widths[index - 1] != 0 && widths[index] != 0)
+                return true;
+        return false;
+    }();
+    static constexpr auto offsets = []
+    {
+        std::array<std::size_t, widths.size()> result{};
+        for (std::size_t index = 1; index < result.size(); ++index)
+            result[index] = result[index - 1] + widths[index - 1];
+        return result;
+    }();
+
+    template<std::size_t First, std::size_t Width, std::size_t... Indices>
+    static void read_batch(const std::byte* source, T& value, std::index_sequence<Indices...>)
+    {
+        // The complete wire span is checked. Copy only when every member address in the
+        // actual destination agrees with the serialized order and widths.
+        if constexpr (sizeof(void*) == 8 && Width <= sizeof(T) &&
+            (field<First + Indices>::copy_representation && ...))
+        {
+            auto bytes = std::as_writable_bytes(std::span(&value, 1));
+            const auto offset = reinterpret_cast<std::uintptr_t>(field<First>::address(value)) -
+                reinterpret_cast<std::uintptr_t>(bytes.data());
+            if (offset <= bytes.size() - Width &&
+                ((field<First + Indices>::address(value) ==
+                    bytes.data() + offset + (offsets[First + Indices] - offsets[First])) && ...))
+            {
+                (field<First + Indices>::validate(source + (offsets[First + Indices] - offsets[First])), ...);
+                std::memcpy(bytes.data() + offset, source, Width);
+                return;
+            }
+        }
+        (field<First + Indices>::read(source + (offsets[First + Indices] - offsets[First]), value), ...);
+    }
+
+    template<std::size_t First, class... Context>
+    static void read_field_or_batch(reader& input, T& value, Context&... context)
+    {
+        if constexpr (First == 0 || widths[First] == 0 || widths[First - 1] == 0)
+        {
+            constexpr auto end = []
+            {
+                auto last = First;
+                while (widths[last] != 0)
+                    ++last;
+                return last;
+            }();
+            if constexpr (end > First + 1)
+            {
+                constexpr auto width = offsets[end] - offsets[First];
+                const auto batch = input.take(width);
+                read_batch<First, width>(batch.data(), value, std::make_index_sequence<end - First>{});
+            }
+            else
+                std::tuple_element_t<First, members>::read(input, value, context...);
+        }
+    }
+
+    template<std::size_t... Indices, class... Context>
+    static void read_fields(reader& input, T& value, std::index_sequence<Indices...>, Context&... context)
+    {
+        (read_field_or_batch<Indices>(input, value, context...), ...);
     }
 };
 
