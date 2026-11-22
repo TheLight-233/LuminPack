@@ -80,6 +80,147 @@ void store_escape(std::byte*& target, char16_t value) noexcept
         }
     }
 }
+
+std::size_t find_utf16_escape(std::u16string_view value) noexcept
+{
+    if (value.size() >= 16)
+        return detail::json_literal_prefix<true>(std::as_bytes(std::span(value))) / sizeof(char16_t);
+    for (std::size_t index = 0; index < value.size(); ++index)
+    {
+        if (escaped(value[index]))
+            return index;
+    }
+    return value.size();
+}
+
+bool has_utf16_literal_run(std::u16string_view value, std::size_t first_escape, std::size_t width = 32) noexcept
+{
+    auto start = first_escape + 1;
+    for (int skipped = 0; skipped < 4 && start < value.size() && escaped(value[start]); ++skipped)
+        ++start;
+    return value.size() - start >= width && find_utf16_escape(value.substr(start, width)) == width;
+}
+
+bool use_sparse_utf16_escapes(std::u16string_view value, std::size_t first_escape) noexcept
+{
+    if (!has_utf16_literal_run(value, first_escape))
+        return false;
+
+    // Confirm that the first literal run is not immediately followed by a dense suffix.
+    auto next_run = first_escape + 1;
+    while (next_run < value.size() && escaped(value[next_run]))
+        ++next_run;
+    const auto following = value.substr(next_run);
+    const auto next_escape = find_utf16_escape(following);
+    return following.size() - next_escape < 32 || has_utf16_literal_run(following, next_escape, 16);
+}
+
+std::pair<std::u16string_view, std::size_t> visit_sparse_utf16_escapes(
+    std::u16string_view value, std::size_t first_escape, auto copy_literal, auto write_escape)
+{
+    for (;;)
+    {
+        if (first_escape != 0)
+            copy_literal(value.substr(0, first_escape));
+        auto end = first_escape;
+        do
+            write_escape(value[end++]);
+        while (end < value.size() && escaped(value[end]));
+
+        value.remove_prefix(end);
+        first_escape = find_utf16_escape(value);
+        if (first_escape == value.size() || (first_escape < 32 && !has_utf16_literal_run(value, first_escape)))
+            return {value, first_escape};
+    }
+}
+
+void copy_utf16_literal(std::byte*& target, std::u16string_view literal) noexcept
+{
+    const auto width = literal.size() * sizeof(char16_t);
+    std::memcpy(target, literal.data(), width);
+    target += width;
+}
+
+void store_utf16_sparse_escape(std::byte*& target, char16_t character) noexcept
+{
+    const auto letter = escape_letter(character);
+    if (letter == 'u')
+    {
+        store_json_unit<json_encoding::utf16>(target, '\\');
+        store_json_unit<json_encoding::utf16>(target, 'u');
+        constexpr std::string_view hex = "0123456789abcdef";
+        for (int shift = 12; shift >= 0; shift -= 4)
+            store_json_unit<json_encoding::utf16>(target, hex[(character >> shift) & 0xf]);
+    }
+    else
+    {
+        const auto pair = std::uint32_t{'\\'} | (static_cast<std::uint32_t>(letter) << 16);
+        std::memcpy(target, &pair, sizeof(pair));
+        target += sizeof(pair);
+    }
+}
+
+bool try_write_sparse_utf16_json_string(writer& output, std::u16string_view value,
+    std::size_t first_escape, std::size_t room)
+{
+    if (!use_sparse_utf16_escapes(value, first_escape))
+        return false;
+
+    constexpr auto unit = sizeof(char16_t);
+    const auto content = std::as_bytes(std::span(value));
+    auto payload_width = content.size();
+    {
+        const auto extra_room = room - value.size();
+        auto remaining = extra_room;
+        // Check the exact escaped size before publishing any bytes to the caller's span.
+        const auto measure_escape = [&](char16_t character) {
+            const std::size_t extra = escape_letter(character) == 'u' ? 5 : 1;
+            if (extra > remaining)
+                detail::short_output();
+            remaining -= extra;
+        };
+        const auto [suffix, next_escape] = visit_sparse_utf16_escapes(value, first_escape,
+            [](std::u16string_view) {}, measure_escape);
+        for (const auto character : suffix.substr(next_escape))
+        {
+            if (escaped(character))
+                measure_escape(character);
+        }
+        payload_width += (extra_room - remaining) * unit;
+    }
+
+    writer next = output;
+    auto record = next.reserve(payload_width + 2 * unit);
+    const auto payload = record.subspan(unit, payload_width);
+    {
+        std::u16string scratch;
+        if (detail::overlaps(content, payload))
+        {
+            scratch = value;
+            value = scratch;
+        }
+        auto* target = payload.data();
+        const auto [suffix, prefix] = visit_sparse_utf16_escapes(value, first_escape,
+            [&](std::u16string_view literal) { copy_utf16_literal(target, literal); },
+            [&](char16_t character) { store_utf16_sparse_escape(target, character); });
+        if (prefix != 0)
+            copy_utf16_literal(target, suffix.substr(0, prefix));
+        for (const auto character : suffix.substr(prefix))
+        {
+            if (escaped(character))
+                store_utf16_sparse_escape(target, character);
+            else
+                store_json_unit<json_encoding::utf16>(target, character);
+        }
+    }
+    auto* head = record.data();
+    auto* tail = record.data() + record.size() - unit;
+    store_json_unit<json_encoding::utf16>(head, '"');
+    store_json_unit<json_encoding::utf16>(tail, '"');
+    output = next;
+    return true;
+}
+
 }
 
 template<json_encoding Encoding>
@@ -571,6 +712,10 @@ void basic_json_writer<Encoding>::write_string(std::u16string_view value)
             if (value.size() > room)
                 detail::short_output();
             literal_prefix = detail::json_literal_prefix<true>(content) / sizeof(unit);
+            if (value.size() >= 512 && value.size() - literal_prefix > 32 &&
+                (!escaped(value[literal_prefix + 1]) || !escaped(value[literal_prefix + 2])) &&
+                try_write_sparse_utf16_json_string(output_, value, literal_prefix, room))
+                return;
             room -= literal_prefix;
         }
     }

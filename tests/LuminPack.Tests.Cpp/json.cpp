@@ -748,6 +748,79 @@ using json_graph_envelope_codec = json_record_body<json_graph_envelope,
     json_record_member<u"Choice", &json_graph_envelope::choice, graph_json_union>,
     json_record_member<u"Other", &json_graph_envelope::other, other_graph_node_codec>>;
 
+void utf16_string_writes()
+{
+    constexpr auto utf16 = json_encoding::utf16;
+    const auto check = [](std::u16string_view value, std::u16string_view escaped_content) {
+        std::u16string expected(1, u'"');
+        expected.append(escaped_content);
+        expected.push_back(u'"');
+        const auto wire = bytes(std::u16string_view(expected));
+        constexpr auto canary = std::byte{0xa5};
+        std::vector<std::byte> storage(wire.size() + 2, canary);
+        auto destination = std::span(storage).subspan(1, wire.size());
+        basic_json_writer<utf16> output(destination);
+        output.write_string(value);
+        require(std::ranges::equal(output.written(), wire), "Write exact UTF-16 string bytes into an unaligned span.");
+        require(storage.front() == canary && storage.back() == canary, "Keep the UTF-16 string output bounded.");
+        basic_json_reader<utf16> input(output.written());
+        require(input.read_string() == value, "Round-trip UTF-16 string literals and escape runs.");
+
+        std::ranges::fill(storage, canary);
+        basic_json_writer<utf16> short_output(destination.first(wire.size() - 1));
+        try
+        {
+            short_output.write_string(value);
+            throw std::runtime_error("Reject a short UTF-16 string output span.");
+        }
+        catch (const std::length_error&)
+        {
+            require(short_output.written().empty() && std::ranges::all_of(storage, [canary](auto byte) { return byte == canary; }),
+                "Keep UTF-16 string output atomic when even the last code unit does not fit.");
+        }
+
+        for (const auto source_first : {false, true})
+        {
+            const std::size_t start = source_first ? 0 : 2;
+            const std::size_t target = source_first ? 2 : 0;
+            std::vector<char16_t> overlapping(expected.size() + 2);
+            std::ranges::copy(value, overlapping.data() + start);
+            basic_json_writer<utf16> overlap_output(std::as_writable_bytes(std::span(overlapping).subspan(target)));
+            overlap_output.write_string(std::u16string_view(overlapping.data() + start, value.size()));
+            require(std::ranges::equal(overlap_output.written(), wire), "Preserve overlapping UTF-16 string input.");
+        }
+    };
+
+    for (const auto length : {0, 1, 15, 16, 31, 32, 511, 512})
+    {
+        const std::u16string value(length, u'\u754c');
+        check(value, value);
+    }
+    check(u"\u00e9\r\t\U00010400\f\b", u"\u00e9\\r\\t\U00010400\\u000c\\u0008");
+
+    const std::u16string prefix(33, u'a');
+    const std::u16string literal(520, u'\u754c');
+    const std::u16string short_run(16, u'x');
+    for (const auto tail_length : {31, 32})
+    {
+        const std::u16string boundary_prefix(511 - tail_length, u'a');
+        const std::u16string boundary_tail(tail_length, u'\u754c');
+        check(boundary_prefix + u'\t' + boundary_tail, boundary_prefix + uR"(\t)" + boundary_tail);
+    }
+    const std::u16string cluster{u'\\', u'\0', u'"'};
+    const auto sparse_prefix = prefix + u"\n\r" + literal;
+    const auto escaped_prefix = prefix + uR"(\n\r)" + literal;
+    check(sparse_prefix, escaped_prefix);
+    check(sparse_prefix + cluster + short_run + u"\t\f\b",
+        escaped_prefix + uR"(\\\u0000\")" + short_run + uR"(\t\u000c\u0008)");
+    check(prefix + u"\n\r\t" + literal + u'"', prefix + uR"(\n\r\t)" + literal + uR"(\")");
+    const std::u16string dense(40, u'\t');
+    std::u16string escaped_dense;
+    for (std::size_t index = 0; index < dense.size(); ++index)
+        escaped_dense.append(uR"(\t)");
+    check(sparse_prefix + dense, escaped_prefix + escaped_dense);
+}
+
 void tracked_json_graphs()
 {
     using luminpack::read_reference_json_document;
@@ -879,6 +952,7 @@ int main(int argc, char** argv)
         validation();
         custom_json();
         generated_opening_heads();
+        utf16_string_writes();
         tracked_json_graphs();
         std::cout << "LuminPack C++ JSON wire checks passed.\n";
         return 0;
