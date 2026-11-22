@@ -12,7 +12,7 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-CODEGEN = ROOT / "tools/LuminPack.Codegen.Cpp/LuminPack.Codegen.Cpp.csproj"
+CODEGEN = ROOT / "tools/LuminPack.Codegen/LuminPack.Codegen.csproj"
 MODELS = {"simple": "LuminPackBenchmark.SimpleClass", "serialize": "LuminPackBenchmark.CharacterSaveData"}
 FORMATS = (("binary", ".bin"), ("json-utf8", ".utf8.json"), ("json-utf16", ".utf16.json"))
 LANGUAGES = ("java", "go", "typescript")
@@ -229,7 +229,7 @@ def invoke(command, cwd=ROOT, **options):
 def build_dotnet(project, artifacts, *, export=False, properties=()):
     settings = [f"-p:ArtifactsPath={artifacts}", *properties]
     if export:
-        settings.append("-p:LuminPackExportCppContract=true")
+        settings.append("-p:LuminPackExportContract=true")
     invoke(["dotnet", "build", project, "-c", "Release", *settings])
     result = invoke(["dotnet", "msbuild", project, "-getProperty:TargetPath", "-p:Configuration=Release", *settings],
                     capture_output=True, text=True)
@@ -342,7 +342,7 @@ def prepare_inputs(args, work, codegen, routes):
             flags += ["--native-integer-bytes", str(args.native_integer_bytes)]
         if args.native_scalar_alignment:
             flags += ["--native-scalar-alignment", str(args.native_scalar_alignment)]
-        invoke(["dotnet", codegen, "project-portable", *flags, manifest, root, schema])
+        invoke(["dotnet", codegen, "project", *flags, manifest, root, schema])
         schemas[(root, profile)] = schema
     return managed, inputs, schemas
 
@@ -386,7 +386,7 @@ def main():
     parser.add_argument("--fixtures", type=Path, help="Reuse a manifest and documents emitted by the selected managed suite.")
     parser.add_argument("--manifest", type=Path, help="Use this manifest for reused fixtures stored separately from their manifest.")
     parser.add_argument("--work-dir", type=Path, help="Write all build and exchange artifacts in this directory.")
-    parser.add_argument("--codegen-dll", type=Path, help="Reuse a built LuminPack.Codegen.Cpp executable assembly.")
+    parser.add_argument("--codegen-dll", type=Path, help="Reuse a built LuminPack.Codegen executable assembly.")
     parser.add_argument("--managed-dll", type=Path, help="Reuse a built managed verifier for the selected suite.")
     parser.add_argument("--managed-dotnet", default="dotnet", help="Managed fixture host executable override.")
     parser.add_argument("--java", help="Java executable override.")

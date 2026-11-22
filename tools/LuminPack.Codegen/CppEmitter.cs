@@ -12,8 +12,6 @@ internal sealed partial class CppEmitter
     private readonly HashSet<(string Type, int Profile)> building = new();
     private readonly StringBuilder code = new("#pragma once\n\n#include <luminpack/luminpack.h>\n\n");
     private readonly ILookup<string, string>? rttiBases;
-    private static readonly string[] Profiles =
-        ["utf8_length", "utf8_token", "utf16_length", "utf16_token", "utf8_varint", "utf16_varint"];
 
     /// <summary>Indexes declared types from the current manifest version.</summary>
     /// <param name="manifest">The validated manifest root.</param>
@@ -57,7 +55,7 @@ internal sealed partial class CppEmitter
 
         emitter.code.Append("namespace luminpack_generated::root_").Append(Identifier(root));
         if (binaryProfile.HasValue)
-            emitter.code.Append("_binary_").Append(Profiles[binaryProfile.Value]);
+            emitter.code.Append("_binary_").Append(BinaryProfiles.Names[binaryProfile.Value]);
         emitter.code.Append("\n{\n");
         emitter.AnalyzeRecursiveRecords(declaration);
         JsonElement profile = declaration.GetProperty("profile");
@@ -71,18 +69,6 @@ internal sealed partial class CppEmitter
             using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true);
             writer.Write(emitter.code.ToString());
         });
-    }
-
-    /// <summary>Resolves a CLI option to the existing compiler profile ordinal.</summary>
-    /// <param name="name">The requested built-in profile name.</param>
-    /// <returns>The binary profile index used by generated codecs.</returns>
-    internal static int ParseBinaryProfile(string name)
-    {
-        int profile = Array.IndexOf(Profiles, name.Replace('-', '_'));
-        if (profile < 0)
-            throw new ArgumentException("Unknown Binary profile " + name + ". Choose " +
-                string.Join(", ", Profiles.Select(static value => value.Replace('_', '-'))) + ".");
-        return profile;
     }
 
     /// <summary>Binds a normalized contract and emits its dependencies before its own definitions.</summary>
@@ -602,9 +588,9 @@ internal sealed partial class CppEmitter
     /// <returns>The matching C++ enum constant.</returns>
     private static string Profile(int profile)
     {
-        if ((uint)profile >= (uint)Profiles.Length)
+        if ((uint)profile >= (uint)BinaryProfiles.Names.Length)
             throw Missing("string profile", profile.ToString(CultureInfo.InvariantCulture));
-        return "luminpack::string_profile::" + Profiles[profile];
+        return "luminpack::string_profile::" + BinaryProfiles.Names[profile];
     }
 
     /// <summary>Formats one exact wire descriptor.</summary>

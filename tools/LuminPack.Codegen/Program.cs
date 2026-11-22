@@ -6,16 +6,22 @@ try
 {
     if (args is ["export", var assemblyPath, var manifestPath])
         ContractExport.Write(assemblyPath, manifestPath);
+    else if (args is ["generate", "--language", var language, ..] &&
+        (language == "cpp" ? CppGenerateCommand.TryRun(args.AsSpan(3)) : PortableGenerateCommand.TryRun(language, args.AsSpan(3))))
+        return 0;
     else if (args is ["generate", ..] && CppGenerateCommand.TryRun(args.AsSpan(1)))
         return 0;
-    else if (args is ["project-portable" or "generate-portable", ..] && PortableGenerateCommand.TryRun(args))
+    else if (args is ["project" or "project-portable", ..] && PortableGenerateCommand.TryRun(null, args.AsSpan(1)))
+        return 0;
+    else if (args is ["generate-portable", var legacyLanguage, ..] && PortableGenerateCommand.TryRun(legacyLanguage, args.AsSpan(2)))
         return 0;
     else
     {
-        Console.Error.WriteLine("Usage: LuminPack.Codegen.Cpp export <assembly.dll> <manifest.json>");
-        Console.Error.WriteLine("       LuminPack.Codegen.Cpp generate [--binary-profile <profile>] [--rtti] <manifest.json> <root-type> <output.h>");
-        Console.Error.WriteLine("       LuminPack.Codegen.Cpp project-portable [--binary-profile <profile>] [--native-integer-bytes <4|8>] [--native-scalar-alignment <4|8>] <manifest.json> <root-type> <output.json>");
-        Console.Error.WriteLine("       LuminPack.Codegen.Cpp generate-portable <java|go|typescript> [--binary-profile <profile>] [--native-integer-bytes <4|8>] [--native-scalar-alignment <4|8>] [--package <name>] [--runtime-import <path>] <manifest.json> <root-type> <output>");
+        Console.Error.WriteLine("Usage: LuminPack.Codegen export <assembly.dll> <manifest.json>");
+        Console.Error.WriteLine("       LuminPack.Codegen generate --language <cpp|java|go|typescript> [options] <manifest.json> <root-type> <output>");
+        Console.Error.WriteLine("       LuminPack.Codegen project [options] <manifest.json> <root-type> <output.json>");
+        Console.Error.WriteLine("Options: --binary-profile <profile>, --rtti (C++), --package <name> (Java/Go), --runtime-import <path> (TypeScript),");
+        Console.Error.WriteLine("         --native-integer-bytes <4|8> and --native-scalar-alignment <4|8> (portable projections and Java/Go/TypeScript).");
         return 2;
     }
     return 0;
@@ -57,7 +63,7 @@ internal static class ContractExport
             if (entry.Key == CompleteBinaryInputMetadataKey)
             {
                 if (completeBinaryInput.HasValue || entry.Value is not ("true" or "false"))
-                    throw new InvalidOperationException("Invalid LuminPack C++ complete binary input policy.");
+                    throw new InvalidOperationException("Invalid LuminPack complete binary input policy.");
                 completeBinaryInput = entry.Value == "true";
                 continue;
             }
@@ -65,13 +71,13 @@ internal static class ContractExport
             JsonElement data = document.RootElement;
             if (data.ValueKind != JsonValueKind.Object || !data.TryGetProperty("id", out JsonElement identity) ||
                 identity.ValueKind != JsonValueKind.String || string.IsNullOrEmpty(identity.GetString()))
-                throw new InvalidOperationException("A LuminPack C++ contract row has no type identity.");
+                throw new InvalidOperationException("A LuminPack contract row has no type identity.");
             if (!rows.TryAdd(identity.GetString()!, data.Clone()))
-                throw new InvalidOperationException("Duplicate LuminPack C++ contract for " + identity.GetString() + ".");
+                throw new InvalidOperationException("Duplicate LuminPack contract for " + identity.GetString() + ".");
         }
 
         if (rows.Count == 0)
-            throw new InvalidOperationException("No LuminPack C++ contracts in this assembly. Enable LuminPackExportCppContract in its build.");
+            throw new InvalidOperationException("No LuminPack contracts in this assembly. Enable LuminPackExportContract in its build.");
 
         OutputFile.Replace(assemblyPath, manifestPath, stream =>
         {
@@ -116,7 +122,7 @@ internal static class ContractExport
             return null;
         string? row = blob.ReadSerializedString();
         if (row == null || blob.ReadUInt16() != 0 || blob.RemainingBytes != 0)
-            throw new BadImageFormatException("Invalid LuminPack C++ contract attribute.");
+            throw new BadImageFormatException("Invalid LuminPack contract attribute.");
         return (key, row);
     }
 }

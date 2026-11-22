@@ -13,9 +13,10 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace LuminPack.SourceGenerator.Next.Rendering;
 
-/// <summary>Projects normalized Next contracts into build-only assembly metadata for the C++ tool.</summary>
-internal static class CppContractExport
+/// <summary>Projects normalized Next contracts into build-only assembly metadata for native bindings.</summary>
+internal static class PortableContractExport
 {
+    // Keep the existing keys so previously built tools can read newly exported assemblies.
     internal const string MetadataKey = "LuminPack.Cpp.Contract.v1";
     internal const string CompleteBinaryInputMetadataKey = "LuminPack.Cpp.CompleteBinaryInput.v1";
 

@@ -78,14 +78,16 @@ internal static partial class NextPipeline
             .WithComparer(FactArrayComparer<ModeledPayload>.Instance).Combine(external)
             .Select(static (input, _) => input.Right.IsEmpty ? input.Left : input.Left.AddRange(input.Right))
             .WithComparer(FactArrayComparer<ModeledPayload>.Instance);
-        var cppExport = context.AnalyzerConfigOptionsProvider.Select(static (options, _) =>
-            options.GlobalOptions.TryGetValue("build_property.LuminPackExportCppContract", out string? value) &&
-            string.Equals(value, "true", StringComparison.OrdinalIgnoreCase));
-        var cppCompilation = context.CompilationProvider.Combine(cppExport)
+        var contractExport = context.AnalyzerConfigOptionsProvider.Select(static (options, _) =>
+            (options.GlobalOptions.TryGetValue("build_property.LuminPackExportContract", out string? enabled) &&
+                string.Equals(enabled, "true", StringComparison.OrdinalIgnoreCase)) ||
+            (options.GlobalOptions.TryGetValue("build_property.LuminPackExportCppContract", out string? legacy) &&
+                string.Equals(legacy, "true", StringComparison.OrdinalIgnoreCase)));
+        var contractCompilation = context.CompilationProvider.Combine(contractExport)
             .Select(static (input, _) => input.Right ? input.Left : null);
-        var cppInputs = cppCompilation.Combine(calls)
+        var contractInputs = contractCompilation.Combine(calls)
             .Select(static (input, _) => input.Left == null ? default : input);
-        context.RegisterSourceOutput(declared.Combine(cppInputs), static (production, input) =>
+        context.RegisterSourceOutput(declared.Combine(contractInputs), static (production, input) =>
         {
             if (input.Right.Left is not { } compilation)
                 return;
@@ -106,7 +108,7 @@ internal static partial class NextPipeline
             if (roots.Count != 0 || custom.Count != 0 || callRoots.Count != 0)
             {
                 GeneratorOptions options = GeneratorOptionsFactory.From(compilation);
-                string source = CppContractExport.Render(roots, callRoots.Values, options,
+                string source = PortableContractExport.Render(roots, callRoots.Values, options,
                     model => TypeModelFactory.TryCreateCppNativeStorage(model, compilation, options),
                     TypeModelFactory.CreateCppRawCompoundStorage(compilation, options), custom, TypeModelFactory.AssemblyPolicy(compilation),
                     production.CancellationToken);

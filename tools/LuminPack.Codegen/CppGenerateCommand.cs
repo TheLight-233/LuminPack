@@ -17,7 +17,7 @@ internal static class CppGenerateCommand
                     useRtti = true;
                     break;
                 case "--binary-profile" when binaryProfile == null && index < arguments.Length:
-                    binaryProfile = CppEmitter.ParseBinaryProfile(arguments[index++]);
+                    binaryProfile = BinaryProfiles.Parse(arguments[index++]);
                     break;
                 default:
                     return false;
