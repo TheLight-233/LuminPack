@@ -337,6 +337,9 @@ internal sealed partial class CppEmitter
         }
         if (enums.TryGetValue(type, out JsonElement enumeration))
             return BindEnum(enumeration);
+        int rectangularRank = RectangularRank(type, out string element);
+        if (rectangularRank > 1)
+            return BindRectangular(rectangularRank, Sequence(BindType(element, profile, label, false)));
         if (type.EndsWith("[]", StringComparison.Ordinal))
             return Sequence(BindType(type[..^2], profile, label, false));
         if (contracts.TryGetValue(type, out JsonElement contract))

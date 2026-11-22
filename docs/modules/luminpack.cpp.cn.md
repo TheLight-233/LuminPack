@@ -72,6 +72,8 @@ Version rev4 和 rev5 用 `version_member` 与 `version_codec` 绑定生成的�
 
 多模型 Tagged 数组支持原始字段。用 `sizeof` 和 `offsetof` 描述本地步长和字段偏移。参与原始复制的字段必须接受其对象表示的任意位模式，例如定宽整数。写出本地布局前应初始化会进入 wire 的填充字节。
 
+CLR 矩形数组映射为 `std::optional<rectangular_array<T, Rank>>`，其中 `lengths` 和 `lower_bounds` 是定长数组，`values` 是行主序 vector。Binary 使用零下界和导出的集合块格式。JSON 通过 C# 的 `Lengths`、`LowerBounds`、`Values` 对象保留非零下界。两种读取器都校验形状与元素数量是否一致。
+
 生成器沿用 Next 的存储方案绑定递归 Packed 字段以及多模型 Tagged 数组和 List。多模型 Tagged 值独立出现或作为字典值时，使用紧凑字段顺序。非空的多模型 Tagged 集合携带导出模型的从 1 开始的标签。C++ 字段偏移与步长匹配模型时直接复制，否则转换到导出的第一个模型。无需标签的原始结构体可在 CLR 与目标 C++ 的字段偏移和步长一致时走 Native 路径。生成的填充字段让 DTO 复制保留这些原始字节。
 
 跨模型 Tagged 原始块根据导出的偏移构建与 C# 一致的重排和分组转换计划。SIMD 只处理完整窗口，尾部由标量路径处理。异布局读取保留目标填充，同布局复制保留原始字节，写入规范布局时将填充清零。
@@ -143,7 +145,7 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 从启用了注册的程序集导出的 RTTI Union 提供 `root_binary::registry`。应用 case 继承自 `registry::base_type`，通过 `registry::register_case<Case, Binding>(tag)` 注册。绑定提供读取 payload 的 `read_binary` 和 `read_json`，以及写入带标签 case 的 `write_binary` 和 `write_json`。JSON 方法支持 UTF-8 和 UTF-16 writer。Binary codec 在调用绑定前写入转义哈希，Binary 绑定可用 `write_registered_union_tag<registry::wide_tags>(output, tag)` 写入标签。JSON 绑定写入数字 `$type`，并用 `$value` 包装应用 payload。C# 与 C++ 使用相同的标签和表示。生成的 case 仍优先按哈希分派。
 
-生成器支持位置类和 Version 类，包括引用跟踪对象图、封闭的类或接口 Union、枚举、定宽标量、文本、一维数组、List、Dictionary，以及具有已生成字段契约的 Packed 和 Tagged 聚合和存储经过验证的顺序布局原始结构体。可空原生类型和枚举也可以用作 Version 字段、数组或 List 元素和字典值。遇到尚未实现的 wire 表示时，生成器会报告对应成员或类型。
+生成器支持位置类和 Version 类，包括引用跟踪对象图、封闭的类或接口 Union、枚举、定宽标量、文本、一维数组、矩形数组、List、Dictionary，以及具有已生成字段契约的 Packed 和 Tagged 聚合和存储经过验证的顺序布局原始结构体。可空原生类型和枚举也可以用作 Version 字段、数组或 List 元素和字典值。遇到尚未实现的 wire 表示时，生成器会报告对应成员或类型。
 
 ## 验证基准模型
 

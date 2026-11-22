@@ -51,7 +51,13 @@ internal sealed partial class CppEmitter
         if (nullableWidth != 0)
             throw Missing(label, "the fixed-width nullable formatter");
 
-        if (definition == "System.Collections.Generic.List" || definition == "$array" && formatter.GetProperty("rank").GetInt32() == 1)
+        if (definition == "$array")
+        {
+            int rank = formatter.GetProperty("rank").GetInt32();
+            Binding sequence = BindElementSequence(arguments[0], profile, label);
+            return rank > 1 ? BindRectangular(rank, sequence) : sequence;
+        }
+        if (definition == "System.Collections.Generic.List")
             return BindElementSequence(arguments[0], profile, label);
         if (definition == "System.Collections.Generic.Dictionary")
         {
