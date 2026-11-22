@@ -185,7 +185,8 @@ internal static class CppContractExport
         Object(("type", formatter.Type), ("definition", formatter.Definition), ("arguments", formatter.Arguments.Select(Formatter)),
             ("underlying", formatter.Underlying), ("rank", formatter.Rank), ("raw", formatter.Raw),
             ("rawCollection", formatter.RawCollection), ("layout", Storage(formatter.Layout)),
-            ("nullableLayout", Storage(formatter.NullableStorage)), ("nullableEncoding", formatter.NullableEncoding));
+            ("nullableLayout", Storage(formatter.NullableStorage)), ("nullableEncoding", formatter.NullableEncoding),
+            ("nativeNullableElement", formatter.NativeNullableElement));
 
     /// <summary>Projects one native layout and its modeled Tagged wire offsets.</summary>
     /// <param name="storage">The normalized storage description or null.</param>

@@ -54,6 +54,8 @@ int main()
 
 Use `scalar_codec`, `boolean_codec`, and `enum_codec` for fixed-width values. `list_codec` is used for a one-dimensional array or List with the same element representation. Its numeric and enum paths copy one validated contiguous block. `dictionary_codec` uses a count and key/value pairs. Its unordered map preserves key/value equivalence. Pass an ordered sequence of unique pairs to `write_entries` when the output must reproduce another writer's enumeration order.
 
+Use `nullable_codec` for a marker-prefixed `Nullable<T>` represented by `std::optional<T>`. For a fixed-width Version member, pass its full descriptor width as the second argument. `nullable_storage_codec` and `nullable_list_codec` bind the CLR stride and offsets for native dictionary values and contiguous nullable collections. Reads check both the storage range and Boolean flag bytes before converting the block to C++ values. Multi-model Tagged blocks accept every exported tag and write the canonical model. Native blocks require matching CLR layouts at both endpoints.
+
 Bind a string codec to one of the six `string_profile` values. Length and VarInt preserve null separately from empty. Token terminates with a zero code unit and encodes null as empty. Use a length profile for text containing embedded zero units.
 
 Bind a DTO's fields in wire order with `record_member` and `record_codec`. A Next-generated binary Union uses `union_codec` with the emitted case hash and the corresponding payload codec. Share a custom wire representation by binding application-provided read and write functions through `custom_codec`. Use the source wire contract for member order, scalar types, string profile and Tagged model order.
@@ -101,7 +103,7 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 The export is a compiler projection of the resolved member order, binary profiles, layouts, Version descriptors, and Union hashes. The tool reads assembly metadata and produces a header that includes `<luminpack/luminpack.h>`. A generated root has its own namespace containing `root_value`, `root_binary`, `root_json`, and the declared JSON encoding and read limits. For `Example.Message`, the namespace is `luminpack_generated::root_Example_x002eMessage`.
 
-The emitter supports acyclic positional and Version class contracts, closed class or interface Unions, enums, fixed-width primitives, text, one-dimensional arrays, List, Dictionary, and sequential raw structs whose field order and same-width storage are provable. The raw path is selected only when the generated C++ offsets and stride also match. A field-wise codec supplies the local fallback. Generation reports the member or type when its model needs an unimplemented representation.
+The emitter supports acyclic positional and Version class contracts, closed class or interface Unions, enums, fixed-width primitives, text, one-dimensional arrays, List, Dictionary, and sequential raw structs whose field order and same-width storage are provable. Nullable primitives and enums also work as Version fields, array or List elements, and dictionary values. The raw struct path is selected only when the generated C++ offsets and stride also match. A field-wise codec supplies the local fallback. Generation reports the member or type when its model needs an unimplemented representation.
 
 ## Verify the benchmark models
 

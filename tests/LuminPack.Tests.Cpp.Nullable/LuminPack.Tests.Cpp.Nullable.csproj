@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>13</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/LuminPack.Core/LuminPack.Core.csproj" />
+    <ProjectReference Include="../../src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(LuminPackCppNullableLayout)' == 'Packed'">
+    <DefineConstants>$(DefineConstants);LUMINPACK_CPP_TEST_PACKED</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(LuminPackCppNullableLayout)' == 'Native'">
+    <DefineConstants>$(DefineConstants);LUMINPACK_CPP_TEST_NATIVE</DefineConstants>
+  </PropertyGroup>
+</Project>

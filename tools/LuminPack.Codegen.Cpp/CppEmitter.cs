@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 
 /// <summary>Emits closed C++ DTO and codec declarations from a Next manifest.</summary>
-internal sealed class CppEmitter
+internal sealed partial class CppEmitter
 {
     private readonly Dictionary<string, JsonElement> contracts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, JsonElement> enums = new(StringComparer.Ordinal);
@@ -111,24 +111,25 @@ internal sealed class CppEmitter
         {
             string property = Text(field, "name");
             string label = owner + "." + property;
-            if (Flag(field, "compressed") || Flag(field, "fixedNullable"))
-                throw Missing(label, "compressed or fixed-width nullable member framing");
+            if (Flag(field, "compressed"))
+                throw Missing(label, "compressed member framing");
 
             JsonElement memberProfile = field.GetProperty("profile");
             int active = Flag(memberProfile, "declared") ? memberProfile.GetProperty("binary").GetInt32() : profile;
-            Binding member = BindShape(field.GetProperty("shape"), active, label);
+            ulong descriptor = 0;
+            if (version && !ulong.TryParse(Text(field, "descriptor"), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out descriptor))
+                throw Missing(label, "a missing Version descriptor");
+            int nullableWidth = Flag(field, "fixedNullable") ? (int)(descriptor >> 56) : 0;
+            Binding member = BindShape(field.GetProperty("shape"), active, label, nullableWidth);
             string fieldName = "field_" + Identifier(property);
             string pointer = "&" + name + "::" + fieldName;
             declarations.Add("    " + member.Type + " " + fieldName + "{};");
 
             if (version)
             {
-                string descriptor = Text(field, "descriptor");
-                if (!ulong.TryParse(descriptor, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out ulong value))
-                    throw Missing(label, "a missing Version descriptor");
                 var aliases = field.GetProperty("nameKeys").EnumerateArray().Skip(1)
                     .Select(static item => item.GetUInt32().ToString(CultureInfo.InvariantCulture) + "u");
-                binaryMembers.Add(Apply("luminpack::version_member", new[] { pointer, member.Binary, Hex(value) }.Concat(aliases)));
+                binaryMembers.Add(Apply("luminpack::version_member", new[] { pointer, member.Binary, Hex(descriptor) }.Concat(aliases)));
             }
             else
                 binaryMembers.Add(Apply("luminpack::record_member", new[] { pointer, member.Binary }));
@@ -247,15 +248,16 @@ internal sealed class CppEmitter
     /// <param name="shape">The normalized member shape.</param>
     /// <param name="profile">The active binary profile.</param>
     /// <param name="label">The member name used in errors.</param>
+    /// <param name="nullableWidth">The explicitly padded Version width, or zero for ordinary framing.</param>
     /// <returns>The C++ bindings for the member.</returns>
-    private Binding BindShape(JsonElement shape, int profile, string label)
+    private Binding BindShape(JsonElement shape, int profile, string label, int nullableWidth = 0)
     {
         if (shape.TryGetProperty("formatter", out JsonElement formatter) && formatter.ValueKind == JsonValueKind.Object)
         {
-            if (formatter.GetProperty("nullableEncoding").GetInt32() != 0 ||
-                formatter.GetProperty("layout").ValueKind != JsonValueKind.Null)
-                throw Missing(label, "a specialized layout block");
+            return BindFormatter(formatter, profile, label, nullableWidth: nullableWidth);
         }
+        if (nullableWidth != 0)
+            throw Missing(label, "the fixed-width nullable formatter");
         if (!shape.TryGetProperty("type", out JsonElement type) || type.ValueKind != JsonValueKind.String)
             throw Missing(label, "the projected member type");
         return BindType(type.GetString()!, profile, label, false);
@@ -318,9 +320,7 @@ internal sealed class CppEmitter
                     throw Missing(label, "an incomplete Dictionary type");
                 var key = BindType(arguments[..comma], profile, label, true);
                 var value = BindType(arguments[(comma + 1)..], profile, label, false);
-                string binary = Apply("luminpack::dictionary_codec", new[] { key.Binary, value.Binary });
-                string json = Apply("luminpack::json_dictionary_codec", new[] { key.Json, value.Json });
-                return new Binding(binary + "::value_type", binary, json);
+                return Dictionary(key, value);
             }
         }
         throw Missing(label, "the type " + rawType);
@@ -397,6 +397,17 @@ internal sealed class CppEmitter
     {
         string binary = "luminpack::list_codec<" + item.Binary + ">";
         return new Binding(binary + "::value_type", binary, "luminpack::json_list_codec<" + item.Json + ">");
+    }
+
+    /// <summary>Binds matching binary and JSON key/value codecs.</summary>
+    /// <param name="key">The non-null key contract.</param>
+    /// <param name="value">The mapped value contract.</param>
+    /// <returns>The dictionary's type and codecs.</returns>
+    private static Binding Dictionary(Binding key, Binding value)
+    {
+        string binary = Apply("luminpack::dictionary_codec", new[] { key.Binary, value.Binary });
+        string json = Apply("luminpack::json_dictionary_codec", new[] { key.Json, value.Json });
+        return new Binding(binary + "::value_type", binary, json);
     }
 
     /// <summary>Spells a supported scalar with an explicit C++ wire width.</summary>

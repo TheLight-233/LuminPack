@@ -54,6 +54,8 @@ int main()
 
 用 `scalar_codec`、`boolean_codec` 和 `enum_codec` 读写定宽值。`list_codec` 适用于采用相同元素表示的一维数组与 List。数值与枚举列表校验完整范围后一次复制。`dictionary_codec` 写入数量及键值序列。内部的无序映射保留键值语义。需要重现另一端的枚举顺序时，向 `write_entries` 传入按目标顺序排列且键唯一的键值序列。
 
+`nullable_codec` 用 `std::optional<T>` 表示带标记的 `Nullable<T>` 字段。定宽 Version 字段的第二个模板参数是描述符给出的总宽度。`nullable_storage_codec` 和 `nullable_list_codec` 用 CLR 的步长和偏移描述原生字典值与连续可空集合。读取先校验整个范围及布尔标记，再转换为 C++ 值。多模型 Tagged 集合接受导出的每个标签，并以规范模型写出。Native 集合要求两端的 CLR 布局一致。
+
 字符串 codec 可绑定六种 `string_profile`。Length 与 VarInt 区分 null 和空字符串。Token 使用零码元结束，null 与空字符串使用同一表示。含内嵌零码元的文本应使用长度模式。
 
 用 `record_member` 和 `record_codec` 按 wire 顺序绑定 DTO 字段。Next 生成的二进制 Union 用 `union_codec` 绑定已有的 case hash 和各 case 的 payload codec。应用可通过 `custom_codec` 绑定自己实现的读写函数来复用同一份 wire 契约。成员顺序、标量类型、字符串 profile 和 Tagged 模型顺序均沿用源 wire 契约。
@@ -101,7 +103,7 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 导出内容取自 Next 实际解析的成员顺序、二进制 profile、布局、Version 描述符和 Union 哈希。工具读取程序集元数据并生成包含 `<luminpack/luminpack.h>` 的头文件。每个生成根类型有自己的命名空间，提供 `root_value`、`root_binary`、`root_json`，以及声明的 JSON 编码和读取限制。`Example.Message` 的命名空间为 `luminpack_generated::root_Example_x002eMessage`。
 
-生成器支持无环的位置类和 Version 类、封闭的类或接口 Union、枚举、定宽标量、文本、一维数组、List、Dictionary，以及可证明字段顺序与等宽存储的顺序布局结构体。C++ 字段偏移和步长也匹配时才走整块复制，否则使用逐字段读写。遇到尚未实现的 wire 表示时，生成器会报告对应成员或类型。
+生成器支持无环的位置类和 Version 类、封闭的类或接口 Union、枚举、定宽标量、文本、一维数组、List、Dictionary，以及可证明字段顺序与等宽存储的顺序布局结构体。可空原生类型和枚举也可以用作 Version 字段、数组或 List 元素和字典值。C++ 结构体字段偏移和步长也匹配时才走整块复制，否则使用逐字段读写。遇到尚未实现的 wire 表示时，生成器会报告对应成员或类型。
 
 ## 验证基准模型
 
