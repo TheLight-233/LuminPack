@@ -62,7 +62,7 @@ Use `nullable_codec` for a marker-prefixed `Nullable<T>` represented by `std::op
 
 For a proven headerless CLR pair or tuple layout with padding, codegen emits an aggregate with explicit padding fields and checks its C++ offsets and stride at compile time. Binary copies preserve the complete representation, including the padding. JSON uses the original pair or tuple components and initializes the extra padding to zero.
 
-Generated `Memory<T>`, `ReadOnlyMemory<T>`, and supported `ReadOnlySequence<T>` fields own their decoded elements in `std::vector`. A null marker decodes to an empty vector. `ArraySegment<T>` and `ImmutableArray<T>` use `std::optional<std::vector<T>>` so a default value retains the CLR null marker. The codecs keep the C# array grammar, flatten the serialized segment values, and use the existing contiguous block codecs where the exported layout requires them.
+Generated `Memory<T>`, `ReadOnlyMemory<T>`, and supported `ReadOnlySequence<T>` fields own their decoded elements in `std::vector`. A null marker decodes to an empty vector. `ArraySegment<T>` and `ImmutableArray<T>` use `std::optional<std::vector<T>>` so a default value retains the CLR null marker. `ReadOnlySequence<T>` flattens the segments under one length and uses the CLR's standalone representation for modeled structs, pairs, tuples, and nullable values. Its raw element slots require a proven untagged layout. Contiguous memory and array views use the CLR block codecs where the exported layout requires them.
 
 Bind a string codec to one of the six `string_profile` values. Length and VarInt preserve null separately from empty. Token terminates with a zero code unit and encodes null as empty. Use a length profile for text containing embedded zero units.
 

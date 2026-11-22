@@ -62,7 +62,7 @@ int main()
 
 对已证明且带填充的无标签 CLR pair 或 tuple 布局，生成器会发出带显式填充字段的结构体，并在编译期检查 C++ 的偏移和步长。二进制复制保留包括填充在内的完整表示。JSON 沿用 pair 或 tuple 的组件，读取时将额外填充置零。
 
-生成的 `Memory<T>`、`ReadOnlyMemory<T>` 和受支持的 `ReadOnlySequence<T>` 字段用 `std::vector` 持有元素。null 标记读为空 vector。`ArraySegment<T>` 和 `ImmutableArray<T>` 使用 `std::optional<std::vector<T>>`，保留 CLR 默认值的 null 标记。codec 沿用 C# 的数组格式读取各段元素，按导出的布局选择对应的连续块 codec。
+生成的 `Memory<T>`、`ReadOnlyMemory<T>` 和受支持的 `ReadOnlySequence<T>` 字段用 `std::vector` 持有元素。null 标记读为空 vector。`ArraySegment<T>` 和 `ImmutableArray<T>` 使用 `std::optional<std::vector<T>>`，保留 CLR 默认值的 null 标记。`ReadOnlySequence<T>` 将各段合并为同一个长度记录，对已建模的结构体、pair、tuple 和可空值沿用 CLR 的单元素格式。原始元素槽要求可证明的无标签布局。连续内存和数组视图按导出的布局选择 CLR 块 codec。
 
 字符串 codec 可绑定六种 `string_profile`。Length 与 VarInt 区分 null 和空字符串。Token 使用零码元结束，null 与空字符串使用同一表示。含内嵌零码元的文本应使用长度模式。
 
