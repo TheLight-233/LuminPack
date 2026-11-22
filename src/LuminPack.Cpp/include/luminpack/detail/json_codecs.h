@@ -332,6 +332,56 @@ struct json_custom_codec
     static void write(auto& output, const T& value) { Write(output, value); }
 };
 
+namespace detail
+{
+template<class Value, class ReadCase>
+Value read_json_union_envelope(auto& input, ReadCase read_case)
+{
+    if (input.consume_null())
+        return {};
+    const auto container = input.begin('{');
+    std::optional<std::uint32_t> hash;
+    std::optional<std::remove_reference_t<decltype(input)>> deferred;
+    Value result;
+    if (input.consume('}'))
+        throw wire_error("Incomplete LuminPack JSON Union.");
+    do
+    {
+        const auto name = input.read_name();
+        input.expect(':');
+        if (name.matches(u"$type"))
+        {
+            if (hash)
+                throw wire_error("Duplicate LuminPack JSON Union type.");
+            hash = input.template read_number<std::uint32_t>();
+        }
+        else if (name.matches(u"$value"))
+        {
+            if (deferred || result)
+                throw wire_error("Duplicate LuminPack JSON Union payload.");
+            if (hash)
+                result = read_case(input, *hash);
+            else
+                deferred.emplace(input.take_value());
+        }
+        else
+            input.skip_value();
+    }
+    while (input.consume(','));
+    input.expect('}');
+    if (!hash)
+        throw wire_error("LuminPack JSON Union has no case type.");
+    if (deferred)
+    {
+        result = read_case(*deferred, *hash);
+        deferred->require_end();
+    }
+    if (!result)
+        throw wire_error("LuminPack JSON Union has no payload.");
+    return result;
+}
+}
+
 /// Next-generated JSON case hashes select their concrete object codecs.
 template<class... Cases>
 struct json_union_codec
@@ -341,48 +391,10 @@ struct json_union_codec
 
     static value_type read(auto& input)
     {
-        if (input.consume_null())
-            return std::nullopt;
-        const auto container = input.begin('{');
-        std::optional<std::uint32_t> hash;
-        std::optional<std::remove_reference_t<decltype(input)>> deferred;
-        value_type result;
-        if (input.consume('}'))
-            throw wire_error("Incomplete LuminPack JSON Union.");
-        do
+        return detail::read_json_union_envelope<value_type>(input, [](auto& payload, std::uint32_t hash)
         {
-            const auto name = input.read_name();
-            input.expect(':');
-            if (name.matches(u"$type"))
-            {
-                if (hash)
-                    throw wire_error("Duplicate LuminPack JSON Union type.");
-                hash = input.template read_number<std::uint32_t>();
-            }
-            else if (name.matches(u"$value"))
-            {
-                if (deferred || result)
-                    throw wire_error("Duplicate LuminPack JSON Union payload.");
-                if (hash)
-                    result = read_case(input, *hash, indices{});
-                else
-                    deferred.emplace(input.take_value());
-            }
-            else
-                input.skip_value();
-        }
-        while (input.consume(','));
-        input.expect('}');
-        if (!hash)
-            throw wire_error("LuminPack JSON Union has no case type.");
-        if (deferred)
-        {
-            result = read_case(*deferred, *hash, indices{});
-            deferred->require_end();
-        }
-        if (!result)
-            throw wire_error("LuminPack JSON Union has no payload.");
-        return result;
+            return read_case(payload, hash, indices{});
+        });
     }
 
     static void write(auto& output, const value_type& value)

@@ -103,6 +103,8 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 导出内容取自 Next 实际解析的成员顺序、二进制 profile、布局、Version 描述符和 Union 哈希。工具读取程序集元数据并生成包含 `<luminpack/luminpack.h>` 的头文件。每个生成根类型有自己的命名空间，提供 `root_value`、`root_binary`、`root_json`，以及声明的 JSON 编码和读取限制。`Example.Message` 的命名空间为 `luminpack_generated::root_Example_x002eMessage`。
 
+在 `generate` 后加 `--rtti`，可为 Next 的封闭精确分派层生成 C++ 多态 DTO，支持最多 32 个位置类 case。每个 Union 用 `std::unique_ptr` 持有具体对象。写入将 `typeid(value)` 与声明的具体类型逐个比较，读取按 C# 的规范 case hash 执行 `switch`。该选项同时适用于 Binary 和 JSON。同一个根的 RTTI 和 variant 头文件使用相同命名空间，每个程序按需选择一种表示。
+
 生成器支持无环的位置类和 Version 类、封闭的类或接口 Union、枚举、定宽标量、文本、一维数组、List、Dictionary，以及可证明字段顺序与等宽存储的顺序布局结构体。可空原生类型和枚举也可以用作 Version 字段、数组或 List 元素和字典值。C++ 结构体字段偏移和步长也匹配时才走整块复制，否则使用逐字段读写。遇到尚未实现的 wire 表示时，生成器会报告对应成员或类型。
 
 ## 验证基准模型
@@ -124,6 +126,8 @@ cmake --build .tmp/cpp --config Release
 ctest --test-dir .tmp/cpp -C Release -R luminpack_cpp_models --output-on-failure
 dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release --no-build -- read .tmp/cpp-models/out
 ```
+
+验证 RTTI 模型时，用 `generate --rtti` 生成两个头文件，并把 CMake 的 `LUMINPACK_CPP_RTTI_FIXTURES` 指向这份测试目录。通过 CTest 运行 `luminpack_cpp_rtti` 后，用同一个 .NET 验证器读取它生成的 `out` 目录。
 
 ## 对比原生性能
 

@@ -103,6 +103,8 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 The export is a compiler projection of the resolved member order, binary profiles, layouts, Version descriptors, and Union hashes. The tool reads assembly metadata and produces a header that includes `<luminpack/luminpack.h>`. A generated root has its own namespace containing `root_value`, `root_binary`, `root_json`, and the declared JSON encoding and read limits. For `Example.Message`, the namespace is `luminpack_generated::root_Example_x002eMessage`.
 
+Pass `--rtti` immediately after `generate` to use C++ polymorphic DTOs for Next's closed exact-dispatch Union tier. This mode accepts up to 32 positional class cases. Each Union slot owns its case with `std::unique_ptr`. Writers compare `typeid(value)` with the declared concrete types, and readers switch on the canonical C# case hash. The option applies to Binary and JSON. The generated RTTI and variant headers for the same root use the same namespace, so choose one representation for each program.
+
 The emitter supports acyclic positional and Version class contracts, closed class or interface Unions, enums, fixed-width primitives, text, one-dimensional arrays, List, Dictionary, and sequential raw structs whose field order and same-width storage are provable. Nullable primitives and enums also work as Version fields, array or List elements, and dictionary values. The raw struct path is selected only when the generated C++ offsets and stride also match. A field-wise codec supplies the local fallback. Generation reports the member or type when its model needs an unimplemented representation.
 
 ## Verify the benchmark models
@@ -124,6 +126,8 @@ cmake --build .tmp/cpp --config Release
 ctest --test-dir .tmp/cpp -C Release -R luminpack_cpp_models --output-on-failure
 dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release --no-build -- read .tmp/cpp-models/out
 ```
+
+To exercise the RTTI model gate, generate both headers with `generate --rtti` and configure CMake with `LUMINPACK_CPP_RTTI_FIXTURES` pointing to that fixture directory. Run `luminpack_cpp_rtti` through CTest, then use the same managed verifier on its `out` directory.
 
 ## Compare native performance
 

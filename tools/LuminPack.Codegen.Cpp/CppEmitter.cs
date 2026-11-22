@@ -11,17 +11,24 @@ internal sealed partial class CppEmitter
     private readonly Dictionary<(string Type, int Profile), Binding> generated = new();
     private readonly HashSet<(string Type, int Profile)> building = new();
     private readonly StringBuilder code = new("#pragma once\n\n#include <luminpack/luminpack.h>\n\n");
+    private readonly ILookup<string, string>? rttiBases;
     private static readonly string[] Profiles =
         ["utf8_length", "utf8_token", "utf16_length", "utf16_token", "utf8_varint", "utf16_varint"];
 
     /// <summary>Indexes declared types from the current manifest version.</summary>
     /// <param name="manifest">The validated manifest root.</param>
-    private CppEmitter(JsonElement manifest)
+    /// <param name="useRtti">Whether to emit owning class Unions with C#-style dispatch.</param>
+    private CppEmitter(JsonElement manifest, bool useRtti)
     {
         if (manifest.GetProperty("version").GetInt32() != 1)
             throw new InvalidOperationException("Unsupported LuminPack C++ manifest version.");
         foreach (JsonElement contract in manifest.GetProperty("contracts").EnumerateArray())
             contracts.Add(Normalize(Text(contract, "type")), contract);
+        if (useRtti)
+        {
+            rttiBases = IndexRttiBases(contracts.Values);
+            code.Append("#include <memory>\n#include <typeinfo>\n\n");
+        }
         if (manifest.TryGetProperty("valueLayouts", out JsonElement valueLayouts))
         {
             foreach (JsonElement item in valueLayouts.EnumerateArray())
@@ -38,10 +45,11 @@ internal sealed partial class CppEmitter
     /// <param name="manifestPath">The compiler-projected manifest.</param>
     /// <param name="root">The explicit root's CLR metadata name.</param>
     /// <param name="headerPath">The generated C++ header destination.</param>
-    internal static void Generate(string manifestPath, string root, string headerPath)
+    /// <param name="useRtti">Whether to emit owning class Unions with C#-style dispatch.</param>
+    internal static void Generate(string manifestPath, string root, string headerPath, bool useRtti = false)
     {
         using JsonDocument manifest = JsonDocument.Parse(File.ReadAllBytes(manifestPath));
-        var emitter = new CppEmitter(manifest.RootElement);
+        var emitter = new CppEmitter(manifest.RootElement, useRtti);
         JsonElement declaration = emitter.contracts.Values.FirstOrDefault(item => Text(item, "id") == root);
         if (declaration.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("No LuminPack C++ contract for root " + root + ".");
@@ -82,7 +90,7 @@ internal sealed partial class CppEmitter
         Binding binding = Text(contract, "kind") switch
         {
             "Record" => EmitRecord(contract, name, binary),
-            "Union" => EmitUnion(contract, name, binary),
+            "Union" => rttiBases == null ? EmitUnion(contract, name, binary) : EmitRttiUnion(contract, name, binary),
             "Struct" => EmitStruct(contract, name, binary),
             _ => throw Missing(type, "this value-type storage model")
         };
@@ -140,7 +148,8 @@ internal sealed partial class CppEmitter
             jsonMembers.Add(Apply("luminpack::json_record_member", new[] { Literal(property), pointer, member.Json }.Concat(names)));
         }
 
-        code.Append("struct ").Append(name).Append("\n{\n");
+        string inheritance = RttiInheritance(Normalize(Text(contract, "type")));
+        code.Append("struct ").Append(name).Append(inheritance).Append("\n{\n");
         foreach (string declaration in declarations)
             code.Append(declaration).Append('\n');
         code.Append("};\n");

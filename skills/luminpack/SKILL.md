@@ -11,6 +11,8 @@ This skill is about using the library. It does not describe how to maintain the 
 
 For C++ binary interoperability, include the public runtime header and link the CMake target. Use the Next C++ contract export and standalone tool for supported DTO graphs, or supply a closed codec matching the .NET member order and binary profiles. Nullable primitives and enums map to `std::optional`. Bind the exact Version width or CLR storage model when the wire uses padding or a contiguous block. Use the binary document entry points to share Version schema registrations across nested codecs, or pass one version_state through an explicitly framed operation. For JSON, select UTF-8 or UTF-16 at the document entry and bind properties using their C# JSON names. See the [C++ runtime](../../src/LuminPack.Cpp/README.md) for the supported wire operations.
 
+Use `generate --rtti` when the C++ DTO needs Next's closed exact-type Union dispatch. The owning Union slot is a `std::unique_ptr`. Its writer uses the concrete RTTI type, and its reader switches on the C# wire hash.
+
 Generated models do not require a runtime plan or formatter witness supplied by the caller. Operation plans are internal source-generator data; they do not add a runtime API or dispatch layer.
 
 JSON property-name lookup is generated automatically: sparse length groups use exact comparisons, and dense groups use a shared seed-zero hash followed by exact comparison. Generated hash calls use `XxHash3.Hash64(ref byte, uint)` over a validated range, without pointers or pinning. Do not persist these internal hashes; rebuild generated consumers with the matching Core after an algorithm change. See [JSON name lookup](../../docs/json-name-lookup.md).
