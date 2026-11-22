@@ -2,6 +2,9 @@
   <ItemGroup Condition="'$(LuminPackReportGeneratorOutput)' != ''">
     <CompilerVisibleProperty Include="LuminPackReportGeneratorOutput" />
   </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackExportCppContract)' != ''">
+    <CompilerVisibleProperty Include="LuminPackExportCppContract" />
+  </ItemGroup>
   <Import Project="$(MSBuildThisFileDirectory)src/LuminPack.Generator/buildTransitive/LuminPack.Generator.props" />
   <PropertyGroup>
     <LuminPackUseSatori Condition="'$(LuminPackUseSatori)' == ''">true</LuminPackUseSatori>

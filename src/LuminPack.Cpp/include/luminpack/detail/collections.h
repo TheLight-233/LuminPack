@@ -89,10 +89,37 @@ struct required_codec<string_codec<Profile>>
     }
 };
 
+/// Transfers a native result after the generated codec proves the complete object representation.
+/// Restrict raw members to representations that admit every bit pattern.
+template<class T>
+struct raw_struct_codec
+{
+    static_assert(std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>);
+    using value_type = T;
+    static constexpr std::size_t minimum_size = sizeof(T);
+
+    static T read(reader& input)
+    {
+        const auto source = input.take(sizeof(T));
+        T value;
+        std::memcpy(&value, source.data(), sizeof(T));
+        return value;
+    }
+
+    static void write(writer& output, const T& value)
+    {
+        const auto target = output.reserve(sizeof(T));
+        std::memmove(target.data(), &value, sizeof(T));
+    }
+};
+
 namespace detail
 {
 template<class Codec>
 inline constexpr bool contiguous_codec = false;
+
+template<class T>
+inline constexpr bool contiguous_codec<raw_struct_codec<T>> = true;
 
 template<scalar T>
 inline constexpr bool contiguous_codec<scalar_codec<T>> = true;

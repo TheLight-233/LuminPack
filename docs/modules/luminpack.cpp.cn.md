@@ -80,3 +80,45 @@ auto written = luminpack::write_json_document<Numbers, luminpack::json_encoding:
 用 `json_record_member` 绑定 C# 属性名和旧名称，以 `json_record_codec` 组合 DTO。非空值或 Union case 的对象体使用 `json_record_body`。`json_union_codec` 使用 Next 发出的 `$type` 哈希和 `$value` 包装。`json_custom_codec` 绑定应用自己的 JSON 读写函数。
 
 Reader 校验 JSON 语法和文档边界。`json_read_options::max_depth` 限制对象和数组的嵌套深度，默认为 1024。字符串键字典写成 JSON 对象，读取时兼容对象和键值对数组。其他键类型的字典使用键值对数组。
+
+## 生成 C++ DTO 和 codec
+
+使用 Next 的 .NET 项目可以将导出开关提供给编译器：
+
+```xml
+<ItemGroup>
+  <CompilerVisibleProperty Include="LuminPackExportCppContract" />
+</ItemGroup>
+```
+
+在仓库根目录运行构建和独立生成工具，将示例程序集路径和根类型名改为你的项目实际值。
+
+```sh
+dotnet build path/to/Contracts.csproj -c Release -p:LuminPackExportCppContract=true
+dotnet run --project tools/LuminPack.Codegen.Cpp -- export path/to/Contracts.dll .tmp/contracts.json
+dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json Example.Message .tmp/message.h
+```
+
+导出内容取自 Next 实际解析的成员顺序、二进制 profile、布局、Version 描述符和 Union 哈希。工具读取程序集元数据并生成包含 `<luminpack/luminpack.h>` 的头文件。每个生成根类型有自己的命名空间，提供 `root_value`、`root_binary`、`root_json`，以及声明的 JSON 编码和读取限制。`Example.Message` 的命名空间为 `luminpack_generated::root_Example_x002eMessage`。
+
+生成器支持无环的位置类和 Version 类、封闭的类或接口 Union、枚举、定宽标量、文本、一维数组、List、Dictionary，以及可证明字段顺序与等宽存储的顺序布局结构体。C++ 字段偏移和步长也匹配时才走整块复制，否则使用逐字段读写。遇到尚未实现的 wire 表示时，生成器会报告对应成员或类型。
+
+## 验证基准模型
+
+互通测试调用托管基准项目实际使用的 `SimpleClass.Create()` 和 `CharacterSaveData.Create()`。将 .NET 文档和两个生成头文件放在同一目录。
+
+```sh
+dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release -p:LuminPackExportCppContract=true -- write .tmp/cpp-models
+dotnet run --project tools/LuminPack.Codegen.Cpp -- export benchmarks/LuminPack.Benchmark/bin/Release/net10.0/LuminPack.Benchmark.dll .tmp/cpp-models/manifest.json
+dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/cpp-models/manifest.json LuminPackBenchmark.SimpleClass .tmp/cpp-models/simple-benchmark.hpp
+dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/cpp-models/manifest.json LuminPackBenchmark.CharacterSaveData .tmp/cpp-models/serialize-benchmark.hpp
+```
+
+用 fixture 的绝对路径配置 CMake。测试用生成的 C++ codec 在 .NET 原始 Binary 和 JSON 之间转换，再由 .NET 读取 C++ 输出并与原始模型值对比。
+
+```sh
+cmake -S src/LuminPack.Cpp -B .tmp/cpp -DLUMINPACK_CPP_MODEL_FIXTURES=/absolute/path/to/.tmp/cpp-models
+cmake --build .tmp/cpp --config Release
+ctest --test-dir .tmp/cpp -C Release -R luminpack_cpp_models --output-on-failure
+dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release --no-build -- read .tmp/cpp-models/out
+```

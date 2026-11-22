@@ -80,3 +80,45 @@ auto written = luminpack::write_json_document<Numbers, luminpack::json_encoding:
 Use `json_record_member` to bind a DTO field to its C# property name and any former names, and `json_record_codec` to compose the object. Use `json_record_body` for a non-null value or Union case payload. `json_union_codec` uses the emitted `$type` hash and `$value` envelope. `json_custom_codec` binds application-owned JSON functions.
 
 The reader validates JSON grammar and the document boundary. Set `json_read_options::max_depth` to limit nested objects and arrays. The default is 1024. String-key dictionaries write object properties and accept either properties or pairs on read. Other dictionaries use arrays of key/value pairs.
+
+## Generate C++ DTOs and codecs
+
+In a .NET project using Next, expose the export option to the compiler:
+
+```xml
+<ItemGroup>
+  <CompilerVisibleProperty Include="LuminPackExportCppContract" />
+</ItemGroup>
+```
+
+Run the build and the standalone tool from the repository root. Replace the assembly path and root metadata name with your model's.
+
+```sh
+dotnet build path/to/Contracts.csproj -c Release -p:LuminPackExportCppContract=true
+dotnet run --project tools/LuminPack.Codegen.Cpp -- export path/to/Contracts.dll .tmp/contracts.json
+dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json Example.Message .tmp/message.h
+```
+
+The export is a compiler projection of the resolved member order, binary profiles, layouts, Version descriptors, and Union hashes. The tool reads assembly metadata and produces a header that includes `<luminpack/luminpack.h>`. A generated root has its own namespace containing `root_value`, `root_binary`, `root_json`, and the declared JSON encoding and read limits. For `Example.Message`, the namespace is `luminpack_generated::root_Example_x002eMessage`.
+
+The emitter supports acyclic positional and Version class contracts, closed class or interface Unions, enums, fixed-width primitives, text, one-dimensional arrays, List, Dictionary, and sequential raw structs whose field order and same-width storage are provable. The raw path is selected only when the generated C++ offsets and stride also match. A field-wise codec supplies the local fallback. Generation reports the member or type when its model needs an unimplemented representation.
+
+## Verify the benchmark models
+
+The integration test uses the actual `SimpleClass.Create()` and `CharacterSaveData.Create()` factories from the managed benchmark project. Emit the .NET documents and generate both headers into the same directory:
+
+```sh
+dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release -p:LuminPackExportCppContract=true -- write .tmp/cpp-models
+dotnet run --project tools/LuminPack.Codegen.Cpp -- export benchmarks/LuminPack.Benchmark/bin/Release/net10.0/LuminPack.Benchmark.dll .tmp/cpp-models/manifest.json
+dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/cpp-models/manifest.json LuminPackBenchmark.SimpleClass .tmp/cpp-models/simple-benchmark.hpp
+dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/cpp-models/manifest.json LuminPackBenchmark.CharacterSaveData .tmp/cpp-models/serialize-benchmark.hpp
+```
+
+Configure CMake with the absolute fixture directory. The test transcodes the original .NET binary and JSON through the generated C++ models. Then verify that .NET reads both C++ outputs back to the original benchmark values.
+
+```sh
+cmake -S src/LuminPack.Cpp -B .tmp/cpp -DLUMINPACK_CPP_MODEL_FIXTURES=/absolute/path/to/.tmp/cpp-models
+cmake --build .tmp/cpp --config Release
+ctest --test-dir .tmp/cpp -C Release -R luminpack_cpp_models --output-on-failure
+dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release --no-build -- read .tmp/cpp-models/out
+```

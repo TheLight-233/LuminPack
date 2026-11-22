@@ -78,6 +78,24 @@ internal static partial class NextPipeline
             .WithComparer(FactArrayComparer<ModeledPayload>.Instance).Combine(external)
             .Select(static (input, _) => input.Right.IsEmpty ? input.Left : input.Left.AddRange(input.Right))
             .WithComparer(FactArrayComparer<ModeledPayload>.Instance);
+        var cppExport = context.AnalyzerConfigOptionsProvider.Select(static (options, _) =>
+            options.GlobalOptions.TryGetValue("build_property.LuminPackExportCppContract", out string? value) &&
+            string.Equals(value, "true", StringComparison.OrdinalIgnoreCase));
+        context.RegisterSourceOutput(declared.Combine(cppExport), static (production, input) =>
+        {
+            if (!input.Right)
+                return;
+
+            var roots = new List<TypeModel>();
+            foreach (ModeledPayload payload in input.Left)
+                if (payload.Result.IsComplete && payload.Result.Model is { } model)
+                    roots.Add(model);
+            if (roots.Count != 0)
+            {
+                production.AddSource("LuminPackGen.CppContracts.g.cs",
+                    CppContractExport.Render(roots, production.CancellationToken));
+            }
+        });
         var report = context.AnalyzerConfigOptionsProvider.Select(static (options, _) =>
             options.GlobalOptions.TryGetValue("build_property.LuminPackReportGeneratorOutput", out string? value) &&
             string.Equals(value, "true", StringComparison.OrdinalIgnoreCase));
