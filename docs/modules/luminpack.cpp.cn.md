@@ -122,3 +122,15 @@ cmake --build .tmp/cpp --config Release
 ctest --test-dir .tmp/cpp -C Release -R luminpack_cpp_models --output-on-failure
 dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release --no-build -- read .tmp/cpp-models/out
 ```
+
+## 对比原生性能
+
+先完成上面的模型互通验证，再用本地的 yalantinglibs 0.5.8 和 RapidJSON 1.1.0 源码配置独立基准。可执行程序使用生成的模型，分别与 `struct_pack` 对比二进制性能，与 RapidJSON 对比 UTF-8 JSON 性能。RapidJSON 适配器用 `Writer` 编码类型化数据，从 RapidJSON DOM 还原相同的 DTO。
+
+```sh
+cmake -S benchmarks/LuminPack.Benchmark.Cpp -B .tmp/cpp-bench -DCMAKE_BUILD_TYPE=Release -DLUMINPACK_CPP_MODEL_FIXTURES=/absolute/path/to/.tmp/cpp-models -DLUMINPACK_CPP_YALANTINGLIBS=/absolute/path/to/yalantinglibs -DLUMINPACK_CPP_RAPIDJSON=/absolute/path/to/rapidjson
+cmake --build .tmp/cpp-bench --config Release
+.tmp/cpp-bench/Release/luminpack_cpp_benchmark .tmp/cpp-models > .tmp/cpp-bench/results.csv
+```
+
+使用单配置生成器时，在 `.tmp/cpp-bench` 下直接运行可执行程序。基准在计时前校验模型内容，写入复用缓冲区，每次读取新建对象。两边的 JSON 读取共用同一份 .NET UTF-8 文档。二进制读取使用同一个模型各自的线格式。CSV 记录负载字节数、七轮计时的中位数和样本变异系数，以及同轮耗时除以对照库耗时。每次操作的分配请求次数和请求字节数单独采样，覆盖 C++ `new` 和 RapidJSON 分配器适配器。

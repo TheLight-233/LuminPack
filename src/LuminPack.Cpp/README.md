@@ -122,3 +122,15 @@ cmake --build .tmp/cpp --config Release
 ctest --test-dir .tmp/cpp -C Release -R luminpack_cpp_models --output-on-failure
 dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release --no-build -- read .tmp/cpp-models/out
 ```
+
+## Compare native performance
+
+After building the fixture gate above, configure the standalone benchmark with local checkouts of yalantinglibs 0.5.8 and RapidJSON 1.1.0. The executable compares the generated models with `struct_pack` for binary and RapidJSON for UTF-8 JSON. The RapidJSON adapter writes typed values with `Writer` and materializes the same DTOs from the RapidJSON DOM.
+
+```sh
+cmake -S benchmarks/LuminPack.Benchmark.Cpp -B .tmp/cpp-bench -DCMAKE_BUILD_TYPE=Release -DLUMINPACK_CPP_MODEL_FIXTURES=/absolute/path/to/.tmp/cpp-models -DLUMINPACK_CPP_YALANTINGLIBS=/absolute/path/to/yalantinglibs -DLUMINPACK_CPP_RAPIDJSON=/absolute/path/to/rapidjson
+cmake --build .tmp/cpp-bench --config Release
+.tmp/cpp-bench/Release/luminpack_cpp_benchmark .tmp/cpp-models > .tmp/cpp-bench/results.csv
+```
+
+For a single-configuration generator, run the executable directly under `.tmp/cpp-bench`. The benchmark verifies values before measuring, reuses writer storage, and materializes a fresh object on each read. Both JSON readers receive the same managed UTF-8 document. Each binary reader receives its format's wire bytes for the same model. The CSV includes the wire size, median and sample coefficient of variation across seven timed samples, same-run time divided by the reference time, and per-operation allocation requests and requested bytes from a separate sampling pass. Allocation sampling covers C++ `new` and the RapidJSON allocator adapter.

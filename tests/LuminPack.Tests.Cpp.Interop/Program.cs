@@ -36,6 +36,7 @@ internal static class BenchmarkFixture
         {
             File.WriteAllBytes(path + ".bin", LuminPackSerializer.Serialize<T, LuminPackUtf16LengthOptions>(model));
             File.WriteAllBytes(path + ".json", Encoding.Unicode.GetBytes(original));
+            File.WriteAllBytes(path + ".utf8.json", Encoding.UTF8.GetBytes(original));
             return;
         }
 
