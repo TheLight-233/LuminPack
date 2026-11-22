@@ -333,6 +333,14 @@ public class UntrustedInputTest
         Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref target));
         Assert.Same(reused, target!.Values);
         Assert.Equal(expected, reused);
+
+        byte[] overQuota = LuminPackSerializer.Serialize(new SafeCompressedList
+        {
+            Values = Enumerable.Range(0, 129).Select(index => index % 5 - 2).ToList()
+        });
+        Assert.Throws<InvalidDataException>(() => LuminPackSerializer.Deserialize(overQuota, ref target));
+        Assert.Same(reused, target!.Values);
+        Assert.Equal(expected, reused);
     }
 #endif
 
