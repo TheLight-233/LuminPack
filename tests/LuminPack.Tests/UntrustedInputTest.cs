@@ -313,6 +313,29 @@ public class UntrustedInputTest
         Assert.Throws<InvalidDataException>(() => LuminPackSerializer.Deserialize(forged, ref copy));
     }
 
+#if LUMINPACK_NEXT_GENERATOR
+    /// <summary>Compressed List reads validate the frame before preparing reused storage.</summary>
+    [Fact]
+    public void CompressedListReadsValidateTheFrameBeforeResizing()
+    {
+        var expected = Enumerable.Range(0, 127).Select(index => index % 5 - 2).ToList();
+        byte[] bytes = LuminPackSerializer.Serialize(new SafeCompressedList { Values = expected });
+        Assert.True(bytes.Length < expected.Count);
+        var reused = new List<int> { 23 };
+        SafeCompressedList? target = new() { Values = reused };
+
+        byte[] forged = (byte[])bytes.Clone();
+        BitConverter.GetBytes(-1).CopyTo(forged, 1 + sizeof(int));
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(forged, ref target));
+        Assert.Same(reused, target!.Values);
+        Assert.Equal(new[] { 23 }, reused);
+
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref target));
+        Assert.Same(reused, target!.Values);
+        Assert.Equal(expected, reused);
+    }
+#endif
+
     /// <summary>Finds the single byte where two encodings differ.</summary>
     /// <param name="left">The first encoding.</param><param name="right">The second encoding of equal length.</param>
     /// <returns>The differing index.</returns>
@@ -515,3 +538,12 @@ public partial class SafeCompressed
 {
     [LuminPackCompress] public int[] Values = [];
 }
+
+#if LUMINPACK_NEXT_GENERATOR
+/// <summary>A compressed primitive list with a finite read quota.</summary>
+[LuminPackable, LuminPackOption(UntrustedData = true, MaxCollectionLength = 128)]
+public partial class SafeCompressedList
+{
+    [LuminPackCompress] public List<int> Values = [];
+}
+#endif

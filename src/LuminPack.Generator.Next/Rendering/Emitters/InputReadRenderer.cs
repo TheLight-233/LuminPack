@@ -234,6 +234,8 @@ internal static class InputReadRenderer
                 // kernel allocates, as the original projection checks the compressed read's input.
                 string compressed = reader + ".ReadValueWithCompress(";
                 int site = line.IndexOf(compressed, StringComparison.Ordinal);
+                if (site < 0)
+                    site = line.IndexOf(reader + ".ReadCompressedList<", StringComparison.Ordinal);
                 // Record bodies still spell the compressed read as its marked owner call, which the source writer resolves later.
                 if (site < 0 && line.IndexOf(RenderMember.CompressedOwner + ".Read<", StringComparison.Ordinal) is int owner && owner >= 0 &&
                     line.IndexOf(">(ref " + reader + ",", owner, StringComparison.Ordinal) >= 0)

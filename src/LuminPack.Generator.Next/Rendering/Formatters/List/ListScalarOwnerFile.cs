@@ -263,6 +263,8 @@ internal static class ListScalarOwnerFile
                     w.Open();
                     if (nullable)
                         w.Line("RootRead(ref reader, ref value);");
+                    else if (set.Options?.CompressedListReader == true)
+                        w.Line("reader.ReadCompressedList<" + scalar + ">(ref value);");
                     else
                     {
                         w.Line("if (!reader.PeekCollectionHeader(out var length))");

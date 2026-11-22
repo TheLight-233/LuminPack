@@ -72,6 +72,9 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <summary>Whether the referenced Core exposes the two-field binary string reader.</summary>
     internal readonly bool BinaryStringPairReader;
 
+    /// <summary>Whether the referenced Core validates compressed List storage before allocating it.</summary>
+    internal readonly bool CompressedListReader;
+
     /// <summary>Whether the referenced Core can restrict culture names before resolving them.</summary>
     internal readonly bool CheckCultureInfo;
 
@@ -139,6 +142,7 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <param name="framedGroupings">Whether the assembly opts in to explicit grouping presence markers.</param>
     /// <param name="checkCultureInfo">Whether the referenced Core can restrict culture names before resolving them.</param>
     /// <param name="requireCompleteBinaryInput">Whether the assembly requires complete binary document input.</param>
+    /// <param name="compressedListReader">Whether the referenced Core exposes the compressed List reader.</param>
     internal GeneratorOptions(bool net8, int csharpVersion, bool @unsafe, bool unity, RegisterMode registerMode, int availableAliases,
         string assemblyName, bool interceptors, bool ilRewrite = false, bool pointerCursor = false, string[]? ambiguousNames = null,
         int formatterInterfaces = 0, bool knownFormatters = false, bool quotedScalarReader = false, bool spanCursor = false,
@@ -147,8 +151,9 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
         bool queueRefill = false, bool stackRefill = false, bool readOnlyCollectionRefill = false,
         bool readOnlyDictionaryRefill = false, bool concurrentDictionaryRefill = false,
         bool concurrentStackSeed = false, bool binaryStringPairReader = false, bool framedGroupings = false, bool checkCultureInfo = false,
-        bool requireCompleteBinaryInput = false)
+        bool requireCompleteBinaryInput = false, bool compressedListReader = false)
     {
+        CompressedListReader = compressedListReader;
         RequireCompleteBinaryInput = requireCompleteBinaryInput;
         CheckCultureInfo = checkCultureInfo;
         FramedGroupings = framedGroupings;
@@ -189,7 +194,7 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
         KnownFormatters == other.KnownFormatters && QuotedScalarReader == other.QuotedScalarReader &&
         GeneratedJsonPropertyWriter == other.GeneratedJsonPropertyWriter && GeneratedJsonInt32Reader == other.GeneratedJsonInt32Reader &&
         FramedGroupings == other.FramedGroupings && BinaryStringPairReader == other.BinaryStringPairReader && CheckCultureInfo == other.CheckCultureInfo &&
-        RequireCompleteBinaryInput == other.RequireCompleteBinaryInput &&
+        RequireCompleteBinaryInput == other.RequireCompleteBinaryInput && CompressedListReader == other.CompressedListReader &&
         HashSetRefill == other.HashSetRefill && LinkedListAppender == other.LinkedListAppender &&
         ConcurrentDictionaryBuilder == other.ConcurrentDictionaryBuilder && QueueRefill == other.QueueRefill &&
         StackRefill == other.StackRefill && ReadOnlyCollectionRefill == other.ReadOnlyCollectionRefill &&

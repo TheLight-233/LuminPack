@@ -544,6 +544,29 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Read<T>(scoped ReadOnlySpan<byte> source, ref Span<T> value, int count, bool header, bool compressed, out int bytes) => bytes = Read(source, ref value, count, header, compressed);
 
+        /// <summary>Validates a compressed collection frame before preparing the reused list storage.</summary>
+        /// <typeparam name="T">The reference-free element type.</typeparam>
+        /// <param name="value">The reusable list or the decoded null marker.</param>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public void ReadCompressedList<T>(scoped ref List<T?>? value)
+        {
+            ReadOnlySpan<byte> source = GetSpan().Slice(Position);
+            int count = 0;
+            int bytes = ReadBlock<T>(source, ref count, header: true, compressed: true, out int offset, out int payloadBytes);
+            if (count < 0)
+                value = null;
+            else
+            {
+                var list = value ?? new List<T?>(count);
+                Span<T?> destination = GetListSpan(list, count);
+                if (count != 0)
+                    ReadPayload(source.Slice(offset, payloadBytes), destination, compressed: true, destinationIsNew: value == null);
+                value = list;
+            }
+
+            Advance(bytes);
+        }
+
         /// <summary>Validates complete dynamic framing before any collection allocation or unsafe payload copy.</summary>
         /// <typeparam name = "T">The reference-free element type.</typeparam>
         /// <param name = "source">The remaining input.</param>

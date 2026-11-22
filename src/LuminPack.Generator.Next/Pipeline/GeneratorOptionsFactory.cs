@@ -98,8 +98,20 @@ internal static class GeneratorOptionsFactory
             concurrentStackSeed: FormatterConcurrentTraits.HasConcurrentStackSeed(compilation),
             binaryStringPairReader: net8 && !unity && HasBinaryStringPairReader(compilation),
             framedGroupings: AssemblySwitch(compilation, "FramedGroupings"), checkCultureInfo: HasCheckedCultureResolver(compilation),
-            requireCompleteBinaryInput: AssemblySwitch(compilation, "RequireCompleteBinaryInput"));
+            requireCompleteBinaryInput: AssemblySwitch(compilation, "RequireCompleteBinaryInput"),
+            compressedListReader: HasCompressedListReader(compilation));
     }
+
+    /// <summary>Checks the optional compressed List reader on the selected Core asset.</summary>
+    /// <param name="compilation">The compilation binding the referenced Core.</param>
+    /// <returns>Whether its typed by-reference operation is available.</returns>
+    private static bool HasCompressedListReader(Compilation compilation) =>
+        compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader")?.GetMembers("ReadCompressedList")
+            .OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.ReturnsVoid && method.Arity == 1 &&
+                method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 1 &&
+                method.Parameters[0].RefKind == RefKind.Ref && method.Parameters[0].Type is INamedTypeSymbol { Arity: 1 } list &&
+                list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" &&
+                SymbolEqualityComparer.Default.Equals(list.TypeArguments[0], method.TypeParameters[0])) == true;
 
     /// <summary>Checks that the selected Core exposes the checked culture resolver.</summary>
     /// <param name="compilation">The compilation binding the referenced Core.</param>
