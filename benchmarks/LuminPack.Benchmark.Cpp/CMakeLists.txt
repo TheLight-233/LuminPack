@@ -3,7 +3,7 @@ project(LuminPackCppBenchmark LANGUAGES CXX)
 
 set(LUMINPACK_CPP_MODEL_FIXTURES "" CACHE PATH "Generated benchmark headers and .NET fixtures")
 set(LUMINPACK_CPP_YALANTINGLIBS "" CACHE PATH "Checkout of yalantinglibs 0.5.8")
-set(LUMINPACK_CPP_RAPIDJSON "" CACHE PATH "Checkout of RapidJSON 1.1.0")
+set(LUMINPACK_CPP_RAPIDJSON "" CACHE PATH "Checkout of RapidJSON (tested with 297637b)")
 set(LUMINPACK_CPP_BITSERY "" CACHE PATH "Optional checkout of Bitsery 5.2.5")
 set(LUMINPACK_CPP_CEREAL "" CACHE PATH "Optional checkout of cereal 1.3.2")
 set(LUMINPACK_CPP_MSGPACK "" CACHE PATH "Optional checkout of MessagePack-C++ 7.0.0")

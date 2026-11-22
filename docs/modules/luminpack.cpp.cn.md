@@ -191,7 +191,7 @@ dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release --no-build -- 
 
 ## 对比原生性能
 
-先完成上面的模型互通验证，再用本地的 yalantinglibs 0.5.8 和 RapidJSON 1.1.0 源码配置独立基准。.NET 测试数据由默认重载生成。可执行程序用生成的模型与 `struct_pack` 对比二进制性能，并与 RapidJSON 对比 UTF-16 和 UTF-8 JSON。UTF-16 是 LuminPack 的默认 JSON 编码。RapidJSON 适配器用 `Writer` 编码类型化数据，从 RapidJSON DOM 还原相同的 DTO。
+先完成上面的模型互通验证，再用本地的 yalantinglibs 0.5.8 和 RapidJSON `297637bc0a0f00dc504dbc1a47ebdaa577f8ae19` 源码配置独立基准。该 RapidJSON 版本修复了近期 GCC 和 Clang 无法接受的 1.1.0 头文件赋值运算符。.NET 测试数据由默认重载生成。可执行程序用生成的模型与 `struct_pack` 对比二进制性能，并与 RapidJSON 对比 UTF-16 和 UTF-8 JSON。UTF-16 是 LuminPack 的默认 JSON 编码。RapidJSON 适配器用 `Writer` 编码类型化数据，从 RapidJSON DOM 还原相同的 DTO。 [已验证的 RapidJSON 提交](https://github.com/Tencent/rapidjson/tree/297637bc0a0f00dc504dbc1a47ebdaa577f8ae19)
 
 可分别设置额外的依赖路径，加入 Bitsery 5.2.5（`v5.2.5`）、cereal 1.3.2（`v1.3.2`）或 MessagePack-C++ 7.0.0（`cpp-7.0.0`）。Bitsery 使用带检查的缓冲区读取器和紧凑集合长度。cereal 通过内存流使用 `BinaryArchive`。MessagePack-C++ 将记录写成数组，用 BIN 保存模型的 UTF-16LE 文本，再从解析结果还原 DTO。二进制适配器的计时不含字符转码。
 
@@ -213,3 +213,17 @@ cmake --build .tmp/cpp-bench --config Release
 ```
 
 使用单配置生成器时，在 `.tmp/cpp-bench` 下直接运行可执行程序。基准在计时前校验模型内容，写入复用库所支持的缓冲区，每次读取新建对象。UTF-16 读取共用同一份 .NET 文档，UTF-8 读取共用该文档在计时前转码得到的字节。二进制读取使用同一个模型各自的线格式。CSV 记录负载字节数、七轮计时的中位数和样本变异系数。`ratio_to_reference` 以同一轮、同一模型和方向的耗时为分母，二进制用 `struct_pack`，JSON 用同编码的 RapidJSON。每次操作的分配请求次数和字节数单独采样，覆盖 C++ `new` 和 RapidJSON 分配器适配器。MessagePack-C++ 的 zone 另有 C 堆分配，未计入这两列。
+
+### 对比 GCC 和 Clang
+
+每个编译器使用独立的 CMake 构建目录。使用 Ninja 时，在互通测试和性能基准的配置命令中加上 `-DCMAKE_CXX_COMPILER=g++` 或 `-DCMAKE_CXX_COMPILER=clang++`。GCC 16.2 和 Clang 23.1 已在同一套 Windows x64 MinGW-w64 UCRT 工具链上验证。将工具链的 `bin` 目录加入 `PATH`，供基准和互通测试加载运行时 DLL。固定 CPU 亲和性、依赖版本、测试数据和构建选项。每个编译器运行多次，交错顺序并保留每轮 CSV。
+
+原生基准图表复用主库 README 的渲染器。 [图表脚本](../../benchmarks/LuminPack.Benchmark.Cpp/chart.py)
+
+```sh
+python benchmarks/LuminPack.Benchmark.Cpp/chart.py .tmp/cpp-charts \
+  --current 'GCC=.tmp/gcc-current-1.csv' \
+  --current 'Clang=.tmp/clang-current-1.csv'
+```
+
+其余各轮重复传入 `--current`。打开 `index.html` 查看浅色和深色 SVG 图表。条形取各轮中位数的中位数，图中的耗时比以同一轮的 LuminPack 耗时为分母。`summary.csv` 保留耗时比中位数、范围、最高样本变异系数、线格式大小和分配数据。公开的性能图表使用 CI 数据。

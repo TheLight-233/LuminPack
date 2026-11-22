@@ -66,7 +66,9 @@ def format_bytes(value):
     return f"{int(value)} B"
 
 
-def render(title, panels, results, theme):
+def render(title, panels, results, theme, *, colors=COLORS,
+           subtitle="mean time per operation · lower is better",
+           footer="Ratios are relative to LuminPack in the same panel. BenchmarkDotNet, same machine and run."):
     """Draws one suite as side-by-side Serialize and Deserialize panels."""
     t = THEMES[theme]
     rows = max(len(entries) for _, entries in panels)
@@ -77,7 +79,7 @@ def render(title, panels, results, theme):
            'font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">',
            f'<rect x="0.5" y="0.5" width="{width - 1}" height="{height - 1}" rx="10" fill="{t["bg"]}" stroke="{t["border"]}"/>',
            f'<text x="20" y="34" font-size="18" font-weight="600" fill="{t["text"]}">{escape(title)}</text>',
-           f'<text x="{width - 20}" y="34" font-size="12" text-anchor="end" fill="{t["muted"]}">mean time per operation · lower is better</text>']
+           f'<text x="{width - 20}" y="34" font-size="12" text-anchor="end" fill="{t["muted"]}">{escape(subtitle)}</text>']
     for index, (name, entries) in enumerate(panels):
         x0 = 20 + index * (panel_width + 30)
         values = [results[method]["mean"] for _, method in entries]
@@ -90,11 +92,11 @@ def render(title, panels, results, theme):
             weight = "700" if library == "LuminPack" else "400"
             out.append(f'<text x="{x0}" y="{y + bar_height * 0.68:.1f}" font-size="13" font-weight="{weight}" fill="{t["text"]}">{escape(library)}</text>')
             out.append(f'<rect x="{x0 + label_width}" y="{y}" width="{bar_space}" height="{bar_height}" rx="5" fill="{t["grid"]}"/>')
-            out.append(f'<rect x="{x0 + label_width}" y="{y}" width="{length:.1f}" height="{bar_height}" rx="5" fill="{COLORS[library]}"/>')
-            ratio = value / baseline
-            label = format_time(value) + ("" if library == "LuminPack" else f"  ({ratio:.2f}x)")
+            out.append(f'<rect x="{x0 + label_width}" y="{y}" width="{length:.1f}" height="{bar_height}" rx="5" fill="{colors[library]}"/>')
+            ratio = results[method].get("ratio", None if library == "LuminPack" else value / baseline)
+            label = format_time(value) + ("" if ratio is None else f"  ({ratio:.2f}x)")
             out.append(f'<text x="{x0 + label_width + bar_space + 8}" y="{y + bar_height * 0.68:.1f}" font-size="12" font-weight="{weight}" fill="{t["text"]}">{escape(label)}</text>')
-    out.append(f'<text x="20" y="{height - 16}" font-size="11" fill="{t["muted"]}">Ratios are relative to LuminPack in the same panel. BenchmarkDotNet, same machine and run.</text>')
+    out.append(f'<text x="20" y="{height - 16}" font-size="11" fill="{t["muted"]}">{escape(footer)}</text>')
     out.append('</svg>')
     return "\n".join(out)
 

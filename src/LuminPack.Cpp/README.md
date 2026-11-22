@@ -191,7 +191,7 @@ To exercise the RTTI model gate, generate both headers with `generate --rtti` an
 
 ## Compare native performance
 
-After building the fixture gate above, configure the standalone benchmark with local checkouts of yalantinglibs 0.5.8 and RapidJSON 1.1.0. The fixture producer calls the .NET serializer's default overloads. The executable compares the generated models with `struct_pack` for binary and RapidJSON for UTF-16 and UTF-8 JSON. UTF-16 is the default LuminPack JSON encoding. The RapidJSON adapter writes typed values with `Writer` and materializes the same DTOs from the RapidJSON DOM.
+After building the fixture gate above, configure the standalone benchmark with local checkouts of yalantinglibs 0.5.8 and RapidJSON at `297637bc0a0f00dc504dbc1a47ebdaa577f8ae19`. This RapidJSON revision includes the fix for an assignment operator that recent GCC and Clang reject in the 1.1.0 header. The fixture producer calls the .NET serializer's default overloads. The executable compares the generated models with `struct_pack` for binary and RapidJSON for UTF-16 and UTF-8 JSON. UTF-16 is the default LuminPack JSON encoding. The RapidJSON adapter writes typed values with `Writer` and materializes the same DTOs from the RapidJSON DOM. [Tested RapidJSON revision](https://github.com/Tencent/rapidjson/tree/297637bc0a0f00dc504dbc1a47ebdaa577f8ae19)
 
 Set any of the additional binary dependency paths to add Bitsery 5.2.5 (`v5.2.5`), cereal 1.3.2 (`v1.3.2`), or MessagePack-C++ 7.0.0 (`cpp-7.0.0`). Bitsery uses its checked buffer reader and compact collection lengths. cereal uses `BinaryArchive` over memory streams. The MessagePack-C++ adapter writes records as arrays, stores the input UTF-16LE text in BIN values, and materializes the DTO from the parsed object. No text transcoding is timed for those binary adapters.
 
@@ -213,3 +213,17 @@ cmake --build .tmp/cpp-bench --config Release
 ```
 
 For a single-configuration generator, run the executable directly under `.tmp/cpp-bench`. The benchmark verifies values before measuring, reuses supported writer buffers, and materializes a fresh object on each read. The UTF-16 readers receive the same managed document. The UTF-8 readers receive its identical transcoding prepared outside the timing loop. Each binary reader receives its format's wire bytes for the same model. The CSV includes the wire size, median and sample coefficient of variation across seven timed samples, and per-operation allocation requests and requested bytes from a separate sampling pass. `ratio_to_reference` divides each median by the matching `struct_pack` binary or RapidJSON JSON median of the same encoding from the same run. Allocation sampling covers C++ `new` and the RapidJSON allocator adapter. The MessagePack-C++ zone uses additional C heap allocations beyond the reported count and bytes.
+
+### Compare GCC and Clang
+
+Use a separate CMake build directory for each compiler. With Ninja, add `-DCMAKE_CXX_COMPILER=g++` or `-DCMAKE_CXX_COMPILER=clang++` to both the fixture gate and the benchmark configure commands. GCC 16.2 and Clang 23.1 were exercised on Windows x64 with the same MinGW-w64 UCRT toolchain. Put the toolchain's `bin` directory on `PATH` so the benchmark and fixture executables can load its runtime DLLs. Keep the CPU affinity, dependency revisions, fixture bytes and build options fixed. Run each compiler several times, alternating their order and retaining each CSV.
+
+The native chart command uses the main README renderer. [Chart script](../../benchmarks/LuminPack.Benchmark.Cpp/chart.py)
+
+```sh
+python benchmarks/LuminPack.Benchmark.Cpp/chart.py .tmp/cpp-charts \
+  --current 'GCC=.tmp/gcc-current-1.csv' \
+  --current 'Clang=.tmp/clang-current-1.csv'
+```
+
+Repeat `--current` for the remaining runs. Open `index.html` for the light and dark SVG charts. Bars show the median of the run medians. Chart ratios divide each library's time by LuminPack's time in the same run. `summary.csv` records the median ratio, ratio range, highest sample variation, wire size and allocation measurements. Use CI data for published benchmark figures.
