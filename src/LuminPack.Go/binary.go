@@ -839,6 +839,9 @@ func (s *Schema) scalarValue(name string, value any) any {
 }
 
 func (w *binaryWriter) scalar(name string, value any) {
+	if w.nativeScalar(name, value) {
+		return
+	}
 	var bits uint64
 	switch v := w.s.scalarValue(name, value).(type) {
 	case bool:
@@ -866,6 +869,71 @@ func (w *binaryWriter) scalar(name string, value any) {
 	case 8:
 		w.u64(bits)
 	}
+}
+
+func (w *binaryWriter) nativeScalar(name string, value any) bool {
+	switch v := value.(type) {
+	case bool:
+		if name == "bool" {
+			if v {
+				w.byte(1)
+			} else {
+				w.byte(0)
+			}
+			return true
+		}
+	case int8:
+		if name == "sbyte" {
+			w.byte(byte(v))
+			return true
+		}
+	case uint8:
+		if name == "byte" {
+			w.byte(v)
+			return true
+		}
+	case int16:
+		if name == "short" {
+			w.u16(uint16(v))
+			return true
+		}
+	case uint16:
+		if name == "ushort" || name == "char" {
+			w.u16(v)
+			return true
+		}
+	case int32:
+		if name == "int" || w.s.nativeIntegerBytes == 4 && (name == "nint" || name == "System.IntPtr") {
+			w.u32(uint32(v))
+			return true
+		}
+	case uint32:
+		if name == "uint" || w.s.nativeIntegerBytes == 4 && (name == "nuint" || name == "System.UIntPtr") {
+			w.u32(v)
+			return true
+		}
+	case int64:
+		if name == "long" || w.s.nativeIntegerBytes == 8 && (name == "nint" || name == "System.IntPtr") {
+			w.u64(uint64(v))
+			return true
+		}
+	case uint64:
+		if name == "ulong" || w.s.nativeIntegerBytes == 8 && (name == "nuint" || name == "System.UIntPtr") {
+			w.u64(v)
+			return true
+		}
+	case float32:
+		if name == "float" {
+			w.u32(math.Float32bits(v))
+			return true
+		}
+	case float64:
+		if name == "double" {
+			w.u64(math.Float64bits(v))
+			return true
+		}
+	}
+	return false
 }
 
 func utf16Bytes(value []uint16) []byte {
