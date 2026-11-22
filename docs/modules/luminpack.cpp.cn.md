@@ -2,7 +2,7 @@
 
 [English](../../src/LuminPack.Cpp/README.md)
 
-C++20 Runtime 使用调用方提供的连续缓冲区读写 LuminPack 二进制记录。Codec 统一包含公开头文件 `<luminpack/luminpack.h>`，链接 `LuminPack::Cpp` 静态库。Latin-1 SIMD 内核在私有编译单元中构建，并在支持的 x64 处理器上运行时选择。
+C++20 运行时使用调用方提供的连续缓冲区读写 LuminPack 二进制，以及 UTF-8 或 UTF-16LE JSON。生成的 codec 包含公开头文件 `<luminpack/luminpack.h>`，链接 `LuminPack::Cpp` 静态库。运行时按硬件能力选择 SIMD 内核。[跨语言契约](../portable-runtime.cn.md)
 
 ## 构建
 
@@ -127,23 +127,23 @@ JSON 读取器先扫描完整的普通文本段，再解码转义或非 ASCII UT
 
 ```xml
 <ItemGroup>
-  <CompilerVisibleProperty Include="LuminPackExportCppContract" />
+  <CompilerVisibleProperty Include="LuminPackExportContract" />
 </ItemGroup>
 ```
 
 在仓库根目录运行构建和独立生成工具，将示例程序集路径和根类型名改为你的项目实际值。
 
 ```sh
-dotnet build path/to/Contracts.csproj -c Release -p:LuminPackExportCppContract=true
-dotnet run --project tools/LuminPack.Codegen.Cpp -- export path/to/Contracts.dll .tmp/contracts.json
-dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json Example.Message .tmp/message.h
+dotnet build path/to/Contracts.csproj -c Release -p:LuminPackExportContract=true
+dotnet run --project tools/LuminPack.Codegen -c Release -- export path/to/Contracts.dll .tmp/contracts.json
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language cpp .tmp/contracts.json Example.Message .tmp/message.h
 ```
 
 导出内容取自 Next 实际解析的成员顺序、二进制 profile、布局、Version 描述符和 Union 哈希。工具读取程序集元数据并生成包含 `<luminpack/luminpack.h>` 的头文件。每个生成根类型有自己的命名空间，提供 `root_value`、`root_binary`、`root_json`，以及声明的 JSON 编码和读取限制。`Example.Message` 的命名空间为 `luminpack_generated::root_Example_x002eMessage`。
 
-使用 `generate --binary-profile utf8-length` 可以匹配 C# 的显式 Binary 操作，例如 `Serialize<Message, LuminPackUtf8LengthOptions>`。其余内置选项为 `utf8-token`、`utf16-length`、`utf16-token`、`utf8-varint` 和 `utf16-varint`。成员声明的设置优先于所属类型声明的 profile，操作 profile 为继承设置提供默认值。JSON 使用文档声明的选项。显式 profile 会在命名空间后附加后缀，例如 `_binary_utf8_length`，可同时包含默认头文件和其他 profile 的头文件。`--binary-profile` 可以与 `--rtti` 一起使用。
+使用 `generate --language cpp --binary-profile utf8-length` 可以匹配 C# 的显式 Binary 操作，例如 `Serialize<Message, LuminPackUtf8LengthOptions>`。其余内置选项为 `utf8-token`、`utf16-length`、`utf16-token`、`utf8-varint` 和 `utf16-varint`。成员声明的设置优先于所属类型声明的 profile，操作 profile 为继承设置提供默认值。JSON 使用文档声明的选项。显式 profile 会在命名空间后附加后缀，例如 `_binary_utf8_length`，可同时包含默认头文件和其他 profile 的头文件。`--binary-profile` 可以与 `--rtti` 一起使用。
 
-当具体的 C# 序列化调用直接使用封闭泛型，或通过容器间接使用它时，可以导出 Next 已建模的封闭类型。从清单复制准确的 `id`，传给 `generate` 时加上引号，例如 `generate .tmp/contracts.json 'Example.Box<string>' .tmp/box.h`。
+当具体的 C# 序列化调用直接使用封闭泛型，或通过容器间接使用它时，可以导出 Next 已建模的封闭类型。从清单复制准确的 `id` 并用引号包裹，例如 `generate --language cpp .tmp/contracts.json 'Example.Box<string>' .tmp/box.h`。
 
 将生成的 `root_binary_limits` 或 `root_json_options` 传给对应的文档读取入口，就会在解码前检查声明的 `MaxInputBytes`。限制以传入文档的字节数为单位。用于连续读取的游标继续执行集合、字符串和深度检查。
 
@@ -172,10 +172,10 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 互通测试调用托管基准项目实际使用的 `SimpleClass.Create()` 和 `CharacterSaveData.Create()`。将 .NET 文档和两个生成头文件放在同一目录。
 
 ```sh
-dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release -p:LuminPackExportCppContract=true -- write .tmp/cpp-models
-dotnet run --project tools/LuminPack.Codegen.Cpp -- export benchmarks/LuminPack.Benchmark/bin/Release/net10.0/LuminPack.Benchmark.dll .tmp/cpp-models/manifest.json
-dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/cpp-models/manifest.json LuminPackBenchmark.SimpleClass .tmp/cpp-models/simple-benchmark.hpp
-dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/cpp-models/manifest.json LuminPackBenchmark.CharacterSaveData .tmp/cpp-models/serialize-benchmark.hpp
+dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release -p:LuminPackExportContract=true -- write .tmp/cpp-models
+dotnet run --project tools/LuminPack.Codegen -c Release -- export benchmarks/LuminPack.Benchmark/bin/Release/net10.0/LuminPack.Benchmark.dll .tmp/cpp-models/manifest.json
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language cpp .tmp/cpp-models/manifest.json LuminPackBenchmark.SimpleClass .tmp/cpp-models/simple-benchmark.hpp
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language cpp .tmp/cpp-models/manifest.json LuminPackBenchmark.CharacterSaveData .tmp/cpp-models/serialize-benchmark.hpp
 ```
 
 用 fixture 的绝对路径配置 CMake。测试用生成的 C++ codec 在 .NET 原始 Binary 和 JSON 之间转换，再由 .NET 读取 C++ 输出并与原始模型值对比。
@@ -187,7 +187,7 @@ ctest --test-dir .tmp/cpp -C Release -R luminpack_cpp_models --output-on-failure
 dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release --no-build -- read .tmp/cpp-models/out
 ```
 
-验证 RTTI 模型时，用 `generate --rtti` 生成两个头文件，并把 CMake 的 `LUMINPACK_CPP_RTTI_FIXTURES` 指向这份测试目录。通过 CTest 运行 `luminpack_cpp_rtti` 后，用同一个 .NET 验证器读取它生成的 `out` 目录。
+验证 RTTI 模型时，用 `generate --language cpp --rtti` 生成两个头文件，并把 CMake 的 `LUMINPACK_CPP_RTTI_FIXTURES` 指向这份测试目录。通过 CTest 运行 `luminpack_cpp_rtti` 后，用同一个 .NET 验证器读取它生成的 `out` 目录。
 
 ## 对比原生性能
 

@@ -1,87 +1,119 @@
-# Java, Go, and TypeScript interoperability
+# Cross-language contracts
 
 [Chinese](portable-runtime.cn.md)
 
-Generate a portable binding from the same .NET contract used by the [C++ runtime](../src/LuminPack.Cpp/README.md). Each binding supplies the root contract, member order, Binary profiles, JSON names, Union cases, and layout information used by the language runtime. Keep the export and generated bindings with the version of the .NET contract they describe.
+LuminPack uses one contract for Binary and JSON across its runtimes. Define the model in C#, export its compiler-generated contract, and generate the bindings needed by each application. The export records member order, profiles, JSON names, Union cases, Version descriptors, input limits, and physical layouts. Regenerate the bindings when the model changes.
 
-## Export and generate
+| Runtime | Guide |
+| --- | --- |
+| .NET | [Getting started](getting-started.md) |
+| C++ | [Build the C++20 library and generate codecs](../src/LuminPack.Cpp/README.md) |
+| Java | [Compile the runtime and bind a contract](../src/LuminPack.Java/README.md) |
+| Go | [Use the source module and generated schema](../src/LuminPack.Go/README.md) |
+| TypeScript | [Use the ESM package and generated types](../src/LuminPack.TypeScript/README.md) |
 
-Use the Next generator in the .NET project that owns the contracts. Make its export option visible to the compiler.
+## Define and export a model
+
+Use the Next source generator in the .NET project that owns your contracts. This example defines a Default positional record. Each generated binding follows the exported member names and Binary order.
+
+```csharp
+using System.Collections.Generic;
+using LuminPack.Attribute;
+
+namespace Example;
+
+[LuminPackable]
+public partial class Message
+{
+    public int Id { get; set; }
+    public string Text { get; set; } = "";
+    public List<int> Measurements { get; set; } = new();
+}
+```
+
+Expose the export switch to the compiler in the .NET project file.
 
 ```xml
 <ItemGroup>
-  <CompilerVisibleProperty Include="LuminPackExportCppContract" />
+  <CompilerVisibleProperty Include="LuminPackExportContract" />
 </ItemGroup>
 ```
 
-From the repository root, export the built assembly and generate one binding per root and target language.
+Build the assembly, then export its compiler metadata. Substitute the built assembly's path in the second command.
 
 ```sh
-dotnet build path/to/Contracts.csproj -c Release -p:LuminPackExportCppContract=true
-dotnet run --project tools/LuminPack.Codegen.Cpp -c Release -- export path/to/Contracts.dll .tmp/contracts.json
-dotnet run --project tools/LuminPack.Codegen.Cpp -c Release -- generate-portable java .tmp/contracts.json Example.Message .tmp/Message.java
-dotnet run --project tools/LuminPack.Codegen.Cpp -c Release -- generate-portable go .tmp/contracts.json Example.Message .tmp/message.go
-dotnet run --project tools/LuminPack.Codegen.Cpp -c Release -- generate-portable typescript .tmp/contracts.json Example.Message .tmp/message.ts
+dotnet build path/to/Contracts.csproj -c Release -p:LuminPackExportContract=true
+dotnet run --project tools/LuminPack.Codegen -c Release -- export path/to/Contracts.dll .tmp/contracts.json
 ```
 
-Copy a closed generic root's full `id` from the export and quote it on the command line. To exchange a supported collection as the root, use its full type expression, such as `'System.Collections.Generic.List<Example.Message>'`. The `project-portable` command takes the same manifest, root and output arguments and writes a runtime-loadable JSON contract.
+## Generate bindings
 
-Place command options before the manifest path. `--binary-profile` accepts `utf8-length`, `utf8-token`, `utf16-length`, `utf16-token`, `utf8-varint`, or `utf16-varint`. Type and member declarations retain precedence. `--native-integer-bytes 4` selects a 32-bit managed endpoint for `nint` and `nuint`. Native Nullable slots use a separate `--native-scalar-alignment` setting. Set it to `4` if the endpoint uses 4-byte alignment for 64-bit scalars. Both settings default to `8`. For formats shared across architectures, choose the type's [Packed or Tagged option](options.md#struct-layout).
+From the repository root, choose one target language and one root per command. Use the full model name or the exact closed generic `id` from the manifest. Quote names containing shell metacharacters, such as `'Example.Box<string>'`.
 
-## Java
-
-Compile the generated source together with the [Java runtime sources](../src/LuminPack.Java/src/main/java/luminpack) using JDK 17 or later. The default generated package is `luminpack.generated`. Set `--package` to put the binding in an application package. The output filename supplies the Java class name.
-
-```java
-Object message = luminpack.generated.Message.CODEC.readBinary(binary);
-byte[] json = luminpack.generated.Message.CODEC.writeJson(message, luminpack.LuminPack.UTF8);
+```sh
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language cpp .tmp/contracts.json Example.Message .tmp/message.h
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language java .tmp/contracts.json Example.Message .tmp/Message.java
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language go .tmp/contracts.json Example.Message .tmp/message.go
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language typescript .tmp/contracts.json Example.Message .tmp/message.ts
 ```
 
-Records use maps keyed by member names. Statically declared Union cases use `LuminPack.UnionValue`, with an unsigned 32-bit hash in a `long`. Unsigned 64-bit values use `BigInteger`. To load a projected JSON manifest directly, call `LuminPack.fromManifest`. Attach application formatters with `withCustom` and registered Union cases with `withUnionCase`.
+Java, Go, and TypeScript can also load a projected JSON contract. The `project` command accepts supported standalone type expressions, such as `'System.Collections.Generic.List<Example.Message>'`.
 
-## Go
-
-Use Go 1.23 or later. Reference `github.com/TheLight-233/LuminPack/src/LuminPack.Go` in the application module, with a `replace` directive pointing to the checked-out [Go runtime](../src/LuminPack.Go) when using it from source. The generated package defaults to `generated`. Set `--package` to match the surrounding Go files.
-
-```go
-schema, err := generated.LoadMessageLuminPack()
-if err != nil {
-    return err
-}
-message, err := schema.DecodeBinary("", binary)
-if err != nil {
-    return err
-}
-json, err := schema.EncodeJSONWithEncoding("", message, luminpack.UTF8)
+```sh
+dotnet run --project tools/LuminPack.Codegen -c Release -- project .tmp/contracts.json Example.Message .tmp/message.contract.json
 ```
 
-An empty type identity selects the exported root. Records use `luminpack.Record`, dictionaries use wire-ordered `luminpack.Dictionary`, and Union cases carry a concrete type identity. Use `luminpack.LoadSchema` to load a projected JSON manifest. Attach application formatters with `WithCustom` and registered cases with `WithRegisteredUnion`.
+Place options before the manifest path.
 
-## TypeScript
+| Option | Usage |
+| --- | --- |
+| `--binary-profile <profile>` | Select `utf8-length`, `utf8-token`, `utf16-length`, `utf16-token`, `utf8-varint`, or `utf16-varint`. Declared type and member profiles retain precedence. |
+| `--rtti` | Generate C++ RTTI Union codecs, including supported virtual dispatch and runtime registration. |
+| `--package <name>` | Set the generated Java or Go package. |
+| `--runtime-import <specifier>` | Set the TypeScript runtime's ESM module specifier. |
+| `--native-integer-bytes <4 or 8>` | Set the managed `nint` and `nuint` width for Java, Go, and TypeScript. The default is 8. C++ uses the target ABI. |
+| `--native-scalar-alignment <4 or 8>` | Set the managed storage alignment of 64-bit scalars for Java, Go, and TypeScript. The default is 8. A managed endpoint can use 4-byte native integers and 8-byte scalar alignment. |
 
-Build the [TypeScript runtime](../src/LuminPack.TypeScript) with `npm ci` and `npm run build` in its source directory, then reference it from the application as `@luminpack/typescript`. Use `--runtime-import` to set another ESM module specifier.
+## Match the wire options
 
-```ts
-import { codec } from "./message.js";
-
-const message = codec.readBinary(binary);
-const json = codec.writeJson(message, "utf8");
-```
-
-Generated record types expose the .NET member names. Dictionaries use `Map`, 64-bit integers use `bigint`, and Union cases use `{ type, value }`. Binary and JSON documents use `Uint8Array`. To load a projected manifest directly, call `createCodec`. To supply application formatters or registered cases on a generated binding, call `bindCodec` with the corresponding `custom` or `registered` options.
-
-## Runtime fast paths
-
-- **Java** uses word-at-a-time text operations and contiguous primitive storage. For SIMD scans, build `src/LuminPack.Java/src/vector/java/luminpack/VectorStringKernels.java` with `javac --add-modules jdk.incubator.vector` and the baseline classes on the classpath. Include `src/LuminPack.Java/src/vector/resources` and the vector classes on the application classpath. Launch with `java --add-modules jdk.incubator.vector`. The JVM chooses a supported vector width.
-- **Go** uses SSE2 on amd64 and selects AVX2 or AVX-512BW for complete blocks when the CPU and operating system support them. It uses NEON on arm64. These kernels serve ASCII scans and supported UTF-16 conversions. Other architectures and builds with `-tags purego` use the Go implementation.
-- **TypeScript** uses checked typed-array paths for contiguous primitives. Long text scans use WebAssembly SIMD where available, with a JavaScript fallback. The SIMD module is embedded in the runtime. To rebuild it after editing `wasm/text.c`, run `node scripts/build-text-simd.mjs` from the TypeScript runtime with a Clang and `wasm-ld` toolchain on `PATH`.
+- Use the same root and Binary profile at both endpoints. The default is UTF-16 Length. Length and VarInt preserve null and empty strings separately. Token uses a zero terminator and represents null as an empty string. Use Length or VarInt for embedded zero units.
+- Use the same JSON encoding at both endpoints. The JSON wire contract also defines names, enum values, collection shapes, and Union discriminators. [Wire formats](formats.md)
+- Use `GeneratorType.Version` for models that must evolve and read old data. Match the Union cases and registered tags across endpoints. Custom formatters define their own payload and require matching application bindings. [Version tolerance](versioning.md), [Unions](polymorphism.md), [Custom formatters](custom-formatters.md)
+- Preserve tracked object identity by sharing the same object or record instance when constructing the graph. Keep a C++ reference document alive while using its borrowed pointers. [Reference tracking](versioning.md#reference-tracking)
+- For cross-architecture exchange, choose a supported Packed or Tagged layout. Native Binary requires matching CLR layout, including padding and alignment. Match native integer width separately. Binary rectangular arrays use zero lower bounds. JSON supports nonzero lower bounds. [Struct layout options](options.md#3264-bit-struct-layouts)
 
 ## Verify an exchange
 
-Keep the same root, Binary profile and JSON encoding at both endpoints. For a tracked graph, preserve identity by reusing the same record instance when constructing the graph. Custom formatters and registered Union cases require matching application bindings on each endpoint.
-
-Run the managed interoperability harness from the repository root. The default suite uses the `SimpleClass` and `CharacterSaveData` benchmark models, passing documents through managed Binary, UTF-8 JSON, and UTF-16 JSON. Use `--help` for more suites and executable overrides.
+The interoperability harness writes `SimpleClass` and `CharacterSaveData` in .NET, passes Binary, UTF-8 JSON, and UTF-16 JSON through Java, Go, and TypeScript, then has .NET verify the results. The `strings` suite checks the six Binary profiles against managed bytes. The C++ guide has its CMake interoperability commands. [C++ guide](../src/LuminPack.Cpp/README.md#verify-the-benchmark-models)
 
 ```sh
 python tests/LuminPack.Tests.Portable/verify.py
+python tests/LuminPack.Tests.Portable/verify.py --suite strings
+python tests/LuminPack.Tests.Portable/verify.py --help
+```
+
+## Run and chart language benchmarks
+
+Prepare the same managed benchmark fixtures for each target. Add `--cpp` to the prepare command if you plan to run the C++ benchmark so it also generates the C++ headers.
+
+```sh
+python benchmarks/LuminPack.Benchmark.Portable/prepare.py .tmp/portable-benchmark/models
+```
+
+Run the command for your language from the repository root. The C++ script uses Bash and CMake, and the TypeScript benchmark uses Node.js 22 or later.
+
+```sh
+python benchmarks/LuminPack.Benchmark.Java/run.py .tmp/portable-benchmark/models .tmp/portable-benchmark/java.csv
+(cd benchmarks/LuminPack.Benchmark.Go && go run . ../../.tmp/portable-benchmark/models ../../.tmp/portable-benchmark/go.csv)
+npm ci --prefix src/LuminPack.TypeScript
+npm run build --prefix src/LuminPack.TypeScript
+npm ci --prefix benchmarks/LuminPack.Benchmark.TypeScript
+node benchmarks/LuminPack.Benchmark.TypeScript/benchmark.mjs .tmp/portable-benchmark/models .tmp/portable-benchmark/typescript.csv
+bash benchmarks/LuminPack.Benchmark.Portable/run-cpp.sh .tmp/portable-benchmark/models .tmp/portable-benchmark
+```
+
+Render the CSV to light and dark charts and an HTML report. Repeat `--input` to include results for more languages. Published README charts use CI artifacts. [Benchmark methodology and CI](ci.md#language-runtime-benchmarks)
+
+```sh
+python benchmarks/LuminPack.Benchmark.Portable/chart.py .tmp/portable-benchmark/charts --input .tmp/portable-benchmark/java.csv
 ```

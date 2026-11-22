@@ -1,0 +1,78 @@
+# LuminPack for Go
+
+[简体中文](../../docs/modules/luminpack.go.cn.md)
+
+The Go module reads and writes LuminPack Binary and UTF-8 or UTF-16LE JSON. A generated Go file embeds the root schema from the shared contract. [Cross-language contracts](../../docs/portable-runtime.md)
+
+## Install from source and generate
+
+Use Go 1.23 or later. Add the runtime module requirement and a local replacement to the application's `go.mod`. Set the replacement to the path of your checkout.
+
+```go
+require github.com/TheLight-233/LuminPack/src/LuminPack.Go v0.0.0
+
+replace github.com/TheLight-233/LuminPack/src/LuminPack.Go => ../LuminPack/src/LuminPack.Go
+```
+
+From the LuminPack repository root, generate the shared guide's `Example.Message` binding. Put the output in the Go package that will own it. The default package name is `generated`.
+
+```sh
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language go --package generated .tmp/contracts.json Example.Message .tmp/message.go
+```
+
+## Read and write
+
+Use the empty type identity to select the root. The schema reports invalid wire data or incompatible model values as errors.
+
+```go
+import (
+    "example.com/myapp/generated"
+    luminpack "github.com/TheLight-233/LuminPack/src/LuminPack.Go"
+)
+
+func transcode(binary []byte) ([]byte, error) {
+    schema, err := generated.LoadMessageLuminPack()
+    if err != nil {
+        return nil, err
+    }
+    message, err := schema.DecodeBinary("", binary)
+    if err != nil {
+        return nil, err
+    }
+    return schema.EncodeJSONWithEncoding("", message, luminpack.UTF8)
+}
+```
+
+Reuse the loaded schema across independent operations. To create a model, use a value such as `luminpack.Record{"Id": int32(7), "Text": "ready", "Measurements": []int32{2, 5}}`. Use `EncodeBinary` for a new byte slice or `AppendBinary` to append to an existing destination. Use `EncodeJSONWithEncoding` and `DecodeJSONWithEncoding` with `luminpack.UTF8` or `luminpack.UTF16` when choosing the JSON encoding per call.
+
+| Contract value | Go value |
+| --- | --- |
+| Record or modeled struct | `luminpack.Record`, keyed by exported member names. |
+| Scalar array or List | Typed slices for eligible storage. Other sequences expose element values in wire order. |
+| Dictionary | `luminpack.Dictionary`, a slice of key-value entries in wire order. |
+| Rectangular array | `luminpack.Rectangular`, with lengths, lower bounds, and row-major values. |
+| Declared or registered Union case | `luminpack.Union`, with the concrete type identity and payload. |
+| Native padded value | `luminpack.NativeValue`, which carries logical fields and the original Binary storage. |
+| Raw UTF-16 units | `luminpack.UTF16String` for values containing unpaired UTF-16 code units. |
+
+Reuse the same `Record` map for repeated nodes in tracked graphs. Native integers use the widths described by the contract.
+
+## Load a schema or attach application codecs
+
+Pass the bytes from `project` to `luminpack.LoadSchema` to use a contract directly. Use `WithCustom(typeID, codec)` for Custom contracts and `WithRegisteredUnion(unionType, tag, caseType, codec)` for registered cases. Both return a new schema. A `CustomCodec` provides Binary and JSON functions. Its Binary reader returns the consumed byte count, and its JSON functions exchange `json.RawMessage` payloads.
+
+## SIMD and scalar builds
+
+The runtime uses SSE2 on amd64 and selects AVX2 or AVX-512BW when available for complete blocks. On arm64 it uses NEON. The text kernels cover ASCII scans and supported UTF-16 conversions. The `purego` build tag exercises the portable implementation. Run the following commands from the runtime module.
+
+```sh
+go test ./...
+go test -tags purego ./...
+```
+
+## Verify interoperability
+
+```sh
+python tests/LuminPack.Tests.Portable/verify.py --language go
+python tests/LuminPack.Tests.Portable/verify.py --language go --suite strings --go-pure
+```

@@ -2,9 +2,9 @@
 
 # ✨ LuminPack
 
-**面向 .NET 与 Unity 的极速二进制 & JSON 序列化库**
+**面向 .NET、C++、Java、Go 与 TypeScript 的二进制和 JSON 序列化库**
 
-*零反射 · 零分配读取 · 原生支持 IL2CPP 与 NativeAOT*
+*共享数据契约 · .NET 源代码生成 · 支持 Unity 与 NativeAOT*
 
 [![NuGet](https://img.shields.io/nuget/v/LuminPack.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/LuminPack)
 [![Downloads](https://img.shields.io/nuget/dt/LuminPack.svg?style=flat-square&logo=nuget&label=Downloads)](https://www.nuget.org/packages/LuminPack)
@@ -19,7 +19,7 @@
 [English](../README.md) · **简体中文**
 
 [快速开始](#-快速开始) ·
-[特性](#-特性) ·
+[.NET 特性](#-net-特性) ·
 [文档](#-文档) ·
 [基准测试](#-基准测试) ·
 [平台扩展包](#-平台扩展包)
@@ -28,7 +28,15 @@
 
 ---
 
-**LuminPack** 是一款 C# 高性能序列化库。只需给类型标上 `[LuminPackable]`，源代码生成器就会在编译期为它生成专属的二进制与 JSON 序列化代码——没有反射，没有运行时代码生成，也没有隐藏的内存分配。它为游戏存档、网络封包和实时系统而生，在每一微秒、每一个字节都很重要的场景里表现出色；同时它能运行在所有 .NET 平台上：从 .NET 11 服务器，到手机和主机上的 Unity IL2CPP。
+**LuminPack** 是面向游戏存档、网络封包和实时应用的高性能序列化库。.NET 源代码生成器为 `[LuminPackable]` 类型构建二进制和 JSON 序列化器，并可导出同一份契约，为 C++、Java、Go 和 TypeScript 生成绑定。各运行时按选定的模型和数据格式配置读写 LuminPack 文档。[跨语言指南](portable-runtime.cn.md)
+
+| 语言 | 运行时指南 |
+| --- | --- |
+| C# | [.NET 与 Unity](getting-started.cn.md) |
+| C++ | [C++20 运行时与生成的 codec](modules/luminpack.cpp.cn.md) |
+| Java | [JDK 运行时与生成绑定](modules/luminpack.java.cn.md) |
+| Go | [Go 模块与生成绑定](modules/luminpack.go.cn.md) |
+| TypeScript | [TypeScript 运行时与生成类型](modules/luminpack.typescript.cn.md) |
 
 ```csharp
 [LuminPackable]
@@ -44,7 +52,7 @@ LuminPackSerializer.Deserialize(bytes, ref player);          // ♻️ 填回原
 string json = LuminPackSerializer.SerializeJson(player);     // 📜 同一个模型直接出 JSON
 ```
 
-## 🌟 特性
+## 🌟 .NET 特性
 
 <table>
 <tr>
@@ -337,6 +345,25 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter "LuminPackBenchmark.SimpleBenchmark.*" "LuminPackBenchmark.SerializeBenchmark.*" "LuminPackBenchmark.JsonBenchmark.*" "LuminPackBenchmark.PolymorphismBenchmark.*"
 ```
 
+### 各语言 Runtime 基准
+
+四种语言使用同一组 `SimpleClass` 和 `CharacterSaveData` 模型。在各自的语言内对比 LuminPack 默认 Binary 模式与 UTF-8 JSON，分别测量序列化和反序列化。
+
+| Runtime | Binary 对照库 | UTF-8 JSON 对照库 |
+| --- | --- | --- |
+| C++ | struct_pack、Bitsery、cereal、MessagePack-C++ | RapidJSON、jsoncons、nlohmann/json、simdjson（读取） |
+| Java | Kryo、MessagePack、Jackson CBOR、Fastjson2 JSONB | Jackson、Gson、Fastjson2 |
+| Go | CBOR、MessagePack、encoding/gob | encoding/json、goccy/go-json、jsoniter |
+| TypeScript | @msgpack/msgpack、msgpackr、cbor-x | V8 JSON、@jsonjoy.com/json-pack、fast-json-stringify + V8 |
+
+<!-- portable-benchmark-charts:start -->
+
+此处的浅色与深色图表由托管基准实测生成。
+
+<!-- portable-benchmark-charts:end -->
+
+[基准工作流](https://github.com/TheLight-233/LuminPack/actions/workflows/ci.yml) · [测试方法与复现](ci.cn.md#各语言-runtime-基准)
+
 ## 📚 文档
 
 | | 指南 | 内容 |
@@ -352,7 +379,7 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter "Lumi
 | 💡 | [IDE 代码修复](code-fixes.cn.md) | 随包提供的生成器诊断快速修复与 Fix All |
 | 🎮 | [Unity、IL2CPP 与 NativeAOT](unity.cn.md) | Unity 配置、Burst、裁剪 |
 | 📐 | [数据格式](formats.cn.md) | 二进制布局与 JSON 表示 |
-| 🌐 | [Java、Go 和 TypeScript](portable-runtime.cn.md) | 生成绑定，与 .NET 互通二进制和 JSON |
+| 🌐 | [跨语言契约](portable-runtime.cn.md) | 导出一份契约，在各运行时之间互通二进制和 JSON |
 | 🗜️ | [压缩](compression.cn.md) | `LuminCompressor`、`[LuminPackCompress]` 与 `LUM2` 帧格式 |
 | 🛡️ | [安全](security.cn.md) | 可移植性、不可信输入、加密 |
 

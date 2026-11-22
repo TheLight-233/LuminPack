@@ -1,23 +1,23 @@
 ---
 name: luminpack
-description: Write correct code that uses the LuminPack binary and JSON serializer for .NET and Unity. Covers [LuminPackable] models and attributes, the generated LuminPackSerializer API, ref reuse, Unions, version tolerance, reference tracking, compile-time options and profiles, struct layouts, automatic generation, Custom formatters and registration.
+description: Write code using LuminPack Binary and JSON on .NET, Unity, C++, Java, Go, and TypeScript. Covers [LuminPackable] models, the generated LuminPackSerializer API, cross-language contracts, ref reuse, Unions, version tolerance, reference tracking, compile-time profiles, layouts, Custom formatters, and registration.
 ---
 
 # Using LuminPack
 
-LuminPack generates a dedicated binary and JSON formatter for every type at compile time (incremental source generator, no reflection). It targets `netstandard2.1` (Unity Mono/IL2CPP) and .NET 8 to .NET 11, and works under NativeAOT.
+The .NET source generator creates Binary and JSON formatters at compile time. It targets `netstandard2.1` (Unity Mono/IL2CPP) and .NET 8 to .NET 11, and works under NativeAOT. Export the generated wire contract to use the same models from C++, Java, Go, or TypeScript.
 
 This skill is about using the library. It does not describe how to maintain the LuminPack repository.
 
 For standalone C++ LUM2 frames, use `luminpack::compression` with non-overlapping caller-owned spans. Allocate with `max_compressed_size` or `decompressed_size` before calling `compress` or `decompress`.
 
-For C++ binary interoperability, include the public runtime header and link the CMake target. Use the Next C++ contract export and standalone tool for supported DTO graphs, or supply a closed codec matching the .NET member order and binary profiles. Nullable primitives and enums map to `std::optional`. Bind the exact Version width or CLR storage model when the wire uses padding or a contiguous block. Use the binary document entry points to share Version schema registrations across nested codecs, or pass one version_state through an explicitly framed operation. For JSON, select UTF-8 or UTF-16 at the document entry and bind properties using their C# JSON names. See the [C++ runtime](../../src/LuminPack.Cpp/README.md) for the supported wire operations.
+Enable `LuminPackExportContract` in the Next model build. Run `LuminPack.Codegen export` on the assembly and `LuminPack.Codegen generate --language <cpp|java|go|typescript>` on the resulting manifest. Java and Go use records keyed by .NET member name. TypeScript emits model types and uses `bigint` for 64-bit integers. Use `LuminPack.Codegen project` for a runtime-loadable JSON contract in Java, Go, or TypeScript. Match the Binary profile and JSON encoding across endpoints. [Cross-language contracts](../../docs/portable-runtime.md)
 
-For Java, Go, and TypeScript, run `generate-portable <language>` against the same Next export to create a root binding. Java and Go use records keyed by .NET member name. TypeScript also emits DTO types and uses `bigint` for 64-bit integers. Use the same Binary profile and JSON encoding at both endpoints. See the [portable runtime guide](../../docs/portable-runtime.md) for build steps and application registrations.
+For C++ interoperability, include the public runtime header and link the CMake target. Generate supported codecs from the shared contract or compose a codec matching the exported member order and profiles. Nullable primitives and enums map to `std::optional`. Bind the exact Version width or CLR storage model when the wire uses padding or a contiguous block. Use document entry points to share Version schema registrations across nested codecs. For JSON, select UTF-8 or UTF-16 at the document entry and bind properties using the exported names. [C++ runtime](../../src/LuminPack.Cpp/README.md)
 
 Use a fresh export and generated C++ header to read archived Version revision-1 Binary records. The reader validates complete legacy names and type contracts. Re-encoding sends the decoded value in the current Version format.
 
-Match a C# built-in Binary operation profile with C++ `generate --binary-profile`, for example `--binary-profile utf8-length` for `LuminPackUtf8LengthOptions`. Member and type declarations retain precedence. Explicitly profiled roots use a namespace suffix such as `_binary_utf8_length`. JSON keeps its own document settings.
+Match a C# built-in Binary operation profile with `--binary-profile`, for example `--binary-profile utf8-length` for `LuminPackUtf8LengthOptions`. Member and type declarations retain precedence. Explicitly profiled C++ roots use a namespace suffix such as `_binary_utf8_length`. JSON keeps its own document settings.
 
 Use a newly generated root's `read_root_binary` to apply the managed `RequireCompleteBinaryInput` policy, its input limits, and its graph ownership when required.
 
@@ -25,7 +25,7 @@ Generate a modeled closed generic root with its exact manifest `id` in quotes, f
 
 Ordinary recursive C++ records own each recursive node with `std::unique_ptr`, including List and Dictionary elements. A tracked object or ordinary RTTI Union case can own an ordinary recursive subtree through a field. The subtree can refer to acyclic tracked descendants owned by the graph document. Use the generated root codec to apply the supported recursion context and the declared Default Binary depth.
 
-Use `generate --rtti` to project Next's exact and virtual Union dispatch tiers. Exact writers compare concrete RTTI types. Virtual writers call a generated slot for the active Binary profile or JSON encoding and share compile-time hashes for closed generic cases. Readers switch on the C# wire hash. A Union with all ordinary direct cases uses `std::unique_ptr`. A Union with a direct tracked case uses pointers borrowed from the reference graph for all cases.
+Use `generate --language cpp --rtti` to project Next's exact and virtual Union dispatch tiers. Exact writers compare concrete RTTI types. Virtual writers call a generated slot for the active Binary profile or JSON encoding and share compile-time hashes for closed generic cases. Readers switch on the C# wire hash. A Union with all ordinary direct cases uses `std::unique_ptr`. A Union with a direct tracked case uses pointers borrowed from the reference graph for all cases.
 
 For an RTTI Union exported with registration enabled, register an application case derived from `root_binary::registry::base_type` using `root_binary::registry::register_case<Case, Binding>(tag)`. Supply Binary and JSON payload readers and tagged writers. The Binary codec writes the escape hash, then the binding writes the tag with `write_registered_union_tag<root_binary::registry::wide_tags>` and its payload. The JSON binding writes the numeric `$type` and application payload in the `$value` envelope. Match the C# runtime registration's tag and wire representation.
 

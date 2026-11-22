@@ -10,6 +10,10 @@ on:
         description: Time the BenchmarkDotNet suites, Nino workloads and serialization matrix
         type: boolean
         default: false
+      run_portable_benchmarks:
+        description: Compare C++, Java, Go, and TypeScript serializers on the shared fixtures
+        type: boolean
+        default: false
       benchmark_jit:
         description: Separate production PGO timings from the FullOpts stability control
         type: choice
@@ -174,6 +178,10 @@ jobs:
     uses: ./.github/workflows/benchmark-matrix.yml
     with:
       timing: true
+
+  portable-benchmarks:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_portable_benchmarks
+    uses: ./.github/workflows/portable-benchmarks.yml
 
   nino-benchmark:
     name: Nino workloads and AppData benchmark

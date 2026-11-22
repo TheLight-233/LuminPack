@@ -2,9 +2,9 @@
 
 # ✨ LuminPack
 
-**Blazing-fast binary & JSON serialization for .NET and Unity**
+**Binary and JSON serialization for .NET, C++, Java, Go, and TypeScript**
 
-*Zero reflection · Zero-allocation reads · Ready for IL2CPP and NativeAOT*
+*Shared wire contracts · Source-generated .NET serializers · Unity and NativeAOT support*
 
 [![NuGet](https://img.shields.io/nuget/v/LuminPack.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/LuminPack)
 [![Downloads](https://img.shields.io/nuget/dt/LuminPack.svg?style=flat-square&logo=nuget&label=Downloads)](https://www.nuget.org/packages/LuminPack)
@@ -19,7 +19,7 @@
 **English** · [简体中文](docs/README.cn.md)
 
 [Quick Start](#-quick-start) ·
-[Features](#-features) ·
+[.NET Features](#-net-features) ·
 [Documentation](#-documentation) ·
 [Benchmarks](#-benchmarks) ·
 [Platform Packages](#-platform-packages)
@@ -28,7 +28,15 @@
 
 ---
 
-**LuminPack** is a high-performance serializer for C#. Mark a type with `[LuminPackable]` and a source generator writes a dedicated binary and JSON serializer for it at compile time — no reflection, no runtime code generation, no hidden allocations. It was built for game saves, network packets and real-time systems where every microsecond and every byte counts, and it runs everywhere .NET does: from .NET 11 servers down to Unity IL2CPP on consoles and phones.
+**LuminPack** is a high-performance serializer for game saves, network packets, and real-time applications. The .NET source generator builds Binary and JSON serializers for `[LuminPackable]` types. Export the same contract to generate bindings for C++, Java, Go, and TypeScript. Each runtime reads and writes LuminPack documents using the selected model and wire options. [Cross-language guide](docs/portable-runtime.md)
+
+| Language | Runtime guide |
+| --- | --- |
+| C# | [.NET and Unity](docs/getting-started.md) |
+| C++ | [C++20 runtime and generated codecs](src/LuminPack.Cpp/README.md) |
+| Java | [JDK runtime and generated bindings](src/LuminPack.Java/README.md) |
+| Go | [Go module and generated bindings](src/LuminPack.Go/README.md) |
+| TypeScript | [TypeScript runtime and generated types](src/LuminPack.TypeScript/README.md) |
 
 ```csharp
 [LuminPackable]
@@ -44,7 +52,7 @@ LuminPackSerializer.Deserialize(bytes, ref player);          // ♻️ refills t
 string json = LuminPackSerializer.SerializeJson(player);     // 📜 JSON from the same model
 ```
 
-## 🌟 Features
+## 🌟 .NET features
 
 <table>
 <tr>
@@ -337,6 +345,25 @@ Want to see it on your own hardware? Run the same four benchmark classes locally
 dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter "LuminPackBenchmark.SimpleBenchmark.*" "LuminPackBenchmark.SerializeBenchmark.*" "LuminPackBenchmark.JsonBenchmark.*" "LuminPackBenchmark.PolymorphismBenchmark.*"
 ```
 
+### Language runtime benchmarks
+
+The language runners use the same `SimpleClass` and `CharacterSaveData` models. Each compares Binary in the default LuminPack mode and UTF-8 JSON within one language, with separate serialization and deserialization measurements.
+
+| Runtime | Binary comparisons | UTF-8 JSON comparisons |
+| --- | --- | --- |
+| C++ | struct_pack, Bitsery, cereal, MessagePack-C++ | RapidJSON, jsoncons, nlohmann/json, simdjson (read) |
+| Java | Kryo, MessagePack, Jackson CBOR, Fastjson2 JSONB | Jackson, Gson, Fastjson2 |
+| Go | CBOR, MessagePack, encoding/gob | encoding/json, goccy/go-json, jsoniter |
+| TypeScript | @msgpack/msgpack, msgpackr, cbor-x | V8 JSON, @jsonjoy.com/json-pack, fast-json-stringify + V8 |
+
+<!-- portable-benchmark-charts:start -->
+
+The hosted benchmark run supplies the light and dark charts for this section.
+
+<!-- portable-benchmark-charts:end -->
+
+[Benchmark workflow](https://github.com/TheLight-233/LuminPack/actions/workflows/ci.yml) · [Method and reproduction](docs/ci.md#language-runtime-benchmarks)
+
 ## 📚 Documentation
 
 | | Guide | You'll learn |
@@ -352,7 +379,7 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter "Lumi
 | 💡 | [IDE Code Fixes](docs/code-fixes.md) | Included quick actions for generator diagnostics and Fix All |
 | 🎮 | [Unity, IL2CPP & NativeAOT](docs/unity.md) | Unity setup, Burst, trimming |
 | 📐 | [Wire Formats](docs/formats.md) | The binary layout and the JSON representation |
-| 🌐 | [Java, Go, and TypeScript](docs/portable-runtime.md) | Generate bindings and exchange Binary and JSON with .NET |
+| 🌐 | [Cross-language contracts](docs/portable-runtime.md) | Export one contract and exchange Binary and JSON across runtimes |
 | 🗜️ | [Compression](docs/compression.md) | `LuminCompressor`, `[LuminPackCompress]` and the `LUM2` frame |
 | 🛡️ | [Security](docs/security.md) | Portability, untrusted input, encryption |
 

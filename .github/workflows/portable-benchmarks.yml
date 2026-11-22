@@ -1,0 +1,123 @@
+name: Portable language benchmarks
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  fixtures:
+    name: Export the managed benchmark fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          dotnet-version: 10.0.x
+      - run: python3 benchmarks/LuminPack.Benchmark.Portable/prepare.py .tmp/portable-benchmark/models --cpp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portable-benchmark-fixtures
+          path: .tmp/portable-benchmark/models/
+          if-no-files-found: error
+
+  benchmark:
+    name: Compare ${{ matrix.language }} libraries
+    needs: fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [cpp, java, go, typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: portable-benchmark-fixtures
+          path: .tmp/portable-benchmark/models
+      - uses: actions/setup-java@v4
+        if: matrix.language == 'java'
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-go@v5
+        if: matrix.language == 'go'
+        with:
+          go-version-file: benchmarks/LuminPack.Benchmark.Go/go.mod
+          cache-dependency-path: benchmarks/LuminPack.Benchmark.Go/go.sum
+      - uses: actions/setup-node@v4
+        if: matrix.language == 'typescript'
+        with:
+          node-version: '22'
+      - name: Record runner information
+        env:
+          LANGUAGE: ${{ matrix.language }}
+        run: |
+          mkdir -p .tmp/portable-benchmark/results
+          lscpu > ".tmp/portable-benchmark/results/$LANGUAGE-cpu.txt"
+          uname -a > ".tmp/portable-benchmark/results/$LANGUAGE-os.txt"
+      - name: Benchmark C++
+        if: matrix.language == 'cpp'
+        run: bash benchmarks/LuminPack.Benchmark.Portable/run-cpp.sh .tmp/portable-benchmark/models .tmp/portable-benchmark/results
+      - name: Benchmark Java
+        if: matrix.language == 'java'
+        run: |
+          java -version 2> .tmp/portable-benchmark/results/java-runtime.txt
+          python3 benchmarks/LuminPack.Benchmark.Java/run.py .tmp/portable-benchmark/models .tmp/portable-benchmark/results/java.csv
+      - name: Benchmark Go
+        if: matrix.language == 'go'
+        working-directory: benchmarks/LuminPack.Benchmark.Go
+        run: |
+          go version > ../../.tmp/portable-benchmark/results/go-runtime.txt
+          go run . ../../.tmp/portable-benchmark/models ../../.tmp/portable-benchmark/results/go.csv
+      - name: Benchmark TypeScript
+        if: matrix.language == 'typescript'
+        run: |
+          node --version > .tmp/portable-benchmark/results/typescript-runtime.txt
+          npm ci --prefix src/LuminPack.TypeScript
+          npm run build --prefix src/LuminPack.TypeScript
+          npm ci --prefix benchmarks/LuminPack.Benchmark.TypeScript
+          node benchmarks/LuminPack.Benchmark.TypeScript/benchmark.mjs .tmp/portable-benchmark/models .tmp/portable-benchmark/results/typescript.csv
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portable-benchmark-raw-${{ matrix.language }}
+          path: |
+            .tmp/portable-benchmark/results/*.csv
+            .tmp/portable-benchmark/results/*.txt
+          if-no-files-found: error
+
+  charts:
+    name: Render benchmarks for the README
+    needs: benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: portable-benchmark-raw-*
+          path: .tmp/portable-benchmark/raw
+          merge-multiple: true
+      - name: Render light and dark charts
+        run: |
+          work=.tmp/portable-benchmark
+          source="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          python3 benchmarks/LuminPack.Benchmark.Portable/chart.py "$work/charts" \
+            --input "$work/raw/cpp.csv" --input "$work/raw/java.csv" --input "$work/raw/go.csv" \
+            --input "$work/raw/typescript.csv" --source-url "$source" --host 'GitHub Actions Ubuntu x64'
+          printf '{"source_url":"%s","commit":"%s"}\n' "$source" "$GITHUB_SHA" > "$work/charts/provenance.json"
+          echo 'Download `portable-benchmark-charts` for the four light/dark chart pairs and summary.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portable-benchmark-charts
+          path: .tmp/portable-benchmark/charts/
+          if-no-files-found: error

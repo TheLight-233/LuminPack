@@ -12,6 +12,7 @@
 | `unity.yml`、`unity-extensions.yml` | Unity Editor 测试、IL2CPP 与 WebGL Player、Unity 对象与 Burst 契约。 |
 | `benchmark-matrix.yml` | 序列化矩阵的往返校验；手动运行时计时。 |
 | `benchmark-matrix-paired.yml` | 手动在同一 runner 上以 FullOpts 和 TieredPGO 对照两个或三个版本的指定 Matrix 用例。 |
+| `portable-benchmarks.yml` | 手动运行 C++、Java、Go、TypeScript 各自生态的 Binary 与 UTF-8 JSON 对照。 |
 | `fuzz.yml` | 有预算上限的 SharpFuzz/libFuzzer 测试，见 [Fuzz 测试](fuzzing.cn.md)。 |
 | `release.yml` | 构建候选包、比较 API，并通过配置的版本标签发布到 NuGet。见[发布](releasing.cn.md)。 |
 
@@ -35,6 +36,20 @@ AVX-512 硬件测试在推送和同仓库拉取请求时自动运行，手动运
 Unity 2022.3.51f1 和 6000.0.43f1 依次运行 Editor 测试、IL2CPP smoke Player、Unity 对象与 Burst Editor 契约，以及在无头 Chrome 中运行的 WebGL IL2CPP smoke Player，共用一个许可证。多次运行会排队（最多 100 个），不会取消之前的运行。Fork 拉取请求跳过需要许可证的任务。手动的 Windows 和 macOS 原生 Player 检查需要预先激活许可证的自托管 runner；Linux 托管机器无法验证这些平台。
 
 ## 基准测试
+
+### 各语言 Runtime 基准
+
+手动运行 `ci.yml` 时勾选 `run_portable_benchmarks`。工作流一次导出 `SimpleClass` 和 `CharacterSaveData`，为每种语言提供同样的 .NET 文档。对比限定在同一语言、模型、格式和读写操作内。图表条形为耗时中位数，细线为样本范围，倍率用 LuminPack 耗时除以对照库耗时。原始产物记录运行主机、运行时版本、耗时、编码大小和各测试可采集的分配数据。
+
+Java 通过 JMH 启动独立 JVM。Go 轮换运行各计时窗口并采集分配量。TypeScript 通过 Node 对字节输入与输出进行计时，分配列留空。三者都在计时前准备模型与输入字节，计时覆盖完整编码或解码调用。对照库使用其常用的类型化结构、树或对象，并验证还原到相同的逻辑字段。C++ 使用生成的类型化 DTO，按库支持的方式复用写缓冲，汇总独立进程的中位数。simdjson 只测读取。
+
+工作流用 README 的渲染器生成浅色与深色图表。从对应 CI 运行下载并解压 `portable-benchmark-charts`，以下命令将图表和数据出处放入中英文 README。
+
+```sh
+python3 benchmarks/LuminPack.Benchmark.Portable/publish.py .tmp/portable-benchmark-charts
+```
+
+本地夹具准备和各语言运行方式见[跨语言指南](portable-runtime.cn.md)。
 
 手动触发 `ci.yml` 并开启 `run_benchmarks` 后，会为 BenchmarkDotNet 主套件、Nino 的 Workloads 和 AppData 套件以及[序列化矩阵](../benchmarks/LuminPack.MatrixBenchmark)计时。
 

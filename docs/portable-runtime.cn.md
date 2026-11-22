@@ -1,87 +1,119 @@
-# Java、Go 和 TypeScript 互通
+# 跨语言契约
 
 [English](portable-runtime.md)
 
-Java、Go 和 TypeScript 与 [C++ Runtime](modules/luminpack.cpp.cn.md) 共用同一份 .NET 契约。生成的绑定提供根类型、成员顺序、二进制配置、JSON 名称、Union 分支和布局信息。请将导出文件和生成的绑定与对应版本的 .NET 契约一同管理。
+LuminPack 的各个运行时共用一份二进制和 JSON 契约。在 C# 中定义模型，导出编译器生成的契约，再为各个应用生成所需的绑定。导出文件记录成员顺序、配置、JSON 名称、Union 分支、Version 描述符、输入限制和物理布局。模型发生变化后重新生成绑定。
 
-## 导出与生成
+| 运行时 | 指南 |
+| --- | --- |
+| .NET | [快速开始](getting-started.cn.md) |
+| C++ | [构建 C++20 库并生成 codec](modules/luminpack.cpp.cn.md) |
+| Java | [编译运行时并绑定契约](modules/luminpack.java.cn.md) |
+| Go | [使用源码模块和生成的 schema](modules/luminpack.go.cn.md) |
+| TypeScript | [使用 ESM 包和生成的类型](modules/luminpack.typescript.cn.md) |
 
-在定义契约的 .NET 项目中使用 Next 生成器，并将导出选项暴露给编译器。
+## 定义并导出模型
+
+在定义契约的 .NET 项目中使用 Next 源代码生成器。下面的示例是一个 Default 位置记录。各语言生成的绑定采用导出文件中的成员名与二进制顺序。
+
+```csharp
+using System.Collections.Generic;
+using LuminPack.Attribute;
+
+namespace Example;
+
+[LuminPackable]
+public partial class Message
+{
+    public int Id { get; set; }
+    public string Text { get; set; } = "";
+    public List<int> Measurements { get; set; } = new();
+}
+```
+
+在 .NET 项目文件中将导出开关暴露给编译器。
 
 ```xml
 <ItemGroup>
-  <CompilerVisibleProperty Include="LuminPackExportCppContract" />
+  <CompilerVisibleProperty Include="LuminPackExportContract" />
 </ItemGroup>
 ```
 
-从仓库根目录导出编译后的程序集，并为每个根类型和目标语言分别生成绑定。
+编译程序集并导出编译器元数据。将第二条命令中的程序集路径替换为实际构建产物。
 
 ```sh
-dotnet build path/to/Contracts.csproj -c Release -p:LuminPackExportCppContract=true
-dotnet run --project tools/LuminPack.Codegen.Cpp -c Release -- export path/to/Contracts.dll .tmp/contracts.json
-dotnet run --project tools/LuminPack.Codegen.Cpp -c Release -- generate-portable java .tmp/contracts.json Example.Message .tmp/Message.java
-dotnet run --project tools/LuminPack.Codegen.Cpp -c Release -- generate-portable go .tmp/contracts.json Example.Message .tmp/message.go
-dotnet run --project tools/LuminPack.Codegen.Cpp -c Release -- generate-portable typescript .tmp/contracts.json Example.Message .tmp/message.ts
+dotnet build path/to/Contracts.csproj -c Release -p:LuminPackExportContract=true
+dotnet run --project tools/LuminPack.Codegen -c Release -- export path/to/Contracts.dll .tmp/contracts.json
 ```
 
-闭合泛型根类型使用导出文件中的完整 `id`，在命令行中用引号包裹。将受支持的集合用作根类型时，传入完整的类型表达式，例如 `'System.Collections.Generic.List<Example.Message>'`。`project-portable` 使用相同的契约文件、根类型和输出路径参数，生成可直接加载的 JSON 契约。
+## 生成语言绑定
 
-命令选项放在契约文件路径前。`--binary-profile` 支持 `utf8-length`、`utf8-token`、`utf16-length`、`utf16-token`、`utf8-varint` 和 `utf16-varint`，类型与成员声明保留优先级。32 位 .NET 上的 `nint` 和 `nuint` 使用 `--native-integer-bytes 4`。Native Nullable 存储另有 `--native-scalar-alignment`，当对端的 64 位标量按 4 字节对齐时设为 `4`。两项默认均为 `8`。跨架构传输时可为类型选择 [Packed 或 Tagged](options.cn.md)。
+在仓库根目录运行，每条命令指定一种目标语言和一个根类型。使用完整模型名，或导出文件中的闭合泛型 `id`。包含命令行特殊字符的名称需要用引号包裹，例如 `'Example.Box<string>'`。
 
-## Java
-
-使用 JDK 17 或更高版本编译生成文件与 [Java Runtime 源代码](../src/LuminPack.Java/src/main/java/luminpack)。生成类默认放在 `luminpack.generated` 包下，`--package` 可指定应用的包名。输出文件名决定生成类的名称。
-
-```java
-Object message = luminpack.generated.Message.CODEC.readBinary(binary);
-byte[] json = luminpack.generated.Message.CODEC.writeJson(message, luminpack.LuminPack.UTF8);
+```sh
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language cpp .tmp/contracts.json Example.Message .tmp/message.h
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language java .tmp/contracts.json Example.Message .tmp/Message.java
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language go .tmp/contracts.json Example.Message .tmp/message.go
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language typescript .tmp/contracts.json Example.Message .tmp/message.ts
 ```
 
-记录使用以成员名为键的 Map。静态 Union 分支使用 `LuminPack.UnionValue`，无符号 32 位哈希存入 `long`。无符号 64 位值使用 `BigInteger`。使用 `LuminPack.fromManifest` 可直接加载投影后的 JSON 契约。使用 `withCustom` 绑定应用的格式化器，使用 `withUnionCase` 注册 Union 分支。
+Java、Go 和 TypeScript 也可以直接加载投影后的 JSON 契约。`project` 支持将受支持的独立类型表达式用作根，例如 `'System.Collections.Generic.List<Example.Message>'`。
 
-## Go
-
-使用 Go 1.23 或更高版本。在应用模块中引用 `github.com/TheLight-233/LuminPack/src/LuminPack.Go`。从源码使用时，可通过 `replace` 指向本地 [Go Runtime](../src/LuminPack.Go)。生成包默认为 `generated`，`--package` 可指定所在目录的 Go 包名。
-
-```go
-schema, err := generated.LoadMessageLuminPack()
-if err != nil {
-    return err
-}
-message, err := schema.DecodeBinary("", binary)
-if err != nil {
-    return err
-}
-json, err := schema.EncodeJSONWithEncoding("", message, luminpack.UTF8)
+```sh
+dotnet run --project tools/LuminPack.Codegen -c Release -- project .tmp/contracts.json Example.Message .tmp/message.contract.json
 ```
 
-传入空类型标识会选用导出的根类型。记录使用 `luminpack.Record`，字典使用保留 wire 顺序的 `luminpack.Dictionary`，Union 分支携带具体类型标识。使用 `luminpack.LoadSchema` 可直接加载投影后的 JSON 契约。使用 `WithCustom` 绑定应用的格式化器，使用 `WithRegisteredUnion` 注册 Union 分支。
+选项放在契约文件路径之前。
 
-## TypeScript
+| 选项 | 用法 |
+| --- | --- |
+| `--binary-profile <profile>` | 选择 `utf8-length`、`utf8-token`、`utf16-length`、`utf16-token`、`utf8-varint` 或 `utf16-varint`。类型和成员声明的优先级更高。 |
+| `--rtti` | 生成 C++ RTTI Union codec，支持相应的虚派发与运行时注册。 |
+| `--package <name>` | 设置生成的 Java 或 Go 包名。 |
+| `--runtime-import <specifier>` | 设置 TypeScript 运行时的 ESM 模块标识。 |
+| `--native-integer-bytes <4 或 8>` | 为 Java、Go 和 TypeScript 指定托管端 `nint`、`nuint` 的宽度，默认 8。C++ 由目标 ABI 决定。 |
+| `--native-scalar-alignment <4 或 8>` | 为 Java、Go 和 TypeScript 指定托管端 64 位标量的对齐方式，默认 8。托管端的原生整数可以是 4 字节，标量仍按 8 字节对齐。 |
 
-在 [TypeScript Runtime](../src/LuminPack.TypeScript) 源码目录运行 `npm ci` 和 `npm run build`，随后在应用中引用 `@luminpack/typescript`。需要其他 ESM 模块标识时，可使用 `--runtime-import`。
+## 对齐两端的数据格式设置
 
-```ts
-import { codec } from "./message.js";
-
-const message = codec.readBinary(binary);
-const json = codec.writeJson(message, "utf8");
-```
-
-生成的记录类型使用 .NET 成员名称。字典使用 `Map`，64 位整数使用 `bigint`，Union 分支使用 `{ type, value }`。二进制和 JSON 数据都使用 `Uint8Array`。使用 `createCodec` 可直接加载投影后的 JSON 契约。在生成的绑定中可调用 `bindCodec` 并传入 `custom` 或 `registered`，绑定应用格式化器或注册 Union 分支。
-
-## Runtime 快路径
-
-- **Java** 使用按机器字批处理的字符串操作和连续 Primitive 存储。启用 SIMD 扫描时，用 `javac --add-modules jdk.incubator.vector` 编译 `src/LuminPack.Java/src/vector/java/luminpack/VectorStringKernels.java`，并将基础 Runtime 类加入编译 classpath。运行时将 Vector 类和 `src/LuminPack.Java/src/vector/resources` 一起加入应用的 classpath，并使用 `java --add-modules jdk.incubator.vector` 启动。JVM 会选择支持的向量宽度。
-- **Go** 在 amd64 使用 SSE2，并在 CPU 和操作系统均支持时为完整数据块选择 AVX2 或 AVX-512BW。在 arm64 使用 NEON。这些内核加速 ASCII 扫描和适用的 UTF-16 转换。其他架构以及 `-tags purego` 构建使用 Go 实现。
-- **TypeScript** 对连续 Primitive 数据使用带边界检查的 TypedArray 快路径。支持时使用 WebAssembly SIMD 扫描长文本，其余环境走 JavaScript 路径。SIMD 模块内嵌在 Runtime 中。如修改 `wasm/text.c`，可在 TypeScript Runtime 目录运行 `node scripts/build-text-simd.mjs` 重新生成模块，需在 `PATH` 中提供 Clang 和 `wasm-ld`。
+- 两端使用相同的根类型和二进制配置，默认是 UTF-16 Length。Length 和 VarInt 区分 `null` 与空字符串。Token 使用零码元作为终止符，将 `null` 写成空字符串。需要保留内嵌零码元时，使用 Length 或 VarInt。
+- 两端使用相同的 JSON 编码。JSON 契约还定义成员名、枚举值、集合形状和 Union 类型标识。[数据格式](formats.cn.md)
+- 需要演进并读取旧数据的模型使用 `GeneratorType.Version`。两端的 Union 分支和注册 tag 保持一致。Custom 格式化器定义自己的数据负载，两端需要匹配的应用绑定。[版本容忍](versioning.cn.md)、[Union 多态](polymorphism.cn.md)、[自定义格式化器](custom-formatters.cn.md)
+- 构建启用引用跟踪的对象图时，复用同一对象或记录实例。在 C++ 中使用借用指针期间，保持引用文档存活。[引用跟踪](versioning.cn.md#引用跟踪)
+- 跨架构传输可以选择支持的 Packed 或 Tagged 布局。Native 二进制要求 CLR 布局匹配，包括填充和对齐，原生整数宽度需单独匹配。二进制矩形数组使用零下界，JSON 支持非零下界。[结构体布局选项](options.cn.md#3264-位结构体布局)
 
 ## 验证互通
 
-两端使用相同的根类型、二进制配置和 JSON 编码。构建启用引用跟踪的对象图时，复用同一记录实例以保留引用身份。Custom 格式化器与注册式 Union 分支需要在两端提供匹配的实现。
-
-在仓库根目录运行互通测试。默认使用 `SimpleClass` 和 `CharacterSaveData` 基准模型，验证 .NET Binary、UTF-8 JSON 和 UTF-16 JSON 的跨语言读写。通过 `--help` 查看其他测试组和工具路径设置。
+互通测试在 .NET 中生成 `SimpleClass` 和 `CharacterSaveData`，通过 Java、Go、TypeScript 读写二进制、UTF-8 JSON 和 UTF-16 JSON，再由 .NET 验证结果。`strings` 测试组将六种二进制配置与托管端生成的数据逐字节对比。C++ 的互通测试通过 CMake 运行。[C++ 指南](modules/luminpack.cpp.cn.md#验证基准模型)
 
 ```sh
 python tests/LuminPack.Tests.Portable/verify.py
+python tests/LuminPack.Tests.Portable/verify.py --suite strings
+python tests/LuminPack.Tests.Portable/verify.py --help
+```
+
+## 运行基准测试并绘制图表
+
+为各目标语言准备相同的托管基准数据。需要运行 C++ 基准时，在准备命令中加上 `--cpp`，一并生成 C++ 头文件。
+
+```sh
+python benchmarks/LuminPack.Benchmark.Portable/prepare.py .tmp/portable-benchmark/models
+```
+
+在仓库根目录执行对应语言的命令。C++ 脚本使用 Bash 和 CMake，TypeScript 基准使用 Node.js 22 或更高版本。
+
+```sh
+python benchmarks/LuminPack.Benchmark.Java/run.py .tmp/portable-benchmark/models .tmp/portable-benchmark/java.csv
+(cd benchmarks/LuminPack.Benchmark.Go && go run . ../../.tmp/portable-benchmark/models ../../.tmp/portable-benchmark/go.csv)
+npm ci --prefix src/LuminPack.TypeScript
+npm run build --prefix src/LuminPack.TypeScript
+npm ci --prefix benchmarks/LuminPack.Benchmark.TypeScript
+node benchmarks/LuminPack.Benchmark.TypeScript/benchmark.mjs .tmp/portable-benchmark/models .tmp/portable-benchmark/typescript.csv
+bash benchmarks/LuminPack.Benchmark.Portable/run-cpp.sh .tmp/portable-benchmark/models .tmp/portable-benchmark
+```
+
+将 CSV 渲染为浅色、深色图表和 HTML 报告。多次传入 `--input` 可以纳入其他语言的结果。README 中发布的图表使用 CI 产物。[基准方法与 CI](ci.cn.md#各语言-runtime-基准)
+
+```sh
+python benchmarks/LuminPack.Benchmark.Portable/chart.py .tmp/portable-benchmark/charts --input .tmp/portable-benchmark/java.csv
 ```

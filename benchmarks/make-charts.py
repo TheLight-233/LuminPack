@@ -83,7 +83,8 @@ def render(title, panels, results, theme, *, colors=COLORS,
     for index, (name, entries) in enumerate(panels):
         x0 = 20 + index * (panel_width + 30)
         values = [results[method]["mean"] for _, method in entries]
-        baseline, peak = values[0], max(values)
+        baseline = values[0]
+        peak = max(results[method].get("high", results[method]["mean"]) for _, method in entries)
         bar_space = panel_width - label_width - 96
         out.append(f'<text x="{x0}" y="{top - 12}" font-size="14" font-weight="600" fill="{t["text"]}">{name}</text>')
         for row, ((library, method), value) in enumerate(zip(entries, values)):
@@ -93,6 +94,12 @@ def render(title, panels, results, theme, *, colors=COLORS,
             out.append(f'<text x="{x0}" y="{y + bar_height * 0.68:.1f}" font-size="13" font-weight="{weight}" fill="{t["text"]}">{escape(library)}</text>')
             out.append(f'<rect x="{x0 + label_width}" y="{y}" width="{bar_space}" height="{bar_height}" rx="5" fill="{t["grid"]}"/>')
             out.append(f'<rect x="{x0 + label_width}" y="{y}" width="{length:.1f}" height="{bar_height}" rx="5" fill="{colors[library]}"/>')
+            spread = results[method]
+            if "low" in spread and "high" in spread:
+                start, end = (x0 + label_width + bar_space * spread[bound] / peak for bound in ("low", "high"))
+                line_y = y + bar_height - 7
+                out.append(f'<path d="M{start:.1f} {line_y - 3}v6 m0 -3H{end:.1f} m0 -3v6" '
+                           f'fill="none" stroke="{t["text"]}" stroke-opacity="0.8" stroke-width="1.2"/>')
             ratio = results[method].get("ratio", None if library == "LuminPack" else value / baseline)
             label = format_time(value) + ("" if ratio is None else f"  ({ratio:.2f}x)")
             out.append(f'<text x="{x0 + label_width + bar_space + 8}" y="{y + bar_height * 0.68:.1f}" font-size="12" font-weight="{weight}" fill="{t["text"]}">{escape(label)}</text>')

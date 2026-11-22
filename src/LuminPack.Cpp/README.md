@@ -2,7 +2,7 @@
 
 [中文](../../docs/modules/luminpack.cpp.cn.md)
 
-The C++20 runtime reads and writes LuminPack binary records over caller-owned contiguous buffers. Codecs include one public header, `<luminpack/luminpack.h>`, and link the `LuminPack::Cpp` static library. The library builds the Latin-1 SIMD kernels in private translation units and selects them at runtime on supported x64 processors.
+The C++20 runtime reads and writes LuminPack Binary and UTF-8 or UTF-16LE JSON over caller-owned contiguous buffers. Generated codecs include the public header `<luminpack/luminpack.h>` and link the `LuminPack::Cpp` static library. The runtime selects supported SIMD kernels at run time. [Cross-language contracts](../../docs/portable-runtime.md)
 
 ## Build
 
@@ -127,23 +127,23 @@ In a .NET project using Next, expose the export option to the compiler:
 
 ```xml
 <ItemGroup>
-  <CompilerVisibleProperty Include="LuminPackExportCppContract" />
+  <CompilerVisibleProperty Include="LuminPackExportContract" />
 </ItemGroup>
 ```
 
 Run the build and the standalone tool from the repository root. Replace the assembly path and root metadata name with your model's.
 
 ```sh
-dotnet build path/to/Contracts.csproj -c Release -p:LuminPackExportCppContract=true
-dotnet run --project tools/LuminPack.Codegen.Cpp -- export path/to/Contracts.dll .tmp/contracts.json
-dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json Example.Message .tmp/message.h
+dotnet build path/to/Contracts.csproj -c Release -p:LuminPackExportContract=true
+dotnet run --project tools/LuminPack.Codegen -c Release -- export path/to/Contracts.dll .tmp/contracts.json
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language cpp .tmp/contracts.json Example.Message .tmp/message.h
 ```
 
 The export is a compiler projection of the resolved member order, binary profiles, layouts, Version descriptors, and Union hashes. The tool reads assembly metadata and produces a header that includes `<luminpack/luminpack.h>`. A generated root has its own namespace containing `root_value`, `root_binary`, `root_json`, and the declared JSON encoding and read limits. For `Example.Message`, the namespace is `luminpack_generated::root_Example_x002eMessage`.
 
-Pass `generate --binary-profile utf8-length` to match an explicit C# Binary operation such as `Serialize<Message, LuminPackUtf8LengthOptions>`. The other built-in choices are `utf8-token`, `utf16-length`, `utf16-token`, `utf8-varint`, and `utf16-varint`. A member's declared settings take precedence over its enclosing type's declared profile, and the operation profile supplies inherited settings. JSON uses its declared document options. An explicit profile adds a namespace suffix such as `_binary_utf8_length`, so its header can coexist with the default header and headers for other profiles. `--binary-profile` and `--rtti` can be combined.
+Pass `generate --language cpp --binary-profile utf8-length` to match an explicit C# Binary operation such as `Serialize<Message, LuminPackUtf8LengthOptions>`. The other built-in choices are `utf8-token`, `utf16-length`, `utf16-token`, `utf8-varint`, and `utf16-varint`. A member's declared settings take precedence over its enclosing type's declared profile, and the operation profile supplies inherited settings. JSON uses its declared document options. An explicit profile adds a namespace suffix such as `_binary_utf8_length`, so its header can coexist with the default header and headers for other profiles. `--binary-profile` and `--rtti` can be combined.
 
-A modeled closed generic type can be exported when a concrete C# serialization call reaches it directly or through a container. Copy its exact `id` from the manifest and quote it when passing it to `generate`, for example `generate .tmp/contracts.json 'Example.Box<string>' .tmp/box.h`.
+A modeled closed generic type can be exported when a concrete C# serialization call reaches it directly or through a container. Copy its exact `id` from the manifest and quote it when passing it to `generate --language cpp .tmp/contracts.json 'Example.Box<string>' .tmp/box.h`.
 
 Pass the generated `root_binary_limits` or `root_json_options` to its document reader to enforce a declared `MaxInputBytes` before decoding. The limit counts bytes in the supplied document. Advancing cursors keep their collection, string, and depth checks.
 
@@ -172,10 +172,10 @@ An ordinary Version class can be a generated variant or RTTI Union case. Its Bin
 The integration test uses the actual `SimpleClass.Create()` and `CharacterSaveData.Create()` factories from the managed benchmark project. Emit the .NET documents and generate both headers into the same directory:
 
 ```sh
-dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release -p:LuminPackExportCppContract=true -- write .tmp/cpp-models
-dotnet run --project tools/LuminPack.Codegen.Cpp -- export benchmarks/LuminPack.Benchmark/bin/Release/net10.0/LuminPack.Benchmark.dll .tmp/cpp-models/manifest.json
-dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/cpp-models/manifest.json LuminPackBenchmark.SimpleClass .tmp/cpp-models/simple-benchmark.hpp
-dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/cpp-models/manifest.json LuminPackBenchmark.CharacterSaveData .tmp/cpp-models/serialize-benchmark.hpp
+dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release -p:LuminPackExportContract=true -- write .tmp/cpp-models
+dotnet run --project tools/LuminPack.Codegen -c Release -- export benchmarks/LuminPack.Benchmark/bin/Release/net10.0/LuminPack.Benchmark.dll .tmp/cpp-models/manifest.json
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language cpp .tmp/cpp-models/manifest.json LuminPackBenchmark.SimpleClass .tmp/cpp-models/simple-benchmark.hpp
+dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language cpp .tmp/cpp-models/manifest.json LuminPackBenchmark.CharacterSaveData .tmp/cpp-models/serialize-benchmark.hpp
 ```
 
 Configure CMake with the absolute fixture directory. The test transcodes the original .NET binary and JSON through the generated C++ models. Then verify that .NET reads both C++ outputs back to the original benchmark values.
@@ -187,7 +187,7 @@ ctest --test-dir .tmp/cpp -C Release -R luminpack_cpp_models --output-on-failure
 dotnet run --project tests/LuminPack.Tests.Cpp.Interop -c Release --no-build -- read .tmp/cpp-models/out
 ```
 
-To exercise the RTTI model gate, generate both headers with `generate --rtti` and configure CMake with `LUMINPACK_CPP_RTTI_FIXTURES` pointing to that fixture directory. Run `luminpack_cpp_rtti` through CTest, then use the same managed verifier on its `out` directory.
+To exercise the RTTI model gate, generate both headers with `generate --language cpp --rtti` and configure CMake with `LUMINPACK_CPP_RTTI_FIXTURES` pointing to that fixture directory. Run `luminpack_cpp_rtti` through CTest, then use the same managed verifier on its `out` directory.
 
 ## Compare native performance
 

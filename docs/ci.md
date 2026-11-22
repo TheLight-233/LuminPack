@@ -12,6 +12,7 @@ Pushes to `main` and `refactor`, and pull requests, trigger the hosted checks. T
 | `unity.yml`, `unity-extensions.yml` | Unity Editor tests, IL2CPP and WebGL players, Unity object and Burst contracts. |
 | `benchmark-matrix.yml` | Round-trip validation of the serialization matrix; timing on manual runs. |
 | `benchmark-matrix-paired.yml` | Manual same-runner comparison of two or three revisions for selected Matrix fixtures, in FullOpts and TieredPGO. |
+| `portable-benchmarks.yml` | Manual Binary and UTF-8 JSON comparisons with native C++, Java, Go, and TypeScript libraries. |
 | `fuzz.yml` | Bounded SharpFuzz/libFuzzer campaigns; see [fuzzing](fuzzing.md). |
 | `release.yml` | Release candidate builds, API comparison and NuGet publishing from the configured version tag. See [releasing](releasing.md). |
 
@@ -37,6 +38,20 @@ Unity 2022.3.51f1 and 6000.0.43f1 run Editor tests, an IL2CPP smoke player, the 
 ## Benchmarks
 
 Manually dispatching `ci.yml` with `run_benchmarks` enabled times the BenchmarkDotNet suites, the Nino Workloads and AppData suites, and the [serialization matrix](../benchmarks/LuminPack.MatrixBenchmark).
+
+### Language runtime benchmarks
+
+Run `ci.yml` with `run_portable_benchmarks` enabled. The workflow exports `SimpleClass` and `CharacterSaveData` once and supplies the same .NET documents to every language. Compare libraries within a language, model, format, and operation. The chart bars are medians, the thin lines show the sample range, and the multiplier divides LuminPack's time by the peer's time. The raw artifacts record the runner, runtime, timing, encoded bytes, and allocation figures where the runner can collect them.
+
+The Java runner uses JMH with fresh JVM forks. Go runs rotated time windows with allocation sampling. TypeScript measures Node APIs over byte buffers and does not collect allocated bytes. These runners time complete encode and decode APIs with pre-built input values and preloaded documents. Reference adapters use their natural typed or tree/object representations and verify that they recover the same logical fields. Construction of those inputs stays outside the timed operation. The C++ runner compares generated typed DTOs, reuses supported output buffers, and reports medians across independent process runs. Its simdjson entry measures decode only.
+
+The chart artifact uses the README renderer for both themes. To install a measured chart set in the two READMEs, extract `portable-benchmark-charts` from its CI run and pass the extracted directory to the publication script.
+
+```sh
+python3 benchmarks/LuminPack.Benchmark.Portable/publish.py .tmp/portable-benchmark-charts
+```
+
+For local fixture preparation and standalone runs, see the [shared language guide](portable-runtime.md).
 
 | Input | Default | Effect |
 | --- | --- | --- |
