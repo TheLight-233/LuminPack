@@ -755,6 +755,110 @@ void homogeneous_two_byte_utf8_runs()
     }
 }
 
+void homogeneous_bmp_utf8_runs()
+{
+    constexpr auto profile = luminpack::string_profile::utf8_length;
+    constexpr std::size_t header_size = 8;
+    constexpr std::array<std::size_t, 15> lengths{31, 32, 33, 39, 40, 47, 48, 63, 64, 65, 71, 72, 96, 129, 193};
+    constexpr std::array<char16_t, 7> units_table{0x0800, 0x4e2d, 0x97a9, 0xd7ff, 0xe000, 0xfffd, 0xffff};
+    constexpr std::array<std::array<byte, 3>, 7> byte_table{{
+        {byte{0xe0}, byte{0xa0}, byte{0x80}}, {byte{0xe4}, byte{0xb8}, byte{0xad}}, {byte{0xe9}, byte{0x9e}, byte{0xa9}},
+        {byte{0xed}, byte{0x9f}, byte{0xbf}}, {byte{0xee}, byte{0x80}, byte{0x80}}, {byte{0xef}, byte{0xbf}, byte{0xbd}},
+        {byte{0xef}, byte{0xbf}, byte{0xbf}}
+    }};
+
+    for (const auto length : lengths)
+    {
+        alignas(64) std::array<char16_t, 194> characters{};
+        const auto units = std::span(characters).subspan(1, length);
+        const auto text = std::u16string_view(units.data(), units.size());
+        std::vector<byte> payload;
+        for (std::size_t index = 0; index < length; ++index)
+        {
+            const auto entry = index % units_table.size();
+            units[index] = units_table[entry];
+            payload.insert(payload.end(), byte_table[entry].begin(), byte_table[entry].end());
+        }
+
+        std::array<byte, header_size + 3 * 193 + 2> storage;
+        const auto check_record = [&](std::span<const byte> record, std::span<const byte> expected)
+        {
+            reader input(record);
+            check(input.read<std::int32_t>() == static_cast<std::int32_t>(expected.size()), "BMP UTF-8 byte count.");
+            check(input.read<std::int32_t>() == static_cast<std::int32_t>(length), "BMP UTF-8 code-unit count.");
+            check(std::ranges::equal(input.take(expected.size()), expected), "BMP UTF-8 exact payload.");
+            input.require_end();
+        };
+        const auto verify_write = [&](std::span<const byte> expected)
+        {
+            storage.fill(byte{204});
+            const auto window = std::span(storage).subspan(1, header_size + expected.size());
+            writer output(window);
+            luminpack::write_string(output, profile, text);
+            check_record(output.written(), expected);
+            check(storage.front() == byte{204} && storage[1 + window.size()] == byte{204}, "BMP UTF-8 write bounds.");
+        };
+        verify_write(payload);
+
+        const std::array<std::size_t, 11> positions{7, 8, 15, 16, 31, 32, 47, 48, 63, 64, length - 1};
+        for (const auto index : positions)
+        {
+            if (index >= length)
+                continue;
+            const auto original = units[index];
+            units[index] = 0x7ff;
+            auto mixed = payload;
+            mixed[index * 3] = byte{0xdf};
+            mixed[index * 3 + 1] = byte{0xbf};
+            mixed.erase(mixed.begin() + static_cast<std::ptrdiff_t>(index * 3 + 2));
+            verify_write(mixed);
+            units[index] = original;
+        }
+
+        if (length == lengths.back())
+        {
+            auto separated = payload;
+            const std::array<std::size_t, 3> delimiters{98, 65, 32};
+            for (const auto index : delimiters)
+            {
+                units[index] = u'|';
+                const auto at = separated.begin() + static_cast<std::ptrdiff_t>(index * 3);
+                *at = byte{'|'};
+                separated.erase(at + 1, at + 3);
+            }
+            verify_write(separated);
+            for (const auto index : delimiters)
+                units[index] = units_table[index % units_table.size()];
+        }
+
+        units[length - 2] = 0xd83d;
+        units[length - 1] = 0xde00;
+        auto supplementary = payload;
+        supplementary.resize(payload.size() - 6);
+        const std::array emoji{byte{0xf0}, byte{0x9f}, byte{0x98}, byte{0x80}};
+        supplementary.insert(supplementary.end(), emoji.begin(), emoji.end());
+        verify_write(supplementary);
+
+        std::array<char16_t, 300> alias{};
+        std::ranges::copy(text, alias.begin() + 1);
+        writer output(std::as_writable_bytes(std::span(alias)).subspan(1, header_size + supplementary.size()));
+        luminpack::write_string(output, profile, std::u16string_view(alias.data() + 1, length));
+        check_record(output.written(), supplementary);
+
+        storage.fill(byte{204});
+        output = writer(std::span(storage).first(header_size + supplementary.size() - 1));
+        expect_error<std::length_error>([&] { luminpack::write_string(output, profile, text); }, "Writes a short BMP UTF-8 window.");
+        check(output.written().empty() && std::ranges::all_of(storage, [](byte value) { return value == byte{204}; }),
+            "Publishes a short BMP UTF-8 write.");
+
+        units.back() = 0xd800;
+        output = writer(storage);
+        expect_error<std::invalid_argument>([&] { luminpack::write_string(output, profile, text); }, "Writes an invalid BMP UTF-8 tail.");
+        check(output.written().empty() && std::ranges::all_of(storage, [](byte value) { return value == byte{204}; }),
+            "Publishes an invalid BMP UTF-8 write.");
+    }
+}
+
 struct point
 {
     std::int32_t x;
@@ -1068,6 +1172,7 @@ int main(int argc, char** argv)
         short_utf8_records(directory);
         long_utf8_ascii_runs();
         homogeneous_two_byte_utf8_runs();
+        homogeneous_bmp_utf8_runs();
         record_and_union_codecs();
         version_contracts(directory);
         std::cout << "LuminPack C++ wire checks passed.\n";

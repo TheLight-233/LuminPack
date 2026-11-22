@@ -434,10 +434,11 @@ void write_string(writer& output, string_profile profile, std::optional<std::u16
             }
 #endif
 #if defined(LUMINPACK_CPP_INLINE_SSE2)
-            if (profile == string_profile::utf8_length && text.size() >= 32 && text.front() >= 0x80 && text.front() < 0x800)
+            if (profile == string_profile::utf8_length && text.size() >= 32 && text.front() >= 0x80)
             {
-                prefix = detail::encode_two_byte_prefix(std::span(text.data(), text.size()), destination);
-                bytes_written = prefix * 2;
+                const auto run = detail::encode_homogeneous_utf8_prefix(std::span(text.data(), text.size()), destination);
+                prefix = run.consumed;
+                bytes_written = run.written;
             }
 #endif
             if (prefix < text.size())

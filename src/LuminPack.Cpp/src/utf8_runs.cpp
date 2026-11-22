@@ -47,13 +47,9 @@ std::size_t encode_two_byte_128(std::span<const char16_t> source, std::span<std:
     }
     return index;
 }
-}
 
-std::size_t encode_two_byte_prefix(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+std::size_t encode_two_byte_blocks(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
 {
-    if (source.size() < 32 || destination.size() < 24 || !has_ssse3() || !is_two_byte_sample(source.first<16>()))
-        return 0;
-
     std::size_t consumed = 0;
 #if defined(LUMINPACK_CPP_AVX512BW)
     if (has_avx512bw())
@@ -64,6 +60,75 @@ std::size_t encode_two_byte_prefix(std::span<const char16_t> source, std::span<s
         consumed += encode_two_byte_avx2(source.subspan(consumed), destination.subspan(consumed * 2));
 #endif
     return consumed + encode_two_byte_128(source.subspan(consumed), destination.subspan(consumed * 2));
+}
+
+#if defined(LUMINPACK_CPP_SSSE3)
+bool is_three_byte_bmp(char16_t unit) noexcept
+{
+    return unit >= 0x800 && (unit < 0xd800 || unit > 0xdfff);
+}
+
+bool is_bmp_sample(std::span<const char16_t, 16> sample) noexcept
+{
+#if defined(LUMINPACK_CPP_AVX2)
+    if (has_avx2())
+        return is_bmp_sample_avx2(sample);
+#endif
+    return is_bmp_sample_ssse3(sample);
+}
+
+std::size_t encode_bmp_blocks(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    std::size_t consumed = 0;
+#if defined(LUMINPACK_CPP_AVX512BW)
+    if (has_avx512bw())
+        consumed = encode_bmp_avx512(source, destination);
+#endif
+#if defined(LUMINPACK_CPP_AVX2)
+    if (has_avx2())
+        consumed += encode_bmp_avx2(source.subspan(consumed), destination.subspan(consumed * 3));
+#endif
+    return consumed + encode_bmp_ssse3(source.subspan(consumed), destination.subspan(consumed * 3));
+}
+#endif
+}
+
+utf8_prefix encode_homogeneous_utf8_prefix(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    if (source.size() < 32 || destination.size() < 24 || !has_ssse3())
+        return {};
+
+    utf8_prefix prefix{};
+    const auto lead = source.front();
+    if (lead >= 0x80 && lead < 0x800)
+    {
+        if (!is_two_byte_sample(source.first<16>()))
+            return {};
+        prefix.consumed = encode_two_byte_blocks(source, destination);
+        prefix.written = prefix.consumed * 2;
+    }
+#if defined(LUMINPACK_CPP_SSSE3)
+    else
+    {
+        if (!is_three_byte_bmp(lead) || !is_bmp_sample(source.first<16>()))
+            return {};
+        prefix.consumed = encode_bmp_blocks(source, destination);
+        prefix.written = prefix.consumed * 3;
+    }
+
+    // Core re-enters only after a complete run, for one ASCII delimiter before a BMP run.
+    while (prefix.consumed != 0 && source.size() - prefix.consumed >= 33 && destination.size() - prefix.written >= 25 &&
+        source[prefix.consumed] < 0x80 && is_three_byte_bmp(source[prefix.consumed + 1]))
+    {
+        destination[prefix.written++] = static_cast<std::byte>(source[prefix.consumed++]);
+        const auto consumed = encode_bmp_blocks(source.subspan(prefix.consumed), destination.subspan(prefix.written));
+        if (consumed == 0)
+            break;
+        prefix.consumed += consumed;
+        prefix.written += consumed * 3;
+    }
+#endif
+    return prefix;
 }
 }
 #endif

@@ -72,7 +72,7 @@ The reader checks input ranges in Release builds. Use `reader_limits` to bound c
 
 With SIMD enabled on x64, UTF-16 Length writes of 1–16 code units use the same bounded short Latin-1 path as C#. For 17–64 code units, the writer uses the C# head and tail paths when the complete raw payload fits in disjoint storage. UTF-8 Length writes use the C# short ASCII path for 4–16 code units with SSE2 and 17–32 code units with AVX2 when the ASCII payload fits in disjoint storage. The general x64 Latin-1 path selects AVX-512BW, AVX2, or SSE2 based on support and complete block size. Other targets use the portable implementation. Set `LUMINPACK_CPP_MAX_SIMD_BITS` to `128`, `256`, or `512` to cap the compiled width. The CMake option `LUMINPACK_CPP_SIMD=OFF` selects the portable implementation on x64 as well.
 
-Fixed UTF-8 Length also uses the C# AVX2 path for long ASCII prefixes and the C# SIMD path for runs of two-byte UTF-8 code points. The two-byte path starts with the same sample and consumes only complete validated groups before resuming the general encoder.
+Fixed UTF-8 Length also uses the C# AVX2 path for long ASCII prefixes and the C# SIMD paths for runs of two-byte or three-byte UTF-8 code points. These paths sample the prefix and consume only complete validated groups. Three-byte BMP runs use constant shuffle tables and can resume after one ASCII separator.
 
 ## JSON
 
