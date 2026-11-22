@@ -61,7 +61,7 @@ struct record_read_field<T, record_member<Field, Codec, AllowBatch>>
             return false;
     }();
 
-    static const std::byte* address(T& value) noexcept
+    static const std::byte* address(const T& value) noexcept
     {
         return reinterpret_cast<const std::byte*>(std::addressof(value.*Field));
     }
@@ -83,6 +83,19 @@ struct record_read_field<T, record_member<Field, Codec, AllowBatch>>
         else
             std::memcpy(std::addressof(value.*Field), source, width);
     }
+
+    static void write(std::byte* destination, const T& value) noexcept
+    {
+        if constexpr (boolean)
+            *destination = static_cast<std::byte>(value.*Field ? 1 : 0);
+        else if constexpr (scalar<field_type> || std::is_enum_v<field_type>)
+        {
+            const auto stored = value.*Field;
+            std::memcpy(destination, &stored, width);
+        }
+        else
+            std::memmove(destination, address(value), width);
+    }
 };
 }
 
@@ -102,7 +115,7 @@ struct record_payload_codec
             detail::truncated_input();
         T result{};
         if constexpr (has_batch)
-            read_fields(next, result, std::index_sequence_for<Members...>{}, context...);
+            transfer_fields(next, result, std::index_sequence_for<Members...>{}, context...);
         else
             (Members::read(next, result, context...), ...);
         input = next;
@@ -115,12 +128,18 @@ struct record_payload_codec
     {
         writer next = output;
         auto transaction = detail::version_transaction(context...);
-        (Members::write(next, value, context...), ...);
+        if constexpr (has_batch)
+            transfer_fields(next, value, std::index_sequence_for<Members...>{}, context...);
+        else
+            (Members::write(next, value, context...), ...);
         output = next;
         transaction.commit();
     }
 
 private:
+    template<class, class...>
+    friend struct record_codec;
+
     using members = std::tuple<Members...>;
     template<std::size_t Index>
     using field = detail::record_read_field<T, std::tuple_element_t<Index, members>>;
@@ -141,31 +160,66 @@ private:
         return result;
     }();
 
-    template<std::size_t First, std::size_t Width, std::size_t... Indices>
-    static void read_batch(const std::byte* source, T& value, std::index_sequence<Indices...>)
+    static constexpr std::size_t fixed_width = has_batch && ((detail::record_read_field<T, Members>::width != 0) && ...)
+        ? offsets.back() : 0;
+
+    template<std::size_t First, std::size_t Width, class Value, std::size_t... Indices>
+    static auto contiguous_fields(Value& value, std::index_sequence<Indices...>) noexcept
     {
-        // The complete wire span is checked. Copy only when every member address in the
-        // actual destination agrees with the serialized order and widths.
+        using pointer = std::conditional_t<std::is_const_v<Value>, const std::byte*, std::byte*>;
+        // Copy only when the actual member addresses match the serialized offsets and widths.
         if constexpr (sizeof(void*) == 8 && Width <= sizeof(T) &&
             (field<First + Indices>::copy_representation && ...))
         {
-            auto bytes = std::as_writable_bytes(std::span(&value, 1));
+            auto bytes = [&]
+            {
+                if constexpr (std::is_const_v<Value>)
+                    return std::as_bytes(std::span(&value, 1));
+                else
+                    return std::as_writable_bytes(std::span(&value, 1));
+            }();
             const auto offset = reinterpret_cast<std::uintptr_t>(field<First>::address(value)) -
                 reinterpret_cast<std::uintptr_t>(bytes.data());
             if (offset <= bytes.size() - Width &&
                 ((field<First + Indices>::address(value) ==
                     bytes.data() + offset + (offsets[First + Indices] - offsets[First])) && ...))
-            {
-                (field<First + Indices>::validate(source + (offsets[First + Indices] - offsets[First])), ...);
-                std::memcpy(bytes.data() + offset, source, Width);
-                return;
-            }
+                return bytes.data() + offset;
+        }
+        return pointer{};
+    }
+
+    template<std::size_t First, std::size_t Width, std::size_t... Indices>
+    static void transfer_batch(reader& input, T& value, std::index_sequence<Indices...> indices)
+    {
+        const auto* source = input.take(Width).data();
+        if (auto* destination = contiguous_fields<First, Width>(value, indices))
+        {
+            (field<First + Indices>::validate(source + (offsets[First + Indices] - offsets[First])), ...);
+            std::memcpy(destination, source, Width);
+            return;
         }
         (field<First + Indices>::read(source + (offsets[First + Indices] - offsets[First]), value), ...);
     }
 
-    template<std::size_t First, class... Context>
-    static void read_field_or_batch(reader& input, T& value, Context&... context)
+    template<std::size_t First, std::size_t Width, std::size_t... Indices>
+    static void write_reserved(std::byte* destination, const T& value, std::index_sequence<Indices...> indices) noexcept
+    {
+        if (const auto* source = contiguous_fields<First, Width>(value, indices))
+        {
+            std::memmove(destination, source, Width);
+            return;
+        }
+        (field<First + Indices>::write(destination + (offsets[First + Indices] - offsets[First]), value), ...);
+    }
+
+    template<std::size_t First, std::size_t Width, std::size_t... Indices>
+    static void transfer_batch(writer& output, const T& value, std::index_sequence<Indices...> indices)
+    {
+        write_reserved<First, Width>(output.reserve(Width).data(), value, indices);
+    }
+
+    template<std::size_t First, class Cursor, class Value, class... Context>
+    static void transfer_field_or_batch(Cursor& cursor, Value& value, Context&... context)
     {
         if constexpr (First == 0 || widths[First] == 0 || widths[First - 1] == 0)
         {
@@ -179,18 +233,19 @@ private:
             if constexpr (end > First + 1)
             {
                 constexpr auto width = offsets[end] - offsets[First];
-                const auto batch = input.take(width);
-                read_batch<First, width>(batch.data(), value, std::make_index_sequence<end - First>{});
+                transfer_batch<First, width>(cursor, value, std::make_index_sequence<end - First>{});
             }
+            else if constexpr (std::same_as<Cursor, reader>)
+                std::tuple_element_t<First, members>::read(cursor, value, context...);
             else
-                std::tuple_element_t<First, members>::read(input, value, context...);
+                std::tuple_element_t<First, members>::write(cursor, value, context...);
         }
     }
 
-    template<std::size_t... Indices, class... Context>
-    static void read_fields(reader& input, T& value, std::index_sequence<Indices...>, Context&... context)
+    template<std::size_t... Indices, class Cursor, class Value, class... Context>
+    static void transfer_fields(Cursor& cursor, Value& value, std::index_sequence<Indices...>, Context&... context)
     {
-        (read_field_or_batch<Indices>(input, value, context...), ...);
+        (transfer_field_or_batch<Indices>(cursor, value, context...), ...);
     }
 };
 
@@ -247,10 +302,20 @@ struct record_codec
     template<class... Context>
     static void write_body(writer& output, const T& value, Context&... context)
     {
-        writer next = output;
-        write_object_header(next, static_cast<std::uint8_t>(sizeof...(Members)));
-        payload::write(next, value, context...);
-        output = next;
+        if constexpr (payload::fixed_width != 0)
+        {
+            auto bytes = output.reserve(1 + payload::fixed_width);
+            bytes.front() = static_cast<std::byte>(sizeof...(Members));
+            payload::template write_reserved<0, payload::fixed_width>(bytes.data() + 1, value,
+                std::index_sequence_for<Members...>{});
+        }
+        else
+        {
+            writer next = output;
+            write_object_header(next, static_cast<std::uint8_t>(sizeof...(Members)));
+            payload::write(next, value, context...);
+            output = next;
+        }
     }
 };
 

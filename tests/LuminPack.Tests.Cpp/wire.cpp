@@ -1090,6 +1090,16 @@ void fixed_record_batches()
     const std::array expected{byte{4}, byte{0x44}, byte{0x33}, byte{0x22}, byte{0x11},
         byte{0x66}, byte{0x55}, byte{1}, byte{0}};
     check(std::ranges::equal(wire, expected), "Keep the fixed record's exact unaligned wire.");
+    for (std::size_t length = 0; length < expected.size(); ++length)
+    {
+        std::array<byte, 16> too_short;
+        too_short.fill(byte{0x7d});
+        writer bounded(std::span(too_short).first(length));
+        expect_error<std::length_error>([&] { dense_codec::write(bounded, dense_record{1, 2, true, false}); },
+            "Accepts a short output window for a fixed record.");
+        check(bounded.written().empty() && std::ranges::all_of(too_short, [](byte value) { return value == byte{0x7d}; }),
+            "Reserve the complete fixed record before storing its marker and fields.");
+    }
     auto input = reader(wire);
     const auto dense = dense_codec::read(input);
     check(dense && dense->sequence == 0x11223344u && dense->kind == 0x5566u &&
@@ -1124,6 +1134,8 @@ void fixed_record_batches()
         record_member<&reordered_record::sequence, scalar_codec<std::uint32_t>, true>>;
     output = writer(storage);
     reordered_codec::write(output, reordered_record{0xabcdef01u, true, 0x2345u});
+    const std::array reordered_wire{byte{3}, byte{0x45}, byte{0x23}, byte{1}, byte{1}, byte{0xef}, byte{0xcd}, byte{0xab}};
+    check(std::ranges::equal(output.written(), reordered_wire), "Write in contract order when the source layout differs.");
     input = reader(output.written());
     const auto reordered = reordered_codec::read(input);
     check(reordered && reordered->sequence == 0xabcdef01u && reordered->active && reordered->kind == 0x2345u,
@@ -1139,6 +1151,26 @@ void fixed_record_batches()
     using excluded_field = record_member<&nonbatch_record::excluded, scalar_codec<std::uint16_t>>;
     static_assert(luminpack::detail::record_read_field<nonbatch_record, volatile_field>::width == 0);
     static_assert(luminpack::detail::record_read_field<nonbatch_record, excluded_field>::width == 0);
+
+    struct mixed_record
+    {
+        std::uint16_t first;
+        std::uint16_t second;
+        std::optional<std::u16string> text;
+        bool active;
+        std::uint32_t sequence;
+    };
+    using mixed_codec = record_codec<mixed_record,
+        record_member<&mixed_record::first, scalar_codec<std::uint16_t>, true>,
+        record_member<&mixed_record::second, scalar_codec<std::uint16_t>, true>,
+        record_member<&mixed_record::text, luminpack::string_codec<>>,
+        record_member<&mixed_record::active, boolean_codec, true>,
+        record_member<&mixed_record::sequence, scalar_codec<std::uint32_t>, true>>;
+    const std::array mixed_wire{byte{5}, byte{0x11}, byte{0x22}, byte{0x33}, byte{0x44},
+        byte{3}, byte{0}, byte{0}, byte{0}, byte{'n'}, byte{1}, byte{1}, byte{0xef}, byte{0xcd}, byte{0xab}};
+    output = writer(std::span<byte>(storage).subspan(1));
+    mixed_codec::write(output, mixed_record{0x2211, 0x4433, u"n", true, 0xabcdef01});
+    check(std::ranges::equal(output.written(), mixed_wire), "Write fixed groups around an ordinary variable-length field.");
 }
 
 struct version_one
