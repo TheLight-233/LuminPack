@@ -770,7 +770,10 @@ public static partial class LuminPackMarshal
         // The existing owner commits only the outer reservation if collection mutation throws.
         writer.CompleteRun(sizeof(int));
         ref byte collection = ref Unsafe.Add(ref destination, sizeof(int));
-        CopyDenseRawPairEntries(ref Unsafe.Add(ref collection, sizeof(int)), ref entry, count);
+        ref byte payload = ref Unsafe.Add(ref collection, sizeof(int));
+        int copied = CopyVersionDensePairPrefix(ref payload, ref entry, count);
+        CopyDenseRawPairEntries(ref Unsafe.Add(ref payload, (nint)(uint)copied * (sizeof(int) + Unsafe.SizeOf<TValue>())),
+            ref Unsafe.Add(ref entry, (nint)(uint)copied), count - copied);
         if (view._version != version || view._count != count || view._freeCount != 0 || !ReferenceEquals(view._entries, entries))
             LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
 

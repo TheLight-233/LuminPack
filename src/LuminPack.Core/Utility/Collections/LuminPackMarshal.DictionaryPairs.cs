@@ -12,6 +12,56 @@ namespace LuminPack.Code;
 
 public static partial class LuminPackMarshal
 {
+    /// <summary>Copies the prefix of a dense Version dictionary with a proved entry layout.</summary>
+    /// <typeparam name="TValue">The primitive value type.</typeparam>
+    /// <param name="target">The reserved packed output, disjoint from the entries.</param>
+    /// <param name="entry">The first validated live entry.</param>
+    /// <param name="count">The complete number of pairs available at both addresses.</param>
+    /// <returns>The number of pairs copied before the scalar suffix.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int CopyVersionDensePairPrefix<TValue>(ref byte target, ref DictionaryView<int, TValue>.Entry entry,
+        int count) where TValue : unmanaged
+    {
+        if (IntPtr.Size != 8 || count < 16)
+            return 0;
+
+        ref byte start = ref Unsafe.As<DictionaryView<int, TValue>.Entry, byte>(ref entry);
+        ref byte key = ref Unsafe.As<int, byte>(ref entry.Key);
+        ref byte value = ref Unsafe.As<TValue, byte>(ref entry.Value);
+        if (Unsafe.ByteOffset(ref start, ref key) != (nint)8)
+            return 0;
+
+        int stride = Unsafe.SizeOf<DictionaryView<int, TValue>.Entry>();
+        if (typeof(TValue) == typeof(byte) && stride == 16 && Unsafe.ByteOffset(ref start, ref value) == (nint)12)
+        {
+            // Each store stays within the payload. The next pair overwrites its three unused bytes.
+            for (int i = 0; i < count - 1; i++)
+            {
+                Unsafe.WriteUnaligned(ref target, Unsafe.ReadUnaligned<ulong>(ref key));
+                target = ref Unsafe.Add(ref target, sizeof(int) + sizeof(byte));
+                key = ref Unsafe.Add(ref key, 16);
+            }
+            return count - 1;
+        }
+
+#if NET8_0_OR_GREATER
+        if (Ssse3.IsSupported && Unsafe.SizeOf<TValue>() == sizeof(ulong) && stride == 24 &&
+            Unsafe.ByteOffset(ref start, ref value) == (nint)16)
+        {
+            // Remove the gap between the key and value. The scalar last pair ends exactly at the payload limit.
+            var mask = Vector128.Create((byte)0, 1, 2, 3, 8, 9, 10, 11, 12, 13, 14, 15, 0x80, 0x80, 0x80, 0x80);
+            for (int i = 0; i < count - 1; i++)
+            {
+                Ssse3.Shuffle(Vector128.LoadUnsafe(ref key), mask).StoreUnsafe(ref target);
+                target = ref Unsafe.Add(ref target, sizeof(int) + sizeof(ulong));
+                key = ref Unsafe.Add(ref key, 24);
+            }
+            return count - 1;
+        }
+#endif
+        return 0;
+    }
+
     /// <summary>Expands packed raw pairs into the already allocated, unpublished entries of a fresh dictionary.</summary>
     /// <typeparam name="TKey">The raw key type.</typeparam>
     /// <typeparam name="TValue">The raw value type.</typeparam>
