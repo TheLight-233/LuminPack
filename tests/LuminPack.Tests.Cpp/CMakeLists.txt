@@ -8,6 +8,12 @@ target_link_libraries(luminpack_cpp_json PRIVATE LuminPack::Cpp)
 add_test(NAME luminpack_cpp_json
     COMMAND luminpack_cpp_json "${CMAKE_CURRENT_SOURCE_DIR}/../LuminPack.Tests.Aot/Fixtures")
 
+add_executable(luminpack_cpp_json_scan json_scan.cpp)
+target_include_directories(luminpack_cpp_json_scan PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../src/LuminPack.Cpp/src")
+target_compile_definitions(luminpack_cpp_json_scan PRIVATE $<$<BOOL:${LUMINPACK_CPP_SIMD}>:LUMINPACK_CPP_SIMD>)
+target_link_libraries(luminpack_cpp_json_scan PRIVATE LuminPack::Cpp)
+add_test(NAME luminpack_cpp_json_scan COMMAND luminpack_cpp_json_scan)
+
 set(LUMINPACK_CPP_MODEL_FIXTURES "" CACHE PATH "Generated benchmark headers and .NET model documents")
 if(LUMINPACK_CPP_MODEL_FIXTURES)
     add_executable(luminpack_cpp_models benchmark_models.cpp)

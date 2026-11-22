@@ -206,6 +206,8 @@ private:
     [[nodiscard]] char16_t read_hex_escape();
     template<class Put>
     void read_text(Put&& put);
+    template<class Put>
+    void read_text_content(Put&& put);
     void check_depth(std::size_t depth) const;
 
     std::span<const std::byte> input_;

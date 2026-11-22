@@ -1,5 +1,6 @@
 #include <luminpack/luminpack.h>
 
+#include "json_scan.h"
 #include "latin1.h"
 #include "unicode.h"
 
@@ -290,6 +291,13 @@ template<class Put>
 void basic_json_reader<Encoding>::read_text(Put&& put)
 {
     expect('"');
+    read_text_content(std::forward<Put>(put));
+}
+
+template<json_encoding Encoding>
+template<class Put>
+void basic_json_reader<Encoding>::read_text_content(Put&& put)
+{
     for (;;)
     {
         auto value = next_unit();
@@ -353,8 +361,24 @@ void basic_json_reader<Encoding>::read_text(Put&& put)
 template<json_encoding Encoding>
 std::u16string basic_json_reader<Encoding>::read_string()
 {
+    expect('"');
+    const auto source = input_.subspan(position_);
+    const auto length = detail::json_literal_prefix<Encoding == json_encoding::utf16>(source);
+    const auto end = position_ + length;
+    if (at(end) == '"')
+    {
+        const auto payload = source.first(length);
+        std::u16string text(length / sizeof(unit), u'\0');
+        if constexpr (Encoding == json_encoding::utf8)
+            detail::widen_latin1(payload, std::span(text));
+        else if (!payload.empty())
+            std::memcpy(text.data(), payload.data(), payload.size());
+        position_ = end + sizeof(unit);
+        return text;
+    }
+
     std::u16string text;
-    read_text([&](char16_t value) { text.push_back(value); });
+    read_text_content([&](char16_t value) { text.push_back(value); });
     return text;
 }
 
@@ -365,20 +389,16 @@ json_property_name<Encoding> basic_json_reader<Encoding>::read_name()
     if (at(position_) != '"')
         throw wire_error("Expected a property name in LuminPack JSON.");
     const auto start = position_ + sizeof(unit);
-    auto offset = start;
-    auto value = at(offset);
-    while (value >= 0x20 && value != end_of_input && value != '"' && value != '\\' &&
-        (Encoding == json_encoding::utf16 || value < 0x80))
-    {
-        offset += sizeof(unit);
-        value = at(offset);
-    }
-    if (value == '"')
+    const auto offset = start + detail::json_literal_prefix<Encoding == json_encoding::utf16>(input_.subspan(start));
+    if (at(offset) == '"')
     {
         position_ = offset + sizeof(unit);
         return json_property_name<Encoding>(input_.subspan(start, offset - start));
     }
-    return json_property_name<Encoding>(read_string());
+    position_ = start;
+    std::u16string text;
+    read_text_content([&](char16_t unit) { text.push_back(unit); });
+    return json_property_name<Encoding>(std::move(text));
 }
 
 template<json_encoding Encoding>
@@ -518,8 +538,20 @@ void basic_json_writer<Encoding>::write_string(std::u16string_view value)
         detail::short_output();
     auto room = (output_.remaining() - 2 * quote_bytes) / sizeof(unit);
     const auto initial_room = room;
+    const auto content = std::as_bytes(std::span(value.data(), value.size()));
+    std::size_t literal_prefix = 0;
+    if constexpr (Encoding == json_encoding::utf16)
+    {
+        if (content.size() >= 64)
+        {
+            if (value.size() > room)
+                detail::short_output();
+            literal_prefix = detail::json_literal_prefix<true>(content) / sizeof(unit);
+            room -= literal_prefix;
+        }
+    }
     bool plain = true;
-    for (std::size_t index = 0; index < value.size();)
+    for (auto index = literal_prefix; index < value.size();)
     {
         const auto character = value[index];
         std::size_t width = 1;
@@ -546,7 +578,6 @@ void basic_json_writer<Encoding>::write_string(std::u16string_view value)
     writer next = output_;
     auto record = next.reserve(payload_width + 2 * quote_bytes);
     auto* target = record.data() + quote_bytes;
-    const auto content = std::as_bytes(std::span(value.data(), value.size()));
     if (plain && Encoding == json_encoding::utf16)
     {
         if (!content.empty())
@@ -568,7 +599,16 @@ void basic_json_writer<Encoding>::write_string(std::u16string_view value)
         }
         else
         {
-            for (std::size_t index = 0; index < value.size();)
+            if constexpr (Encoding == json_encoding::utf16)
+            {
+                const auto prefix_width = literal_prefix * sizeof(unit);
+                if (prefix_width != 0)
+                {
+                    std::memcpy(target, value.data(), prefix_width);
+                    target += prefix_width;
+                }
+            }
+            for (auto index = literal_prefix; index < value.size();)
             {
                 const auto character = value[index];
                 if (escaped(character))
