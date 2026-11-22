@@ -3,6 +3,7 @@
 #include "cpu_isa.h"
 #include "latin1.h"
 #include "unicode.h"
+#include "utf8_ascii_read.h"
 #include "utf8_runs.h"
 
 #include <algorithm>
@@ -339,6 +340,27 @@ std::optional<std::u16string_view> read_string_into(reader& input, string_profil
 {
     if (profile == string_profile::utf16_length)
         return read_utf16_into(input, destination);
+
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+    if (profile == string_profile::utf8_length)
+    {
+        const auto payload = detail::peek_ascii_utf8_length(input);
+        if (!payload.empty() && payload.size() <= 32)
+        {
+            input.check_string_length(payload.size());
+            if (detail::try_read_short_ascii(payload, [&](std::size_t length) {
+                if (length > destination.size())
+                    detail::short_output();
+                return destination.data();
+            }))
+            {
+                (void)input.take(detail::utf8_length_header_size + payload.size());
+                return std::u16string_view(destination.data(), payload.size());
+            }
+        }
+    }
+#endif
+
     reader next = input;
     const auto record = read_text_record(next, profile);
     if (!record)
@@ -358,6 +380,38 @@ std::optional<std::u16string_view> read_string_into(reader& input, string_profil
 
 std::optional<std::u16string> read_string(reader& input, string_profile profile)
 {
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+    if (profile == string_profile::utf8_length)
+    {
+        const auto payload = detail::peek_ascii_utf8_length(input);
+        if (!payload.empty() && payload.size() <= 32)
+        {
+            input.check_string_length(payload.size());
+            std::u16string result;
+            if (detail::try_read_short_ascii(payload, [&](std::size_t length) {
+                result.resize(length);
+                return result.data();
+            }))
+            {
+                (void)input.take(detail::utf8_length_header_size + payload.size());
+                return result;
+            }
+        }
+#if defined(LUMINPACK_CPP_AVX2)
+        else if (!payload.empty() && detail::has_avx2())
+        {
+            input.check_string_length(payload.size());
+            std::u16string result(payload.size(), u'\0');
+            if (detail::try_widen_long_ascii_avx2(payload, std::span(result)))
+            {
+                (void)input.take(detail::utf8_length_header_size + payload.size());
+                return result;
+            }
+        }
+#endif
+    }
+#endif
+
     reader next = input;
     const auto record = read_text_record(next, profile);
     if (!record)

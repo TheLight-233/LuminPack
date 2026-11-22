@@ -74,6 +74,8 @@ With SIMD enabled on x64, UTF-16 Length writes of 1–16 code units use the same
 
 Fixed UTF-8 Length also uses the C# AVX2 path for long ASCII prefixes and the C# SIMD paths for runs of two-byte or three-byte UTF-8 code points. These paths sample the prefix and consume only complete validated groups. Three-byte BMP runs use constant shuffle tables and can resume after one ASCII separator.
 
+Fixed UTF-8 Length reads use bounded ASCII widening when both length headers agree. The short path checks every byte before storing. The long AVX2 path validates while widening into an unpublished string. Other inputs use the validating decoder.
+
 ## JSON
 
 Use `read_json_document` and `write_json_document` with a concrete JSON codec. The document defaults to little-endian UTF-16. Pass `json_encoding::utf8` as the second template argument to match a UTF-8 .NET root, regardless of the string profile on its individual binary members.

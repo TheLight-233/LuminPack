@@ -22,6 +22,11 @@ add_executable(luminpack_cpp_document_limits document_limits.cpp)
 target_link_libraries(luminpack_cpp_document_limits PRIVATE LuminPack::Cpp)
 add_test(NAME luminpack_cpp_document_limits COMMAND luminpack_cpp_document_limits)
 
+add_executable(luminpack_cpp_utf8_ascii_read utf8_ascii_read.cpp)
+target_link_libraries(luminpack_cpp_utf8_ascii_read PRIVATE LuminPack::Cpp)
+add_test(NAME luminpack_cpp_utf8_ascii_read
+    COMMAND luminpack_cpp_utf8_ascii_read "${CMAKE_CURRENT_SOURCE_DIR}/../LuminPack.Tests.Aot/Fixtures")
+
 set(LUMINPACK_CPP_MODEL_FIXTURES "" CACHE PATH "Generated benchmark headers and .NET model documents")
 if(LUMINPACK_CPP_MODEL_FIXTURES)
     add_executable(luminpack_cpp_models benchmark_models.cpp)

@@ -74,6 +74,8 @@ x64 启用 SIMD 时，UTF-16 Length 写入 1–16 个码元会使用与 C# 相�
 
 固定 UTF-8 Length 写入也使用 C# 的长 ASCII 前缀 AVX2 路径，以及连续双字节或三字节 UTF-8 字符的 SIMD 路径。这些路径先探测前缀，再处理完整、已验证的向量分组。三字节 BMP 使用常量重排表，可以在单个 ASCII 分隔符后继续处理下一段。
 
+固定 UTF-8 Length 读取在两个长度字段相等时尝试有界 ASCII 扩展。短路径在写入前验证每个字节。长串 AVX2 路径在扩展到尚未返回的字符串时同步验证。其他输入由通用解码器校验。
+
 ## JSON
 
 用 `read_json_document` 和 `write_json_document` 调用具体的 JSON codec。文档默认使用小端 UTF-16。与 UTF-8 .NET 根类型互通时，将第二个模板参数设为 `json_encoding::utf8`。二进制成员使用的字符串 profile 不会改变 JSON 文档的编码。
