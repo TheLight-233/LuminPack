@@ -1,5 +1,6 @@
 #include "latin1.h"
 #include "ascii_bytes.h"
+#include "ascii_utf16.h"
 #include "cpu_isa.h"
 
 #include <cstring>
@@ -94,6 +95,16 @@ bool is_ascii_bytes_128(std::span<const std::byte> source) noexcept
         [](__m128i bytes) noexcept { return _mm_movemask_epi8(bytes) == 0; });
 }
 
+std::size_t first_non_ascii_utf16_128(std::span<const char16_t> source) noexcept
+{
+    return first_non_ascii_utf16_vectors<8>(source, [](const char16_t* chars) noexcept {
+        const auto high = _mm_and_si128(load128(chars), _mm_set1_epi16(-128));
+        const auto ascii = _mm_cmpeq_epi16(high, _mm_setzero_si128());
+        const auto invalid = static_cast<std::uint16_t>(~_mm_movemask_epi8(ascii));
+        return static_cast<std::size_t>(std::countr_zero(invalid)) / 2;
+    });
+}
+
 bool is_latin1(__m128i value) noexcept
 {
     const auto high = _mm_and_si128(value, _mm_set1_epi16(-256));
@@ -114,18 +125,6 @@ bool narrow_block(const char16_t* source, std::byte* destination) noexcept
         return false;
     store_narrowed(destination, first, second);
     return true;
-}
-
-bool narrow_latin1_128(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
-{
-    // The final vector may overlap the preceding block but stays within both ranges.
-    const auto last = source.size() - 16;
-    for (std::size_t index = 0; index < last; index += 16)
-    {
-        if (!narrow_block(source.data() + index, destination.data() + index))
-            return false;
-    }
-    return narrow_block(source.data() + last, destination.data() + last);
 }
 
 bool narrow_medium_latin1_128(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
@@ -165,6 +164,28 @@ bool is_ascii_bytes_128(std::span<const std::byte> source) noexcept
         [](uint8x16_t bytes) noexcept { return vmaxvq_u8(bytes) < 0x80; });
 }
 
+std::size_t first_non_ascii_utf16_128(std::span<const char16_t> source) noexcept
+{
+    return first_non_ascii_utf16_vectors<8>(source, [](const char16_t* chars) noexcept {
+        const auto units = vreinterpretq_u16_u8(load128(chars));
+        const auto invalid = vcgtq_u16(units, vdupq_n_u16(0x7f));
+        const auto bytes = vreinterpret_u64_u8(vmovn_u16(invalid));
+        return static_cast<std::size_t>(std::countr_zero(vget_lane_u64(bytes, 0))) / 8;
+    });
+}
+
+bool narrow_block(const char16_t* source, std::byte* destination) noexcept
+{
+    const auto first = vreinterpretq_u16_u8(load128(source));
+    const auto second = vreinterpretq_u16_u8(load128(source + 8));
+    const auto high = vandq_u16(vorrq_u16(first, second), vdupq_n_u16(0xff00));
+    if (vmaxvq_u16(high) != 0)
+        return false;
+    const auto bytes = vmovn_high_u16(vmovn_u16(first), second);
+    std::memcpy(destination, &bytes, sizeof(bytes));
+    return true;
+}
+
 void widen_block(const std::byte* source, char16_t* destination) noexcept
 {
     const auto bytes = load128(source);
@@ -172,6 +193,20 @@ void widen_block(const std::byte* source, char16_t* destination) noexcept
     const auto high = vmovl_high_u8(bytes);
     std::memcpy(destination, &low, sizeof(low));
     std::memcpy(destination + 8, &high, sizeof(high));
+}
+#endif
+
+#if defined(LUMINPACK_CPP_SSE2) || defined(LUMINPACK_CPP_TEXT_NEON)
+bool narrow_latin1_128(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    // The final vector may overlap the preceding block but stays within both ranges.
+    const auto last = source.size() - 16;
+    for (std::size_t index = 0; index < last; index += 16)
+    {
+        if (!narrow_block(source.data() + index, destination.data() + index))
+            return false;
+    }
+    return narrow_block(source.data() + last, destination.data() + last);
 }
 #endif
 
@@ -225,6 +260,23 @@ bool is_ascii_bytes(std::span<const std::byte> source) noexcept
     return is_ascii_bytes_scalar(source);
 }
 
+std::size_t first_non_ascii_utf16(std::span<const char16_t> source) noexcept
+{
+#if defined(LUMINPACK_CPP_AVX512BW)
+    if (source.size() >= 64 && has_avx512bw())
+        return first_non_ascii_utf16_avx512(source);
+#endif
+#if defined(LUMINPACK_CPP_AVX2)
+    if (source.size() >= 32 && has_avx2())
+        return first_non_ascii_utf16_avx2(source);
+#endif
+#if defined(LUMINPACK_CPP_SSE2) || defined(LUMINPACK_CPP_TEXT_NEON)
+    if (source.size() >= 8)
+        return first_non_ascii_utf16_128(source);
+#endif
+    return first_non_ascii_utf16_scalar(source);
+}
+
 #if defined(LUMINPACK_CPP_INLINE_SSE2)
 bool has_ssse3() noexcept
 {
@@ -270,6 +322,19 @@ bool has_avx512vbmi() noexcept
 }
 #endif
 
+#if defined(LUMINPACK_CPP_AVX2)
+std::size_t encode_ascii_prefix(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+#if defined(LUMINPACK_CPP_AVX512BW)
+    if (has_avx512bw())
+        return encode_ascii_prefix_avx512(source, destination);
+#endif
+    if (has_avx2())
+        return encode_ascii_prefix_avx2(source, destination);
+    return 0;
+}
+#endif
+
 bool narrow_latin1(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
 {
 #if defined(LUMINPACK_CPP_AVX512BW)
@@ -280,7 +345,7 @@ bool narrow_latin1(std::span<const char16_t> source, std::span<std::byte> destin
     if (source.size() >= 32 && has_avx2())
         return narrow_latin1_avx2(source, destination);
 #endif
-#if defined(LUMINPACK_CPP_SSE2)
+#if defined(LUMINPACK_CPP_SSE2) || defined(LUMINPACK_CPP_TEXT_NEON)
     if (source.size() >= 16)
         return narrow_latin1_128(source, destination);
 #endif

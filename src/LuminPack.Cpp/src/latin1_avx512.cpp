@@ -1,4 +1,5 @@
 #include "latin1.h"
+#include "ascii_utf16.h"
 
 #include <cstring>
 #include <immintrin.h>
@@ -15,6 +16,12 @@ T load(const void* source) noexcept
     return value;
 }
 
+void store_narrowed(std::byte* destination, __m512i value) noexcept
+{
+    const auto bytes = _mm512_cvtusepi16_epi8(value);
+    std::memcpy(destination, &bytes, sizeof(bytes));
+}
+
 bool narrow_block(const char16_t* source, std::byte* destination) noexcept
 {
     const auto first = load<__m512i>(source);
@@ -24,10 +31,8 @@ bool narrow_block(const char16_t* source, std::byte* destination) noexcept
         return false;
 
     // The AVX-512BW conversions preserve lane order and need no post-pack shuffle.
-    const auto low = _mm512_cvtusepi16_epi8(first);
-    const auto high = _mm512_cvtusepi16_epi8(second);
-    std::memcpy(destination, &low, sizeof(low));
-    std::memcpy(destination + 32, &high, sizeof(high));
+    store_narrowed(destination, first);
+    store_narrowed(destination + 32, second);
     return true;
 }
 
@@ -38,6 +43,35 @@ void widen_block(const std::byte* source, char16_t* destination) noexcept
     std::memcpy(destination, &first, sizeof(first));
     std::memcpy(destination + 32, &second, sizeof(second));
 }
+}
+
+std::size_t first_non_ascii_utf16_avx512(std::span<const char16_t> source) noexcept
+{
+    return first_non_ascii_utf16_vectors<32>(source, [](const char16_t* chars) noexcept {
+        const auto invalid = _mm512_test_epi16_mask(load<__m512i>(chars), _mm512_set1_epi16(-128));
+        return static_cast<std::size_t>(std::countr_zero(static_cast<std::uint32_t>(invalid)));
+    });
+}
+
+std::size_t encode_ascii_prefix_avx512(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    const auto narrow32 = [](const char16_t* chars, std::byte* output) noexcept {
+        const auto first = load<__m512i>(chars);
+        if (_mm512_test_epi16_mask(first, _mm512_set1_epi16(-128)) != 0)
+            return false;
+        store_narrowed(output, first);
+        return true;
+    };
+    const auto narrow64 = [](const char16_t* chars, std::byte* output) noexcept {
+        const auto first = load<__m512i>(chars);
+        const auto second = load<__m512i>(chars + 32);
+        if (_mm512_test_epi16_mask(_mm512_or_si512(first, second), _mm512_set1_epi16(-128)) != 0)
+            return false;
+        store_narrowed(output, first);
+        store_narrowed(output + 32, second);
+        return true;
+    };
+    return encode_ascii_prefix_blocks(source, destination, narrow32, narrow64);
 }
 
 bool narrow_latin1_avx512(std::span<const char16_t> source, std::span<std::byte> destination) noexcept

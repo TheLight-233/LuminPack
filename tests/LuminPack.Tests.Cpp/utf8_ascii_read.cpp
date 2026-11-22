@@ -117,6 +117,55 @@ void check_ascii_records()
         require(storage.front() == std::byte{0xcc} && storage.back() == std::byte{0xcc}, "Unexpected record mutation.");
     }
 }
+
+void check_asymmetric_width_writes()
+{
+    constexpr auto canary = std::byte{0xcc};
+    constexpr std::size_t length = 259;
+    std::u16string text(length, u'a');
+
+    for (const auto index : {1u, 7u, 8u, 15u, 16u, 31u, 32u, 63u, 64u, 65u, 127u, 128u, 256u})
+    {
+        text[index] = u'\u00ff';
+        text[index + 1] = u'\u0800';
+
+        std::vector<std::byte> expected(header_size + length + 3, std::byte{'a'});
+        luminpack::writer header(expected);
+        header.write(static_cast<std::int32_t>(length + 3));
+        header.write(static_cast<std::int32_t>(length));
+        const std::array multibyte{std::byte{0xc3}, std::byte{0xbf}, std::byte{0xe0}, std::byte{0xa0}, std::byte{0x80}};
+        std::ranges::copy(multibyte, expected.begin() + header_size + index);
+
+        std::vector<std::byte> storage(expected.size() + 2, canary);
+        const auto target = std::span(storage).subspan(1, expected.size());
+        luminpack::writer writer(target);
+        luminpack::write_string(writer, profile, text);
+        require(std::ranges::equal(writer.written(), expected), "Mixed UTF-8 write changed the wire bytes.");
+        require(storage.front() == canary && storage.back() == canary, "UTF-8 write exceeded the checked destination.");
+
+        auto aliased = text;
+        auto overlapping_target = std::as_writable_bytes(std::span(aliased)).subspan(3, target.size());
+        luminpack::writer overlapping(overlapping_target);
+        luminpack::write_string(overlapping, profile, aliased);
+        require(std::ranges::equal(overlapping.written(), expected), "Overlapping UTF-8 write changed the wire bytes.");
+
+        std::ranges::fill(storage, canary);
+        luminpack::writer short_output(target.first(target.size() - 1));
+        expect_error<std::length_error>([&] { luminpack::write_string(short_output, profile, text); });
+        require(short_output.written().empty(), "Short UTF-8 write published the cursor.");
+        require(std::ranges::all_of(storage, [](std::byte value) { return value == canary; }),
+            "Short UTF-8 write changed the destination.");
+
+        text[index] = text[index + 1] = u'a';
+        text[index] = static_cast<char16_t>(0xd800);
+        luminpack::writer malformed(target);
+        expect_error<std::invalid_argument>([&] { luminpack::write_string(malformed, profile, text); });
+        require(malformed.written().empty(), "Malformed UTF-8 write published the cursor.");
+        require(std::ranges::all_of(storage, [](std::byte value) { return value == canary; }),
+            "Malformed UTF-8 write changed the destination.");
+        text[index] = u'a';
+    }
+}
 }
 
 int main(int argc, char** argv)
@@ -128,6 +177,7 @@ int main(int argc, char** argv)
         managed_records(std::filesystem::path(argv[1]) / "short-ascii.bin", 4, 16);
         managed_records(std::filesystem::path(argv[1]) / "medium-ascii.bin", 17, 32);
         check_ascii_records();
+        check_asymmetric_width_writes();
         std::cout << "LuminPack C++ UTF-8 Length ASCII reads passed.\n";
     }
     catch (const std::exception& error)

@@ -84,7 +84,7 @@ With SIMD enabled on x64, UTF-16 Length writes of 1–16 code units use the same
 
 UTF-16 Length reads use the C# 4–16 code-unit Latin-1 widening path for fresh strings and eligible list prefixes. Each record's complete window and string quota are checked before decoding.
 
-Fixed UTF-8 Length also uses the C# AVX2 path for long ASCII prefixes and the C# SIMD paths for runs of two-byte or three-byte UTF-8 code points. These paths sample the prefix and consume only complete validated groups. Three-byte BMP runs use constant shuffle tables and can resume after one ASCII separator.
+The UTF-8 byte-count pass finds the end of the leading ASCII run with AVX-512BW, AVX2, SSE2, NEON, or packed words before checking the Unicode remainder. Fixed UTF-8 Length writes use the C# long ASCII groups with AVX-512BW or AVX2 and the consecutive two-byte or three-byte UTF-8 SIMD paths. The writer reserves the complete record before storing any payload. ARM64 uses NEON to narrow complete Latin-1 blocks. Three-byte BMP runs use constant shuffle tables and can resume after one ASCII separator.
 
 When the homogeneous probe declines a Latin-1-leading string, the writer can use the C# mixed ASCII and Latin-1 path. All 256 lane masks and exact write widths are compile-time constants. The general UTF-8 encoder resumes at the first code unit outside Latin-1.
 

@@ -1,6 +1,7 @@
 #include <luminpack/luminpack.h>
 
 #include "ascii_bytes.h"
+#include "ascii_utf16.h"
 #include "cpu_isa.h"
 #include "latin1.h"
 #include <luminpack/detail/unicode.h>
@@ -86,8 +87,8 @@ using detail::read_utf8_scalar;
 
 std::size_t utf8_bytes(std::u16string_view source)
 {
-    std::size_t bytes = 0;
-    std::size_t index = 0;
+    auto index = source.size() > 32 && source.front() < 0x80 ? detail::first_non_ascii_utf16(std::span(source)) : 0;
+    auto bytes = index;
     while (index < source.size())
     {
         const auto scalar = read_utf16_scalar(source, index);
@@ -501,9 +502,9 @@ void write_string(writer& output, string_profile profile, std::optional<std::u16
             std::size_t prefix = 0;
             std::size_t bytes_written = 0;
 #if defined(LUMINPACK_CPP_AVX2)
-            if (profile == string_profile::utf8_length && text.size() > 32 && text.front() < 0x80 && detail::has_avx2())
+            if (profile == string_profile::utf8_length && text.size() > 32 && text.front() < 0x80)
             {
-                prefix = detail::encode_ascii_prefix_avx2(std::span(text.data(), text.size()), destination);
+                prefix = detail::encode_ascii_prefix(std::span(text.data(), text.size()), destination);
                 bytes_written = prefix;
             }
 #endif
