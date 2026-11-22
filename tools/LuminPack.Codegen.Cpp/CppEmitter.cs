@@ -160,11 +160,7 @@ internal sealed partial class CppEmitter
             declarations.Add("    " + member.Type + " " + fieldName + "{};");
 
             if (version)
-            {
-                var aliases = field.GetProperty("nameKeys").EnumerateArray().Skip(1)
-                    .Select(static item => item.GetUInt32().ToString(CultureInfo.InvariantCulture) + "u");
-                binaryMembers.Add(Apply("luminpack::version_member", new[] { pointer, member.Binary, Hex(descriptor) }.Concat(aliases)));
-            }
+                binaryMembers.Add(BindVersionMember(field, property, pointer, member.Binary, descriptor));
             else
             {
                 JsonElement shape = field.GetProperty("shape");

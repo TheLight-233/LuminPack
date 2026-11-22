@@ -70,6 +70,8 @@ int main()
 
 Version rev4 和 rev5 用 `version_member` 与 `version_codec` 绑定生成的字段描述符和旧名称哈希。`read_binary_document` 和 `write_binary_document` 为每份独立文档创建 schema 注册表。同一操作中连续读写多条记录时，给 codec 传入同一个 `version_state`。开始独立记录前调用 `reset()`。写入端顺序查找前八项，在注册第九个 schema 时创建开放寻址索引。
 
+读取存档的 Version rev1 记录时，请重新导出 .NET 契约并生成 C++ 头文件。生成的读取器在解码限定长度的字段载荷前，会校验完整的旧字段名、别名及类型契约。根据模型使用与 rev4 和 rev5 相同的 `read_binary_document` 或 `read_binary_reference_document` 入口。重新写入解码后的值时使用当前的 Version 格式。
+
 多模型 Tagged 数组支持原始字段。用 `sizeof` 和 `offsetof` 描述本地步长和字段偏移。参与原始复制的字段必须接受其对象表示的任意位模式，例如定宽整数。写出本地布局前应初始化会进入 wire 的填充字节。
 
 CLR 矩形数组映射为 `std::optional<rectangular_array<T, Rank>>`，其中 `lengths` 和 `lower_bounds` 是定长数组，`values` 是行主序 vector。Binary 使用零下界和导出的集合块格式。JSON 通过 C# 的 `Lengths`、`LowerBounds`、`Values` 对象保留非零下界。两种读取器都校验形状与元素数量是否一致。

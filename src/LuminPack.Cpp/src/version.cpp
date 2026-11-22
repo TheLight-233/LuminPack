@@ -7,9 +7,10 @@ namespace luminpack
 namespace
 {
 constexpr std::uint8_t version_marker = 251;
+constexpr std::uint8_t legacy_form = 1;
 constexpr std::uint8_t full_form = 0x40;
 constexpr std::uint8_t short_form = 0x50;
-constexpr std::size_t maximum_fields = 249;
+constexpr auto maximum_fields = detail::maximum_version_fields;
 constexpr std::size_t small_table = 8;
 constexpr std::size_t maximum_ordinal = (1u << 30) - 1;
 
@@ -96,6 +97,24 @@ void write_ordinal(writer& output, std::uint32_t ordinal)
         ordinal >>= 7;
     }
     output.write(static_cast<std::uint8_t>(ordinal));
+}
+
+std::string_view read_legacy_metadata(reader& input)
+{
+    std::uint32_t length = 0;
+    for (unsigned shift = 0; shift <= 28; shift += 7)
+    {
+        const auto byte = input.read<std::uint8_t>();
+        if (shift == 28 && byte > 7)
+            break;
+        length |= static_cast<std::uint32_t>(byte & 127u) << shift;
+        if (byte < 128)
+        {
+            const auto bytes = input.take(length);
+            return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
+        }
+    }
+    throw wire_error("Invalid LuminPack legacy Version metadata length.");
 }
 }
 
@@ -201,15 +220,14 @@ void version_state::truncate(std::size_t size) noexcept
         entries_.pop_back();
 }
 
-std::optional<std::span<const std::uint64_t>> read_version_header(
-    reader& input, version_state& state, string_profile profile)
+detail::version_read_header detail::read_version_record_header(reader& input, version_state& state, string_profile profile)
 {
     reader next = input;
     const auto marker = next.read<std::uint8_t>();
     if (marker == 255)
     {
         input = next;
-        return std::nullopt;
+        return {{}, version_read_form::null_record};
     }
     if (marker != version_marker)
         throw wire_error("Invalid LuminPack Version record marker.");
@@ -219,10 +237,14 @@ std::optional<std::span<const std::uint64_t>> read_version_header(
     {
         const auto descriptors = state.get(read_ordinal(next));
         input = next;
-        return descriptors;
+        return {descriptors, version_read_form::modern};
     }
     if (form != (full_form | tag))
+    {
+        if (form == legacy_form)
+            return {{}, version_read_form::legacy};
         throw wire_error("Unexpected LuminPack Version record form or string profile.");
+    }
 
     const auto count = next.read<std::uint8_t>();
     if (count > maximum_fields)
@@ -238,7 +260,70 @@ std::optional<std::span<const std::uint64_t>> read_version_header(
     validate_descriptors(table);
     const auto stored = state.append(hash, table, false);
     input = next;
-    return stored;
+    return {stored, version_read_form::modern};
+}
+
+std::optional<std::span<const std::uint64_t>> read_version_header(
+    reader& input, version_state& state, string_profile profile)
+{
+    const auto header = detail::read_version_record_header(input, state, profile);
+    if (header.form == detail::version_read_form::legacy)
+        throw wire_error("A revision-1 Version record requires its full legacy member contracts.");
+    if (header.form == detail::version_read_form::null_record)
+        return std::nullopt;
+    return header.descriptors;
+}
+
+detail::legacy_version_map detail::read_legacy_version_map(reader& input, string_profile profile,
+    std::span<const legacy_version_field> fields)
+{
+    const auto marker = input.read<std::uint8_t>();
+    const auto revision = input.read<std::uint8_t>();
+    const auto tag = input.read<std::uint8_t>();
+    const auto count = input.read<std::uint8_t>();
+    if (marker != version_marker || revision != legacy_form || count > maximum_fields || fields.size() > maximum_fields)
+        throw wire_error("Invalid LuminPack legacy Version header.");
+    if (tag != profile_tag(profile))
+        throw wire_error("The LuminPack legacy Version string profile does not match.");
+
+    legacy_version_map map{};
+    map.count = count;
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        const auto name = read_legacy_metadata(input);
+        const auto contract = read_legacy_metadata(input);
+        const auto matches = [&](const legacy_version_field& field) {
+            return std::ranges::find(field.names, name) != field.names.end();
+        };
+        const auto field = index < fields.size() && matches(fields[index])
+            ? fields.begin() + static_cast<std::ptrdiff_t>(index) : std::ranges::find_if(fields, matches);
+        if (field == fields.end())
+        {
+            map.slots[index] = legacy_version_map::absent;
+            continue;
+        }
+        if (contract != field->contract)
+            throw wire_error("LuminPack legacy Version member type or wire profile changed.");
+        const auto slot = static_cast<std::size_t>(field - fields.begin());
+        if (map.present[slot])
+            throw wire_error("Duplicate LuminPack legacy Version destination member.");
+        map.present[slot] = true;
+        map.slots[index] = static_cast<std::uint8_t>(slot);
+    }
+
+    constexpr auto maximum_payload = static_cast<std::uint64_t>(std::numeric_limits<std::int32_t>::max());
+    std::uint64_t total = 0;
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        const auto length = read_reference_id(input);
+        total += length;
+        if (total > maximum_payload)
+            throw wire_error("LuminPack legacy Version payload exceeds its maximum size.");
+        map.lengths[index] = length;
+    }
+    if (total > input.unread().size())
+        truncated_input();
+    return map;
 }
 
 void write_version_header(writer& output, version_state& state, string_profile profile,

@@ -9,6 +9,18 @@ class version_state;
 
 namespace detail
 {
+inline constexpr std::size_t maximum_version_fields = 249;
+
+enum class version_read_form : std::uint8_t { modern, null_record, legacy };
+
+struct version_read_header
+{
+    std::span<const std::uint64_t> descriptors;
+    version_read_form form;
+};
+
+[[nodiscard]] version_read_header read_version_record_header(reader& input, version_state& state, string_profile profile);
+
 constexpr std::uint64_t version_schema_hash(std::span<const std::uint64_t> descriptors) noexcept
 {
     constexpr auto basis = std::uint64_t{14695981039346656037ull};
@@ -60,7 +72,7 @@ private:
         std::vector<std::uint64_t> descriptors;
     };
 
-    friend std::optional<std::span<const std::uint64_t>> read_version_header(
+    friend detail::version_read_header detail::read_version_record_header(
         reader& input, version_state& state, string_profile profile);
     friend void detail::write_version_prehashed(writer& output, version_state& state, string_profile profile,
         std::uint64_t hash, std::span<const std::uint64_t> descriptors);

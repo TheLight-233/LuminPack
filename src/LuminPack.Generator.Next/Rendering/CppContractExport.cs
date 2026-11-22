@@ -188,7 +188,7 @@ internal static class CppContractExport
         Object(("name", member.Name), ("profile", Profile(member.Policy)), ("compressed", member.Compressed),
             ("shape", Shape(member, getRawCompoundStorage)), ("descriptor", version?.Descriptors[index].ToString("X16", CultureInfo.InvariantCulture)),
             ("oldNames", version?.OldNames[index]), ("nameKeys", version?.NameKeys[index]),
-            ("fixedNullable", version?.FixedNullable[index]));
+            ("fixedNullable", version?.FixedNullable[index]), ("legacyVersionContract", version?.LegacyContracts[index]));
 
     /// <summary>Captures the existing binary and JSON profile decisions for a declaration or member.</summary>
     /// <param name="policy">The normalized wire policy.</param>

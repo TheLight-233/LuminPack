@@ -70,6 +70,8 @@ Bind a DTO's fields in wire order with `record_member` and `record_codec`. A Nex
 
 For Version revision 4 and 5, bind the emitted field descriptors and former name hashes through `version_member` and `version_codec`. Use `read_binary_document` and `write_binary_document` for a fresh schema registry per document. For successive records in the same operation, pass one `version_state` to the codecs. Reset it before an independent record. The writer scans the first eight registrations and creates an open-addressed index when it registers the ninth schema.
 
+To read archived revision-1 Version records, export the .NET contract again and regenerate the C++ header. The generated reader checks complete legacy field names, aliases, and type contracts before decoding their length-bounded payloads. Use the same `read_binary_document` or `read_binary_reference_document` entry as for that model's revision-4 and revision-5 data. Writing the decoded value uses the current Version format.
+
 Multi-model Tagged arrays support raw fields. Describe local Tagged strides and offsets with `sizeof` and `offsetof`. Each copied field's object representation must admit every bit pattern, as fixed-width integer fields do. Initialize any padding that a native write would expose.
 
 CLR rectangular arrays map to `std::optional<rectangular_array<T, Rank>>` with fixed-size `lengths` and `lower_bounds` and a row-major `values` vector. Binary uses zero lower bounds and the projected collection block. JSON preserves nonzero bounds through the C# `Lengths`, `LowerBounds`, and `Values` object. Both readers check the shape against the element count.

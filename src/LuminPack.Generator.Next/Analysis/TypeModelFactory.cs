@@ -3325,6 +3325,7 @@ internal static partial class TypeModelFactory
             var descriptors = new ulong[members.Length];
             var runtimeContracts = new bool[members.Length];
             var entries = new string[members.Length];
+            var legacyContracts = new string?[members.Length];
             var tempTypes = new string[members.Length];
             for (int index = 0; index < members.Length; index++)
             {
@@ -3334,7 +3335,9 @@ internal static partial class TypeModelFactory
                 string representation = VersionRepresentation(fieldType, members[index].Policy, compressed);
                 string? typeIdentity = VersionIsDirectPrimitive(fieldType, memberType) ? string.Empty : VersionTypeIdentity(memberType);
                 runtimeContracts[index] = typeIdentity == null;
-                uint hash = typeIdentity == null ? 0 : WireNameHash(representation + typeIdentity, Encoding.UTF8) & 0xFFFFFFu;
+                string? legacyContract = typeIdentity == null ? null : representation + typeIdentity;
+                legacyContracts[index] = legacyContract;
+                uint hash = legacyContract == null ? 0 : WireNameHash(legacyContract, Encoding.UTF8) & 0xFFFFFFu;
                 descriptors[index] = nameKeys[index][0] | (ulong)hash << 32 | (ulong)widths[index] << 56;
                 string[] aliasLiterals = new[] { members[index].Name }.Concat(oldNames[index]).Where(alias => alias != serialized)
                     .Select(VersionLiteral).ToArray();
@@ -3355,7 +3358,7 @@ internal static partial class TypeModelFactory
                     "<" + string.Join(", ", identity.TypeParameters) + ">");
             var layoutFields = locals.Select(local => local.TypeName +
                 (IsUnmanagedKeyword(local.TypeName) || local.IsValue ? string.Empty : "?") + " " + Identifier(local.Name)).ToArray();
-            return new VersionSchemaModel(schema, descriptors, runtimeContracts, nameKeys, entries, tempTypes,
+            return new VersionSchemaModel(schema, descriptors, runtimeContracts, nameKeys, entries, legacyContracts, tempTypes,
                 VersionLayout(type), layoutFields, oldNames, fixedNullable);
         }
 

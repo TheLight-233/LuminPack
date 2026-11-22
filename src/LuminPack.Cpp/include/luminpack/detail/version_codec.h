@@ -1,5 +1,7 @@
 #pragma once
 
+#include "version_legacy.h"
+
 // Included by luminpack.h after Version state and the static codec declarations.
 namespace luminpack
 {
@@ -16,6 +18,8 @@ namespace luminpack
 template<auto Field, class Codec, std::uint64_t Descriptor, std::uint32_t... Aliases>
 struct version_member
 {
+    using field_codec = Codec;
+    static constexpr auto field = Field;
     static constexpr auto descriptor = Descriptor;
     static constexpr std::array<std::uint32_t, 1 + sizeof...(Aliases)> names{
         static_cast<std::uint32_t>(descriptor), Aliases...
@@ -88,7 +92,7 @@ struct version_codec
     using value_type = std::optional<T>;
     static constexpr std::size_t minimum_size = 1;
     static constexpr std::size_t member_count = sizeof...(Members);
-    static_assert(member_count <= 249);
+    static_assert(member_count <= detail::maximum_version_fields);
 
     static value_type read(reader& input)
     {
@@ -101,19 +105,31 @@ struct version_codec
     {
         reader next = input;
         auto transaction = detail::version_transaction(state, context...);
-        const auto incoming = read_version_header(next, state, Profile);
-        if (!incoming)
+        const auto header = detail::read_version_record_header(next, state, Profile);
+        if (header.form != detail::version_read_form::modern)
         {
+            if (header.form == detail::version_read_form::legacy) [[unlikely]]
+            {
+                if constexpr ((requires { Members::legacy_field; } && ...))
+                {
+                    auto value = read_legacy(next, state, context...);
+                    input = next;
+                    transaction.commit();
+                    return value;
+                }
+                else
+                    throw wire_error("A revision-1 Version record requires its full legacy member contracts.");
+            }
             input = next;
             transaction.commit();
             return std::nullopt;
         }
 
         T result{};
-        if (std::ranges::equal(*incoming, descriptors))
+        if (std::ranges::equal(header.descriptors, descriptors))
             (Members::read(next, state, result, context...), ...);
         else
-            read_mapped(next, state, result, *incoming, context...);
+            read_mapped(next, state, result, header.descriptors, context...);
         input = next;
         transaction.commit();
         return result;
@@ -188,6 +204,31 @@ private:
     }
 
     static_assert(unique_keys(), "Version current and former name keys must be unique.");
+
+    template<class... Context>
+    static value_type read_legacy(reader& input, version_state& state, Context&... context)
+    {
+        constexpr std::array<detail::legacy_version_field, member_count> fields{Members::legacy_field...};
+        constexpr std::array<void (*)(reader&, version_state&, T&, Context&...), member_count> read_slot{
+            &Members::template read_legacy<T, Context...>...
+        };
+        constexpr std::array<void (*)(T&), member_count> reset_slot{&Members::template reset<T>...};
+        const auto map = detail::read_legacy_version_map(input, Profile, fields);
+        T result{};
+        for (std::size_t index = 0; index < map.count; ++index)
+        {
+            auto field = input.subrecord(map.lengths[index]);
+            const auto slot = map.slots[index];
+            if (slot != detail::legacy_version_map::absent)
+                read_slot[slot](field, state, result, context...);
+        }
+        for (std::size_t slot = 0; slot < member_count; ++slot)
+        {
+            if (!map.present[slot])
+                reset_slot[slot](result);
+        }
+        return result;
+    }
 
     static void skip(reader& input, std::uint8_t width)
     {

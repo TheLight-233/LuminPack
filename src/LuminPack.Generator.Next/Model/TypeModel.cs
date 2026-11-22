@@ -107,6 +107,9 @@ internal sealed class VersionSchemaModel : IEquatable<VersionSchemaModel>
     /// <summary>The revision-1 field table entries, also used for open type contracts.</summary>
     internal readonly string[] FieldEntries;
 
+    /// <summary>The exact revision-1 wire contracts, or null where only runtime types can resolve them.</summary>
+    internal readonly string?[] LegacyContracts;
+
     /// <summary>The declared types of the staged members.</summary>
     internal readonly string[] TempTypes;
 
@@ -136,19 +139,22 @@ internal sealed class VersionSchemaModel : IEquatable<VersionSchemaModel>
     /// <param name="runtimeContracts">The members that compute a type hash for each closed construction.</param>
     /// <param name="nameKeys">The accepted keys per slot.</param>
     /// <param name="fieldEntries">The legacy schema entries.</param>
+    /// <param name="legacyContracts">The compiled legacy type contracts in field order.</param>
     /// <param name="tempTypes">The staged field types.</param>
     /// <param name="layout">The storage mirror name.</param>
     /// <param name="layoutFields">The storage mirror field declarations.</param>
     /// <param name="oldNames">The former member names.</param>
     /// <param name="fixedNullable">The members with a fixed-width nullable representation.</param>
     internal VersionSchemaModel(string schema, ulong[] descriptors, bool[] runtimeContracts, uint[][] nameKeys,
-        string[] fieldEntries, string[] tempTypes, string layout, string[] layoutFields, string[][] oldNames, bool[] fixedNullable)
+        string[] fieldEntries, string?[] legacyContracts, string[] tempTypes, string layout, string[] layoutFields,
+        string[][] oldNames, bool[] fixedNullable)
     {
         Schema = schema;
         Descriptors = descriptors;
         RuntimeContracts = runtimeContracts;
         NameKeys = nameKeys;
         FieldEntries = fieldEntries;
+        LegacyContracts = legacyContracts;
         TempTypes = tempTypes;
         Layout = layout;
         LayoutFields = layoutFields;
@@ -160,6 +166,7 @@ internal sealed class VersionSchemaModel : IEquatable<VersionSchemaModel>
     public bool Equals(VersionSchemaModel? other) => ReferenceEquals(this, other) || other != null && Schema == other.Schema &&
         Layout == other.Layout && Descriptors.SequenceEqual(other.Descriptors) && RuntimeContracts.SequenceEqual(other.RuntimeContracts) &&
         FixedNullable.SequenceEqual(other.FixedNullable) && FieldEntries.SequenceEqual(other.FieldEntries) &&
+        LegacyContracts.SequenceEqual(other.LegacyContracts) &&
         TempTypes.SequenceEqual(other.TempTypes) && LayoutFields.SequenceEqual(other.LayoutFields) &&
         NameKeys.Length == other.NameKeys.Length && NameKeys.Zip(other.NameKeys, (left, right) => left.SequenceEqual(right)).All(same => same) &&
         OldNames.Length == other.OldNames.Length && OldNames.Zip(other.OldNames, (left, right) => left.SequenceEqual(right)).All(same => same);
