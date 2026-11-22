@@ -242,22 +242,32 @@ public:
 
     static void write(writer& output, const value_type& value)
     {
-        if (!value || value->empty())
+        if (!value)
         {
-            output.write<std::int32_t>(value ? 0 : -1);
+            output.write<std::int32_t>(-1);
+            return;
+        }
+        write_elements(output, *value);
+    }
+
+    static void write_elements(writer& output, const std::vector<element_type>& value)
+    {
+        if (value.empty())
+        {
+            output.write<std::int32_t>(0);
             return;
         }
 
         // Convert logical fields into the canonical CLR model without depending on std::tuple storage.
         constexpr auto model = layout.wire.front();
         constexpr auto header_size = minimum_size + 1;
-        const auto count = detail::collection_count(value->size());
+        const auto count = detail::collection_count(value.size());
         if (output.remaining() < header_size)
             detail::short_output();
-        const auto size = detail::checked_output_width(value->size(), model.stride, output.remaining() - header_size);
+        const auto size = detail::checked_output_width(value.size(), model.stride, output.remaining() - header_size);
         writer next = output;
         const auto target = next.reserve(header_size + size);
-        std::span<const element_type> items(*value);
+        std::span<const element_type> items(value);
         std::vector<element_type> scratch;
         if (detail::overlaps(std::as_bytes(items), target))
         {

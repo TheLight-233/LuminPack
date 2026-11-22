@@ -265,13 +265,18 @@ struct list_codec
             output.write<std::int32_t>(-1);
             return;
         }
+        write_elements(output, *value, context...);
+    }
 
+    template<class... Context>
+    static void write_elements(writer& output, const std::vector<element_type>& value, Context&... context)
+    {
         writer next = output;
-        const auto count = detail::collection_count(value->size());
+        const auto count = detail::collection_count(value.size());
         auto transaction = detail::version_transaction(context...);
         if constexpr (detail::contiguous_codec<Element>)
         {
-            const auto source = std::as_bytes(std::span(*value));
+            const auto source = std::as_bytes(std::span(value));
             if (next.remaining() < minimum_size || source.size() > next.remaining() - minimum_size)
                 detail::short_output();
             const auto record = next.reserve(minimum_size + source.size());
@@ -282,7 +287,7 @@ struct list_codec
         else
         {
             next.write(count);
-            for (const auto& item : *value)
+            for (const auto& item : value)
                 detail::write_codec<Element>(next, item, context...);
         }
         output = next;

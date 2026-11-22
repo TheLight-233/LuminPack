@@ -62,6 +62,8 @@ int main()
 
 对已证明且带填充的无标签 CLR pair 或 tuple 布局，生成器会发出带显式填充字段的结构体，并在编译期检查 C++ 的偏移和步长。二进制复制保留包括填充在内的完整表示。JSON 沿用 pair 或 tuple 的组件，读取时将额外填充置零。
 
+生成的 `Memory<T>`、`ReadOnlyMemory<T>` 和受支持的 `ReadOnlySequence<T>` 字段用 `std::vector` 持有元素。null 标记读为空 vector。`ArraySegment<T>` 和 `ImmutableArray<T>` 使用 `std::optional<std::vector<T>>`，保留 CLR 默认值的 null 标记。codec 沿用 C# 的数组格式读取各段元素，按导出的布局选择对应的连续块 codec。
+
 字符串 codec 可绑定六种 `string_profile`。Length 与 VarInt 区分 null 和空字符串。Token 使用零码元结束，null 与空字符串使用同一表示。含内嵌零码元的文本应使用长度模式。
 
 用 `record_member` 和 `record_codec` 按 wire 顺序绑定 DTO 字段。Next 生成的二进制 Union 用 `union_codec` 绑定已有的 case hash 和各 case 的 payload codec。应用可通过 `custom_codec` 绑定自己实现的读写函数来复用同一份 wire 契约。成员顺序、标量类型、字符串 profile 和 Tagged 模型顺序均沿用源 wire 契约。

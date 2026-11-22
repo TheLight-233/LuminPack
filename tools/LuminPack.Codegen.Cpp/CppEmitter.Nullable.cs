@@ -29,6 +29,12 @@ internal sealed partial class CppEmitter
                 throw Missing(label, "a ValueTuple dictionary key");
             return BindTuple(formatter, profile, label);
         }
+        if (IsContiguousView(definition) && nullableWidth == 0)
+        {
+            if (required)
+                throw Missing(label, "a memory view dictionary key");
+            return BindContiguousView(definition, formatter.GetProperty("arguments")[0], profile, label);
+        }
         if (layout.ValueKind != JsonValueKind.Null &&
             (!contracts.TryGetValue(Normalize(type), out JsonElement contract) ||
                 Text(contract, "kind") != "Struct" || !JsonElement.DeepEquals(contract.GetProperty("storage"), layout)))
@@ -46,16 +52,7 @@ internal sealed partial class CppEmitter
             throw Missing(label, "the fixed-width nullable formatter");
 
         if (definition == "System.Collections.Generic.List" || definition == "$array" && formatter.GetProperty("rank").GetInt32() == 1)
-        {
-            JsonElement element = arguments[0];
-            if (element.GetProperty("nullableEncoding").GetInt32() != 0)
-                return BindNullableBlock(element, profile, label);
-            if (Text(element, "definition") == PairDefinition)
-                return Sequence(BindPair(element, profile, label, collection: true));
-            if (Text(element, "definition") == TupleDefinition)
-                return Sequence(BindTuple(element, profile, label, collection: true));
-            return Sequence(BindFormatter(element, profile, label));
-        }
+            return BindElementSequence(arguments[0], profile, label);
         if (definition == "System.Collections.Generic.Dictionary")
         {
             Binding key = BindFormatter(arguments[0], profile, label, required: true);

@@ -131,9 +131,14 @@ struct json_list_codec
             output.write_null();
             return;
         }
+        write_elements(output, *value);
+    }
+
+    static void write_elements(auto& output, const std::vector<element_type>& value)
+    {
         output.token('[');
         bool first = true;
-        for (const auto& item : *value)
+        for (const auto& item : value)
         {
             if (!std::exchange(first, false))
                 output.token(',');

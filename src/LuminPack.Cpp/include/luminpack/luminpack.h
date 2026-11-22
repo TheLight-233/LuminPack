@@ -511,3 +511,4 @@ void write_tagged_array(writer& output, std::optional<std::span<const T>> value)
 #include "detail/polymorphic_union.h"
 #include "detail/pair_codecs.h"
 #include "detail/tuple_codecs.h"
+#include "detail/memory_codecs.h"

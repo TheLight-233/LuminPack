@@ -155,23 +155,26 @@ struct storage_list_codec
 
     static void write(writer& output, const value_type& value)
     {
-        if constexpr (tagged)
-        {
-            const auto items = value ? std::optional(std::span<const T>(*value)) : std::nullopt;
-            write_tagged_array<T, Layout>(output, items);
-        }
-        else if (!value)
+        if (!value)
             output.write<std::int32_t>(-1);
         else
+            write_elements(output, *value);
+    }
+
+    static void write_elements(writer& output, const std::vector<T>& value)
+    {
+        if constexpr (tagged)
+            write_tagged_array<T, Layout>(output, std::span<const T>(value));
+        else
         {
-            const auto count = detail::collection_count(value->size());
+            const auto count = detail::collection_count(value.size());
             if (output.remaining() < minimum_size)
                 detail::short_output();
-            const auto width = detail::checked_output_width(value->size(), Layout.packed_model().stride,
+            const auto width = detail::checked_output_width(value.size(), Layout.packed_model().stride,
                 output.remaining() - minimum_size);
             writer next = output;
             const auto record = next.reserve(minimum_size + width);
-            detail::transfer_packed<Layout, true>(std::as_bytes(std::span(*value)), record.subspan(minimum_size), value->size());
+            detail::transfer_packed<Layout, true>(std::as_bytes(std::span(value)), record.subspan(minimum_size), value.size());
             detail::store_count(record, count);
             output = next;
         }
