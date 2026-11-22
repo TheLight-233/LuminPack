@@ -50,6 +50,14 @@ inline version_state* registered_union_version() noexcept { return nullptr; }
 
 template<class... Context>
 inline version_state* registered_union_version(version_state& state, Context&...) noexcept { return &state; }
+
+template<class Base>
+Base* adopt_registered_union(reference_read_state& references, std::unique_ptr<Base> value)
+{
+    if (!value)
+        throw wire_error("LuminPack Union case has no payload.");
+    return references.own(std::move(value));
+}
 }
 
 /// Registers app-owned callbacks by exact C++ runtime type and managed UInt16 tag.
@@ -99,6 +107,12 @@ private:
 
     template<class, class>
     friend struct registered_json_polymorphic_union_codec;
+
+    template<class, class>
+    friend struct registered_graph_polymorphic_union_codec;
+
+    template<class, class>
+    friend struct registered_graph_json_polymorphic_union_codec;
 
     using pointer = std::unique_ptr<base_type>;
 
@@ -296,6 +310,99 @@ struct registered_json_polymorphic_union_codec
             else
                 found->write_utf16(output, found->tag, *value);
         }
+    }
+};
+
+/// A graph-owned RTTI Union with existing typed registration fallback for escaped Binary tags.
+template<class Policy, class Dispatch>
+struct registered_graph_polymorphic_union_codec
+{
+    using registry = registered_union_registry<Policy>;
+    using base_type = typename Policy::base_type;
+    using value_type = base_type*;
+    static constexpr auto minimum_size = sizeof(std::uint32_t);
+
+    static value_type read(reader& input, version_state& version, reference_read_state& references)
+    {
+        value_type result = nullptr;
+        read_into(input, result, version, references);
+        return result;
+    }
+
+    static void read_into(reader& input, value_type& destination, version_state& version, reference_read_state& references)
+    {
+        detail::read_graph_union(input, destination, version, references, [&](reader& next, std::uint32_t hash)
+        {
+            if (hash != std::numeric_limits<std::uint32_t>::max())
+                return Dispatch::read(next, hash, destination, version, references);
+
+            const auto tag = detail::read_registered_union_tag<Policy::wide_tags>(next);
+            const auto found = registry::lookup(tag);
+            if (!found)
+                throw wire_error("Unknown registered LuminPack Union tag.");
+            return detail::adopt_registered_union(references, found->read_binary(next, &version));
+        });
+    }
+
+    static void write(writer& output, value_type value, version_state& version, reference_write_state& references)
+    {
+        detail::write_graph_union(output, value, version, references, [&](writer& next, base_type& object)
+        {
+            if (Dispatch::try_write(next, object, version, references))
+                return;
+
+            const auto found = registry::lookup(std::type_index(typeid(object)));
+            if (!found)
+                throw std::invalid_argument("Unknown LuminPack Union runtime type.");
+            next.write(std::numeric_limits<std::uint32_t>::max());
+            found->write_binary(next, found->tag, object, &version);
+        });
+    }
+};
+
+/// A graph-owned RTTI JSON Union with generated cases preceding typed registered delegates.
+template<class Policy, class Dispatch>
+struct registered_graph_json_polymorphic_union_codec
+{
+    using registry = registered_union_registry<Policy>;
+    using base_type = typename Policy::base_type;
+    using value_type = base_type*;
+
+    static value_type read(auto& input)
+    {
+        return detail::read_graph_json_union<base_type>(input, [](auto& payload, std::uint32_t hash) -> std::optional<value_type>
+        {
+            if (auto result = Dispatch::try_read(payload, hash))
+                return result;
+            if (hash <= std::numeric_limits<std::uint16_t>::max())
+            {
+                if (const auto found = registry::lookup(static_cast<std::uint16_t>(hash)))
+                {
+                    if constexpr (std::same_as<typename std::remove_cvref_t<decltype(payload)>::unit, char>)
+                        return detail::adopt_registered_union(payload.references(), found->read_utf8(payload));
+                    else
+                        return detail::adopt_registered_union(payload.references(), found->read_utf16(payload));
+                }
+            }
+            throw wire_error("Unknown LuminPack JSON Union case hash or tag.");
+        });
+    }
+
+    static void write(auto& output, value_type value)
+    {
+        detail::write_graph_json_union(output, value, [](auto& next, base_type& object)
+        {
+            if (Dispatch::try_write(next, object))
+                return;
+
+            const auto found = registry::lookup(std::type_index(typeid(object)));
+            if (!found)
+                throw std::invalid_argument("Unknown LuminPack Union runtime type.");
+            if constexpr (std::same_as<typename std::remove_cvref_t<decltype(next)>::unit, char>)
+                found->write_utf8(next, found->tag, object);
+            else
+                found->write_utf16(next, found->tag, object);
+        });
     }
 };
 }

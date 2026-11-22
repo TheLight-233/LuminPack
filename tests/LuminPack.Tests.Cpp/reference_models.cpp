@@ -1,4 +1,6 @@
 #include "envelope.hpp"
+#include "graph-choice.hpp"
+#include "graph-packet.hpp"
 #include "node.hpp"
 #include "rtti-wrapper.hpp"
 #include "version-node.hpp"
@@ -7,6 +9,8 @@
 #include <iostream>
 
 namespace envelope = luminpack_generated::root_LuminPackCppReferenceFixtures_x002eEnvelope;
+namespace graph_choice = luminpack_generated::root_LuminPackCppReferenceFixtures_x002eIGraphChoice;
+namespace graph_packet = luminpack_generated::root_LuminPackCppReferenceFixtures_x002eGraphPacket;
 namespace node = luminpack_generated::root_LuminPackCppReferenceFixtures_x002eNode;
 namespace rtti = luminpack_generated::root_LuminPackCppReferenceFixtures_x002eIWrapper;
 namespace version = luminpack_generated::root_LuminPackCppReferenceFixtures_x002eVersionNode;
@@ -72,6 +76,88 @@ void verify_rtti(const rtti::root_value& value)
     const auto* payload = dynamic_cast<const rtti::type_LuminPackCppReferenceFixtures_x002eWrapper*>(value.get());
     require(payload != nullptr, "Select the ordinary RTTI case.");
     verify_node(payload->field_Value);
+}
+
+template<class Base>
+struct graph_external final : Base
+{
+    graph_external() { ++live_count; }
+    ~graph_external() override { --live_count; }
+
+    std::int32_t value = 0;
+    inline static int live_count = 0;
+};
+
+template<class T>
+struct graph_external_binding
+{
+    static std::unique_ptr<T> read_binary(reader& input)
+    {
+        auto value = std::make_unique<T>();
+        value->value = input.read<std::int32_t>() ^ 59;
+        return value;
+    }
+
+    static void write_binary(writer& output, std::uint16_t tag, const T& value)
+    {
+        write_registered_union_tag<true>(output, tag);
+        output.write(value.value ^ 59);
+    }
+
+    static std::unique_ptr<T> read_json(auto& input)
+    {
+        auto value = std::make_unique<T>();
+        value->value = input.template read_number<std::int32_t>() ^ 71;
+        return value;
+    }
+
+    static void write_json(auto& output, std::uint16_t tag, const T& value)
+    {
+        output.token('{');
+        output.template write_property<json_name{u"$type"}>();
+        output.write_number(tag);
+        output.token(',');
+        output.template write_property<json_name{u"$value"}>();
+        output.write_number(value.value ^ 71);
+        output.token('}');
+    }
+};
+
+void verify_graph_root(graph_choice::root_value value)
+{
+    const auto* tracked = dynamic_cast<const graph_choice::type_LuminPackCppReferenceFixtures_x002eGraphNode*>(value);
+    require(tracked && tracked->field_Id == 73, "Decode the direct tracked RTTI case.");
+    const auto* peer = dynamic_cast<const graph_choice::type_LuminPackCppReferenceFixtures_x002eGraphLeaf*>(tracked->field_Next);
+    require(peer && peer->field_Value == -81 && peer->field_Link == tracked,
+        "Preserve a cycle through an ordinary RTTI case.");
+}
+
+template<class Case>
+void verify_graph_version(const auto* value)
+{
+    const auto* tracked = dynamic_cast<const Case*>(value);
+    require(tracked && tracked->field_Id == 79 && tracked->field_Next == value,
+        "Preserve the tracked Version case and its RTTI back reference.");
+}
+
+using packet_registry = graph_packet::type_LuminPackCppReferenceFixtures_x002eIGraphChoice_binary::registry;
+using packet_external = graph_external<packet_registry::base_type>;
+
+void verify_graph_packet(const graph_packet::root_value& value)
+{
+    require(value && value->field_Direct && value->field_Items && value->field_Items->size() == 6,
+        "Read the record containing a graph RTTI Union.");
+    const auto* tracked = value->field_Direct;
+    const auto& items = *value->field_Items;
+    require(tracked->field_Id == 73 && value->field_ThroughUnion == tracked && items[0] == tracked && items[5] == tracked,
+        "Share the same concrete shell across direct members, RTTI slots and list elements.");
+    const auto* child = dynamic_cast<const graph_packet::type_LuminPackCppReferenceFixtures_x002eGraphLeaf*>(tracked->field_Next);
+    const auto* leaf = dynamic_cast<const graph_packet::type_LuminPackCppReferenceFixtures_x002eGraphLeaf*>(items[1]);
+    require(child && leaf && child != leaf && child->field_Link == tracked && leaf->field_Link == tracked &&
+        leaf->field_Value == -81 && !items[2], "Own ordinary RTTI cases independently and preserve their graph edges.");
+    verify_graph_version<graph_packet::type_LuminPackCppReferenceFixtures_x002eGraphVersion>(items[3]);
+    const auto* external = dynamic_cast<const packet_external*>(items[4]);
+    require(external && external->value == 97, "Resolve the wide app-owned case through the graph RTTI registry.");
 }
 
 template<class Binary, class Json>
@@ -169,6 +255,22 @@ void reuse_shells(const interop_models::path& directory)
     require(json_value == json_existing, "Reuse the supplied JSON shell.");
     verify_node(json_value);
 }
+
+void reuse_rtti_shell(const interop_models::path& directory)
+{
+    using tracked = graph_choice::type_LuminPackCppReferenceFixtures_x002eGraphNode;
+    const auto binary = interop_models::load(directory / "tracked-case.bin");
+    reference_graph graph;
+    auto* shell = graph.make<tracked>();
+    graph_choice::root_value value = shell;
+    reference_read_state references(graph);
+    version_state version;
+    reader input(binary);
+    graph_choice::root_binary::read_into(input, value, version, references);
+    input.require_end();
+    require(value == shell, "Reuse the existing exact tracked RTTI shell.");
+    verify_graph_root(value);
+}
 }
 
 int main(int argc, char** argv)
@@ -178,7 +280,8 @@ try
     const auto directory = interop_models::path(argv[1]);
     std::filesystem::create_directories(directory / "out");
     static_assert(node::root_requires_reference_graph && version::root_requires_reference_graph &&
-        envelope::root_requires_reference_graph && rtti::root_requires_reference_graph);
+        envelope::root_requires_reference_graph && rtti::root_requires_reference_graph &&
+        graph_choice::root_requires_reference_graph && graph_packet::root_requires_reference_graph);
 
     exchange<node::root_binary, node::root_json>(directory, "node",
         [](const auto* value) { verify_node(value); }, node::root_binary_limits, node::root_binary_reference_depth);
@@ -191,10 +294,23 @@ try
         verify_envelope, envelope::root_binary_limits, envelope::root_binary_reference_depth);
     exchange<rtti::root_binary, rtti::root_json>(directory, "rtti-wrapper",
         verify_rtti, rtti::root_binary_limits, rtti::root_binary_reference_depth);
+    exchange<graph_choice::root_binary, graph_choice::root_json>(directory, "tracked-case",
+        verify_graph_root, graph_choice::root_binary_limits, graph_choice::root_binary_reference_depth);
+    exchange<graph_choice::root_binary, graph_choice::root_json>(directory, "tracked-version-case",
+        [](const auto* value) { verify_graph_version<graph_choice::type_LuminPackCppReferenceFixtures_x002eGraphVersion>(value); },
+        graph_choice::root_binary_limits, graph_choice::root_binary_reference_depth);
+    exchange<graph_choice::root_binary, graph_choice::root_json>(directory, "null-tracked-union",
+        [](const auto* value) { require(!value, "Read a null graph RTTI Union."); },
+        graph_choice::root_binary_limits, graph_choice::root_binary_reference_depth);
+    packet_registry::register_case<packet_external, graph_external_binding<packet_external>>(600);
+    exchange<graph_packet::root_binary, graph_packet::root_json>(directory, "tracked-union-packet",
+        verify_graph_packet, graph_packet::root_binary_limits, graph_packet::root_binary_reference_depth);
+    require(packet_external::live_count == 0, "Free registered cases when their document graphs are destroyed.");
     invalid_references(directory);
     version_aliases();
     reuse_shells(directory);
     deferred_rtti_reference(directory);
+    reuse_rtti_shell(directory);
 
     std::cout << "C++ verified binary and JSON reference graph fixtures.\n";
     return 0;

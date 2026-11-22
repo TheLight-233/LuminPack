@@ -5,6 +5,7 @@ internal sealed partial class CppEmitter
 {
     private readonly HashSet<string> emittedRttiBases = new(StringComparer.Ordinal);
     private readonly HashSet<string> emittedRttiRegistrations = new(StringComparer.Ordinal);
+    private readonly Queue<(JsonElement Contract, string Name, int Profile)> trackedRttiUnions = new();
 
     /// <summary>Indexes the polymorphic base declarations required by each exact case.</summary>
     /// <param name="declarations">The analyzed contracts in the producer assembly.</param>
@@ -46,7 +47,7 @@ internal sealed partial class CppEmitter
     /// <param name="contract">The Union declaration with its canonical hashes and case order.</param>
     /// <param name="name">The name of this profile's dispatch.</param>
     /// <param name="profile">The active binary profile.</param>
-    /// <returns>The Binary and JSON owning Union bindings.</returns>
+    /// <returns>The owning or graph-borrowed Binary and JSON bindings.</returns>
     private Binding EmitRttiUnion(JsonElement contract, string name, int profile)
     {
         string owner = Text(contract, "id");
@@ -56,6 +57,58 @@ internal sealed partial class CppEmitter
         if (cases.GetArrayLength() is < 1 or > 32)
             throw Missing(owner, "a case count outside Next's closed exact-dispatch tier");
 
+        bool graph = cases.EnumerateArray().Any(item =>
+            contracts.TryGetValue(Normalize(Text(item, "type")), out JsonElement declaration) &&
+            Flag(declaration.GetProperty("profile"), "trackReferences"));
+        bool registered = Flag(contract, "unionRegistration");
+        if (graph)
+        {
+            code.Append("struct ").Append(name).Append("_binary_dispatch;\nstruct ").Append(name).Append("_json_dispatch;\n");
+            trackedRttiUnions.Enqueue((contract, name, profile));
+        }
+        else
+        {
+            var bindings = BindRttiCases(cases, owner, profile);
+            EmitRttiDispatch(name + "_binary_dispatch", baseName, bindings, json: false, registered, graph);
+            EmitRttiDispatch(name + "_json_dispatch", baseName, bindings, json: true, registered, graph);
+        }
+        string policy = registered ? EmitRttiRegistration(contract, baseName, cases) : baseName;
+        string binary = graph ? "graph_polymorphic_union_codec" : "polymorphic_union_codec";
+        string json = graph ? "graph_json_polymorphic_union_codec" : "json_polymorphic_union_codec";
+        string scope = registered ? "luminpack::registered_" : "luminpack::";
+        Alias(name + "_binary", scope + binary, new[] { policy, name + "_binary_dispatch" });
+        Alias(name + "_json", scope + json, new[] { policy, name + "_json_dispatch" });
+        code.Append('\n');
+        return new Binding(name + "_binary::value_type", name + "_binary", name + "_json");
+    }
+
+    /// <summary>Completes the graph before dispatch code inspects any concrete pointer target.</summary>
+    private void EmitDeferredRecordsAndRttiUnions()
+    {
+        var complete = new List<(JsonElement Contract, string Name, IReadOnlyList<RttiCase> Cases)>();
+        EmitTrackedRecords();
+        while (trackedRttiUnions.TryDequeue(out var item))
+        {
+            complete.Add((item.Contract, item.Name,
+                BindRttiCases(item.Contract.GetProperty("cases"), Text(item.Contract, "id"), item.Profile)));
+            EmitTrackedRecords();
+        }
+        foreach (var item in complete)
+        {
+            string baseName = RttiBaseName(item.Contract);
+            bool registered = Flag(item.Contract, "unionRegistration");
+            EmitRttiDispatch(item.Name + "_binary_dispatch", baseName, item.Cases, json: false, registered, graph: true);
+            EmitRttiDispatch(item.Name + "_json_dispatch", baseName, item.Cases, json: true, registered, graph: true);
+        }
+    }
+
+    /// <summary>Uses full record entries for directly tracked cases and payload entries for ordinary cases.</summary>
+    /// <param name="cases">The compiler-projected Union cases.</param>
+    /// <param name="owner">The Union's diagnostic name.</param>
+    /// <param name="profile">The effective binary profile.</param>
+    /// <returns>The validated hashes and concrete codec entries in dispatch order.</returns>
+    private IReadOnlyList<RttiCase> BindRttiCases(JsonElement cases, string owner, int profile)
+    {
         var bindings = new List<RttiCase>(cases.GetArrayLength());
         var hashes = new HashSet<uint>();
         foreach (JsonElement item in cases.EnumerateArray().OrderBy(static item => item.GetProperty("tag").GetInt32()))
@@ -65,24 +118,17 @@ internal sealed partial class CppEmitter
             if (!contracts.TryGetValue(type, out JsonElement declaration) || Text(declaration, "kind") != "Record")
                 throw Missing(Text(item, "id"), "an RTTI case without a class DTO");
             Binding member = BindContract(declaration, profile);
-            if (member.Payload == null || member.JsonPayload == null)
+            bool tracked = Flag(declaration.GetProperty("profile"), "trackReferences");
+            string? binary = tracked ? member.Binary : member.Payload;
+            string? json = tracked ? member.Json : member.JsonPayload;
+            if (binary == null || json == null)
                 throw Missing(Text(item, "id"), "an RTTI case without a positional payload codec");
             uint hash = item.GetProperty("hash").GetUInt32();
             if (hash == 0 || hash == uint.MaxValue || !hashes.Add(hash))
                 throw Missing(owner, "a reserved or duplicate RTTI Union hash");
-            bindings.Add(new RttiCase(hash.ToString(CultureInfo.InvariantCulture) + "u", member.Payload, member.JsonPayload));
+            bindings.Add(new RttiCase(hash.ToString(CultureInfo.InvariantCulture) + "u", binary, json, tracked));
         }
-
-        bool registered = Flag(contract, "unionRegistration");
-        EmitRttiDispatch(name + "_binary_dispatch", baseName, bindings, json: false, registered);
-        EmitRttiDispatch(name + "_json_dispatch", baseName, bindings, json: true, registered);
-        string policy = registered ? EmitRttiRegistration(contract, baseName, cases) : baseName;
-        Alias(name + "_binary", registered ? "luminpack::registered_polymorphic_union_codec" : "luminpack::polymorphic_union_codec",
-            new[] { policy, name + "_binary_dispatch" });
-        Alias(name + "_json", registered ? "luminpack::registered_json_polymorphic_union_codec" : "luminpack::json_polymorphic_union_codec",
-            new[] { policy, name + "_json_dispatch" });
-        code.Append('\n');
-        return new Binding(name + "_binary::value_type", name + "_binary", name + "_json");
+        return bindings;
     }
 
     /// <summary>Emits one registration policy shared by all profiles of a generated Union.</summary>
@@ -114,45 +160,60 @@ internal sealed partial class CppEmitter
     /// <param name="cases">The ordered hashes and case payload bindings.</param>
     /// <param name="json">Whether to use JSON property framing.</param>
     /// <param name="registered">Whether unknown cases can fall back to registered delegates.</param>
-    private void EmitRttiDispatch(string name, string baseName, IReadOnlyList<RttiCase> cases, bool json, bool registered)
+    /// <param name="graph">Whether decoded pointers borrow from their document graph.</param>
+    private void EmitRttiDispatch(string name, string baseName, IReadOnlyList<RttiCase> cases, bool json, bool registered, bool graph)
     {
         bool tryRead = json && registered;
         code.Append("struct ").Append(name).Append("\n{\n");
         foreach (RttiCase item in cases)
-            code.Append("    using case_").Append(item.Hash).Append(" = ").Append(item.Binary).Append("::value_type;\n");
+        {
+            code.Append("    using case_").Append(item.Hash).Append(" = ");
+            if (item.Tracked)
+                code.Append("std::remove_pointer_t<");
+            code.Append(item.Binary).Append("::value_type").Append(item.Tracked ? ">;\n" : ";\n");
+        }
         code.Append('\n');
-        if (!json)
+        if (!json && !graph)
             code.Append("    template<class... Context>\n");
-        code.Append("    static std::unique_ptr<").Append(baseName).Append(tryRead ? "> try_read(" : "> read(")
-            .Append(json ? "auto& input, std::uint32_t hash)" : "luminpack::reader& input, std::uint32_t hash, Context&... context)")
-            .Append("\n    {\n        switch (hash)\n        {\n");
+        string resultType = graph ? baseName + "*" : $"std::unique_ptr<{baseName}>";
+        if (graph && tryRead)
+            resultType = $"std::optional<{baseName}*>";
+        code.Append("    static ").Append(resultType).Append(tryRead ? " try_read(" : " read(");
+        if (json)
+            code.Append("auto& input, std::uint32_t hash)");
+        else if (graph)
+            code.Append("luminpack::reader& input, std::uint32_t hash, ").Append(baseName)
+                .Append("* seed, luminpack::version_state& version, luminpack::reference_read_state& references)");
+        else
+            code.Append("luminpack::reader& input, std::uint32_t hash, Context&... context)");
+        code.Append("\n    {\n        switch (hash)\n        {\n");
         foreach (RttiCase item in cases)
         {
-            code.Append("        case ").Append(item.Hash).Append(":\n            return std::make_unique<case_").Append(item.Hash).Append(">(");
-            if (json)
-                code.Append(item.Json).Append("::read(input));\n");
-            else
-                code.Append("luminpack::detail::read_codec<").Append(item.Binary).Append(">(input, context...));\n");
+            code.Append("        case ").Append(item.Hash).Append(":\n");
+            EmitRttiReadCase(item, json, graph);
         }
         code.Append("        default:\n").Append(tryRead ? "            return {};\n" :
             "            throw luminpack::wire_error(\"Unknown LuminPack Union case hash.\");\n").Append("        }\n    }\n\n");
-        if (tryRead)
+        if (tryRead && !graph)
         {
             code.Append("    static std::unique_ptr<").Append(baseName).Append("> read(auto& input, std::uint32_t hash)\n")
                 .Append("    {\n        if (auto value = try_read(input, hash))\n            return value;\n")
                 .Append("        throw luminpack::wire_error(\"Unknown LuminPack Union case hash.\");\n    }\n\n");
         }
 
-        if (!json)
+        if (!json && !graph)
             code.Append("    template<class... Context>\n");
-        string writeParameters = (json ? "auto& output, const " : "luminpack::writer& output, const ") +
-            baseName + (json ? "& value)" : "& value, Context&... context)");
+        string writeCursor = json ? "auto& output, " : "luminpack::writer& output, ";
+        string writeContext = json ? ")" : graph ?
+            ", luminpack::version_state& version, luminpack::reference_write_state& references)" : ", Context&... context)";
+        string writeParameters = writeCursor + (graph ? "" : "const ") + baseName + "& value" + writeContext;
         code.Append(registered ? "    static bool try_write(" : "    static void write(").Append(writeParameters)
             .Append("\n    {\n        const std::type_info& type = typeid(value);\n");
         string branch = "if";
         foreach (RttiCase item in cases)
         {
             code.Append("        ").Append(branch).Append(" (type == typeid(case_").Append(item.Hash).Append("))\n        {\n");
+            string value = (item.Tracked ? "&static_cast<case_" : "static_cast<const case_") + item.Hash + "&>(value)";
             if (json)
             {
                 code.Append("            output.token('{');\n")
@@ -160,14 +221,14 @@ internal sealed partial class CppEmitter
                     .Append("            output.write_number(").Append(item.Hash).Append(");\n")
                     .Append("            output.token(',');\n")
                     .Append("            output.template write_property<luminpack::detail::json_union_value_name>();\n")
-                    .Append("            ").Append(item.Json).Append("::write(output, static_cast<const case_").Append(item.Hash).Append("&>(value));\n")
+                    .Append("            ").Append(item.Json).Append("::write(output, ").Append(value).Append(");\n")
                     .Append("            output.token('}');\n");
             }
             else
             {
                 code.Append("            output.write(").Append(item.Hash).Append(");\n")
-                    .Append("            luminpack::detail::write_codec<").Append(item.Binary).Append(">(output, static_cast<const case_")
-                    .Append(item.Hash).Append("&>(value), context...);\n");
+                    .Append("            luminpack::detail::write_codec<").Append(item.Binary).Append(">(output, ")
+                    .Append(value).Append(graph ? ", version, references);\n" : ", context...);\n");
             }
             code.Append(registered ? "            return true;\n        }\n" : "            return;\n        }\n");
             branch = "else if";
@@ -175,16 +236,55 @@ internal sealed partial class CppEmitter
         if (registered)
         {
             code.Append("        return false;\n    }\n\n");
-            if (!json)
-                code.Append("    template<class... Context>\n");
-            code.Append("    static void write(").Append(writeParameters).Append("\n    {\n")
-                .Append(json ? "        if (!try_write(output, value))\n" : "        if (!try_write(output, value, context...))\n")
-                .Append("            throw std::invalid_argument(\"Unknown LuminPack Union runtime type.\");\n    }\n");
+            if (!graph)
+            {
+                if (!json)
+                    code.Append("    template<class... Context>\n");
+                code.Append("    static void write(").Append(writeParameters).Append("\n    {\n")
+                    .Append(json ? "        if (!try_write(output, value))\n" : "        if (!try_write(output, value, context...))\n")
+                    .Append("            throw std::invalid_argument(\"Unknown LuminPack Union runtime type.\");\n    }\n");
+            }
         }
         else
             code.Append("        throw std::invalid_argument(\"Unknown LuminPack Union runtime type.\");\n    }\n");
         code.Append("};\n\n");
     }
 
-    private readonly record struct RttiCase(string Hash, string Binary, string Json);
+    /// <summary>Decodes a selected case into its graph shell, or creates an ordinary case from its payload.</summary>
+    /// <param name="item">The concrete case entry and hash.</param>
+    /// <param name="json">Whether to use the JSON case codec.</param>
+    /// <param name="graph">Whether the reference graph owns ordinary decoded cases.</param>
+    private void EmitRttiReadCase(RttiCase item, bool json, bool graph)
+    {
+        if (item.Tracked)
+        {
+            if (json)
+                code.Append("            return ").Append(item.Json).Append("::read(input);\n");
+            else
+            {
+                string concrete = "case_" + item.Hash;
+                code.Append("        {\n            auto* existing = seed && typeid(*seed) == typeid(").Append(concrete)
+                    .Append(") ? static_cast<").Append(concrete).Append("*>(seed) : nullptr;\n")
+                    .Append("            ").Append(item.Binary).Append("::read_into(input, existing, version, references);\n")
+                    .Append("            return existing;\n        }\n");
+            }
+            return;
+        }
+
+        bool depthScope = graph && !json;
+        if (depthScope)
+            code.Append("        {\n            luminpack::reference_read_state::depth_scope depth(references);\n");
+        string adoption = !graph ? "" : json ? "input.references().own(" : "references.own(";
+        code.Append("            return ").Append(adoption).Append("std::make_unique<case_").Append(item.Hash).Append(">(");
+        if (json)
+            code.Append(item.Json).Append("::read(input))");
+        else
+            code.Append("luminpack::detail::read_codec<").Append(item.Binary).Append(">(input, ")
+                .Append(graph ? "version, references))" : "context...))");
+        code.Append(graph ? ");\n" : ";\n");
+        if (depthScope)
+            code.Append("        }\n");
+    }
+
+    private readonly record struct RttiCase(string Hash, string Binary, string Json, bool Tracked);
 }

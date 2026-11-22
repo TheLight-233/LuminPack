@@ -92,7 +92,7 @@ UTF-16 Length 新建字符串和读取符合条件的列表前缀时，使用 C#
 
 生成的头文件声明 `root_requires_reference_graph` 时，Binary 用 `read_binary_reference_document<root_binary>(bytes, root_binary_limits, root_binary_reference_depth)` 读取，JSON 用 `read_reference_json_document<root_json, root_json_encoding>(bytes, root_json_options)` 读取。返回的文档通过 `graph` 持有跟踪对象，`value` 是解码后的根值。跟踪类字段是指向图中对象的可空指针，使用这些指针期间需要保留文档。构造图时可用 `reference_graph::make<T>()` 分配跟踪 DTO，再连接返回的指针。写入使用 `write_binary_reference_document` 或 `write_reference_json_document`，每次开始新的标识表。
 
-Default 和 Version 跟踪记录保留直接成员、受支持的集合和默认 variant Union 中的共享实例及环。Binary 的显式对象 ID 随操作与 Version 作用域一同传递。JSON 沿用 `$id` 和 `$ref`。当 .NET 根类型没有声明有限深度时，C++ Binary 图默认最多允许 512 层首次出现对象。调用方可以向读取入口传入深度上限。
+Default 和 Version 跟踪记录保留直接成员、受支持的集合以及 variant 和 RTTI Union 中的共享实例及环。Binary 的显式对象 ID 随操作与 Version 作用域一同传递。JSON 沿用 `$id` 和 `$ref`。当 .NET 根类型没有声明有限深度时，C++ Binary 图的可移植默认深度为 512。调用方可以向读取入口传入深度上限。
 
 ## JSON
 
@@ -139,7 +139,7 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 对 Next Custom 注册，在包含生成头文件之前提供特化，例如 `luminpack::custom_binding<u"Example.Message">`。特化提供 `binary` codec。如果 .NET 注册包含 JSON，也提供值类型相同的 `json` codec。可以使用 `custom_codec` 和 `json_custom_codec`。wire 字节和 null 表示由应用负责。生成的 Custom JSON 使用自动注册的 UTF-16 profile。仅注册 Binary 时只需提供 `binary` codec。
 
-在 `generate` 后加 `--rtti`，可为 Next 的封闭精确分派层生成 C++ 多态 DTO，支持最多 32 个位置类 case。每个 Union 用 `std::unique_ptr` 持有具体对象。写入将 `typeid(value)` 与声明的具体类型逐个比较，读取按 C# 的规范 case hash 执行 `switch`。该选项同时适用于 Binary 和 JSON。同一个根的 RTTI 和 variant 头文件使用相同命名空间，每个程序按需选择一种表示。
+在 `generate` 后加 `--rtti`，可为 Next 的封闭精确分派层生成 C++ 多态 DTO，支持最多 32 个位置类或引用跟踪类 case。直接 case 全是普通类时，Union 槽用 `std::unique_ptr` 持有对象。存在直接跟踪 case 时，Union 的所有槽都借用文档图中的指针，包括普通 case 和注册 case。写入将 `typeid(value)` 与声明的具体类型逐个比较，读取按 C# 的规范 case hash 执行 `switch`。该选项同时适用于 Binary 和 JSON。同一个根的 RTTI 和 variant 头文件使用相同命名空间，每个程序按需选择一种表示。
 
 从启用了注册的程序集导出的 RTTI Union 提供 `root_binary::registry`。应用 case 继承自 `registry::base_type`，通过 `registry::register_case<Case, Binding>(tag)` 注册。绑定提供读取 payload 的 `read_binary` 和 `read_json`，以及写入带标签 case 的 `write_binary` 和 `write_json`。JSON 方法支持 UTF-8 和 UTF-16 writer。Binary codec 在调用绑定前写入转义哈希，Binary 绑定可用 `write_registered_union_tag<registry::wide_tags>(output, tag)` 写入标签。JSON 绑定写入数字 `$type`，并用 `$value` 包装应用 payload。C# 与 C++ 使用相同的标签和表示。生成的 case 仍优先按哈希分派。
 

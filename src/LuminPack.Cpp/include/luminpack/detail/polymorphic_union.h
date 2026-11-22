@@ -79,4 +79,127 @@ struct json_polymorphic_union_codec
             output.write_null();
     }
 };
+
+namespace detail
+{
+template<class Base, class ReadCase>
+void read_graph_union(reader& input, Base*& destination, version_state& version,
+    reference_read_state& references, ReadCase read_case)
+{
+    reader next = input;
+    const auto hash = next.read<std::uint32_t>();
+    if (hash == 0)
+        destination = nullptr;
+    else
+    {
+        auto transaction = version_transaction(version, references);
+        destination = read_case(next, hash);
+        transaction.commit();
+    }
+    input = next;
+}
+
+template<class Base, class WriteCase>
+void write_graph_union(writer& output, Base* value, version_state& version,
+    reference_write_state& references, WriteCase write_case)
+{
+    if (!value)
+    {
+        output.write<std::uint32_t>(0);
+        return;
+    }
+
+    writer next = output;
+    auto transaction = version_transaction(version, references);
+    write_case(next, *value);
+    output = next;
+    transaction.commit();
+}
+
+template<class Base, class ReadCase>
+Base* read_graph_json_union(auto& input, ReadCase read_case)
+{
+    auto next = input;
+    reference_read_state::scope transaction(next.references());
+    // A known tracked case may return null. Keep that distinct from an absent envelope payload.
+    const auto result = read_json_union_envelope<std::optional<Base*>>(next, read_case);
+    input = next;
+    transaction.commit();
+    return result.value_or(nullptr);
+}
+
+template<class Base, class WriteCase>
+void write_graph_json_union(auto& output, Base* value, WriteCase write_case)
+{
+    if (!value)
+    {
+        output.write_null();
+        return;
+    }
+
+    auto next = output;
+    reference_write_state::scope transaction(next.references());
+    write_case(next, *value);
+    output = next;
+    transaction.commit();
+}
+}
+
+/// An RTTI Union with a tracked direct case. All case pointers borrow the owning document's graph.
+template<class Base, class Dispatch>
+struct graph_polymorphic_union_codec
+{
+    static_assert(std::has_virtual_destructor_v<Base>);
+
+    using value_type = Base*;
+    static constexpr auto minimum_size = sizeof(std::uint32_t);
+
+    static value_type read(reader& input, version_state& version, reference_read_state& references)
+    {
+        value_type result = nullptr;
+        read_into(input, result, version, references);
+        return result;
+    }
+
+    static void read_into(reader& input, value_type& destination, version_state& version, reference_read_state& references)
+    {
+        detail::read_graph_union(input, destination, version, references, [&](reader& next, std::uint32_t hash)
+        {
+            return Dispatch::read(next, hash, destination, version, references);
+        });
+    }
+
+    static void write(writer& output, value_type value, version_state& version, reference_write_state& references)
+    {
+        detail::write_graph_union(output, value, version, references, [&](writer& next, Base& object)
+        {
+            Dispatch::write(next, object, version, references);
+        });
+    }
+};
+
+/// The JSON envelope of an RTTI Union whose direct cases borrow one reference graph.
+template<class Base, class Dispatch>
+struct graph_json_polymorphic_union_codec
+{
+    static_assert(std::has_virtual_destructor_v<Base>);
+
+    using value_type = Base*;
+
+    static value_type read(auto& input)
+    {
+        return detail::read_graph_json_union<Base>(input, [](auto& payload, std::uint32_t hash) -> std::optional<Base*>
+        {
+            return Dispatch::read(payload, hash);
+        });
+    }
+
+    static void write(auto& output, value_type value)
+    {
+        detail::write_graph_json_union(output, value, [](auto& next, Base& object)
+        {
+            Dispatch::write(next, object);
+        });
+    }
+};
 }

@@ -17,7 +17,7 @@ internal sealed partial class CppEmitter
 
     /// <summary>Indexes declared types from the current manifest version.</summary>
     /// <param name="manifest">The validated manifest root.</param>
-    /// <param name="useRtti">Whether to emit owning class Unions with C#-style dispatch.</param>
+    /// <param name="useRtti">Whether to emit polymorphic class Unions with C#-style dispatch.</param>
     private CppEmitter(JsonElement manifest, bool useRtti)
     {
         if (manifest.GetProperty("version").GetInt32() != 1)
@@ -45,7 +45,7 @@ internal sealed partial class CppEmitter
     /// <param name="manifestPath">The compiler-projected manifest.</param>
     /// <param name="root">The explicit root's CLR metadata name.</param>
     /// <param name="headerPath">The generated C++ header destination.</param>
-    /// <param name="useRtti">Whether to emit owning class Unions with C#-style dispatch.</param>
+    /// <param name="useRtti">Whether to emit polymorphic class Unions with C#-style dispatch.</param>
     internal static void Generate(string manifestPath, string root, string headerPath, bool useRtti = false)
     {
         using JsonDocument manifest = JsonDocument.Parse(File.ReadAllBytes(manifestPath));
@@ -57,7 +57,7 @@ internal sealed partial class CppEmitter
         emitter.code.Append("namespace luminpack_generated::root_").Append(Identifier(root)).Append("\n{\n");
         JsonElement profile = declaration.GetProperty("profile");
         Binding binding = emitter.BindContract(declaration, profile.GetProperty("binary").GetInt32());
-        emitter.EmitTrackedRecords();
+        emitter.EmitDeferredRecordsAndRttiUnions();
         emitter.EmitRoot(binding, profile);
         emitter.code.Append("}\n");
         OutputFile.Replace(manifestPath, headerPath, stream =>

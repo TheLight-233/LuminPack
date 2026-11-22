@@ -6,7 +6,7 @@ using LuminPack.Option;
 namespace LuminPackCppReferenceFixtures;
 
 /// <summary>Exchanges recursive and shared reference graphs with the generated C++ models.</summary>
-internal static class Program
+internal static partial class Program
 {
     /// <summary>Writes the managed documents or verifies the native documents.</summary>
     /// <param name="args">The requested operation and document directory.</param>
@@ -48,6 +48,7 @@ internal static class Program
         Exchange(directory, write, "version-node", version, VerifyVersion);
         Exchange(directory, write, "envelope", document, VerifyEnvelope);
         Exchange<IWrapper>(directory, write, "rtti-wrapper", new Wrapper { Value = first }, VerifyWrapper);
+        ExchangeTrackedUnions(directory, write);
         Console.WriteLine(write ? ".NET wrote the reference graph fixtures." : ".NET verified the C++ reference graph documents.");
         return 0;
     }
@@ -68,9 +69,11 @@ internal static class Program
         {
             File.WriteAllBytes(binary, LuminPackSerializer.Serialize(original));
             var buffer = new ArrayBufferWriter<byte>();
+            graphUsesUtf8 = true;
             LuminPackSerializer.SerializeJson<T, LuminPackUtf8LengthOptions>(original, buffer);
             File.WriteAllBytes(utf8, buffer.WrittenSpan.ToArray());
             buffer.Clear();
+            graphUsesUtf8 = false;
             LuminPackSerializer.SerializeJson<T, LuminPackUtf16LengthOptions>(original, buffer);
             File.WriteAllBytes(utf16, buffer.WrittenSpan.ToArray());
             return;
@@ -78,9 +81,11 @@ internal static class Program
 
         verify(LuminPackSerializer.Deserialize<T>(File.ReadAllBytes(binary)));
         T value = default!;
+        graphUsesUtf8 = true;
         LuminPackSerializer.DeserializeJson<T, LuminPackUtf8LengthOptions>(File.ReadAllBytes(utf8), ref value);
         verify(value);
         value = default!;
+        graphUsesUtf8 = false;
         LuminPackSerializer.DeserializeJson<T, LuminPackUtf16LengthOptions>(File.ReadAllBytes(utf16), ref value);
         verify(value);
     }
