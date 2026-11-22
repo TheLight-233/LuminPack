@@ -49,7 +49,8 @@ internal static class CppContractExport
                 RenderModelFactory.Create(model, options, json: true) is { } jsonModel
                     ? JsonEmitter.FindGeneratedInt32Runs(jsonModel)
                     : null;
-            Append(Contract(model, model is StructModel value ? getNativeStorage(value) : null, orderedRuns, getRawCompoundStorage));
+            Append(Contract(model, model is StructModel value ? getNativeStorage(value) : null, orderedRuns,
+                options.RegisterMode != RegisterMode.Disabled, getRawCompoundStorage));
         }
         var ids = new HashSet<string>(contracts.Keys, StringComparer.Ordinal);
         foreach (var declaration in custom.OrderBy(item => item.Id, StringComparer.Ordinal))
@@ -141,9 +142,10 @@ internal static class CppContractExport
     /// <param name="model">The declaration facts.</param>
     /// <param name="native">The independent tag-free layout facts, when available.</param>
     /// <param name="orderedRuns">The proven generated JSON Int32 runs by start ordinal.</param>
+    /// <param name="registration">Whether the consuming assembly enables runtime registration.</param>
     /// <param name="getRawCompoundStorage">The layout proof for headerless framework storage.</param>
     /// <returns>The JSON properties for the contract row.</returns>
-    private static object Contract(TypeModel model, (int Strategy, FormatterStorageModel Layout)? native, int[]? orderedRuns,
+    private static object Contract(TypeModel model, (int Strategy, FormatterStorageModel Layout)? native, int[]? orderedRuns, bool registration,
         Func<FormatterModel, FormatterStorageModel?> getRawCompoundStorage)
     {
         var record = model as RecordModel;
@@ -158,6 +160,7 @@ internal static class CppContractExport
             ("nativeStrategy", native?.Strategy), ("nativeStorage", Storage(native?.Layout)),
             ("jsonInt32Runs", orderedRuns),
             ("sequenceBase", record?.SequenceBase), ("collectionBase", Formatter(record?.CollectionBase, getRawCompoundStorage)),
+            ("unionWideTags", union?.WideTags), ("unionRegistration", union != null && registration),
             ("cases", union?.Cases.Select(static item => Object(("id", item.Type.MetadataName), ("type", item.Type.GlobalName),
                 ("hash", item.NameHash), ("tag", item.Tag), ("ownEntry", item.OwnEntry)))),
             ("members", model.Members.Select((member, index) => Member(member, version, index, getRawCompoundStorage))));

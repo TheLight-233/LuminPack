@@ -13,6 +13,8 @@ For C++ binary interoperability, include the public runtime header and link the 
 
 Use `generate --rtti` when the C++ DTO needs Next's closed exact-type Union dispatch. The owning Union slot is a `std::unique_ptr`. Its writer uses the concrete RTTI type, and its reader switches on the C# wire hash.
 
+For an RTTI Union exported with registration enabled, register an application case derived from `root_binary::registry::base_type` using `root_binary::registry::register_case<Case, Binding>(tag)`. Supply Binary and JSON payload readers and tagged writers. The Binary codec writes the escape hash, then the binding writes the tag with `write_registered_union_tag<root_binary::registry::wide_tags>` and its payload. The JSON binding writes the numeric `$type` and application payload in the `$value` envelope. Match the C# runtime registration's tag and wire representation.
+
 Pass generated `root_binary_limits` or `root_json_options` to the corresponding C++ document reader to enforce the root's declared `MaxInputBytes` before decoding.
 
 For an exported C# Custom registration, define `luminpack::custom_binding<u"Namespace.Type">` before the generated header. Bind the application-owned wire with a `binary` codec and a matching `json` codec if the C# automatic registration exposes JSON. Its JSON profile is UTF-16.

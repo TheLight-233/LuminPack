@@ -135,6 +135,8 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 在 `generate` 后加 `--rtti`，可为 Next 的封闭精确分派层生成 C++ 多态 DTO，支持最多 32 个位置类 case。每个 Union 用 `std::unique_ptr` 持有具体对象。写入将 `typeid(value)` 与声明的具体类型逐个比较，读取按 C# 的规范 case hash 执行 `switch`。该选项同时适用于 Binary 和 JSON。同一个根的 RTTI 和 variant 头文件使用相同命名空间，每个程序按需选择一种表示。
 
+从启用了注册的程序集导出的 RTTI Union 提供 `root_binary::registry`。应用 case 继承自 `registry::base_type`，通过 `registry::register_case<Case, Binding>(tag)` 注册。绑定提供读取 payload 的 `read_binary` 和 `read_json`，以及写入带标签 case 的 `write_binary` 和 `write_json`。JSON 方法支持 UTF-8 和 UTF-16 writer。Binary codec 在调用绑定前写入转义哈希，Binary 绑定可用 `write_registered_union_tag<registry::wide_tags>(output, tag)` 写入标签。JSON 绑定写入数字 `$type`，并用 `$value` 包装应用 payload。C# 与 C++ 使用相同的标签和表示。生成的 case 仍优先按哈希分派。
+
 生成器支持无环的位置类和 Version 类、封闭的类或接口 Union、枚举、定宽标量、文本、一维数组、List、Dictionary，以及具有已生成字段契约的 Packed 和 Tagged 聚合和存储经过验证的顺序布局原始结构体。可空原生类型和枚举也可以用作 Version 字段、数组或 List 元素和字典值。遇到尚未实现的 wire 表示时，生成器会报告对应成员或类型。
 
 ## 验证基准模型
