@@ -141,7 +141,9 @@ void check_all_cases(const document::root_value& value)
     const auto* last = dynamic_cast<const document::type_LuminPackCppVirtualUnionFixtures_x002eCase32*>(items[31].get());
     require(first && first->field_Number == 7 && last && last->field_Number == 224,
         "Resolve the first and last ordinary case hashes.");
-    require(items[32] && items[33] && typeid(*items[32]) != typeid(*items[33]),
+    const auto* closed_number = items[32].get();
+    const auto* closed_text = items[33].get();
+    require(closed_number && closed_text && typeid(*closed_number) != typeid(*closed_text),
         "Resolve the closed generic instantiations independently.");
 }
 
