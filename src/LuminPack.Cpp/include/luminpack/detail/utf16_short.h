@@ -9,7 +9,7 @@ namespace luminpack::detail
 void write_utf16_fallback(writer& output, std::optional<std::u16string_view> value);
 
 #if defined(LUMINPACK_CPP_INLINE_SSE2)
-/// Narrows 1–16 UTF-16 code units after the caller proves the raw output bound.
+/// Narrows 1 to 16 UTF-16 code units after the caller proves the raw output bound.
 /// Every source lane is loaded and validated before either overlapping store.
 inline bool write_short_latin1(std::span<std::byte> destination, std::u16string_view value) noexcept
 {

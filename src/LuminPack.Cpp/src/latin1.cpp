@@ -65,15 +65,51 @@ __m128i load128(const void* source) noexcept
     return value;
 }
 
+bool is_latin1(__m128i value) noexcept
+{
+    const auto high = _mm_and_si128(value, _mm_set1_epi16(-256));
+    return _mm_movemask_epi8(_mm_cmpeq_epi16(high, _mm_setzero_si128())) == 0xffff;
+}
+
+void store_narrowed(std::byte* destination, __m128i first, __m128i second) noexcept
+{
+    const auto packed = _mm_packus_epi16(first, second);
+    std::memcpy(destination, &packed, sizeof(packed));
+}
+
 bool narrow_block(const char16_t* source, std::byte* destination) noexcept
 {
     const auto first = load128(source);
     const auto second = load128(source + 8);
-    const auto high = _mm_and_si128(_mm_or_si128(first, second), _mm_set1_epi16(-256));
-    if (_mm_movemask_epi8(_mm_cmpeq_epi16(high, _mm_setzero_si128())) != 0xffff)
+    if (!is_latin1(_mm_or_si128(first, second)))
         return false;
-    const auto packed = _mm_packus_epi16(first, second);
-    std::memcpy(destination, &packed, sizeof(packed));
+    store_narrowed(destination, first, second);
+    return true;
+}
+
+bool narrow_latin1_128(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    // The final vector may overlap the preceding block but stays within both ranges.
+    const auto last = source.size() - 16;
+    for (std::size_t index = 0; index < last; index += 16)
+    {
+        if (!narrow_block(source.data() + index, destination.data() + index))
+            return false;
+    }
+    return narrow_block(source.data() + last, destination.data() + last);
+}
+
+bool narrow_medium_latin1_128(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    const auto last = source.size() - 16;
+    const auto first = load128(source.data());
+    const auto first_end = load128(source.data() + 8);
+    const auto last_start = load128(source.data() + last);
+    const auto last_end = load128(source.data() + last + 8);
+    if (!is_latin1(_mm_or_si128(_mm_or_si128(first, first_end), _mm_or_si128(last_start, last_end))))
+        return false;
+    store_narrowed(destination.data(), first, first_end);
+    store_narrowed(destination.data() + last, last_start, last_end);
     return true;
 }
 
@@ -100,17 +136,7 @@ bool narrow_latin1(std::span<const char16_t> source, std::span<std::byte> destin
 #endif
 #if defined(LUMINPACK_CPP_SSE2)
     if (source.size() >= 16)
-    {
-        // Like the Core Latin-1 kernel, classify high bytes before saturating pack.
-        // The final vector may overlap the preceding block but stays within the source and destination.
-        const auto last = source.size() - 16;
-        for (std::size_t index = 0; index < last; index += 16)
-        {
-            if (!narrow_block(source.data() + index, destination.data() + index))
-                return false;
-        }
-        return narrow_block(source.data() + last, destination.data() + last);
-    }
+        return narrow_latin1_128(source, destination);
 #endif
     for (std::size_t index = 0; index < source.size(); ++index)
     {
@@ -121,6 +147,24 @@ bool narrow_latin1(std::span<const char16_t> source, std::span<std::byte> destin
     }
     return true;
 }
+
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+std::int32_t write_medium_utf16_payload(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+#if defined(LUMINPACK_CPP_AVX2)
+    if (available_isa().avx2)
+        return write_medium_utf16_payload_avx2(source, destination);
+#endif
+
+    const auto raw_size = static_cast<std::int32_t>(source.size_bytes());
+    if (source.size() <= 32 ? narrow_medium_latin1_128(source, destination) : narrow_latin1_128(source, destination))
+        return raw_size | 1;
+
+    // A later non-Latin-1 block may leave a compact prefix, which the raw copy overwrites.
+    std::memcpy(destination.data(), source.data(), source.size_bytes());
+    return raw_size;
+}
+#endif
 
 void widen_latin1(std::span<const std::byte> source, std::span<char16_t> destination) noexcept
 {

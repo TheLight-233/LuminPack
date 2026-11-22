@@ -19,10 +19,15 @@ bool is_latin1(__m256i value) noexcept
     return _mm256_testz_si256(value, _mm256_set1_epi16(-256)) != 0;
 }
 
-void store_narrowed(std::byte* destination, __m256i first, __m256i second) noexcept
+__m256i narrow_validated(__m256i first, __m256i second) noexcept
 {
     const auto lanes = _mm256_packus_epi16(first, second);
-    const auto ordered = _mm256_permute4x64_epi64(lanes, 0xd8);
+    return _mm256_permute4x64_epi64(lanes, 0xd8);
+}
+
+void store_narrowed(std::byte* destination, __m256i first, __m256i second) noexcept
+{
+    const auto ordered = narrow_validated(first, second);
     std::memcpy(destination, &ordered, sizeof(ordered));
 }
 
@@ -72,6 +77,46 @@ bool narrow_latin1_avx2(std::span<const char16_t> source, std::span<std::byte> d
             return false;
     }
     return narrow_block(source.data() + last, destination.data() + last);
+}
+
+std::int32_t write_medium_utf16_payload_avx2(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    const auto raw_size = static_cast<std::int32_t>(source.size_bytes());
+    const auto* chars = source.data();
+    auto* payload = destination.data();
+    if (source.size() <= 32)
+    {
+        const auto last = source.size() - 16;
+        const auto first = load256(chars);
+        const auto last_block = load256(chars + last);
+        if (is_latin1(_mm256_or_si256(first, last_block)))
+        {
+            const auto packed = narrow_validated(first, last_block);
+            const auto low = _mm256_castsi256_si128(packed);
+            const auto high = _mm256_extracti128_si256(packed, 1);
+            std::memcpy(payload, &low, sizeof(low));
+            std::memcpy(payload + last, &high, sizeof(high));
+            return raw_size | 1;
+        }
+        std::memcpy(payload, chars, 32);
+        std::memcpy(payload + last * sizeof(char16_t), chars + last, 32);
+        return raw_size;
+    }
+
+    const auto last = source.size() - 32;
+    const auto first = load256(chars);
+    const auto first_end = load256(chars + 16);
+    const auto last_start = load256(chars + last);
+    const auto last_end = load256(chars + last + 16);
+    if (is_latin1(_mm256_or_si256(_mm256_or_si256(first, first_end), _mm256_or_si256(last_start, last_end))))
+    {
+        store_narrowed(payload, first, first_end);
+        store_narrowed(payload + last, last_start, last_end);
+        return raw_size | 1;
+    }
+    std::memcpy(payload, chars, 64);
+    std::memcpy(payload + last * sizeof(char16_t), chars + last, 64);
+    return raw_size;
 }
 
 void widen_latin1_avx2(std::span<const std::byte> source, std::span<char16_t> destination) noexcept

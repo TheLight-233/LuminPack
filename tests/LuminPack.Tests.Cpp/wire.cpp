@@ -132,46 +132,69 @@ void text_fixtures(const std::filesystem::path& directory)
 
 void text_vector_boundaries()
 {
+    // One code unit past an aligned address exercises unaligned vector loads.
+    alignas(32) std::array<char16_t, 258> source{};
     for (std::size_t length = 1; length <= 257; ++length)
     {
-        std::u16string current(length, u'\0');
+        const auto units = std::span(source).subspan(1, length);
         for (std::size_t index = 0; index < length; ++index)
-            current[index] = static_cast<char16_t>((index * 17 + 111) & 255);
+            units[index] = static_cast<char16_t>((index * 17 + 111) & 255);
+        const std::u16string_view current(units.data(), units.size());
 
         // Decode into exactly enough storage and include a canary after each destination.
         std::vector<byte> bytes(4 + length * 2 + 1, byte{204});
         std::vector<char16_t> characters(length + 1, char16_t{0xffff});
         const auto storage = std::span<byte>(bytes);
         const auto destination = std::span<char16_t>(characters).first(length);
-        writer output(storage.first(4 + length));
-        luminpack::write_utf16(output, current);
-        check(output.written().size() == 4 + length && bytes[4 + length] == byte{204}, "Latin-1 writer bounds.");
-        reader input(output.written());
-        check(input.read<std::int32_t>() == static_cast<std::int32_t>(length * 2 + 1), "Latin-1 record marker.");
-        const auto payload = input.take(length);
-        for (std::size_t index = 0; index < length; ++index)
-            check(payload[index] == static_cast<byte>(current[index]), "Latin-1 vector lane order.");
+        writer output(storage);
+        for (const auto capacity : {4 + length, 4 + length * 2})
+        {
+            std::ranges::fill(bytes, byte{204});
+            output = writer(storage.first(capacity));
+            luminpack::write_utf16(output, current);
+            check(output.written().size() == 4 + length && bytes[4 + length] == byte{204}, "Latin-1 writer bounds.");
+            reader compact(output.written());
+            check(compact.read<std::int32_t>() == static_cast<std::int32_t>(length * 2 + 1), "Latin-1 record marker.");
+            check(std::ranges::equal(compact.take(length), current,
+                [](byte actual, char16_t unit) { return actual == static_cast<byte>(unit); }), "Latin-1 vector lane order.");
+            compact.require_end();
+        }
 
-        output = writer(storage.first(4 + length * 2));
-        luminpack::write_utf16(output, current);
-        input = reader(output.written());
-        check(output.written().size() == 4 + length, "Latin-1 writer selects compact form.");
+        reader input(output.written());
         check(luminpack::read_utf16_into(input, destination) == current, "Latin-1 widening.");
         check(characters.back() == 0xffff, "Latin-1 reader bounds.");
         input.require_end();
 
         for (std::size_t index = 0; index < length; ++index)
         {
-            const auto saved = current[index];
-            current[index] = 0xd800;
+            const auto saved = units[index];
+            units[index] = 0xd800;
             output = writer(storage.first(4 + length * 2));
             luminpack::write_utf16(output, current);
             check(output.written().size() == 4 + length * 2 && bytes.back() == byte{204}, "Raw UTF-16 writer bounds.");
+            reader raw(output.written());
+            check(raw.read<std::int32_t>() == static_cast<std::int32_t>(units.size_bytes()), "Raw UTF-16 record marker.");
+            check(std::ranges::equal(raw.take(units.size_bytes()), std::as_bytes(units)), "Raw UTF-16 payload bytes.");
+            raw.require_end();
             input = reader(output.written());
             check(luminpack::read_utf16_into(input, destination) == current, "Mixed text and unpaired surrogate preservation.");
             input.require_end();
-            current[index] = saved;
+            units[index] = saved;
         }
+    }
+
+    for (const auto length : {16, 17, 32, 33, 64, 65})
+    {
+        const auto units = std::span(source).subspan(1, static_cast<std::size_t>(length));
+        units.back() = 0x100;
+        const std::u16string_view current(units.data(), units.size());
+        std::array<byte, 4 + 65> compact{};
+        writer output(std::span<byte>(compact).first(4 + units.size()));
+        expect_error<std::length_error>([&] { luminpack::write_utf16(output, current); },
+            "Writes a raw UTF-16 record into a compact-only window.");
+        check(output.written().empty() && std::ranges::all_of(compact, [](byte value) { return value == byte{}; }),
+            "Publishes a failed medium UTF-16 write.");
+        units.back() = u'\0';
     }
 
     std::array<char16_t, 40> alias{};

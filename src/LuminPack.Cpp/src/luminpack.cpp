@@ -159,6 +159,23 @@ void detail::write_utf16_fallback(writer& output, std::optional<std::u16string_v
     writer compact = output;
     const auto record = compact.reserve(header_size + length);
     const auto destination = record.subspan(header_size);
+
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+    if (length >= 17 && length <= 64 && raw_size <= output.remaining() - header_size)
+    {
+        writer full = output;
+        const auto raw_record = full.reserve(header_size + raw_size);
+        const auto raw_payload = raw_record.subspan(header_size);
+        if (!detail::overlaps(raw, raw_payload))
+        {
+            const auto header = detail::write_medium_utf16_payload(characters, raw_payload);
+            detail::store_count(record, header);
+            output = (header & 1) != 0 ? compact : full;
+            return;
+        }
+    }
+#endif
+
     if (detail::overlaps(raw, destination))
     {
         const std::u16string scratch(*value);
