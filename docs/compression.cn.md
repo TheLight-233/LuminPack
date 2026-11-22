@@ -19,6 +19,8 @@ LuminCompressor.Decompress(storage.AsSpan(0, written), output);
 
 `GetMaxCompressedSize(0)` 返回 8。非空输入的容量上界为 `8 + length + (length >> 7) + 16`；负数及超过 2,130,836,464 的长度会抛出 `ArgumentOutOfRangeException`。该上界覆盖字面量扩展和序列开销，包括不可压缩数据。
 
+C++ 通过 `<luminpack/compression.h>` 和 `luminpack::compression` 提供相同的帧格式。调用 `max_compressed_size(input.size())` 分配目标缓冲区，再按 `compress(input, destination)` 返回的字节数截取压缩帧。`decompressed_size(frame)` 给出 `decompress(frame, destination)` 所需的目标容量。输入和输出是调用方提供且互不重叠的跨度。解码损坏的帧时，目标缓冲区可能保留已解码的前缀。
+
 ## 帧格式
 
 所有多字节定长整数采用小端序。帧以 ASCII `LUM2` 和非负 `Int32` 原始长度开头。空输入仅包含这八字节头部。解码器仅接受 `LUM2` 标识。

@@ -19,6 +19,8 @@ The span overloads use caller-owned, non-overlapping input and output. Compressi
 
 `GetMaxCompressedSize(0)` is 8. For nonempty input the bound is `8 + length + (length >> 7) + 16`; negative lengths and lengths above 2,130,836,464 throw `ArgumentOutOfRangeException`. This bounds literal extensions and sequence framing, including incompressible data.
 
+C++ exposes the same frames through `<luminpack/compression.h>` and `luminpack::compression`. Use `max_compressed_size(input.size())` to allocate a destination, then use the byte count returned by `compress(input, destination)` to select the written frame. `decompressed_size(frame)` gives the destination size for `decompress(frame, destination)`. Both operations use non-overlapping caller-owned spans. A malformed frame can leave a decoded prefix in the destination.
+
 ## Frame format
 
 All multibyte fixed integers are little-endian. A frame starts with ASCII `LUM2` and a nonnegative `Int32` original length. Empty input consists of this eight-byte header alone. The decoder accepts only the `LUM2` signature.

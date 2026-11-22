@@ -9,6 +9,8 @@ LuminPack generates a dedicated binary and JSON formatter for every type at comp
 
 This skill is about using the library. It does not describe how to maintain the LuminPack repository.
 
+For standalone C++ LUM2 frames, use `luminpack::compression` with non-overlapping caller-owned spans. Allocate with `max_compressed_size` or `decompressed_size` before calling `compress` or `decompress`.
+
 For C++ binary interoperability, include the public runtime header and link the CMake target. Use the Next C++ contract export and standalone tool for supported DTO graphs, or supply a closed codec matching the .NET member order and binary profiles. Nullable primitives and enums map to `std::optional`. Bind the exact Version width or CLR storage model when the wire uses padding or a contiguous block. Use the binary document entry points to share Version schema registrations across nested codecs, or pass one version_state through an explicitly framed operation. For JSON, select UTF-8 or UTF-16 at the document entry and bind properties using their C# JSON names. See the [C++ runtime](../../src/LuminPack.Cpp/README.md) for the supported wire operations.
 
 Match a C# built-in Binary operation profile with C++ `generate --binary-profile`, for example `--binary-profile utf8-length` for `LuminPackUtf8LengthOptions`. Member and type declarations retain precedence. Explicitly profiled roots use a namespace suffix such as `_binary_utf8_length`. JSON keeps its own document settings.

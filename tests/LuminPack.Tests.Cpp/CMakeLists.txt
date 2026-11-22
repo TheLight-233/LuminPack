@@ -139,6 +139,10 @@ if(LUMINPACK_CPP_REGISTERED_UNION_FIXTURES)
     add_test(NAME luminpack_cpp_registered_union COMMAND luminpack_cpp_registered_union "${LUMINPACK_CPP_REGISTERED_UNION_FIXTURES}")
 endif()
 
+add_executable(luminpack_cpp_compression compression.cpp)
+target_link_libraries(luminpack_cpp_compression PRIVATE LuminPack::Cpp)
+add_test(NAME luminpack_cpp_compression COMMAND luminpack_cpp_compression)
+
 set(LUMINPACK_CPP_RECTANGULAR_FIXTURES "" CACHE PATH "Generated rectangular array headers and .NET model documents")
 if(LUMINPACK_CPP_RECTANGULAR_FIXTURES)
     add_executable(luminpack_cpp_rectangular rectangular_models.cpp)

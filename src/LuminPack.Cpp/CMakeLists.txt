@@ -11,7 +11,7 @@ endif()
 
 add_library(luminpack_cpp STATIC
     src/luminpack.cpp src/latin1.cpp src/layout_conversion.cpp src/string_profiles.cpp src/utf8_runs.cpp src/version.cpp
-    src/json.cpp src/json_scan.cpp src/xxhash3.cpp)
+    src/json.cpp src/json_scan.cpp src/xxhash3.cpp src/compression.cpp src/compression_match.cpp)
 add_library(LuminPack::Cpp ALIAS luminpack_cpp)
 target_compile_features(luminpack_cpp PUBLIC cxx_std_20)
 target_include_directories(luminpack_cpp PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -51,14 +51,15 @@ if(LUMINPACK_CPP_SIMD)
         if(luminpack_avx2_flag AND LUMINPACK_CPP_MAX_SIMD_BITS GREATER_EQUAL 256)
             set(luminpack_avx2_sources
                 src/latin1_avx2.cpp src/json_scan_avx2.cpp src/layout_conversion_avx2.cpp
-                src/utf8_ascii_read_avx2.cpp src/utf8_runs_avx2.cpp src/xxhash3_avx2.cpp)
+                src/utf8_ascii_read_avx2.cpp src/utf8_runs_avx2.cpp src/xxhash3_avx2.cpp src/compression_match_avx2.cpp)
             target_sources(luminpack_cpp PRIVATE ${luminpack_avx2_sources})
             set_source_files_properties(${luminpack_avx2_sources} PROPERTIES COMPILE_OPTIONS "${luminpack_avx2_flag}")
             target_compile_definitions(luminpack_cpp PRIVATE LUMINPACK_CPP_AVX2)
         endif()
         if(luminpack_avx512_flags AND LUMINPACK_CPP_MAX_SIMD_BITS EQUAL 512)
             set(luminpack_avx512_sources src/latin1_avx512.cpp src/json_scan_avx512.cpp
-                src/layout_conversion_avx512.cpp src/layout_conversion_avx512vbmi.cpp src/utf8_runs_avx512.cpp)
+                src/layout_conversion_avx512.cpp src/layout_conversion_avx512vbmi.cpp src/utf8_runs_avx512.cpp
+                src/compression_match_avx512.cpp)
             target_sources(luminpack_cpp PRIVATE ${luminpack_avx512_sources} src/layout_conversion_avx512f.cpp)
             set_source_files_properties(${luminpack_avx512_sources} PROPERTIES COMPILE_OPTIONS "${luminpack_avx512_flags}")
             set_source_files_properties(src/layout_conversion_avx512f.cpp PROPERTIES COMPILE_OPTIONS "${luminpack_avx512f_flag}")
