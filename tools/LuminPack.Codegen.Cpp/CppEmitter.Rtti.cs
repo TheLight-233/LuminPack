@@ -144,7 +144,8 @@ internal sealed partial class CppEmitter
             if (hash == 0 || hash == uint.MaxValue || !hashes.Add(hash))
                 throw Missing(owner, "a reserved or duplicate RTTI Union hash");
             string? definition = item.TryGetProperty("definition", out JsonElement open) ? open.GetString() : null;
-            bindings.Add(new RttiCase(hash.ToString(CultureInfo.InvariantCulture) + "u", binary, json, tracked, member.RecordStorage!, definition));
+            bindings.Add(new RttiCase(hash.ToString(CultureInfo.InvariantCulture) + "u", binary, json, tracked,
+                !tracked && Flag(declaration, "versioned"), member.RecordStorage!, definition));
         }
         return bindings;
     }
@@ -184,7 +185,10 @@ internal sealed partial class CppEmitter
         string? virtualSlot = null)
     {
         bool tryRead = json && registered;
+        bool nullableVersion = cases.Any(static item => item.NullableVersion);
         code.Append("struct ").Append(name).Append("\n{\n");
+        if (nullableVersion)
+            code.Append("    static constexpr bool nullable_union_case = true;\n");
         foreach (RttiCase item in cases)
         {
             code.Append("    using case_").Append(item.Hash).Append(" = ");
@@ -196,8 +200,8 @@ internal sealed partial class CppEmitter
         if (!json && !graph)
             code.Append("    template<class... Context>\n");
         string resultType = graph ? baseName + "*" : $"std::unique_ptr<{baseName}>";
-        if (graph && tryRead)
-            resultType = $"std::optional<{baseName}*>";
+        if (tryRead && (graph || nullableVersion))
+            resultType = $"std::optional<{resultType}>";
         code.Append("    static ").Append(resultType).Append(tryRead ? " try_read(" : " read(");
         if (json)
             code.Append("auto& input, std::uint32_t hash)");
@@ -210,14 +214,15 @@ internal sealed partial class CppEmitter
         foreach (RttiCase item in cases)
         {
             code.Append("        case ").Append(item.Hash).Append(":\n");
-            EmitRttiReadCase(item, json, graph);
+            EmitRttiReadCase(item, json, graph, baseName);
         }
         code.Append("        default:\n").Append(tryRead ? "            return {};\n" :
             "            throw luminpack::wire_error(\"Unknown LuminPack Union case hash.\");\n").Append("        }\n    }\n\n");
         if (tryRead && !graph)
         {
             code.Append("    static std::unique_ptr<").Append(baseName).Append("> read(auto& input, std::uint32_t hash)\n")
-                .Append("    {\n        if (auto value = try_read(input, hash))\n            return value;\n")
+                .Append("    {\n        if (auto value = try_read(input, hash))\n            return ")
+                .Append(nullableVersion ? "std::move(*value);\n" : "value;\n")
                 .Append("        throw luminpack::wire_error(\"Unknown LuminPack Union case hash.\");\n    }\n\n");
         }
 
@@ -272,7 +277,8 @@ internal sealed partial class CppEmitter
     /// <param name="item">The concrete case entry and hash.</param>
     /// <param name="json">Whether to use the JSON case codec.</param>
     /// <param name="graph">Whether the reference graph owns ordinary decoded cases.</param>
-    private void EmitRttiReadCase(RttiCase item, bool json, bool graph)
+    /// <param name="baseName">The polymorphic base type used for a known null case.</param>
+    private void EmitRttiReadCase(RttiCase item, bool json, bool graph, string baseName)
     {
         if (item.Tracked)
         {
@@ -290,19 +296,32 @@ internal sealed partial class CppEmitter
         }
 
         bool depthScope = graph && !json;
+        bool scoped = depthScope || item.NullableVersion;
+        if (scoped)
+            code.Append("        {\n");
         if (depthScope)
-            code.Append("        {\n            luminpack::reference_read_state::depth_scope depth(references);\n");
+            code.Append("            luminpack::reference_read_state::depth_scope depth(references);\n");
         string adoption = !graph ? "" : json ? "input.references().own(" : "references.own(";
+        if (item.NullableVersion)
+        {
+            string cursor = json ? "input" : graph ? "input, version, references" : "input, context...";
+            string absent = graph ? $"static_cast<{baseName}*>(nullptr)" : $"std::unique_ptr<{baseName}>{{}}";
+            code.Append("            auto value = ").Append(json ? item.Json : item.Binary).Append("::read_union_case(").Append(cursor)
+                .Append(");\n            if (!value)\n                return ").Append(absent).Append(";\n");
+        }
         code.Append("            return ").Append(adoption).Append("std::make_unique<case_").Append(item.Hash).Append(">(");
-        if (json)
+        if (item.NullableVersion)
+            code.Append("std::move(*value))");
+        else if (json)
             code.Append(item.Json).Append("::read(input))");
         else
             code.Append("luminpack::detail::read_codec<").Append(item.Binary).Append(">(input, ")
                 .Append(graph ? "version, references))" : "context...))");
         code.Append(graph ? ");\n" : ";\n");
-        if (depthScope)
+        if (scoped)
             code.Append("        }\n");
     }
 
-    private readonly record struct RttiCase(string Hash, string Binary, string Json, bool Tracked, string Storage, string? Definition);
+    private readonly record struct RttiCase(string Hash, string Binary, string Json, bool Tracked, bool NullableVersion,
+        string Storage, string? Definition);
 }

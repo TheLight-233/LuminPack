@@ -165,6 +165,8 @@ Ordinary recursive classes use `std::unique_ptr` for each recursive node, includ
 
 A tracked object or an ordinary RTTI Union case can own an ordinary recursive subtree through a field. An ordinary recursive subtree can also refer to acyclic tracked descendants. The graph document owns the tracked objects and the recursive fields own their decoded copies. Generation diagnoses direct recursive Union cases, Union descendants below an ordinary recursion boundary, and tracked descendants that lead back into recursion. It also diagnoses independent descendant limits, finite depth across a mixed recursive graph, and finite depth across isolated Version reads.
 
+An ordinary Version class can be a generated variant or RTTI Union case. Its Binary payload shares the enclosing document's Version schema registry. Binary and JSON readers accept a known Version case whose payload is null and return a null Union value.
+
 ## Verify the benchmark models
 
 The integration test uses the actual `SimpleClass.Create()` and `CharacterSaveData.Create()` factories from the managed benchmark project. Emit the .NET documents and generate both headers into the same directory:

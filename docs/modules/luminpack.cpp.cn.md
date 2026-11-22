@@ -165,6 +165,8 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 启用引用跟踪的对象或普通 RTTI Union case 可以通过字段持有普通递归子树。普通递归子树也可以引用非递归的跟踪对象。图文档拥有跟踪对象，递归字段独立拥有各自解码的值。递归类直接作为 Union case、递归子树包含 Union 后代，或跟踪对象重新进入递归时，生成器会给出诊断。诊断也覆盖后代独立的输入限制、混合递归图的有限深度，以及隔离 Version 读取的有限深度。
 
+普通 Version 类可以作为生成的 variant 或 RTTI Union case。其二进制载荷与外层文档共享 Version schema 注册表。Binary 和 JSON 读取器接受已知 Version case 内的 null 载荷，返回 null Union 值。
+
 ## 验证基准模型
 
 互通测试调用托管基准项目实际使用的 `SimpleClass.Create()` 和 `CharacterSaveData.Create()`。将 .NET 文档和两个生成头文件放在同一目录。

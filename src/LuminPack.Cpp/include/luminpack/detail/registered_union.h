@@ -232,11 +232,18 @@ struct registered_polymorphic_union_codec
             if (!found)
                 throw wire_error("Unknown registered LuminPack Union tag.");
             result = found->read_binary(next, detail::registered_union_version(context...));
+            if (!result)
+                throw wire_error("LuminPack Union case has no payload.");
         }
         else
+        {
             result = Dispatch::read(next, hash, context...);
-        if (!result)
-            throw wire_error("LuminPack Union case has no payload.");
+            if constexpr (!detail::nullable_union_case<Dispatch>)
+            {
+                if (!result)
+                    throw wire_error("LuminPack Union case has no payload.");
+            }
+        }
         input = next;
         transaction.commit();
         return result;
@@ -275,7 +282,9 @@ struct registered_json_polymorphic_union_codec
 
     static value_type read(auto& input)
     {
-        return detail::read_json_union_envelope<value_type>(input, [](auto& payload, std::uint32_t hash) -> value_type
+        constexpr bool nullable = detail::nullable_union_case<Dispatch>;
+        using case_result = std::conditional_t<nullable, std::optional<value_type>, value_type>;
+        const auto read_case = [](auto& payload, std::uint32_t hash) -> case_result
         {
             if (auto result = Dispatch::try_read(payload, hash))
                 return result;
@@ -283,14 +292,28 @@ struct registered_json_polymorphic_union_codec
             {
                 if (const auto found = registry::lookup(static_cast<std::uint16_t>(hash)))
                 {
-                    if constexpr (std::same_as<typename std::remove_cvref_t<decltype(payload)>::unit, char>)
-                        return found->read_utf8(payload);
+                    auto result = [&]() {
+                        if constexpr (std::same_as<typename std::remove_cvref_t<decltype(payload)>::unit, char>)
+                            return found->read_utf8(payload);
+                        else
+                            return found->read_utf16(payload);
+                    }();
+                    if constexpr (nullable)
+                    {
+                        if (!result)
+                            throw wire_error("LuminPack JSON Union has no payload.");
+                        return case_result(std::in_place, std::move(result));
+                    }
                     else
-                        return found->read_utf16(payload);
+                        return result;
                 }
             }
             throw wire_error("Unknown LuminPack JSON Union case hash or tag.");
-        });
+        };
+        if constexpr (nullable)
+            return detail::read_nullable_json_union_envelope<value_type>(input, read_case);
+        else
+            return detail::read_json_union_envelope<value_type>(input, read_case);
     }
 
     static void write(auto& output, const value_type& value)

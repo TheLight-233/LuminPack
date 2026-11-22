@@ -210,8 +210,9 @@ internal sealed partial class CppEmitter
         }
         Alias(name + "_json", "luminpack::json_optional_codec<" + name + "_json_body>");
         code.Append('\n');
+        string jsonPayload = version ? "luminpack::json_version_union_payload<" + name + "_json_body>" : name + "_json_body";
         return new Binding("std::optional<" + name + ">", name + "_binary", name + "_json",
-            version ? null : name + "_binary::payload", name + "_json_body", RecordStorage: name);
+            name + "_binary::payload", jsonPayload, RecordStorage: name);
     }
 
     /// <summary>Emits a raw value when sequential managed layout and local field offsets prove the same wire block.</summary>

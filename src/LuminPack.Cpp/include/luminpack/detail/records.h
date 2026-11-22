@@ -348,6 +348,17 @@ struct union_case
     using value_type = typename codec::value_type;
 };
 
+namespace detail
+{
+template<class Codec>
+inline constexpr bool nullable_union_case = [] {
+    if constexpr (requires { Codec::nullable_union_case; })
+        return Codec::nullable_union_case;
+    else
+        return false;
+}();
+}
+
 /// Static binary dispatch for a closed Next class or interface Union.
 template<class... Cases>
 struct union_codec
@@ -418,7 +429,14 @@ private:
         using item = std::tuple_element_t<Index, cases>;
         if (hash != item::hash)
             return false;
-        result.emplace(std::in_place_index<Index>, detail::read_codec<typename item::codec>(input, context...));
+        using codec = typename item::codec;
+        if constexpr (detail::nullable_union_case<codec>)
+        {
+            if (auto value = codec::read_union_case(input, context...))
+                result.emplace(std::in_place_index<Index>, std::move(*value));
+        }
+        else
+            result.emplace(std::in_place_index<Index>, detail::read_codec<codec>(input, context...));
         return true;
     }
 

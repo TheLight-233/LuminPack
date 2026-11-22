@@ -28,8 +28,11 @@ struct polymorphic_union_codec
 
         auto transaction = detail::version_transaction(context...);
         auto result = Dispatch::read(next, hash, context...);
-        if (!result)
-            throw wire_error("Unknown LuminPack Union case hash.");
+        if constexpr (!detail::nullable_union_case<Dispatch>)
+        {
+            if (!result)
+                throw wire_error("Unknown LuminPack Union case hash.");
+        }
         input = next;
         transaction.commit();
         return result;
@@ -62,13 +65,23 @@ struct json_polymorphic_union_codec
 
     static value_type read(auto& input)
     {
-        return detail::read_json_union_envelope<value_type>(input, [](auto& payload, std::uint32_t hash)
+        if constexpr (detail::nullable_union_case<Dispatch>)
         {
-            auto result = Dispatch::read(payload, hash);
-            if (!result)
-                throw wire_error("Unknown LuminPack JSON Union case hash.");
-            return result;
-        });
+            return detail::read_nullable_json_union_envelope<value_type>(input, [](auto& payload, std::uint32_t hash)
+            {
+                return std::optional<value_type>(std::in_place, Dispatch::read(payload, hash));
+            });
+        }
+        else
+        {
+            return detail::read_json_union_envelope<value_type>(input, [](auto& payload, std::uint32_t hash)
+            {
+                auto result = Dispatch::read(payload, hash);
+                if (!result)
+                    throw wire_error("Unknown LuminPack JSON Union case hash.");
+                return result;
+            });
+        }
     }
 
     static void write(auto& output, const value_type& value)

@@ -535,6 +535,18 @@ private:
 template<class T, class... Members>
 using json_record_codec = json_optional_codec<json_record_body<T, Members...>>;
 
+/// An ordinary Version case accepts the managed nullable object payload inside its Union envelope.
+template<class Body>
+struct json_version_union_payload : Body
+{
+    static constexpr bool nullable_union_case = true;
+
+    static std::optional<typename Body::value_type> read_union_case(auto& input)
+    {
+        return json_optional_codec<Body>::read(input);
+    }
+};
+
 /// Binds app-owned JSON methods matching a Custom wire representation.
 template<class T, auto Read, auto Write>
 struct json_custom_codec
@@ -632,6 +644,13 @@ Value read_json_union_envelope(auto& input, ReadCase read_case)
         throw wire_error("LuminPack JSON Union has no payload.");
     return result;
 }
+
+template<class Value, class ReadCase>
+Value read_nullable_json_union_envelope(auto& input, ReadCase read_case)
+{
+    auto result = read_json_union_envelope<std::optional<Value>>(input, read_case);
+    return result ? std::move(*result) : Value{};
+}
 }
 
 /// Next-generated JSON case hashes select their concrete object codecs.
@@ -643,10 +662,20 @@ struct json_union_codec
 
     static value_type read(auto& input)
     {
-        return detail::read_json_union_envelope<value_type>(input, [](auto& payload, std::uint32_t hash)
+        if constexpr ((detail::nullable_union_case<typename Cases::codec> || ...))
         {
-            return read_case(payload, hash, indices{});
-        });
+            return detail::read_nullable_json_union_envelope<value_type>(input, [](auto& payload, std::uint32_t hash)
+            {
+                return std::optional<value_type>(std::in_place, read_case(payload, hash, indices{}));
+            });
+        }
+        else
+        {
+            return detail::read_json_union_envelope<value_type>(input, [](auto& payload, std::uint32_t hash)
+            {
+                return read_case(payload, hash, indices{});
+            });
+        }
     }
 
     static void write(auto& output, const value_type& value)
@@ -670,7 +699,14 @@ private:
         using item = std::tuple_element_t<Index, cases>;
         if (hash != item::hash)
             return false;
-        result.emplace(std::in_place_index<Index>, item::codec::read(input));
+        using codec = typename item::codec;
+        if constexpr (detail::nullable_union_case<codec>)
+        {
+            if (auto value = codec::read_union_case(input))
+                result.emplace(std::in_place_index<Index>, std::move(*value));
+        }
+        else
+            result.emplace(std::in_place_index<Index>, codec::read(input));
         return true;
     }
 

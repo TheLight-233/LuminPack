@@ -94,6 +94,33 @@ struct version_codec
     static constexpr std::size_t member_count = sizeof...(Members);
     static_assert(member_count <= detail::maximum_version_fields);
 
+    /// A generated Union case uses the complete Version record and shares the enclosing schema registry.
+    struct payload
+    {
+        using value_type = T;
+        static constexpr bool nullable_union_case = true;
+
+        static std::optional<T> read_union_case(reader& input) { return version_codec::read(input); }
+
+        template<class... Context>
+        static std::optional<T> read_union_case(reader& input, version_state& state, Context&... context)
+        {
+            return version_codec::read(input, state, context...);
+        }
+
+        static void write(writer& output, const T& value)
+        {
+            version_state state;
+            version_codec::write_body(output, value, state);
+        }
+
+        template<class... Context>
+        static void write(writer& output, const T& value, version_state& state, Context&... context)
+        {
+            version_codec::write_body(output, value, state, context...);
+        }
+    };
+
     static value_type read(reader& input)
     {
         version_state state;
