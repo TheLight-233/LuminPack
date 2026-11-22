@@ -297,6 +297,229 @@ void tagged_fixtures(const std::filesystem::path& directory)
     }, "Accepts unknown Tagged model.");
 }
 
+template<luminpack::string_profile Profile>
+void text_list_fixture(const std::filesystem::path& directory, const char* name)
+{
+    using codec = luminpack::list_codec<luminpack::string_codec<Profile>>;
+    const auto text = fixture(directory, name);
+    const typename codec::value_type expected = std::vector<std::optional<std::u16string>>{
+        std::nullopt, u"", u"a", u"\u00e9", u"\u4e2d", u"\U0001f600", std::u16string(64, u'a')
+    };
+    reader input(text);
+    check(codec::read(input) == expected, "Read .NET VarInt List<string>.");
+    input.require_end();
+    std::array<byte, 256> buffer{};
+    writer output(buffer);
+    codec::write(output, expected);
+    check(std::ranges::equal(output.written(), text), "Write .NET VarInt List<string>.");
+}
+
+enum class color : std::uint16_t { blue = 1, red = 4096 };
+
+void collection_contracts(const std::filesystem::path& directory)
+{
+    using numbers = luminpack::list_codec<luminpack::scalar_codec<std::int32_t>>;
+    using colors = luminpack::list_codec<luminpack::enum_codec<color>>;
+    using bools = luminpack::list_codec<luminpack::boolean_codec>;
+    using utf8_key = luminpack::required_codec<luminpack::string_codec<luminpack::string_profile::utf8_length>>;
+    using dictionary = luminpack::dictionary_codec<utf8_key, luminpack::scalar_codec<std::int32_t>>;
+    using float_map = luminpack::dictionary_codec<luminpack::scalar_codec<float>, luminpack::scalar_codec<std::int32_t>>;
+
+    const auto integer_bytes = fixture(directory, "int-array.bin");
+    reader input(integer_bytes);
+    auto value = numbers::read(input);
+    check(value && value->size() == 97 && (*value)[32] == 0, "Read raw scalar List.");
+    auto* original_storage = value->data();
+    input = reader(integer_bytes);
+    numbers::read_into(input, value);
+    check(value->data() == original_storage, "Raw scalar List reuses capacity.");
+    std::array<byte, 512> buffer{};
+    writer output(buffer);
+    numbers::write(output, value);
+    check(std::ranges::equal(output.written(), integer_bytes), "Write raw scalar List.");
+
+    output = writer(buffer);
+    const colors::value_type expected_colors = std::vector{color::blue, color::red, static_cast<color>(0xffee)};
+    colors::write(output, expected_colors);
+    input = reader(output.written());
+    check(colors::read(input) == expected_colors && output.written().size() == 10, "Read unnamed enum in raw List.");
+    input.require_end();
+
+    output = writer(buffer);
+    bools::write(output, std::vector<bool>{true, false, true});
+    input = reader(output.written());
+    check(bools::read(input) == bools::value_type(std::vector<bool>{true, false, true}), "Read Boolean List.");
+    input.require_end();
+    buffer[sizeof(std::int32_t) + 1] = byte{2};
+    input = reader(output.written());
+    expect_error<luminpack::wire_error>([&] { (void)bools::read(input); }, "Accepts invalid Boolean.");
+
+    const auto dictionary_bytes = fixture(directory, "dictionary.bin");
+    input = reader(dictionary_bytes);
+    const auto map = dictionary::read(input);
+    check(map && map->size() == 2 && map->at(u"one") == 1 && map->at(u"\u4e2d\u6587") == 2,
+        "Read .NET Dictionary<string,int>.");
+    input.require_end();
+    const std::array<std::pair<std::u16string_view, std::int32_t>, 2> entries{{{u"one", 1}, {u"\u4e2d\u6587", 2}}};
+    output = writer(buffer);
+    dictionary::write_entries(output, entries);
+    check(std::ranges::equal(output.written(), dictionary_bytes), "Write .NET Dictionary<string,int>.");
+
+    output = writer(buffer);
+    output.write<std::int32_t>(2);
+    output.write(std::bit_cast<float>(0x7fc00000u));
+    output.write<std::int32_t>(1);
+    output.write(std::bit_cast<float>(0x7fc00001u));
+    output.write<std::int32_t>(2);
+    input = reader(output.written());
+    expect_error<luminpack::wire_error>([&] { (void)float_map::read(input); }, "Accepts duplicate .NET NaN keys.");
+
+    output = writer(buffer);
+    dictionary::write(output, std::nullopt);
+    dictionary::write(output, dictionary::dictionary_type{});
+    input = reader(output.written());
+    check(!dictionary::read(input), "Read null dictionary.");
+    const auto empty = dictionary::read(input);
+    check(empty && empty->empty(), "Read empty dictionary.");
+    input.require_end();
+
+    input = reader(integer_bytes, {.max_collection_length = 96});
+    expect_error<luminpack::wire_error>([&] { numbers::read_into(input, value); }, "Disregards the collection quota.");
+    check(value->data() == original_storage && input.remaining() == integer_bytes.size(), "Mutates a quota-rejected list.");
+}
+
+void string_profiles(const std::filesystem::path& directory)
+{
+    using luminpack::string_profile;
+    const auto utf8 = fixture(directory, "string-utf8.bin");
+    constexpr auto expected = u"Unity \u2194 .NET 8 \U0001f600";
+    reader input(utf8);
+    check(luminpack::read_string(input, string_profile::utf8_length) == expected, "Read .NET UTF-8.");
+    input.require_end();
+    std::array<byte, 256> buffer{};
+    writer output(buffer);
+    luminpack::write_string(output, string_profile::utf8_length, expected);
+    check(std::ranges::equal(output.written(), utf8), "Write .NET UTF-8.");
+    text_list_fixture<string_profile::utf8_varint>(directory, "string-varint-utf8.bin");
+    text_list_fixture<string_profile::utf16_varint>(directory, "string-varint-utf16.bin");
+
+    using strings = luminpack::list_codec<luminpack::string_codec<string_profile::utf8_length>>;
+    const auto raw_list = fixture(directory, "string-list.bin");
+    const strings::value_type values = std::vector<std::optional<std::u16string>>{
+        u"alpha", u"\u4e2d\u6587", u"\U0001f600", u""
+    };
+    input = reader(raw_list);
+    check(strings::read(input) == values, "Read .NET List<string>.");
+    input.require_end();
+    output = writer(buffer);
+    strings::write(output, values);
+    check(std::ranges::equal(output.written(), raw_list), "Write .NET List<string>.");
+
+    for (const auto profile : {string_profile::utf8_token, string_profile::utf16_token})
+    {
+        output = writer(buffer);
+        luminpack::write_string(output, profile, std::nullopt);
+        luminpack::write_string(output, profile, u"");
+        luminpack::write_string(output, profile, expected);
+        input = reader(output.written());
+        const auto null_as_empty = luminpack::read_string(input, profile);
+        check(null_as_empty && null_as_empty->empty(), "Token null is represented as empty.");
+        check(luminpack::read_string(input, profile) == u"", "Read an empty token.");
+        std::array<char16_t, 32> destination{};
+        check(luminpack::read_string_into(input, profile, destination) == expected, "Read into an existing token buffer.");
+        input.require_end();
+    }
+
+    constexpr std::array malformed_utf8_token{byte{0xe2}, byte{0x82}, byte{0x40}, byte{0}};
+    input = reader(malformed_utf8_token);
+    check(luminpack::read_string(input, string_profile::utf8_token) == u"\ufffd@", "UTF-8 token replacement.");
+    constexpr std::array malformed_utf16_token{byte{0}, byte{0xd8}, byte{64}, byte{0}, byte{0}, byte{0}};
+    input = reader(malformed_utf16_token);
+    check(luminpack::read_string(input, string_profile::utf16_token) == u"\ufffd@", "UTF-16 token replacement.");
+
+    constexpr std::array overlong{byte{0x80}, byte{0}};
+    input = reader(overlong);
+    expect_error<luminpack::wire_error>([&] { (void)luminpack::read_string(input, string_profile::utf16_varint); },
+        "Accepts a non-canonical variable header.");
+    constexpr std::array wrong_count{byte{3}, byte{3}, byte{0xc3}, byte{0xa9}};
+    input = reader(wrong_count);
+    expect_error<luminpack::wire_error>([&] { (void)luminpack::read_string(input, string_profile::utf8_varint); },
+        "Accepts a mismatched UTF-8 character count.");
+    check(input.remaining() == wrong_count.size(), "Consumes an invalid string.");
+
+    input = reader(utf8, {.max_string_length = 16});
+    expect_error<luminpack::wire_error>([&] { (void)luminpack::read_string(input, string_profile::utf8_length); },
+        "Disregards the string quota.");
+}
+
+struct point
+{
+    std::int32_t x;
+    std::optional<std::u16string> note;
+    bool operator==(const point&) const = default;
+};
+
+struct custom_pair
+{
+    std::uint32_t first;
+    char16_t second;
+    bool operator==(const custom_pair&) const = default;
+};
+
+custom_pair read_custom(reader& input)
+{
+    const auto second = input.read<char16_t>();
+    return {input.read<std::uint32_t>(), second};
+}
+
+void write_custom(writer& output, const custom_pair& value)
+{
+    output.write(value.second);
+    output.write(value.first);
+}
+
+void record_and_union_codecs()
+{
+    using x_member = luminpack::record_member<&point::x, luminpack::scalar_codec<std::int32_t>>;
+    using note_member = luminpack::record_member<&point::note, luminpack::string_codec<>>;
+    using positional = luminpack::record_codec<point, x_member, note_member>;
+    using payload = luminpack::record_payload_codec<point, x_member, note_member>;
+    using custom = luminpack::custom_codec<custom_pair, read_custom, write_custom, 6>;
+    constexpr auto point_hash = luminpack::union_name_hash("Demo.Point");
+    constexpr auto custom_hash = luminpack::union_name_hash("Demo.Custom");
+    using tagged = luminpack::union_codec<luminpack::union_case<point_hash, payload>,
+        luminpack::union_case<custom_hash, custom>>;
+
+    const point expected{42, u"abc"};
+    const custom_pair pair{0xfedcba98u, u'\u03b1'};
+    std::array<byte, 64> bytes{};
+    writer output(bytes);
+    positional::write(output, expected);
+    tagged::write(output, tagged::variant_type(expected));
+    tagged::write(output, tagged::variant_type(pair));
+    tagged::write(output, std::nullopt);
+    reader input(output.written());
+    check(positional::read(input) == expected, "Read a concrete positional DTO.");
+    const auto with_tag = input.unread();
+    auto first = tagged::read(input);
+    check(first && std::get<point>(*first) == expected, "Read a statically bound Union case.");
+    reader tag_only(with_tag);
+    check(tag_only.read<std::uint32_t>() == point_hash && tag_only.read<std::int32_t>() == 42,
+        "Union payload omits the positional member count.");
+    auto second = tagged::read(input);
+    check(second && std::get<custom_pair>(*second) == pair, "Dispatch a static custom codec.");
+    check(!tagged::read(input), "Read the four-byte null Union marker.");
+    input.require_end();
+    bytes.front() = byte{1};
+    input = reader(output.written());
+    expect_error<luminpack::wire_error>([&] { (void)positional::read(input); }, "Accepts a mismatched positional schema.");
+
+    output = writer(bytes);
+    output.write<std::uint32_t>(0xffffffffu);
+    input = reader(output.written());
+    expect_error<luminpack::wire_error>([&] { (void)tagged::read(input); }, "Accepts an unknown registered Union case.");
+}
+
 void object_and_input_checks()
 {
     // The same direct calls that a generated positional codec will use.
@@ -358,6 +581,9 @@ int main(int argc, char** argv)
         text_vector_boundaries();
         tagged_fixtures(directory);
         object_and_input_checks();
+        collection_contracts(directory);
+        string_profiles(directory);
+        record_and_union_codecs();
         std::cout << "LuminPack C++ wire checks passed.\n";
         return 0;
     }

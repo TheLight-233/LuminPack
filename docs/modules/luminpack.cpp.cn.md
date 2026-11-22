@@ -50,8 +50,16 @@ int main()
 }
 ```
 
-Runtime 提供位置对象头、定宽数值标量、标量数组、含 compact Latin-1 的 UTF-16 Length 字符串，以及由定宽原始字段组成的多模型 Tagged 数组。由调用方提供具体的 codec。成员顺序、标量类型、字符串 profile 和 Tagged 模型顺序均沿用源 wire 契约。用 `sizeof` 和 `offsetof` 描述本地 Tagged 步长和字段偏移。参与原始复制的字段必须接受其对象表示的任意位模式，例如定宽整数。写出本地布局前应初始化会进入 wire 的填充字节。
+## 组合 codec
 
-Reader 在 Release 构建中也会校验输入范围。读入操作返回借用目标缓冲区的视图，并区分 null 与空值。在使用视图期间保持该缓冲区有效。普通读写无需为缓冲区分配内存。跨布局转换或 Latin-1 转换遇到输入输出重叠时，会在堆上暂存输入。
+用 `scalar_codec`、`boolean_codec` 和 `enum_codec` 读写定宽值。`list_codec` 适用于采用相同元素表示的一维数组与 List。数值与枚举列表校验完整范围后一次复制。`dictionary_codec` 写入数量及键值序列。内部的无序映射保留键值语义。需要重现另一端的枚举顺序时，向 `write_entries` 传入按目标顺序排列且键唯一的键值序列。
 
-x64 的 Latin-1 路径使用 SSE2 和运行时选择的 AVX2。其他目标使用可移植实现。设置 CMake 选项 `LUMINPACK_CPP_SIMD=OFF` 可在 x64 上也使用可移植实现。
+字符串 codec 可绑定六种 `string_profile`。Length 与 VarInt 区分 null 和空字符串。Token 使用零码元结束，null 与空字符串使用同一表示。含内嵌零码元的文本应使用长度模式。
+
+用 `record_member` 和 `record_codec` 按 wire 顺序绑定 DTO 字段。Next 生成的二进制 Union 用 `union_codec` 绑定已有的 case hash 和各 case 的 payload codec。应用可通过 `custom_codec` 绑定自己实现的读写函数来复用同一份 wire 契约。成员顺序、标量类型、字符串 profile 和 Tagged 模型顺序均沿用源 wire 契约。
+
+多模型 Tagged 数组支持原始字段。用 `sizeof` 和 `offsetof` 描述本地步长和字段偏移。参与原始复制的字段必须接受其对象表示的任意位模式，例如定宽整数。写出本地布局前应初始化会进入 wire 的填充字节。
+
+Reader 在 Release 构建中也会校验输入范围。用 `reader_limits` 限制集合元素数量和解码后的 UTF-16 码元数量。读入缓冲区的操作返回借用目标存储的视图，在使用视图期间保持缓冲区有效。跨布局转换或字符串转换遇到输入输出重叠时，会在堆上暂存输入。
+
+x64 的 Latin-1 内核按 CPU 支持和完整块大小选择 AVX-512BW、AVX2 或 SSE2。其他目标使用可移植实现。设置 `LUMINPACK_CPP_MAX_SIMD_BITS` 为 `128`、`256` 或 `512` 可限制编译的最大向量宽度。设置 `LUMINPACK_CPP_SIMD=OFF` 可在 x64 上也使用可移植实现。

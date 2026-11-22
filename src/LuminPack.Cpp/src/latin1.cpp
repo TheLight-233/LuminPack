@@ -6,7 +6,7 @@
 #define LUMINPACK_CPP_SSE2
 #include <emmintrin.h>
 #endif
-#if defined(LUMINPACK_CPP_AVX2) && defined(_MSC_VER)
+#if (defined(LUMINPACK_CPP_AVX2) || defined(LUMINPACK_CPP_AVX512BW)) && defined(_MSC_VER)
 #include <intrin.h>
 #endif
 
@@ -14,31 +14,46 @@ namespace luminpack::detail
 {
 namespace
 {
-#if defined(LUMINPACK_CPP_AVX2)
-bool has_avx2() noexcept
+#if defined(LUMINPACK_CPP_AVX2) || defined(LUMINPACK_CPP_AVX512BW)
+struct latin1_isa
+{
+    bool avx2;
+    bool avx512bw;
+};
+
+latin1_isa detect_isa() noexcept
 {
 #if defined(_MSC_VER)
     int registers[4];
     __cpuid(registers, 0);
     if (registers[0] < 7)
-        return false;
+        return {};
 
     __cpuid(registers, 1);
     constexpr int avx_and_osxsave = (1 << 28) | (1 << 27);
-    if ((registers[2] & avx_and_osxsave) != avx_and_osxsave || (_xgetbv(0) & 6) != 6)
-        return false;
+    if ((registers[2] & avx_and_osxsave) != avx_and_osxsave)
+        return {};
+
+    const auto state = _xgetbv(0);
+    if ((state & 0x06u) != 0x06u)
+        return {};
 
     __cpuidex(registers, 7, 0);
-    return (registers[1] & (1 << 5)) != 0;
+    const auto features = static_cast<unsigned>(registers[1]);
+    const bool avx2 = (features & (1u << 5)) != 0;
+    constexpr auto avx512f_bw = (1u << 16) | (1u << 30);
+    const bool avx512bw = (features & avx512f_bw) == avx512f_bw && (state & 0xe6u) == 0xe6u;
+    return {avx2, avx512bw};
 #else
-    return __builtin_cpu_supports("avx2");
+    return {__builtin_cpu_supports("avx2") != 0,
+        __builtin_cpu_supports("avx512f") != 0 && __builtin_cpu_supports("avx512bw") != 0};
 #endif
 }
 
-bool use_avx2() noexcept
+const latin1_isa& available_isa() noexcept
 {
-    static const bool supported = has_avx2();
-    return supported;
+    static const auto isa = detect_isa();
+    return isa;
 }
 #endif
 
@@ -75,8 +90,12 @@ void widen_block(const std::byte* source, char16_t* destination) noexcept
 
 bool narrow_latin1(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
 {
+#if defined(LUMINPACK_CPP_AVX512BW)
+    if (source.size() >= 64 && available_isa().avx512bw)
+        return narrow_latin1_avx512(source, destination);
+#endif
 #if defined(LUMINPACK_CPP_AVX2)
-    if (source.size() >= 32 && use_avx2())
+    if (source.size() >= 32 && available_isa().avx2)
         return narrow_latin1_avx2(source, destination);
 #endif
 #if defined(LUMINPACK_CPP_SSE2)
@@ -105,8 +124,15 @@ bool narrow_latin1(std::span<const char16_t> source, std::span<std::byte> destin
 
 void widen_latin1(std::span<const std::byte> source, std::span<char16_t> destination) noexcept
 {
+#if defined(LUMINPACK_CPP_AVX512BW)
+    if (source.size() >= 64 && available_isa().avx512bw)
+    {
+        widen_latin1_avx512(source, destination);
+        return;
+    }
+#endif
 #if defined(LUMINPACK_CPP_AVX2)
-    if (source.size() >= 32 && use_avx2())
+    if (source.size() >= 32 && available_isa().avx2)
     {
         widen_latin1_avx2(source, destination);
         return;

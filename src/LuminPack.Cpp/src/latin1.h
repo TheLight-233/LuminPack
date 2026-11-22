@@ -16,4 +16,9 @@ void widen_latin1(std::span<const std::byte> source, std::span<char16_t> destina
 bool narrow_latin1_avx2(std::span<const char16_t> source, std::span<std::byte> destination) noexcept;
 void widen_latin1_avx2(std::span<const std::byte> source, std::span<char16_t> destination) noexcept;
 #endif
+
+#if defined(LUMINPACK_CPP_AVX512BW)
+bool narrow_latin1_avx512(std::span<const char16_t> source, std::span<std::byte> destination) noexcept;
+void widen_latin1_avx512(std::span<const std::byte> source, std::span<char16_t> destination) noexcept;
+#endif
 }

@@ -50,8 +50,16 @@ int main()
 }
 ```
 
-The runtime exposes positional framing, fixed-width numeric scalars, raw scalar arrays, UTF-16 Length records with compact Latin-1, and multi-model Tagged arrays of raw fields. Codecs are supplied by the caller. Use the source wire contract for member order, scalar types, string profile and Tagged model order. Describe local Tagged strides and offsets with `sizeof` and `offsetof`. Each copied field's object representation must admit every bit pattern, as fixed-width integer fields do. Initialize any padding that a native write would expose.
+## Compose codecs
 
-The reader checks input ranges in Release builds. Read-into calls borrow the supplied storage and distinguish null from an empty result. Keep that storage alive while using a returned view. Ordinary reads and writes have no buffer allocations. An overlapping layout conversion or Latin-1 transform stages its input on the heap.
+Use `scalar_codec`, `boolean_codec`, and `enum_codec` for fixed-width values. `list_codec` is used for a one-dimensional array or List with the same element representation. Its numeric and enum paths copy one validated contiguous block. `dictionary_codec` uses a count and key/value pairs. Its unordered map preserves key/value equivalence. Pass an ordered sequence of unique pairs to `write_entries` when the output must reproduce another writer's enumeration order.
 
-The x64 Latin-1 path uses SSE2 and CPU-dispatched AVX2. Other targets use the portable implementation. The CMake option `LUMINPACK_CPP_SIMD=OFF` selects the portable implementation on x64 as well.
+Bind a string codec to one of the six `string_profile` values. Length and VarInt preserve null separately from empty. Token terminates with a zero code unit and encodes null as empty. Use a length profile for text containing embedded zero units.
+
+Bind a DTO's fields in wire order with `record_member` and `record_codec`. A Next-generated binary Union uses `union_codec` with the emitted case hash and the corresponding payload codec. Share a custom wire representation by binding application-provided read and write functions through `custom_codec`. Use the source wire contract for member order, scalar types, string profile and Tagged model order.
+
+Multi-model Tagged arrays support raw fields. Describe local Tagged strides and offsets with `sizeof` and `offsetof`. Each copied field's object representation must admit every bit pattern, as fixed-width integer fields do. Initialize any padding that a native write would expose.
+
+The reader checks input ranges in Release builds. Use `reader_limits` to bound collection counts and decoded UTF-16 lengths. Buffer-oriented read-into calls borrow the supplied storage. Keep that storage alive while using a returned view. Overlapping layout conversions or string transforms stage their input on the heap.
+
+The x64 Latin-1 path selects AVX-512BW, AVX2, or SSE2 based on support and complete block size. Other targets use the portable implementation. Set `LUMINPACK_CPP_MAX_SIMD_BITS` to `128`, `256`, or `512` to cap the compiled width. The CMake option `LUMINPACK_CPP_SIMD=OFF` selects the portable implementation on x64 as well.

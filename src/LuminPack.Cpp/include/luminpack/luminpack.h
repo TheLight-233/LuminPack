@@ -11,6 +11,7 @@
 #include <optional>
 #include <span>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <vector>
@@ -37,7 +38,7 @@ concept scalar =
     std::same_as<T, std::int16_t> || std::same_as<T, std::uint16_t> ||
     std::same_as<T, std::int32_t> || std::same_as<T, std::uint32_t> ||
     std::same_as<T, std::int64_t> || std::same_as<T, std::uint64_t> ||
-    std::same_as<T, float> || std::same_as<T, double>;
+    std::same_as<T, float> || std::same_as<T, double> || std::same_as<T, char16_t>;
 
 namespace detail
 {
@@ -73,13 +74,22 @@ inline void store_count(std::span<std::byte> header, std::int32_t count) noexcep
 bool overlaps(std::span<const std::byte> source, std::span<const std::byte> destination) noexcept;
 }
 
+/// Binary collection and UTF-16 code-unit limits for a read operation.
+struct reader_limits
+{
+    std::uint32_t max_collection_length = std::numeric_limits<std::int32_t>::max();
+    std::uint32_t max_string_length = std::numeric_limits<std::int32_t>::max();
+};
+
 /// Reads a contiguous input window. The input must outlive this cursor.
 class reader
 {
 public:
-    explicit reader(std::span<const std::byte> input) noexcept : input_(input) {}
+    explicit reader(std::span<const std::byte> input, reader_limits limits = {}) noexcept
+        : input_(input), limits_(limits) {}
 
     [[nodiscard]] std::size_t remaining() const noexcept { return input_.size() - position_; }
+    [[nodiscard]] std::span<const std::byte> unread() const noexcept { return input_.subspan(position_); }
 
     /// Checks the complete range before returning it or advancing the cursor.
     [[nodiscard]] std::span<const std::byte> take(std::size_t size)
@@ -101,12 +111,30 @@ public:
         return value;
     }
 
+    /// Validates the Boolean marker before publishing the cursor.
+    [[nodiscard]] bool read_bool()
+    {
+        reader next = *this;
+        const auto marker = next.read<std::uint8_t>();
+        if (marker > 1)
+            throw wire_error("Invalid LuminPack Boolean.");
+        *this = next;
+        return marker != 0;
+    }
+
+    /// Reads a collection count bounded by the supplied minimum element width and input limit.
+    [[nodiscard]] std::optional<std::size_t> read_collection_count(std::size_t minimum_element_width = 0);
+
+    /// Rejects a string that exceeds the configured code-unit limit.
+    void check_string_length(std::size_t length) const;
+
     /// Checks that an independent document has been consumed completely.
     void require_end() const;
 
 private:
     std::span<const std::byte> input_;
     std::size_t position_ = 0;
+    reader_limits limits_;
 };
 
 /// Writes into caller-owned contiguous storage, which must outlive this cursor.
@@ -136,6 +164,9 @@ public:
         std::memcpy(bytes.data(), &value, sizeof(T));
     }
 
+    /// Publishes a Boolean as a single zero or one byte.
+    void write_bool(bool value) { write<std::uint8_t>(value ? 1 : 0); }
+
 private:
     std::span<std::byte> output_;
     std::size_t position_ = 0;
@@ -152,22 +183,41 @@ void write_object_header(writer& output, std::optional<std::uint8_t> count);
 /// Writes a fixed-length UTF-16 record, using compact Latin-1 when possible.
 void write_utf16(writer& output, std::optional<std::u16string_view> value);
 
+/// Binary string representations match the LuminPack profile tags.
+enum class string_profile : std::uint8_t
+{
+    utf8_length = 0,
+    utf8_token = 1,
+    utf16_length = 2,
+    utf16_token = 3,
+    utf8_varint = 4,
+    utf16_varint = 5
+};
+
+/// Decodes a string into reusable UTF-16 storage, preserving null where the profile carries it.
+[[nodiscard]] std::optional<std::u16string_view> read_string_into(reader& input, string_profile profile,
+    std::span<char16_t> destination);
+
+/// Decodes a string into owned UTF-16 storage.
+[[nodiscard]] std::optional<std::u16string> read_string(reader& input, string_profile profile);
+
+/// Writes a UTF-16 value using the selected wire profile.
+void write_string(writer& output, string_profile profile, std::optional<std::u16string_view> value);
+
 /// Reads a raw scalar array into reusable storage. Validation precedes any destination write.
 template<scalar T>
 [[nodiscard]] std::optional<std::span<T>> read_array_into(reader& input, std::span<T> destination)
 {
     reader next = input;
-    const auto count = next.read<std::int32_t>();
-    if (count < -1)
-        throw wire_error("Invalid LuminPack collection count.");
-    if (count == -1)
+    const auto count = next.read_collection_count(sizeof(T));
+    if (!count)
     {
         input = next;
         return std::nullopt;
     }
 
-    const auto length = static_cast<std::size_t>(count);
-    const auto payload = next.take(detail::checked_input_width(length, sizeof(T), next.remaining()));
+    const auto length = *count;
+    const auto payload = next.take(length * sizeof(T));
     if (length > destination.size())
         detail::short_output();
     const auto result = destination.first(length);
@@ -292,18 +342,16 @@ template<class T, auto Layout>
     static_assert(Layout.valid() && Layout.local.stride == sizeof(T));
 
     reader next = input;
-    const auto count = next.read<std::int32_t>();
-    if (count < -1)
-        throw wire_error("Invalid LuminPack collection count.");
-    if (count <= 0)
+    const auto count = next.read_collection_count();
+    if (!count || *count == 0)
     {
         input = next;
-        if (count == -1)
+        if (!count)
             return std::nullopt;
         return destination.first(0);
     }
 
-    const auto length = static_cast<std::size_t>(count);
+    const auto length = *count;
     const auto tag = next.read<std::uint8_t>();
     if (tag == 0 || tag > Layout.wire.size())
         throw wire_error("Unknown LuminPack storage layout tag.");
@@ -355,3 +403,6 @@ void write_tagged_array(writer& output, std::optional<std::span<const T>> value)
     output = next;
 }
 }
+
+#include "detail/collections.h"
+#include "detail/records.h"

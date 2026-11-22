@@ -29,6 +29,33 @@ bool overlaps(std::span<const std::byte> source, std::span<const std::byte> dest
 }
 }
 
+std::optional<std::size_t> reader::read_collection_count(std::size_t minimum_element_width)
+{
+    reader next = *this;
+    const auto count = next.read<std::int32_t>();
+    if (count < -1)
+        throw wire_error("Invalid LuminPack collection count.");
+    if (count == -1)
+    {
+        *this = next;
+        return std::nullopt;
+    }
+
+    const auto size = static_cast<std::size_t>(count);
+    if (size > limits_.max_collection_length)
+        throw wire_error("LuminPack collection exceeds the configured length limit.");
+    if (minimum_element_width != 0)
+        detail::checked_input_width(size, minimum_element_width, next.remaining());
+    *this = next;
+    return size;
+}
+
+void reader::check_string_length(std::size_t length) const
+{
+    if (length > limits_.max_string_length)
+        throw wire_error("LuminPack string exceeds the configured length limit.");
+}
+
 void reader::require_end() const
 {
     if (remaining() != 0)
@@ -69,6 +96,7 @@ std::optional<std::u16string_view> read_utf16_into(reader& input, std::span<char
     const auto length = static_cast<std::size_t>(header) >> 1;
     const bool latin1 = (header & 1) != 0;
     const auto payload = next.take(latin1 ? length : static_cast<std::size_t>(header));
+    next.check_string_length(length);
     if (length > destination.size())
         detail::short_output();
 
