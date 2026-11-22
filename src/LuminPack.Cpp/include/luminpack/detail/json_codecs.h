@@ -16,10 +16,15 @@ struct json_codec<scalar_codec<T>>
     {
         if constexpr (std::same_as<T, char16_t>)
         {
-            const auto text = input.read_string();
-            if (text.size() != 1)
-                throw wire_error("Expected one UTF-16 code unit in a LuminPack JSON character.");
-            return text.front();
+            if constexpr (requires { input.read_character(); })
+                return input.read_character();
+            else
+            {
+                const auto text = input.read_string();
+                if (text.size() != 1)
+                    throw wire_error("Expected one UTF-16 code unit in a LuminPack JSON character.");
+                return text.front();
+            }
         }
         else
             return input.template read_number<T>();
@@ -28,7 +33,12 @@ struct json_codec<scalar_codec<T>>
     static void write(auto& output, T value)
     {
         if constexpr (std::same_as<T, char16_t>)
-            output.write_string(std::u16string_view(&value, 1));
+        {
+            if constexpr (requires { output.write_character(value); })
+                output.write_character(value);
+            else
+                output.write_string(std::u16string_view(&value, 1));
+        }
         else
             output.write_number(value);
     }

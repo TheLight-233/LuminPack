@@ -284,6 +284,7 @@ public:
     void expect(char token);
     [[nodiscard]] bool consume_null();
     [[nodiscard]] bool read_bool();
+    [[nodiscard]] char16_t read_character();
     [[nodiscard]] std::u16string read_string();
     [[nodiscard]] json_property_name<Encoding> read_name();
     void skip_value();
@@ -378,6 +379,7 @@ public:
     void token(char value);
     void write_null() { ascii("null"); }
     void write_bool(bool value) { ascii(value ? "true" : "false"); }
+    void write_character(char16_t value);
     void write_string(std::u16string_view value);
 
     /// Writes an unescaped generated property name and colon with one checked copy.

@@ -66,10 +66,9 @@ void store_json_unit(std::byte*& target, std::uint32_t value) noexcept
 }
 
 template<json_encoding Encoding>
-void store_escape(std::byte*& target, char16_t value) noexcept
+void store_escape(std::byte*& target, char16_t value, char letter) noexcept
 {
     store_json_unit<Encoding>(target, '\\');
-    const auto letter = escape_letter(value);
     store_json_unit<Encoding>(target, letter);
     if (letter == 'u')
     {
@@ -79,6 +78,12 @@ void store_escape(std::byte*& target, char16_t value) noexcept
             store_json_unit<Encoding>(target, hex[(value >> shift) & 0xf]);
         }
     }
+}
+
+template<json_encoding Encoding>
+void store_escape(std::byte*& target, char16_t value) noexcept
+{
+    store_escape<Encoding>(target, value, escape_letter(value));
 }
 
 std::size_t find_utf16_escape(std::u16string_view value) noexcept
@@ -800,6 +805,46 @@ void basic_json_writer<Encoding>::write_string(std::u16string_view value)
     store_json_unit<Encoding>(head, '"');
     store_json_unit<Encoding>(tail, '"');
     output_ = next;
+}
+
+template<json_encoding Encoding>
+char16_t basic_json_reader<Encoding>::read_character()
+{
+    char16_t first = u'\0';
+    std::size_t units = 0;
+    read_text([&](char16_t value) {
+        if (units++ == 0)
+            first = value;
+    });
+    if constexpr (Encoding == json_encoding::utf8)
+    {
+        // The managed UTF-8 char decoder uses a two-unit destination.
+        if (units > 2)
+            throw wire_error("The LuminPack UTF-8 JSON character exceeds two UTF-16 code units.");
+    }
+    return first;
+}
+
+template<json_encoding Encoding>
+void basic_json_writer<Encoding>::write_character(char16_t value)
+{
+    const bool escape = escaped(value) || detail::high_surrogate(value) || detail::low_surrogate(value);
+    const char letter = value == u'\b' ? 'b' : value == u'\f' ? 'f' : escape_letter(value);
+    std::size_t width = 1;
+    if (escape)
+        width = letter == 'u' ? 6 : 2;
+    else if constexpr (Encoding == json_encoding::utf8)
+        width = detail::utf8_scalar_width(value);
+
+    auto* target = output_.reserve((width + 2) * sizeof(unit)).data();
+    store_json_unit<Encoding>(target, '"');
+    if (escape)
+        store_escape<Encoding>(target, value, letter);
+    else if constexpr (Encoding == json_encoding::utf8)
+        detail::store_utf8_scalar(target, value);
+    else
+        store_json_unit<Encoding>(target, value);
+    store_json_unit<Encoding>(target, '"');
 }
 
 template class json_property_name<json_encoding::utf8>;

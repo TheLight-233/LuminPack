@@ -301,7 +301,7 @@ void sparse_property_lookup()
 void unicode_property_heads()
 {
     using luminpack::detail::json_property_head;
-    constexpr auto name = luminpack::json_name{u"A\u00e9\u754c\U00010400"};
+    static constexpr auto name = luminpack::json_name{u"A\u00e9\u754c\U00010400"};
     constexpr auto& head8 = json_property_head<json_encoding::utf8, name, '{'>;
     constexpr auto& head16 = json_property_head<json_encoding::utf16, name, '{'>;
     constexpr std::array<unsigned char, 14> expected8{
@@ -496,6 +496,49 @@ void profiles_and_strings()
     require(std::ranges::equal(character, bytes(u"\"\u754c\"")), "C# char writes as a JSON string.");
     require(read_json_document<json_codec<luminpack::scalar_codec<char16_t>>>(character) == u'\u754c',
         "Read a UTF-16 C# char.");
+}
+
+void json_characters()
+{
+    using character = json_codec<luminpack::scalar_codec<char16_t>>;
+    constexpr auto utf8 = json_encoding::utf8;
+    constexpr auto utf16 = json_encoding::utf16;
+    std::array<std::byte, 32> output{};
+    const auto check_escapes = [&]<json_encoding Encoding>(const auto& backspace, const auto& form_feed, const auto& lone_surrogate) {
+        require(std::ranges::equal(write_json_document<character, Encoding>(output, u'\b'), bytes(backspace)) &&
+            read_json_document<character, Encoding>(bytes(backspace)) == u'\b', "A C# char uses the short backspace escape.");
+        require(std::ranges::equal(write_json_document<character, Encoding>(output, u'\f'), bytes(form_feed)) &&
+            read_json_document<character, Encoding>(bytes(form_feed)) == u'\f', "A C# char uses the short form-feed escape.");
+        require(std::ranges::equal(write_json_document<character, Encoding>(output, char16_t{0xd800}),
+            bytes(lone_surrogate)), "Write the managed escape for an isolated UTF-16 code unit.");
+        malformed([&] { (void)read_json_document<character, Encoding>(bytes(lone_surrogate)); },
+            "The managed char reader rejects an unpaired surrogate escape.");
+    };
+    check_escapes.template operator()<utf8>("\"\\b\"", "\"\\f\"", "\"\\ud800\"");
+    check_escapes.template operator()<utf16>(u"\"\\b\"", u"\"\\f\"", u"\"\\ud800\"");
+
+    require(read_json_document<character, utf8>(bytes("\"\"")) == u'\0' &&
+        read_json_document<character, utf16>(bytes(u"\"\"")) == u'\0', "An empty char string reads as NUL.");
+    require(read_json_document<character, utf8>(bytes("\"\\ud83d\\ude00\"")) == char16_t{0xd83d} &&
+        read_json_document<character, utf16>(bytes(u"\"\U0001f600\"")) == char16_t{0xd83d},
+        "A valid supplementary code point returns its first UTF-16 code unit.");
+    require(read_json_document<character, utf16>(bytes(u"\"foo\"")) == u'f',
+        "The managed UTF-16 reader returns the first code unit.");
+    malformed([&] { (void)read_json_document<character, utf8>(bytes("\"foo\"")); },
+        "The managed UTF-8 reader checks the two-unit conversion destination.");
+
+    output.fill(std::byte{0xa4});
+    luminpack::basic_json_writer<utf8> bounded(std::span(output).first<7>());
+    try
+    {
+        bounded.write_character(char16_t{0xd800});
+        throw std::runtime_error("Check the entire char escape before writing.");
+    }
+    catch (const std::length_error&)
+    {
+        require(bounded.written().empty() && std::ranges::all_of(output, [](auto byte) { return byte == std::byte{0xa4}; }),
+            "A short character buffer retains its original bytes and cursor.");
+    }
 }
 
 struct coordinate
@@ -944,6 +987,7 @@ int main(int argc, char** argv)
         require(argc == 2, "Expected .NET fixture directory.");
         dotnet_fixtures(argv[1]);
         profiles_and_strings();
+        json_characters();
         ordered_property_heads();
         sparse_property_lookup();
         unicode_property_heads();
