@@ -157,7 +157,10 @@ internal sealed partial class CppEmitter
             Alias(name + "_binary", "luminpack::version_codec", new[] { name, Profile(profile) }.Concat(binaryMembers));
         else
             Alias(name + "_binary", "luminpack::record_codec", new[] { name }.Concat(binaryMembers));
-        EmitJsonBody(name + "_json_body", name, jsonMembers);
+        int[]? orderedRuns = contract.TryGetProperty("jsonInt32Runs", out JsonElement runs) && runs.ValueKind == JsonValueKind.Array
+            ? runs.EnumerateArray().Select(static item => item.GetInt32()).ToArray()
+            : null;
+        EmitJsonBody(name + "_json_body", name, jsonMembers, orderedRuns);
         Alias(name + "_json", "luminpack::json_optional_codec<" + name + "_json_body>");
         code.Append('\n');
         return new Binding("std::optional<" + name + ">", name + "_binary", name + "_json",

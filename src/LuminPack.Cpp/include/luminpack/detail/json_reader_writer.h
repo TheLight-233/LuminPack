@@ -131,6 +131,113 @@ public:
         basic_json_reader& reader_;
     };
 
+    /// Holds a validated local cursor for a generated run in the current object.
+    class generated_int32_run
+    {
+    public:
+        generated_int32_run(const generated_int32_run&) = delete;
+        generated_int32_run& operator=(const generated_int32_run&) = delete;
+
+        /// Reads a complete property head and bounded decimal Int32, leaving this field unread on a miss.
+        template<auto Name, bool First>
+        [[nodiscard]] bool read(std::int32_t& value) noexcept
+        {
+            if constexpr (!detail::plain_json_property_name<Name>)
+                return false;
+            else
+            {
+                constexpr const auto& head = detail::json_property_head<Encoding, Name>;
+                constexpr std::size_t skip = First ? 1 : 0;
+                constexpr auto width = (head.size() - skip) * sizeof(unit);
+                constexpr auto step = sizeof(unit);
+                if (remaining_.size() < step || width > remaining_.size() - step ||
+                    std::memcmp(remaining_.data(), head.data() + skip, width) != 0)
+                    return false;
+
+                const auto last = remaining_.size() - step;
+                auto offset = width;
+                auto code = code_at(offset);
+                const bool negative = code == '-';
+                if (negative)
+                {
+                    offset += step;
+                    if (offset > last)
+                        return false;
+                    code = code_at(offset);
+                }
+
+                const auto first_digit = code - '0';
+                if (first_digit > 9)
+                    return false;
+                std::uint64_t magnitude = first_digit;
+                int digits = 1;
+                offset += step;
+                while (offset <= last)
+                {
+                    code = code_at(offset);
+                    const auto digit = code - '0';
+                    if (digit > 9)
+                    {
+                        if (code != ' ' && code != '\t' && code != '\r' && code != '\n' &&
+                            code != ',' && code != ']' && code != '}')
+                            return false;
+                        break;
+                    }
+                    if (first_digit == 0 || digits == 10)
+                        return false;
+                    magnitude = magnitude * 10 + digit;
+                    offset += step;
+                    ++digits;
+                }
+                if (magnitude > (negative ? 2147483648ull : 2147483647ull))
+                    return false;
+
+                const auto signed_magnitude = static_cast<std::int64_t>(magnitude);
+                value = static_cast<std::int32_t>(negative ? -signed_magnitude : signed_magnitude);
+                remaining_ = remaining_.subspan(offset);
+                return true;
+            }
+        }
+
+        /// Publishes the matched prefix before the ordinary object reader resumes.
+        void complete()
+        {
+            const auto consumed = initial_size_ - remaining_.size();
+            if (consumed == 0)
+                return;
+            if (reader_.input_.size() - reader_.position_ != initial_size_)
+                throw wire_error("The JSON reader moved during a generated Int32 run.");
+            reader_.position_ += consumed;
+        }
+
+    private:
+        friend class basic_json_reader;
+
+        explicit generated_int32_run(basic_json_reader& reader) noexcept
+            : reader_(reader), remaining_(reader.input_.subspan(reader.position_)), initial_size_(remaining_.size()) {}
+
+        [[nodiscard]] std::uint32_t code_at(std::size_t offset) const noexcept
+        {
+            if constexpr (Encoding == json_encoding::utf8)
+                return std::to_integer<unsigned char>(remaining_[offset]);
+            else
+            {
+                char16_t code;
+                std::memcpy(&code, remaining_.data() + offset, sizeof(code));
+                return code;
+            }
+        }
+
+        basic_json_reader& reader_;
+        std::span<const std::byte> remaining_;
+        std::size_t initial_size_;
+    };
+
+    [[nodiscard]] generated_int32_run begin_generated_int32_run() noexcept
+    {
+        return generated_int32_run(*this);
+    }
+
     /// Enters an object or array, checking its delimiter and the depth limit.
     [[nodiscard]] container begin(char opening);
     [[nodiscard]] char peek();

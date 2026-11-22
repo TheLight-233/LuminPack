@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 using Microsoft.CodeAnalysis.CSharp;
 
 namespace LuminPack.SourceGenerator.Next.Rendering;
@@ -18,10 +19,11 @@ internal static class CppContractExport
 
     /// <summary>Renders contract rows in a stable type-identity order.</summary>
     /// <param name="roots">The complete payloads already analyzed by Next.</param>
+    /// <param name="options">The compiled generator profile and target capabilities.</param>
     /// <param name="getNativeStorage">The optional native layout analysis for raw structs.</param>
     /// <param name="cancellationToken">Cancels the projection.</param>
     /// <returns>Source containing assembly metadata only.</returns>
-    internal static string Render(IEnumerable<TypeModel> roots,
+    internal static string Render(IEnumerable<TypeModel> roots, GeneratorOptions options,
         Func<StructModel, (int Strategy, FormatterStorageModel Layout)?> getNativeStorage, CancellationToken cancellationToken)
     {
         TypeModel[] declarations = roots.ToArray();
@@ -37,7 +39,11 @@ internal static class CppContractExport
         {
             cancellationToken.ThrowIfCancellationRequested();
             json.Clear();
-            Value(json, Contract(model, model is StructModel value ? getNativeStorage(value) : null));
+            var orderedRuns = model is RecordModel && !model.Policy.TrackReferences &&
+                RenderModelFactory.Create(model, options, json: true) is { } jsonModel
+                    ? JsonEmitter.FindGeneratedInt32Runs(jsonModel)
+                    : null;
+            Value(json, Contract(model, model is StructModel value ? getNativeStorage(value) : null, orderedRuns));
             source.Append("[assembly: global::System.Reflection.AssemblyMetadataAttribute(\"")
                 .Append(MetadataKey).Append("\", ")
                 .Append(SymbolDisplay.FormatLiteral(json.ToString(), true)).Append(")]\n");
@@ -113,8 +119,9 @@ internal static class CppContractExport
     /// <summary>Projects one declaration without referring to its generated C# formatter text.</summary>
     /// <param name="model">The declaration facts.</param>
     /// <param name="native">The independent tag-free layout facts, when available.</param>
+    /// <param name="orderedRuns">The proven generated JSON Int32 runs by start ordinal.</param>
     /// <returns>The JSON properties for the contract row.</returns>
-    private static object Contract(TypeModel model, (int Strategy, FormatterStorageModel Layout)? native)
+    private static object Contract(TypeModel model, (int Strategy, FormatterStorageModel Layout)? native, int[]? orderedRuns)
     {
         var record = model as RecordModel;
         var value = model as StructModel;
@@ -126,6 +133,7 @@ internal static class CppContractExport
             ("profile", Profile(model.Policy)), ("versioned", version != null), ("dynamicVersion", version?.Dynamic),
             ("storageKind", value?.Storage.ToString()), ("storage", Storage(value?.StoragePlan)),
             ("nativeStrategy", native?.Strategy), ("nativeStorage", Storage(native?.Layout)),
+            ("jsonInt32Runs", orderedRuns),
             ("sequenceBase", record?.SequenceBase), ("collectionBase", Formatter(record?.CollectionBase)),
             ("cases", union?.Cases.Select(static item => Object(("id", item.Type.MetadataName), ("type", item.Type.GlobalName),
                 ("hash", item.NameHash), ("tag", item.Tag), ("ownEntry", item.OwnEntry)))),

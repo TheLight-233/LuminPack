@@ -349,6 +349,8 @@ protected:
         {
             if constexpr (can_read_ordered_names<reader_type>())
             {
+                if constexpr (requires { Lookup::read_int32_runs(input, result, next_property, first); })
+                    Lookup::read_int32_runs(input, result, next_property, first);
                 using read_member = bool (*)(reader_type&, T&, bool);
                 static constexpr std::array<read_member, sizeof...(Members)> ordered{
                     &read_ordered<Members, reader_type>...

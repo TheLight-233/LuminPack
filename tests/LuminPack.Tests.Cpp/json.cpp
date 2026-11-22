@@ -343,6 +343,57 @@ void dense_property_lookup()
     require(value.kind == choice_code::enabled && value.flag, "Dense JSON lookup compares every colliding name exactly.");
 }
 
+template<json_encoding Encoding>
+void generated_int32_prefix(std::span<const std::byte> document)
+{
+    basic_json_reader<Encoding> reader(document);
+    const auto object = reader.begin('{');
+    auto run = reader.begin_generated_int32_run();
+    std::int32_t first = 0;
+    std::int32_t second = 0;
+    std::int32_t third = -1;
+    require(run.template read<luminpack::json_name{u"A"}, true>(first) &&
+        run.template read<luminpack::json_name{u"B"}, false>(second),
+        "Match consecutive generated Int32 fields at both signed bounds.");
+    require(first == std::numeric_limits<std::int32_t>::min() && second == std::numeric_limits<std::int32_t>::max(),
+        "Decode the exact generated Int32 values.");
+    require(!run.template read<luminpack::json_name{u"C"}, false>(third) && third == -1,
+        "Leave a property with value whitespace untouched for the ordinary reader.");
+    require(reader.peek() == '"', "The generated Int32 window remains private until publication.");
+    run.complete();
+    reader.expect(',');
+    require(reader.read_name().matches(u"C"), "Publication advances to the first unconsumed property.");
+    reader.expect(':');
+    require(reader.template read_number<std::int32_t>() == 3, "The ordinary reader consumes the complete unmatched value.");
+    reader.expect('}');
+    reader.require_end();
+}
+
+void ordered_int32_runs()
+{
+    constexpr auto utf8 = json_encoding::utf8;
+    generated_int32_prefix<utf8>(bytes("{\"A\":-2147483648,\"B\":2147483647,\"C\": 3}"));
+
+    const auto document16 = bytes(u"{\"A\":-2147483648,\"B\":2147483647,\"C\": 3}");
+    std::array<std::byte, 128> buffer{};
+    auto unaligned = std::span(buffer).subspan(1, document16.size());
+    std::ranges::copy(document16, unaligned.begin());
+    generated_int32_prefix<json_encoding::utf16>(unaligned);
+
+    for (const auto bad : {"{\"A", "{\"A\":", "{\"A\":-", "{\"A\":01}", "{\"A\":2147483648}", "{\"A\":-2147483649}",
+             "{\"A\":1.0}", "{\"A\":1e2}", "{\"A\":1+2}", "{\"A\":1234567890123456}"})
+    {
+        basic_json_reader<utf8> reader{std::string_view(bad)};
+        const auto object = reader.begin('{');
+        auto run = reader.begin_generated_int32_run();
+        std::int32_t value = -1;
+        require(!run.read<luminpack::json_name{u"A"}, true>(value) && value == -1,
+            "A malformed or unsupported integer never changes the destination on the generated path.");
+        run.complete();
+        require(reader.peek() == '"', "A generated Int32 miss publishes no bytes.");
+    }
+}
+
 void profiles_and_strings()
 {
     constexpr auto utf8 = json_encoding::utf8;
@@ -480,6 +531,7 @@ int main(int argc, char** argv)
         ordered_property_heads();
         sparse_property_lookup();
         dense_property_lookup();
+        ordered_int32_runs();
         validation();
         custom_json();
         std::cout << "LuminPack C++ JSON wire checks passed.\n";

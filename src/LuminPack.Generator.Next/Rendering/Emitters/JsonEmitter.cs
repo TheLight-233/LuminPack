@@ -500,6 +500,16 @@ internal static class JsonEmitter
         w.Line("    value.RemoveRange(count, value.Count - count);");
     }
 
+    /// <summary>Finds the directly writable Int32 runs used by the generated JSON read body.</summary>
+    /// <param name="model">The normalized JSON render model.</param>
+    /// <returns>The run lengths by start ordinal, or null for an ordinary read.</returns>
+    internal static int[]? FindGeneratedInt32Runs(PayloadRenderModel model) =>
+        model.GeneratedInt32Runs && model.FreshResult && !model.IsStruct && !model.HasCallbacks && model.Version == null &&
+        model.TypeParameters.Length == 0 && model.Rent == null
+            ? GeneratedJsonInt32Runs.Find(model.Members.Length, index => model.Members[index] is
+                { Kind: RenderMemberKind.Fixed, FieldType: ScalarKind.Int, Mirrored: false, Volatile: false })
+            : null;
+
     /// <summary>Builds the JSON read body.</summary>
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
@@ -511,11 +521,7 @@ internal static class JsonEmitter
         string jsonReader = w.A("LuminPackJsonReader");
         bool fresh = model.FreshResult;
         bool packed = members.Length is >= 4 and <= 32;
-        var runs = model.GeneratedInt32Runs && fresh && !model.IsStruct && !model.HasCallbacks && model.Version == null &&
-            model.TypeParameters.Length == 0 && model.Rent == null
-            ? GeneratedJsonInt32Runs.Find(members.Length, index => members[index] is
-                { Kind: RenderMemberKind.Fixed, FieldType: ScalarKind.Int, Mirrored: false, Volatile: false })
-            : null;
+        var runs = FindGeneratedInt32Runs(model);
         var body = new List<string>();
         if (model.IsStruct)
         {

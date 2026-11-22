@@ -93,6 +93,8 @@ JSON readers scan complete literal runs before decoding escapes or non-ASCII UTF
 
 For ordinary DTO properties with ASCII names, the stock codecs store the UTF-8 and UTF-16 property heads as `constexpr` data. The ordered reader compares the complete head in a validated range before advancing. The writer shares the same static bytes. The name parser handles escapes, former names, out-of-order properties and unknown members. Generated codecs use a length switch when the encoding has at most eight candidates or every length bucket has at most four. Dense tables use a switch on the same seed-zero XXH3 as C#. Both strategies compare the complete name before accepting a match. The generator chooses independently for UTF-8 and UTF-16. Hand-written record codecs use direct comparisons.
 
+For eligible ordinary class members, the Next contract also identifies runs of consecutive writable `Int32` fields. C++ codegen matches their property heads and decimal values with a bounded local cursor, publishes the completed prefix after each chunk of at most sixteen fields, and resumes the ordinary reader at the first unmatched field.
+
 ## Generate C++ DTOs and codecs
 
 In a .NET project using Next, expose the export option to the compiler:
