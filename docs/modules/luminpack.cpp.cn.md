@@ -68,7 +68,7 @@ Version rev4 和 rev5 用 `version_member` 与 `version_codec` 绑定生成的�
 
 Reader 在 Release 构建中也会校验输入范围。用 `reader_limits` 限制集合元素数量和解码后的 UTF-16 码元数量。读入缓冲区的操作返回借用目标存储的视图，在使用视图期间保持缓冲区有效。跨布局转换或字符串转换遇到输入输出重叠时，会在堆上暂存输入。
 
-x64 启用 SIMD 时，UTF-16 Length 写入 1–16 个码元会使用与 C# 相同的有界短 Latin-1 路径。写入 17–64 个码元时，若原始 payload 完整放得下且输入输出 payload 不重叠，写入器使用 C# 的头尾路径。通用 x64 Latin-1 内核按 CPU 支持和完整块大小选择 AVX-512BW、AVX2 或 SSE2。其他目标使用可移植实现。设置 `LUMINPACK_CPP_MAX_SIMD_BITS` 为 `128`、`256` 或 `512` 可限制编译的最大向量宽度。设置 `LUMINPACK_CPP_SIMD=OFF` 可在 x64 上也使用可移植实现。
+x64 启用 SIMD 时，UTF-16 Length 写入 1–16 个码元会使用与 C# 相同的有界短 Latin-1 路径。写入 17–64 个码元时，若原始 payload 完整放得下且输入输出 payload 不重叠，写入器使用 C# 的头尾路径。UTF-8 Length 写入 4–16 个 ASCII 码元时，如果 payload 完整放得下且输入输出 payload 不重叠，写入器使用 C# 的短 ASCII 路径。通用 x64 Latin-1 内核按 CPU 支持和完整块大小选择 AVX-512BW、AVX2 或 SSE2。其他目标使用可移植实现。设置 `LUMINPACK_CPP_MAX_SIMD_BITS` 为 `128`、`256` 或 `512` 可限制编译的最大向量宽度。设置 `LUMINPACK_CPP_SIMD=OFF` 可在 x64 上也使用可移植实现。
 
 ## JSON
 

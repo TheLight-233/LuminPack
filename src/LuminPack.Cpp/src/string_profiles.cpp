@@ -5,6 +5,10 @@
 
 #include <algorithm>
 
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+#include <emmintrin.h>
+#endif
+
 namespace luminpack
 {
 namespace
@@ -217,6 +221,68 @@ void decode_text(std::span<char16_t> destination, text_record record)
     }
 }
 
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+bool is_ascii(__m128i chars) noexcept
+{
+    const auto high = _mm_and_si128(chars, _mm_set1_epi16(-128));
+    return _mm_movemask_epi8(_mm_cmpeq_epi16(high, _mm_setzero_si128())) == 0xffff;
+}
+
+bool try_write_short_ascii_utf8(writer& output, std::u16string_view text)
+{
+    constexpr auto header_size = sizeof(std::uint64_t);
+    const auto length = text.size();
+    if (length < 4 || length > 16 || output.remaining() < header_size + length || text.front() > 0x7f)
+        return false;
+
+    writer next = output;
+    const auto record = next.reserve(header_size + length);
+    const auto payload = record.subspan(header_size);
+    if (detail::overlaps(std::as_bytes(std::span(text.data(), length)), payload))
+        return false;
+
+    // Validate both bounded loads before storing either overlapping group.
+    if (length < 8)
+    {
+        const auto tail = length - 4;
+        std::uint64_t first;
+        std::uint64_t last;
+        std::memcpy(&first, text.data(), sizeof(first));
+        std::memcpy(&last, text.data() + tail, sizeof(last));
+        const auto chars = _mm_set_epi64x(static_cast<std::int64_t>(last), static_cast<std::int64_t>(first));
+        if (!is_ascii(chars))
+            return false;
+        const auto packed = static_cast<std::uint64_t>(_mm_cvtsi128_si64(_mm_packus_epi16(chars, chars)));
+        const auto head = static_cast<std::uint32_t>(packed);
+        const auto end = static_cast<std::uint32_t>(packed >> 32);
+        std::memcpy(payload.data(), &head, sizeof(head));
+        std::memcpy(payload.data() + tail, &end, sizeof(end));
+    }
+    else
+    {
+        const auto tail = length - 8;
+        __m128i first;
+        __m128i last;
+        std::memcpy(&first, text.data(), sizeof(first));
+        std::memcpy(&last, text.data() + tail, sizeof(last));
+        if (!is_ascii(_mm_or_si128(first, last)))
+            return false;
+        const auto packed = _mm_packus_epi16(first, last);
+        const auto head = _mm_cvtsi128_si64(packed);
+        const auto end = _mm_cvtsi128_si64(_mm_unpackhi_epi64(packed, packed));
+        std::memcpy(payload.data(), &head, sizeof(head));
+        std::memcpy(payload.data() + tail, &end, sizeof(end));
+    }
+
+    // The byte count and UTF-16 code-unit count are equal for ASCII.
+    const auto count = static_cast<std::uint64_t>(length);
+    const auto header = count | (count << 32);
+    std::memcpy(record.data(), &header, sizeof(header));
+    output = next;
+    return true;
+}
+#endif
+
 void encode_utf8(std::u16string_view value, std::span<std::byte> target)
 {
     if (value.size() == target.size())
@@ -301,6 +367,11 @@ void write_string(writer& output, string_profile profile, std::optional<std::u16
         write_utf16(output, value);
         return;
     }
+
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+    if (profile == string_profile::utf8_length && value && try_write_short_ascii_utf8(output, *value))
+        return;
+#endif
 
     const auto utf8 = uses_utf8(profile);
     const auto token = uses_token(profile);
