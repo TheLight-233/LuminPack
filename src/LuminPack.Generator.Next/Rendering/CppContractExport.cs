@@ -8,6 +8,7 @@ using System.Threading;
 using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 using Microsoft.CodeAnalysis.CSharp;
 
 namespace LuminPack.SourceGenerator.Next.Rendering;
@@ -21,10 +22,13 @@ internal static class CppContractExport
     /// <param name="roots">The complete payloads already analyzed by Next.</param>
     /// <param name="options">The compiled generator profile and target capabilities.</param>
     /// <param name="getNativeStorage">The optional native layout analysis for raw structs.</param>
+    /// <param name="hasDenseTupleStorage">The layout proof for raw CLR tuple formatters.</param>
     /// <param name="cancellationToken">Cancels the projection.</param>
     /// <returns>Source containing assembly metadata only.</returns>
     internal static string Render(IEnumerable<TypeModel> roots, GeneratorOptions options,
-        Func<StructModel, (int Strategy, FormatterStorageModel Layout)?> getNativeStorage, CancellationToken cancellationToken)
+        Func<StructModel, (int Strategy, FormatterStorageModel Layout)?> getNativeStorage,
+        Func<FormatterModel, bool> hasDenseTupleStorage,
+        CancellationToken cancellationToken)
     {
         TypeModel[] declarations = roots.ToArray();
         var contracts = new SortedDictionary<string, TypeModel>(StringComparer.Ordinal);
@@ -43,7 +47,7 @@ internal static class CppContractExport
                 RenderModelFactory.Create(model, options, json: true) is { } jsonModel
                     ? JsonEmitter.FindGeneratedInt32Runs(jsonModel)
                     : null;
-            Value(json, Contract(model, model is StructModel value ? getNativeStorage(value) : null, orderedRuns));
+            Value(json, Contract(model, model is StructModel value ? getNativeStorage(value) : null, orderedRuns, hasDenseTupleStorage));
             source.Append("[assembly: global::System.Reflection.AssemblyMetadataAttribute(\"")
                 .Append(MetadataKey).Append("\", ")
                 .Append(SymbolDisplay.FormatLiteral(json.ToString(), true)).Append(")]\n");
@@ -120,8 +124,10 @@ internal static class CppContractExport
     /// <param name="model">The declaration facts.</param>
     /// <param name="native">The independent tag-free layout facts, when available.</param>
     /// <param name="orderedRuns">The proven generated JSON Int32 runs by start ordinal.</param>
+    /// <param name="hasDenseTupleStorage">The layout proof for raw CLR tuple formatters.</param>
     /// <returns>The JSON properties for the contract row.</returns>
-    private static object Contract(TypeModel model, (int Strategy, FormatterStorageModel Layout)? native, int[]? orderedRuns)
+    private static object Contract(TypeModel model, (int Strategy, FormatterStorageModel Layout)? native, int[]? orderedRuns,
+        Func<FormatterModel, bool> hasDenseTupleStorage)
     {
         var record = model as RecordModel;
         var value = model as StructModel;
@@ -134,20 +140,21 @@ internal static class CppContractExport
             ("storageKind", value?.Storage.ToString()), ("storage", Storage(value?.StoragePlan)),
             ("nativeStrategy", native?.Strategy), ("nativeStorage", Storage(native?.Layout)),
             ("jsonInt32Runs", orderedRuns),
-            ("sequenceBase", record?.SequenceBase), ("collectionBase", Formatter(record?.CollectionBase)),
+            ("sequenceBase", record?.SequenceBase), ("collectionBase", Formatter(record?.CollectionBase, hasDenseTupleStorage)),
             ("cases", union?.Cases.Select(static item => Object(("id", item.Type.MetadataName), ("type", item.Type.GlobalName),
                 ("hash", item.NameHash), ("tag", item.Tag), ("ownEntry", item.OwnEntry)))),
-            ("members", model.Members.Select((member, index) => Member(member, version, index))));
+            ("members", model.Members.Select((member, index) => Member(member, version, index, hasDenseTupleStorage))));
     }
 
     /// <summary>Projects one member in the declaration's existing wire order.</summary>
     /// <param name="member">The normalized member.</param>
     /// <param name="version">The declaration's Version descriptor table or null.</param>
     /// <param name="index">The member's position in the declaration.</param>
+    /// <param name="hasDenseTupleStorage">The layout proof for raw CLR tuple formatters.</param>
     /// <returns>The JSON properties for the member.</returns>
-    private static object Member(MemberModel member, VersionSchemaModel? version, int index) =>
+    private static object Member(MemberModel member, VersionSchemaModel? version, int index, Func<FormatterModel, bool> hasDenseTupleStorage) =>
         Object(("name", member.Name), ("profile", Profile(member.Policy)), ("compressed", member.Compressed),
-            ("shape", Shape(member)), ("descriptor", version?.Descriptors[index].ToString("X16", CultureInfo.InvariantCulture)),
+            ("shape", Shape(member, hasDenseTupleStorage)), ("descriptor", version?.Descriptors[index].ToString("X16", CultureInfo.InvariantCulture)),
             ("oldNames", version?.OldNames[index]), ("nameKeys", version?.NameKeys[index]),
             ("fixedNullable", version?.FixedNullable[index]));
 
@@ -169,8 +176,9 @@ internal static class CppContractExport
 
     /// <summary>Projects a typed member edge using its actual Next representation.</summary>
     /// <param name="member">The normalized member or null.</param>
+    /// <param name="hasDenseTupleStorage">The layout proof for raw CLR tuple formatters.</param>
     /// <returns>The JSON shape to serialize.</returns>
-    private static object? Shape(MemberModel? member) => member switch
+    private static object? Shape(MemberModel? member, Func<FormatterModel, bool> hasDenseTupleStorage) => member switch
     {
         null => null,
         ScalarMember scalar => Object(("kind", scalar.EnumType == null ? "scalar" : "enum"), ("type", scalar.EnumType ?? scalar.Scalar),
@@ -180,11 +188,11 @@ internal static class CppContractExport
             ("framing", payload.Shape.ToString()), ("nullable", payload.Type.Nullable)),
         CollectionMember sequence => Object(("kind", sequence.Kind.ToString()), ("type", sequence.DeclaredType),
             ("element", sequence.Element.GlobalName), ("rank", sequence.ArrayRank), ("raw", sequence.Raw),
-            ("forwardedElement", Shape(sequence.ForwardedElement))),
+            ("forwardedElement", Shape(sequence.ForwardedElement, hasDenseTupleStorage))),
         DictionaryMember dictionary => Object(("kind", dictionary.Kind.ToString()), ("type", dictionary.DeclaredType),
             ("key", dictionary.Key.GlobalName), ("value", dictionary.Value.GlobalName), ("sparseValue", dictionary.Sparse),
-            ("forwardedValue", Shape(dictionary.ForwardedValue))),
-        SpecialMember special => Object(("kind", "formatter"), ("type", special.Declared), ("formatter", Formatter(special.Formatter))),
+            ("forwardedValue", Shape(dictionary.ForwardedValue, hasDenseTupleStorage))),
+        SpecialMember special => Object(("kind", "formatter"), ("type", special.Declared), ("formatter", Formatter(special.Formatter, hasDenseTupleStorage))),
         CultureInfoMember culture => Object(("kind", "formatter"), ("type", culture.Declared)),
         TypeParameterMember parameter => Object(("kind", "parameter"), ("type", parameter.ParameterName)),
         _ => Object(("kind", "unsupported"), ("details", member.GetType().Name))
@@ -192,13 +200,22 @@ internal static class CppContractExport
 
     /// <summary>Projects a closed formatter's typed arguments and block-storage descriptions.</summary>
     /// <param name="formatter">The formatter to export or null.</param>
+    /// <param name="hasDenseTupleStorage">The layout proof for raw CLR tuple formatters.</param>
     /// <returns>The JSON formatter description.</returns>
-    private static object? Formatter(FormatterModel? formatter) => formatter == null ? null :
-        Object(("type", formatter.Type), ("definition", formatter.Definition), ("arguments", formatter.Arguments.Select(Formatter)),
+    private static object? Formatter(FormatterModel? formatter, Func<FormatterModel, bool> hasDenseTupleStorage)
+    {
+        if (formatter == null)
+            return null;
+        var fields = Object(("type", formatter.Type), ("definition", formatter.Definition),
+            ("arguments", formatter.Arguments.Select(argument => Formatter(argument, hasDenseTupleStorage))),
             ("underlying", formatter.Underlying), ("rank", formatter.Rank), ("raw", formatter.Raw),
             ("rawCollection", formatter.RawCollection), ("layout", Storage(formatter.Layout)),
             ("nullableLayout", Storage(formatter.NullableStorage)), ("nullableEncoding", formatter.NullableEncoding),
             ("nativeNullableElement", formatter.NativeNullableElement));
+        return formatter.Definition == GenericIdentity.ValueTuple && formatter.Raw && hasDenseTupleStorage(formatter)
+            ? fields.Append(("denseTupleStorage", (object)true)).ToArray()
+            : fields;
+    }
 
     /// <summary>Projects one native layout and its modeled Tagged wire offsets.</summary>
     /// <param name="storage">The normalized storage description or null.</param>

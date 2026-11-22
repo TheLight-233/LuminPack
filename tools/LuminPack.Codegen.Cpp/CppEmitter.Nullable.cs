@@ -23,6 +23,12 @@ internal sealed partial class CppEmitter
                 throw Missing(label, "a KeyValuePair dictionary key");
             return BindPair(formatter, profile, label);
         }
+        if (definition == TupleDefinition && nullableWidth == 0)
+        {
+            if (required)
+                throw Missing(label, "a ValueTuple dictionary key");
+            return BindTuple(formatter, profile, label);
+        }
         if (layout.ValueKind != JsonValueKind.Null &&
             (!contracts.TryGetValue(Normalize(type), out JsonElement contract) ||
                 Text(contract, "kind") != "Struct" || !JsonElement.DeepEquals(contract.GetProperty("storage"), layout)))
@@ -46,6 +52,8 @@ internal sealed partial class CppEmitter
                 return BindNullableBlock(element, profile, label);
             if (Text(element, "definition") == PairDefinition)
                 return Sequence(BindPair(element, profile, label, collection: true));
+            if (Text(element, "definition") == TupleDefinition)
+                return Sequence(BindTuple(element, profile, label, collection: true));
             return Sequence(BindFormatter(element, profile, label));
         }
         if (definition == "System.Collections.Generic.Dictionary")

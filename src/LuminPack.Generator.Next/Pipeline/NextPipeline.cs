@@ -97,6 +97,7 @@ internal static partial class NextPipeline
                 GeneratorOptions options = GeneratorOptionsFactory.From(compilation);
                 production.AddSource("LuminPackGen.CppContracts.g.cs",
                     CppContractExport.Render(roots, options, model => TypeModelFactory.TryCreateCppNativeStorage(model, compilation, options),
+                        TypeModelFactory.CreateCppDenseTupleProof(compilation, options),
                         production.CancellationToken));
             }
         });
