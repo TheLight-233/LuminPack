@@ -86,14 +86,33 @@ struct record_codec
     template<class... Context>
     static void write(writer& output, const value_type& value, Context&... context)
     {
-        writer next = output;
         if (value)
-        {
-            write_object_header(next, static_cast<std::uint8_t>(sizeof...(Members)));
-            payload::write(next, *value, context...);
-        }
+            write_body(output, *value, context...);
         else
-            write_object_header(next, std::nullopt);
+            write_object_header(output, std::nullopt);
+    }
+
+    /// Populates an already registered shell after reading its complete positional body.
+    template<class... Context>
+    static void read_into(reader& input, T& destination, Context&... context)
+    {
+        reader next = input;
+        auto transaction = detail::version_transaction(context...);
+        auto value = read(next, context...);
+        if (!value)
+            throw wire_error("A LuminPack reference definition must contain a non-null record.");
+        destination = std::move(*value);
+        input = next;
+        transaction.commit();
+    }
+
+    /// Writes the complete positional record body, including its ordinary member-count marker.
+    template<class... Context>
+    static void write_body(writer& output, const T& value, Context&... context)
+    {
+        writer next = output;
+        write_object_header(next, static_cast<std::uint8_t>(sizeof...(Members)));
+        payload::write(next, value, context...);
         output = next;
     }
 };

@@ -88,6 +88,12 @@ UTF-16 Length 新建字符串和读取符合条件的列表前缀时，使用 C#
 
 固定 UTF-8 Length 读取在两个长度字段相等时尝试有界 ASCII 扩展。短路径在写入前验证每个字节。长串 AVX2 路径在扩展到尚未返回的字符串时同步验证。其他输入由通用解码器校验。
 
+### 引用跟踪
+
+生成的头文件声明 `root_requires_reference_graph` 时，Binary 用 `read_binary_reference_document<root_binary>(bytes, root_binary_limits, root_binary_reference_depth)` 读取，JSON 用 `read_reference_json_document<root_json, root_json_encoding>(bytes, root_json_options)` 读取。返回的文档通过 `graph` 持有跟踪对象，`value` 是解码后的根值。跟踪类字段是指向图中对象的可空指针，使用这些指针期间需要保留文档。构造图时可用 `reference_graph::make<T>()` 分配跟踪 DTO，再连接返回的指针。写入使用 `write_binary_reference_document` 或 `write_reference_json_document`，每次开始新的标识表。
+
+Default 和 Version 跟踪记录保留直接成员、受支持的集合和默认 variant Union 中的共享实例及环。Binary 的显式对象 ID 随操作与 Version 作用域一同传递。JSON 沿用 `$id` 和 `$ref`。当 .NET 根类型没有声明有限深度时，C++ Binary 图默认最多允许 512 层首次出现对象。调用方可以向读取入口传入深度上限。
+
 ## JSON
 
 用 `read_json_document` 和 `write_json_document` 调用具体的 JSON codec。文档默认使用小端 UTF-16。与 UTF-8 .NET 根类型互通时，将第二个模板参数设为 `json_encoding::utf8`。二进制成员使用的字符串 profile 不会改变 JSON 文档的编码。
@@ -137,7 +143,7 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 从启用了注册的程序集导出的 RTTI Union 提供 `root_binary::registry`。应用 case 继承自 `registry::base_type`，通过 `registry::register_case<Case, Binding>(tag)` 注册。绑定提供读取 payload 的 `read_binary` 和 `read_json`，以及写入带标签 case 的 `write_binary` 和 `write_json`。JSON 方法支持 UTF-8 和 UTF-16 writer。Binary codec 在调用绑定前写入转义哈希，Binary 绑定可用 `write_registered_union_tag<registry::wide_tags>(output, tag)` 写入标签。JSON 绑定写入数字 `$type`，并用 `$value` 包装应用 payload。C# 与 C++ 使用相同的标签和表示。生成的 case 仍优先按哈希分派。
 
-生成器支持无环的位置类和 Version 类、封闭的类或接口 Union、枚举、定宽标量、文本、一维数组、List、Dictionary，以及具有已生成字段契约的 Packed 和 Tagged 聚合和存储经过验证的顺序布局原始结构体。可空原生类型和枚举也可以用作 Version 字段、数组或 List 元素和字典值。遇到尚未实现的 wire 表示时，生成器会报告对应成员或类型。
+生成器支持位置类和 Version 类，包括引用跟踪对象图、封闭的类或接口 Union、枚举、定宽标量、文本、一维数组、List、Dictionary，以及具有已生成字段契约的 Packed 和 Tagged 聚合和存储经过验证的顺序布局原始结构体。可空原生类型和枚举也可以用作 Version 字段、数组或 List 元素和字典值。遇到尚未实现的 wire 表示时，生成器会报告对应成员或类型。
 
 ## 验证基准模型
 

@@ -57,6 +57,7 @@ internal sealed partial class CppEmitter
         emitter.code.Append("namespace luminpack_generated::root_").Append(Identifier(root)).Append("\n{\n");
         JsonElement profile = declaration.GetProperty("profile");
         Binding binding = emitter.BindContract(declaration, profile.GetProperty("binary").GetInt32());
+        emitter.EmitTrackedRecords();
         emitter.EmitRoot(binding, profile);
         emitter.code.Append("}\n");
         OutputFile.Replace(manifestPath, headerPath, stream =>
@@ -79,14 +80,17 @@ internal sealed partial class CppEmitter
         var key = (type, binary);
         if (generated.TryGetValue(key, out Binding known))
             return known;
+        if (contract.GetProperty("typeParameters").GetArrayLength() != 0)
+            throw Missing(type, "open parameters");
+
+        string storageName = "type_" + Identifier(Text(contract, "id"));
+        string name = binary == declared ? storageName : storageName + "_profile" + binary.ToString(CultureInfo.InvariantCulture);
+        if (Flag(profile, "trackReferences"))
+            return DeclareTrackedRecord(contract, key, name, storageName);
+
         if (!building.Add(key))
             throw Missing(type, "recursive type graphs");
-        if (contract.GetProperty("typeParameters").GetArrayLength() != 0 || Flag(profile, "trackReferences"))
-            throw Missing(type, "open parameters or reference tracking");
 
-        string name = "type_" + Identifier(Text(contract, "id"));
-        if (binary != declared)
-            name += "_profile" + binary.ToString(CultureInfo.InvariantCulture);
         Binding binding = Text(contract, "kind") switch
         {
             "Record" => EmitRecord(contract, name, binary),
@@ -104,8 +108,9 @@ internal sealed partial class CppEmitter
     /// <param name="contract">The analyzed record.</param>
     /// <param name="name">The sanitized C++ declaration name.</param>
     /// <param name="profile">The record's effective binary string profile.</param>
+    /// <param name="trackedStorage">The graph-owned DTO type, or null for an ordinary record.</param>
     /// <returns>The record's C++ bindings.</returns>
-    private Binding EmitRecord(JsonElement contract, string name, int profile)
+    private Binding EmitRecord(JsonElement contract, string name, int profile, string? trackedStorage = null)
     {
         string owner = Text(contract, "id");
         if (contract.GetProperty("sequenceBase").ValueKind != JsonValueKind.Null ||
@@ -113,6 +118,7 @@ internal sealed partial class CppEmitter
             throw Missing(owner, "an inherited collection body or dynamic Version schema");
 
         bool version = Flag(contract, "versioned");
+        string storage = trackedStorage ?? name;
         var declarations = new List<string>();
         var binaryMembers = new List<string>();
         var jsonMembers = new List<JsonMember>();
@@ -131,7 +137,7 @@ internal sealed partial class CppEmitter
             int nullableWidth = Flag(field, "fixedNullable") ? (int)(descriptor >> 56) : 0;
             Binding member = BindShape(field.GetProperty("shape"), active, label, nullableWidth);
             string fieldName = "field_" + Identifier(property);
-            string pointer = "&" + name + "::" + fieldName;
+            string pointer = "&" + storage + "::" + fieldName;
             declarations.Add("    " + member.Type + " " + fieldName + "{};");
 
             if (version)
@@ -149,11 +155,19 @@ internal sealed partial class CppEmitter
             jsonMembers.Add(new JsonMember(property, pointer, member.Json, names));
         }
 
-        string inheritance = RttiInheritance(Normalize(Text(contract, "type")));
-        code.Append("struct ").Append(name).Append(inheritance).Append("\n{\n");
-        foreach (string declaration in declarations)
-            code.Append(declaration).Append('\n');
-        code.Append("};\n");
+        if (trackedStorage == null || definedReferenceStorage.Add(storage))
+        {
+            string inheritance = RttiInheritance(Normalize(Text(contract, "type")));
+            code.Append("struct ").Append(storage).Append(inheritance).Append("\n{\n");
+            foreach (string declaration in declarations)
+                code.Append(declaration).Append('\n');
+            code.Append("};\n");
+        }
+        if (trackedStorage != null)
+        {
+            EmitTrackedRecordCodec(name, trackedStorage, profile, version, binaryMembers, jsonMembers);
+            return new Binding(storage + "*", name + "_binary", name + "_json");
+        }
         if (version)
             Alias(name + "_binary", "luminpack::version_codec", new[] { name, Profile(profile) }.Concat(binaryMembers));
         else
@@ -250,12 +264,17 @@ internal sealed partial class CppEmitter
         foreach (JsonElement item in contract.GetProperty("cases").EnumerateArray())
         {
             RejectOpaqueUnionCase(item);
-            Binding member = BindType(Text(item, "type"), profile, Text(contract, "id"), false);
+            string type = Text(item, "type");
+            Binding member = BindType(type, profile, Text(contract, "id"), false);
             string hash = item.GetProperty("hash").GetUInt32().ToString(CultureInfo.InvariantCulture) + "u";
-            if (member.Payload == null || member.JsonPayload == null)
+            bool tracked = contracts.TryGetValue(Normalize(type), out JsonElement declaration) &&
+                Flag(declaration.GetProperty("profile"), "trackReferences");
+            string? binary = tracked ? member.Binary : member.Payload;
+            string? json = tracked ? member.Json : member.JsonPayload;
+            if (binary == null || json == null)
                 throw Missing(Text(item, "id"), "a Union case without a matching positional payload codec");
-            binaryMembers.Add(Apply("luminpack::union_case", new[] { hash, member.Payload }));
-            jsonMembers.Add(Apply("luminpack::union_case", new[] { hash, member.JsonPayload }));
+            binaryMembers.Add(Apply("luminpack::union_case", new[] { hash, binary }));
+            jsonMembers.Add(Apply("luminpack::union_case", new[] { hash, json }));
         }
         if (binaryMembers.Count == 0)
             throw Missing(Text(contract, "id"), "a Union without generated cases");
@@ -397,6 +416,16 @@ internal sealed partial class CppEmitter
         Alias("root_binary", binding.Binary);
         Alias("root_json", binding.Json);
         Alias("root_value", binding.Type);
+        code.Append("inline constexpr bool root_requires_reference_graph = ")
+            .Append(declaredReferenceStorage.Count != 0 ? "true" : "false").Append(";\n");
+        if (declaredReferenceStorage.Count != 0)
+        {
+            string maxDepth = profile.TryGetProperty("maxDepth", out JsonElement depth) &&
+                depth.ValueKind == JsonValueKind.Number && depth.TryGetInt32(out int limit) && limit is > 0 and < int.MaxValue
+                ? Integer(limit)
+                : "luminpack::default_binary_reference_depth";
+            code.Append("inline constexpr std::size_t root_binary_reference_depth = ").Append(maxDepth).Append(";\n");
+        }
         string encoding = profile.GetProperty("jsonEncoding").GetInt32() == 0 ? "utf8" : "utf16";
         string inputLimit = !Flag(profile, "trusted") && profile.TryGetProperty("maxInput", out JsonElement maximum) &&
             maximum.ValueKind == JsonValueKind.Number && maximum.TryGetInt32(out int bytes) && bytes is >= 0 and < int.MaxValue

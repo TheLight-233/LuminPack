@@ -15,11 +15,15 @@ internal sealed partial class CppEmitter
     /// <param name="type">The generated object type.</param>
     /// <param name="members">The fields in contract order, including former names.</param>
     /// <param name="orderedRuns">The Next JSON integer run lengths indexed by start ordinal.</param>
-    private void EmitJsonBody(string codec, string type, IReadOnlyList<JsonMember> members, int[]? orderedRuns = null)
+    /// <param name="tracked">Whether the lookup includes the reference envelope's metadata names.</param>
+    private void EmitJsonBody(string codec, string type, IReadOnlyList<JsonMember> members, int[]? orderedRuns = null,
+        bool tracked = false)
     {
         // Keep the first matching member when a former name conflicts with a later member.
         JsonCandidate[] candidates = members.SelectMany((member, index) => new[] { member.Name }
             .Concat(member.FormerNames).Select(name => new JsonCandidate(name, index))).ToArray();
+        if (tracked)
+            candidates = [.. candidates, new("$id", members.Count + 1), new("$ref", members.Count + 2)];
         IEnumerable<string> bindings = members.Select(member => Apply("luminpack::json_record_member",
             new[] { Literal(member.Name), member.Pointer, member.Codec }.Concat(member.FormerNames.Select(Literal))));
         if (candidates.Length == 0)
@@ -35,7 +39,8 @@ internal sealed partial class CppEmitter
         if (orderedRuns != null)
             EmitJsonInt32Runs(type, members, orderedRuns);
         code.Append("};\n");
-        Alias(codec, "luminpack::json_lookup_record_body", new[] { type, lookup }.Concat(bindings));
+        Alias(codec, tracked ? "luminpack::tracked_json_codec" : "luminpack::json_lookup_record_body",
+            new[] { type, lookup }.Concat(bindings));
     }
 
     /// <summary>Emits the Next run's bounded chunks, publishing each chunk before ordinary property lookup.</summary>

@@ -30,14 +30,15 @@ struct version_member
 
     static void reset(auto& value) { value.*Field = typename Codec::value_type{}; }
 
-    static void read(reader& input, version_state& state, auto& value)
+    template<class T, class... Context>
+    static void read(reader& input, version_state& state, T& value, Context&... context)
     {
         if constexpr (width == 254)
-            value.*Field = detail::read_codec<Codec>(input, state);
+            value.*Field = detail::read_codec<Codec>(input, state, context...);
         else if constexpr (width <= 250)
         {
             auto bounded = input.subrecord(width);
-            auto member = detail::read_codec<Codec>(bounded, state);
+            auto member = detail::read_codec<Codec>(bounded, state, context...);
             bounded.require_end();
             value.*Field = std::move(member);
         }
@@ -48,20 +49,21 @@ struct version_member
                 throw wire_error("LuminPack Version member exceeds its maximum size.");
             auto bounded = input.subrecord(length);
             version_state::scope scope(state);
-            auto member = detail::read_codec<Codec>(bounded, state);
+            auto member = detail::read_codec<Codec>(bounded, state, context...);
             bounded.require_end();
             value.*Field = std::move(member);
         }
     }
 
-    static void write(writer& output, version_state& state, const auto& value)
+    template<class... Context>
+    static void write(writer& output, version_state& state, const auto& value, Context&... context)
     {
         if constexpr (width == 254)
-            detail::write_codec<Codec>(output, value.*Field, state);
+            detail::write_codec<Codec>(output, value.*Field, state, context...);
         else if constexpr (width <= 250)
         {
             const auto start = output.written().size();
-            detail::write_codec<Codec>(output, value.*Field, state);
+            detail::write_codec<Codec>(output, value.*Field, state, context...);
             if (output.written().size() - start != width)
                 throw std::invalid_argument("LuminPack Version member has the wrong fixed width.");
         }
@@ -70,7 +72,7 @@ struct version_member
             const auto prefix = output.reserve(sizeof(std::uint32_t));
             const auto start = output.written().size();
             version_state::scope scope(state);
-            detail::write_codec<Codec>(output, value.*Field, state);
+            detail::write_codec<Codec>(output, value.*Field, state, context...);
             const auto length = output.written().size() - start;
             if (length > static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max()))
                 throw std::length_error("LuminPack Version member exceeds its maximum size.");
@@ -94,10 +96,11 @@ struct version_codec
         return read(input, state);
     }
 
-    static value_type read(reader& input, version_state& state)
+    template<class... Context>
+    static value_type read(reader& input, version_state& state, Context&... context)
     {
         reader next = input;
-        version_state::scope transaction(state);
+        auto transaction = detail::version_transaction(state, context...);
         const auto incoming = read_version_header(next, state, Profile);
         if (!incoming)
         {
@@ -108,9 +111,9 @@ struct version_codec
 
         T result{};
         if (std::ranges::equal(*incoming, descriptors))
-            (Members::read(next, state, result), ...);
+            (Members::read(next, state, result, context...), ...);
         else
-            read_mapped(next, state, result, *incoming);
+            read_mapped(next, state, result, *incoming, context...);
         input = next;
         transaction.commit();
         return result;
@@ -122,17 +125,37 @@ struct version_codec
         write(output, value, state);
     }
 
-    static void write(writer& output, const value_type& value, version_state& state)
+    template<class... Context>
+    static void write(writer& output, const value_type& value, version_state& state, Context&... context)
     {
-        if (!value)
-        {
+        if (value)
+            write_body(output, *value, state, context...);
+        else
             output.write<std::uint8_t>(255);
-            return;
-        }
+    }
+
+    /// Populates an existing reference shell using the complete Version header and its member operations.
+    template<class... Context>
+    static void read_into(reader& input, T& destination, version_state& state, Context&... context)
+    {
+        reader next = input;
+        auto transaction = detail::version_transaction(state, context...);
+        auto value = read(next, state, context...);
+        if (!value)
+            throw wire_error("A LuminPack reference definition must contain a non-null Version record.");
+        destination = std::move(*value);
+        input = next;
+        transaction.commit();
+    }
+
+    /// Writes a non-null Version body, including its full schema or registered ordinal.
+    template<class... Context>
+    static void write_body(writer& output, const T& value, version_state& state, Context&... context)
+    {
         writer next = output;
-        version_state::scope transaction(state);
+        auto transaction = detail::version_transaction(state, context...);
         detail::write_version_prehashed(next, state, Profile, schema, descriptors);
-        (Members::write(next, state, *value), ...);
+        (Members::write(next, state, value, context...), ...);
         output = next;
         transaction.commit();
     }
@@ -181,7 +204,8 @@ private:
         }
     }
 
-    static void read_mapped(reader& input, version_state& state, T& target, std::span<const std::uint64_t> incoming)
+    template<class... Context>
+    static void read_mapped(reader& input, version_state& state, T& target, std::span<const std::uint64_t> incoming, Context&... context)
     {
         std::array<std::uint8_t, 249> slots;
         std::array<bool, member_count> seen{};
@@ -207,8 +231,8 @@ private:
             slots[index] = static_cast<std::uint8_t>(slot);
         }
 
-        constexpr std::array<void (*)(reader&, version_state&, T&), member_count> read_slot{
-            &Members::template read<T>...
+        constexpr std::array<void (*)(reader&, version_state&, T&, Context&...), member_count> read_slot{
+            &Members::template read<T, Context...>...
         };
         constexpr std::array<void (*)(T&), member_count> reset_slot{&Members::template reset<T>...};
         for (std::size_t index = 0; index < incoming.size(); ++index)
@@ -216,7 +240,7 @@ private:
             if (slots[index] == absent)
                 skip(input, static_cast<std::uint8_t>(incoming[index] >> 56));
             else
-                read_slot[slots[index]](input, state, target);
+                read_slot[slots[index]](input, state, target, context...);
         }
         for (std::size_t slot = 0; slot < member_count; ++slot)
         {

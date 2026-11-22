@@ -88,6 +88,12 @@ When the homogeneous probe declines a Latin-1-leading string, the writer can use
 
 Fixed UTF-8 Length reads use bounded ASCII widening when both length headers agree. The short path checks every byte before storing. The long AVX2 path validates while widening into an unpublished string. Other inputs use the validating decoder.
 
+### Tracked references
+
+When the generated header sets `root_requires_reference_graph`, read Binary with `read_binary_reference_document<root_binary>(bytes, root_binary_limits, root_binary_reference_depth)` and JSON with `read_reference_json_document<root_json, root_json_encoding>(bytes, root_json_options)`. The returned document owns the tracked objects in its `graph` and exposes the decoded root in `value`. A tracked class field is a nullable pointer into that graph. Retain the document while using those pointers. To construct a graph, allocate the tracked DTOs through `reference_graph::make<T>()` and link the returned pointers. Write with `write_binary_reference_document` or `write_reference_json_document` to start a fresh identity table.
+
+Default and Version tracked records preserve shared objects and cycles through direct members, supported collections and default variant Unions. Binary tracks their explicit IDs together with the current Version scope. JSON uses the existing `$id` and `$ref` properties. The default portable Binary graph limit is 512 nested first occurrences where the .NET root declares no finite limit. The read entry accepts a caller-supplied depth limit.
+
 ## JSON
 
 Use `read_json_document` and `write_json_document` with a concrete JSON codec. The document defaults to little-endian UTF-16. Pass `json_encoding::utf8` as the second template argument to match a UTF-8 .NET root, regardless of the string profile on its individual binary members.
@@ -137,7 +143,7 @@ Pass `--rtti` immediately after `generate` to use C++ polymorphic DTOs for Next'
 
 An RTTI Union exported from an assembly with registration enabled exposes `root_binary::registry`. Register an app-owned case derived from `registry::base_type` with `registry::register_case<Case, Binding>(tag)`. The binding supplies `read_binary` and `read_json` for the case payload and `write_binary` and `write_json` for the tagged case. JSON methods support the writer's UTF-8 and UTF-16 encodings. The Binary codec writes the escape hash before calling the delegate. Use `write_registered_union_tag<registry::wide_tags>(output, tag)` in the Binary delegate, and write the numeric `$type` and application payload in the `$value` envelope in the JSON delegate. Set the same tag and representation in C#. Generated cases keep their hash dispatch before the registry.
 
-The emitter supports acyclic positional and Version class contracts, closed class or interface Unions, enums, fixed-width primitives, text, one-dimensional arrays, List, Dictionary, Packed and Tagged aggregates with generated field contracts, and sequential raw structs with proven storage. Nullable primitives and enums also work as Version fields, array or List elements, and dictionary values. Generation reports the member or type when its model needs an unimplemented representation.
+The emitter supports positional and Version class contracts, including tracked reference graphs, closed class or interface Unions, enums, fixed-width primitives, text, one-dimensional arrays, List, Dictionary, Packed and Tagged aggregates with generated field contracts, and sequential raw structs with proven storage. Nullable primitives and enums also work as Version fields, array or List elements, and dictionary values. Generation reports the member or type when its model needs an unimplemented representation.
 
 ## Verify the benchmark models
 

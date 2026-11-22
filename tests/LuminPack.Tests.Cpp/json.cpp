@@ -669,6 +669,199 @@ void generated_opening_heads()
         (void)read_json_document<generated_nested, utf8>(bytes("{\"Nested\":{\"Value\":42},,\"Enabled\":true}"));
     }, "Generated objects still reject duplicate property separators.");
 }
+
+struct json_graph_node;
+
+struct json_graph_node_codec
+{
+    using value_type = json_graph_node*;
+    static value_type read(auto& input);
+    static void read_into(auto& input, value_type& value);
+    static void write(auto& output, const value_type& value);
+};
+
+struct json_graph_node
+{
+    std::int32_t value = 99;
+    json_graph_node* next = nullptr;
+    std::optional<std::vector<json_graph_node*>> children;
+};
+
+struct json_graph_node_lookup
+{
+    static std::size_t find(const auto& name) noexcept
+    {
+        if (name.matches(u"Value")) return 0;
+        if (name.matches(u"Next")) return 1;
+        if (name.matches(u"Children")) return 2;
+        if (name.matches(u"$id")) return 4;
+        if (name.matches(u"$ref")) return 5;
+        return 3;
+    }
+};
+
+using json_graph_node_impl = luminpack::tracked_json_codec<json_graph_node, json_graph_node_lookup,
+    json_record_member<u"Value", &json_graph_node::value, number>,
+    json_record_member<u"Next", &json_graph_node::next, json_graph_node_codec>,
+    json_record_member<u"Children", &json_graph_node::children, luminpack::json_list_codec<json_graph_node_codec>>>;
+
+json_graph_node* json_graph_node_codec::read(auto& input)
+{
+    return json_graph_node_impl::read(input);
+}
+
+void json_graph_node_codec::read_into(auto& input, value_type& value)
+{
+    json_graph_node_impl::read_into(input, value);
+}
+
+void json_graph_node_codec::write(auto& output, const value_type& value)
+{
+    json_graph_node_impl::write(output, value);
+}
+
+struct other_graph_node {};
+
+struct other_graph_node_lookup
+{
+    static std::size_t find(const auto& name) noexcept
+    {
+        if (name.matches(u"$id")) return 1;
+        if (name.matches(u"$ref")) return 2;
+        return 0;
+    }
+};
+
+using other_graph_node_codec = luminpack::tracked_json_codec<other_graph_node, other_graph_node_lookup>;
+constexpr auto graph_node_hash = luminpack::union_name_hash("GraphNode");
+using graph_json_union = luminpack::json_union_codec<luminpack::union_case<graph_node_hash, json_graph_node_codec>>;
+
+struct json_graph_envelope
+{
+    json_graph_node* anchor = nullptr;
+    graph_json_union::value_type choice;
+    other_graph_node* other = nullptr;
+};
+
+using json_graph_envelope_codec = json_record_body<json_graph_envelope,
+    json_record_member<u"Anchor", &json_graph_envelope::anchor, json_graph_node_codec>,
+    json_record_member<u"Choice", &json_graph_envelope::choice, graph_json_union>,
+    json_record_member<u"Other", &json_graph_envelope::other, other_graph_node_codec>>;
+
+void tracked_json_graphs()
+{
+    using luminpack::read_reference_json_document;
+    using luminpack::write_reference_json_document;
+    constexpr auto utf8 = json_encoding::utf8;
+    json_graph_node root{};
+    json_graph_node child{};
+    root.value = 1;
+    root.next = &root;
+    root.children = std::vector<json_graph_node*>{&child, &child};
+    child.value = 2;
+    child.next = &root;
+
+    const auto verify = [](const json_graph_node* value) {
+        require(value && value->value == 1 && value->next == value, "Resolve an early tracked object shell.");
+        require(value->children && value->children->size() == 2 &&
+            value->children->at(0) == value->children->at(1), "Preserve aliases through a JSON list.");
+        const auto* leaf = value->children->front();
+        require(leaf && leaf->value == 2 && leaf->next == value && !leaf->children, "Resolve a reference to an enclosing object.");
+    };
+    std::array<std::byte, 512> output{};
+    const auto utf8_written = write_reference_json_document<json_graph_node_codec, utf8>(output, &root);
+    require(std::ranges::equal(utf8_written, bytes("{\"$id\":0,\"Value\":1,\"Next\":{\"$ref\":0},\"Children\":["
+        "{\"$id\":1,\"Value\":2,\"Next\":{\"$ref\":0},\"Children\":null},{\"$ref\":1}]}")),
+        "Write canonical JSON reference metadata before fields.");
+    verify(read_reference_json_document<json_graph_node_codec, utf8>(utf8_written).value);
+    const auto utf16_written = write_reference_json_document<json_graph_node_codec>(std::span(output).subspan(1), &root);
+    require(std::ranges::equal(utf16_written, bytes(u"{\"$id\":0,\"Value\":1,\"Next\":{\"$ref\":0},\"Children\":["
+        u"{\"$id\":1,\"Value\":2,\"Next\":{\"$ref\":0},\"Children\":null},{\"$ref\":1}]}")),
+        "Write canonical reference metadata in unaligned UTF-16.");
+    verify(read_reference_json_document<json_graph_node_codec>(utf16_written).value);
+
+    const auto sparse = read_reference_json_document<json_graph_node_codec>(bytes(
+        u"{\"Value\":null,\"$\\u0069d\":4294967295,\"Next\":{\"\\u0024ref\":4294967295,\"Ignored\":[1,2]}}"));
+    require(sparse.value && sparse.value->next == sparse.value && sparse.value->value == 0,
+        "Read an out-of-order identifier and a default-null scalar.");
+    const auto aliases = read_reference_json_document<json_graph_node_codec, utf8>(bytes(
+        "{\"$id\":0,\"$id\":7,\"Children\":[{\"$ref\":0},{\"$ref\":7}]}"));
+    require(aliases.value && aliases.value->children && aliases.value->children->at(0) == aliases.value &&
+        aliases.value->children->at(1) == aliases.value, "Distinct identifiers can name the same early shell.");
+    const auto anonymous = read_reference_json_document<json_graph_node_codec, utf8>(bytes("{}"));
+    require(anonymous.value && anonymous.value->value == 0, "Missing metadata still publishes a fully staged object.");
+    require(!read_reference_json_document<json_graph_node_codec, utf8>(bytes("null")).value,
+        "A null reference root owns no object.");
+
+    const auto text = "{\"Anchor\":{\"$id\":0},\"Choice\":{\"$value\":{\"$ref\":0},\"$type\":" +
+        std::to_string(graph_node_hash) + "}}";
+    const auto envelope = read_reference_json_document<json_graph_envelope_codec, utf8>(bytes(std::string_view(text)));
+    require(envelope.value.anchor && envelope.value.choice &&
+        std::get<0>(*envelope.value.choice) == envelope.value.anchor,
+        "A deferred Union payload shares the enclosing reference table.");
+    json_graph_envelope original;
+    original.anchor = &root;
+    original.choice.emplace(std::in_place_index<0>, &root);
+    const auto envelope_written = write_reference_json_document<json_graph_envelope_codec, utf8>(output, original);
+    const auto restored = read_reference_json_document<json_graph_envelope_codec, utf8>(envelope_written);
+    require(restored.value.anchor && restored.value.choice &&
+        std::get<0>(*restored.value.choice) == restored.value.anchor,
+        "An ordinary record writes the same reference ID through a nested Union.");
+
+    malformed([] {
+        (void)read_reference_json_document<json_graph_node_codec, utf8>(bytes("{\"Next\":{\"$ref\":1},\"$id\":1}"));
+    }, "Reject a reference before its identifier is registered.");
+    malformed([] {
+        (void)read_reference_json_document<json_graph_node_codec, utf8>(bytes("{\"$id\":0,\"$id\":0}"));
+    }, "Reject a duplicate reference identifier.");
+    malformed([] {
+        (void)read_reference_json_document<json_graph_envelope_codec, utf8>(
+            bytes("{\"Anchor\":{\"$id\":0},\"Other\":{\"$ref\":0}}"));
+    }, "Reject a reference to a differently typed shell.");
+    malformed([] {
+        (void)read_reference_json_document<json_graph_node_codec, utf8>(bytes("{\"$ref\":0}"));
+    }, "Each reference JSON document starts with independent state.");
+
+    luminpack::reference_graph graph;
+    luminpack::reference_read_state state(graph);
+    malformed([&] {
+        luminpack::reference_json_reader<utf8> failed(bytes("{\"$id\":0,\"Value\":true}"), {}, state);
+        (void)json_graph_node_codec::read(failed);
+    }, "Reject a malformed member after early registration.");
+    luminpack::reference_json_reader<utf8> valid(bytes("{\"$id\":0,\"Next\":{\"$ref\":0}}"), {}, state);
+    const auto* recovered = json_graph_node_codec::read(valid);
+    require(recovered && recovered->next == recovered, "A failed read removes its provisional reference registrations.");
+
+    json_graph_node existing{};
+    json_graph_node existing_child{};
+    existing.next = &existing_child;
+    auto* target = &existing;
+    luminpack::reference_json_reader<utf8> reuse(
+        bytes("{\"$id\":1,\"Value\":10,\"Next\":{\"$id\":2,\"Value\":20}}"), {}, state);
+    json_graph_node_codec::read_into(reuse, target);
+    require(target == &existing && target->value == 10 && target->next &&
+        target->next != &existing_child && target->next->value == 20 && existing_child.value == 99,
+        "Reuse the supplied outer shell while staging new child objects.");
+
+    luminpack::reference_json_reader<utf8> new_shell(bytes("{\"$id\":3,\"Value\":30}"), {}, state);
+    json_graph_node_codec::read_into(new_shell, target);
+    require(target != &existing && target->value == 30 && existing.value == 10,
+        "An existing ID keeps its shell when a later read supplies that same object.");
+
+    luminpack::reference_graph failed_graph;
+    luminpack::reference_read_state failed_state(failed_graph);
+    json_graph_node retained_child{};
+    json_graph_node retained_root{};
+    retained_root.next = &retained_child;
+    auto* retained = &retained_root;
+    malformed([&] {
+        luminpack::reference_json_reader<utf8> failed(bytes(
+            "{\"$id\":0,\"Next\":{\"$id\":1,\"Next\":{\"$id\":2,\"Value\":7}},\"Value\":"), {}, failed_state);
+        json_graph_node_codec::read_into(failed, retained);
+    }, "Reject a truncated parent after its child and grandchild are decoded.");
+    require(retained == &retained_root && retained->next == &retained_child && retained_child.next == nullptr,
+        "Rolling back a failed parent cannot leave new references in its caller-owned child.");
+}
 }
 
 int main(int argc, char** argv)
@@ -686,6 +879,7 @@ int main(int argc, char** argv)
         validation();
         custom_json();
         generated_opening_heads();
+        tracked_json_graphs();
         std::cout << "LuminPack C++ JSON wire checks passed.\n";
         return 0;
     }

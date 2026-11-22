@@ -99,6 +99,31 @@ inline version_state::scope version_transaction(version_state& state) noexcept
     return version_state::scope(state);
 }
 
+template<class ReferenceState>
+class reference_version_scope
+{
+public:
+    reference_version_scope(version_state& state, ReferenceState& references) noexcept
+        : version_(state), references_(references) {}
+
+    void commit() noexcept
+    {
+        version_.commit();
+        references_.commit();
+    }
+
+private:
+    version_state::scope version_;
+    typename ReferenceState::scope references_;
+};
+
+template<class ReferenceState>
+requires std::same_as<ReferenceState, reference_read_state> || std::same_as<ReferenceState, reference_write_state>
+inline reference_version_scope<ReferenceState> version_transaction(version_state& state, ReferenceState& references) noexcept
+{
+    return reference_version_scope<ReferenceState>(state, references);
+}
+
 template<class Codec, class... Context>
 decltype(auto) read_codec(reader& input, Context&... context)
 {
@@ -108,6 +133,15 @@ decltype(auto) read_codec(reader& input, Context&... context)
         return Codec::read(input);
 }
 
+template<class Codec>
+decltype(auto) read_codec(reader& input, version_state& state, reference_read_state& references)
+{
+    if constexpr (requires { Codec::read(input, state, references); })
+        return Codec::read(input, state, references);
+    else
+        return detail::read_codec<Codec>(input, state);
+}
+
 template<class Codec, class Value, class... Context>
 void write_codec(writer& output, const Value& value, Context&... context)
 {
@@ -115,6 +149,15 @@ void write_codec(writer& output, const Value& value, Context&... context)
         Codec::write(output, value, context...);
     else
         Codec::write(output, value);
+}
+
+template<class Codec, class Value>
+void write_codec(writer& output, const Value& value, version_state& state, reference_write_state& references)
+{
+    if constexpr (requires { Codec::write(output, value, state, references); })
+        Codec::write(output, value, state, references);
+    else
+        detail::write_codec<Codec>(output, value, state);
 }
 }
 }
