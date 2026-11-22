@@ -54,6 +54,9 @@ dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Rel
 # Platform adapters (AspNetCore, Avalonia, Drawing, Maui, MonoGame, SkiaSharp, Wpf)
 dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlatform=Drawing
 
+# Public JSON contracts with System.Text.Json and Newtonsoft.Json
+dotnet run --project tests/LuminPack.Tests.JsonAdapters -c Release
+
 # Release candidate: packages, API comparison and installation (never publishes)
 pwsh -File .github/scripts/release.ps1 -ApiBaseRef HEAD
 

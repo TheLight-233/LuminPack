@@ -357,13 +357,15 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter "Lumi
 
 ## 🧩 平台扩展包
 
-为引擎和 UI 类型提供开箱即用支持的可选扩展。核心库不依赖其中任何一个；目前以源码项目的形式引用。
+可选扩展支持平台类型和对外 JSON 契约。平台项目以源码形式引用，JSON 适配包还可单独打包。
 
 | 包 | 新增支持 |
 | --- | --- |
 | 🎮 [LuminPack.Unity](modules/LuminPack.Unity.cn.md) | 向量、颜色、包围盒、矩阵、曲线、渐变 |
 | 🔥 [LuminPack.Burst](modules/LuminPack.Burst.cn.md) | Unity 上的 Burst 加速内核 |
 | 🌐 [LuminPack.AspNetCore](modules/LuminPack.AspNetCore.cn.md) | MVC 与 Minimal API 二进制请求体、HTTP 值类型 |
+| [LuminPack.SystemTextJson](modules/LuminPack.SystemTextJson.cn.md) | 使用 System.Text.Json 元数据读写对外 JSON 契约 |
+| [LuminPack.NewtonsoftJson](modules/LuminPack.NewtonsoftJson.cn.md) | 使用 Newtonsoft.Json 设置读写对外 JSON 契约 |
 | 🖼️ [LuminPack.Avalonia](modules/LuminPack.Avalonia.cn.md) | 几何、颜色、矩阵 |
 | 🎨 [LuminPack.Drawing](modules/LuminPack.Drawing.cn.md) | `System.Drawing.Color` |
 | 📱 [LuminPack.Maui](modules/LuminPack.Maui.cn.md) | MAUI Graphics 几何与颜色 |

@@ -357,13 +357,15 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter "Lumi
 
 ## 🧩 Platform Packages
 
-Optional add-ons with ready-made support for engine and UI types. The core library depends on none of them; for now they are referenced as source projects.
+Optional add-ons cover platform types and external JSON contracts. Platform projects are referenced from source. The JSON adapters can also be packed separately.
 
 | Package | Adds support for |
 | --- | --- |
 | 🎮 [LuminPack.Unity](src/LuminPack.Unity/README.md) | Vectors, colors, bounds, matrices, curves, gradients |
 | 🔥 [LuminPack.Burst](src/LuminPack.Burst/README.md) | Burst-accelerated kernels for Unity |
 | 🌐 [LuminPack.AspNetCore](src/LuminPack.AspNetCore/README.md) | MVC and Minimal API binary bodies, HTTP value types |
+| [LuminPack.SystemTextJson](src/LuminPack.SystemTextJson/README.md) | External JSON contracts with System.Text.Json metadata |
+| [LuminPack.NewtonsoftJson](src/LuminPack.NewtonsoftJson/README.md) | External JSON contracts with Newtonsoft.Json settings |
 | 🖼️ [LuminPack.Avalonia](src/LuminPack.Avalonia/README.md) | Geometry, colors, matrices |
 | 🎨 [LuminPack.Drawing](src/LuminPack.Drawing/README.md) | `System.Drawing.Color` |
 | 📱 [LuminPack.Maui](src/LuminPack.Maui/README.md) | MAUI Graphics geometry and colors |

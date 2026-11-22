@@ -94,3 +94,5 @@ Token 模式写以终止符结束的字符串，没有 `null` 标记；`null` �
 - 读取时执行 `MaxJsonDepth`（默认 1024）。处理外部来源的 JSON 请开启 `ValidateJsonSyntax`。
 - `$type`、`$value`、`$id`、`$ref` 是保留名。
 - 二进制多维数组格式只支持下界为 0。NativeAOT 无法创建下界非 0 的数组，因此在 NativeAOT 上读取这种 JSON 会抛出 `PlatformNotSupportedException`。
+
+如需和其他序列化器交换对外 JSON 契约，可使用 [System.Text.Json](modules/LuminPack.SystemTextJson.cn.md) 或 [Newtonsoft.Json](modules/LuminPack.NewtonsoftJson.cn.md) 适配包，把 LuminPack 模型映射成对外 DTO。

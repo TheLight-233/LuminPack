@@ -94,3 +94,5 @@ The default text encoding is UTF-16; select UTF-8 with `[LuminPackOption(StringE
 - Reading enforces `MaxJsonDepth` (1024 by default). Enable `ValidateJsonSyntax` for JSON from outside sources.
 - `$type`, `$value`, `$id` and `$ref` are reserved names.
 - The binary multidimensional format supports only zero lower bounds. NativeAOT cannot create arrays with non-zero lower bounds, so reading such JSON there throws `PlatformNotSupportedException`.
+
+To exchange a public JSON contract with another serializer, project the LuminPack model onto a DTO using the [System.Text.Json](../src/LuminPack.SystemTextJson/README.md) or [Newtonsoft.Json](../src/LuminPack.NewtonsoftJson/README.md) adapter.

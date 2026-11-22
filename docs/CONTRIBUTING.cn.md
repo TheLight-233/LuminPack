@@ -54,6 +54,9 @@ dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Rel
 # 平台适配（AspNetCore、Avalonia、Drawing、Maui、MonoGame、SkiaSharp、Wpf）
 dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlatform=Drawing
 
+# System.Text.Json 和 Newtonsoft.Json 对外契约
+dotnet run --project tests/LuminPack.Tests.JsonAdapters -c Release
+
 # 发布候选：打包、API 比较和安装检查（不会发布）
 pwsh -File .github/scripts/release.ps1 -ApiBaseRef HEAD
 
