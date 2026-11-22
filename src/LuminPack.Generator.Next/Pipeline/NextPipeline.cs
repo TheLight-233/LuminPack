@@ -89,15 +89,20 @@ internal static partial class NextPipeline
                 return;
 
             var roots = new List<TypeModel>();
+            var custom = new List<(string Id, string Type, bool Reference, bool Json)>();
             foreach (ModeledPayload payload in input.Left)
+            {
                 if (payload.Result.IsComplete && payload.Result.Model is { } model)
                     roots.Add(model);
-            if (roots.Count != 0)
+                if (payload.CustomContract is { } registration)
+                    custom.Add(registration);
+            }
+            if (roots.Count != 0 || custom.Count != 0)
             {
                 GeneratorOptions options = GeneratorOptionsFactory.From(compilation);
                 production.AddSource("LuminPackGen.CppContracts.g.cs",
                     CppContractExport.Render(roots, options, model => TypeModelFactory.TryCreateCppNativeStorage(model, compilation, options),
-                        TypeModelFactory.CreateCppDenseTupleProof(compilation, options),
+                        TypeModelFactory.CreateCppDenseTupleProof(compilation, options), custom, TypeModelFactory.AssemblyPolicy(compilation),
                         production.CancellationToken));
             }
         });
@@ -169,12 +174,14 @@ internal static partial class NextPipeline
                 compilerUnion ? ModelResult.Unsupported("compiler Union uses a shared formatter owner") :
                 TypeModelFactory.TryCreate(symbol, compilation, options);
             // A valid Custom declaration registers its own static operations.
-            string? custom = declarationErrors ? null :
-                TypeModelFactory.CustomRegistration(symbol, options, out bool customJson) is { } customType
-                    ? CustomRegistrationSource.Block(customType, customJson) : null;
+            bool customJson = false;
+            string? customType = declarationErrors ? null : TypeModelFactory.CustomRegistration(symbol, options, out customJson);
+            string? custom = customType == null ? null : CustomRegistrationSource.Block(customType, customJson);
             return new ModeledPayload(result, options, diagnostics, custom,
                 result.IsComplete ? OperationUsageAnalysis.Declaration(symbol, compilation) : OperationReach.Empty,
-                formatterRoot, formatterRoot != null ? TypeModelFactory.ReachKey(symbol) : null);
+                formatterRoot, formatterRoot != null ? TypeModelFactory.ReachKey(symbol) : null,
+                customContract: errors || customType == null ? null :
+                    (TypeModelFactory.ReachKey(symbol)!, customType, symbol.IsReferenceType, customJson));
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
@@ -258,7 +265,8 @@ internal static partial class NextPipeline
             if (TypeModelFactory.ExternalCustomRegistration(type, compilation, options, out bool customJson) is { } customType)
             {
                 payloads.Add(new ModeledPayload(ModelResult.Unsupported("Custom owns its formatter"), options,
-                    Array.Empty<DiagnosticInfo>(), CustomRegistrationSource.Block(customType, customJson)));
+                    Array.Empty<DiagnosticInfo>(), CustomRegistrationSource.Block(customType, customJson),
+                    customContract: (TypeModelFactory.ReachKey(type)!, customType, type.IsReferenceType, customJson)));
                 continue;
             }
             INamedTypeSymbol complete = TypeModelFactory.InView(type, view);
@@ -349,8 +357,10 @@ internal static partial class NextPipeline
         /// <param name="reach">The payload identities the declaration reaches.</param>
         /// <param name="formatterRoot">The optional shared formatter for the declaration.</param>
         /// <param name="formatterKey">The declaration identity used by operation reachability.</param>
+        /// <param name="customContract">The opaque identity and operations used by the C++ contract export.</param>
         internal ModeledPayload(ModelResult result, GeneratorOptions options, DiagnosticInfo[] diagnostics, string? customRegistration = null,
-            OperationReach? reach = null, MemberModel? formatterRoot = null, string? formatterKey = null)
+            OperationReach? reach = null, MemberModel? formatterRoot = null, string? formatterKey = null,
+            (string Id, string Type, bool Reference, bool Json)? customContract = null)
         {
             Reach = reach ?? OperationReach.Empty;
             CustomRegistration = customRegistration;
@@ -359,6 +369,7 @@ internal static partial class NextPipeline
             Options = options;
             FormatterRoot = formatterRoot;
             FormatterKey = formatterKey;
+            CustomContract = customContract;
         }
 
         internal ModelResult Result
@@ -388,6 +399,9 @@ internal static partial class NextPipeline
             get;
         }
 
+        /// <summary>The validated Custom identity and registered operations, or null.</summary>
+        internal (string Id, string Type, bool Reference, bool Json)? CustomContract { get; }
+
         /// <summary>The shared formatter root published by a compiler Union declaration.</summary>
         internal MemberModel? FormatterRoot { get; }
 
@@ -396,7 +410,7 @@ internal static partial class NextPipeline
 
         /// <inheritdoc/>
         public bool Equals(ModeledPayload other) => Result.Equals(other.Result) && Options.Equals(other.Options) &&
-            CustomRegistration == other.CustomRegistration && Reach.Equals(other.Reach) &&
+            CustomRegistration == other.CustomRegistration && CustomContract == other.CustomContract && Reach.Equals(other.Reach) &&
             Equals(FormatterRoot, other.FormatterRoot) && FormatterKey == other.FormatterKey &&
             SameDiagnostics(Diagnostics, other.Diagnostics);
 

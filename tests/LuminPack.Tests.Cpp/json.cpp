@@ -467,6 +467,15 @@ void custom_json()
     const auto written = write_json_document<coordinate_codec>(buffer, expected);
     require(std::ranges::equal(written, bytes(u"[-45,72]")), "Write a Custom UTF-16 JSON representation.");
     require(read_json_document<coordinate_codec>(written) == expected, "Read a Custom UTF-16 JSON representation.");
+
+    using registered = luminpack::detail::registered_custom_json_codec<coordinate, coordinate_codec>;
+    require(read_json_document<registered>(written) == expected, "The registered Custom codec owns the complete JSON value.");
+    malformed([] {
+        (void)read_json_document<registered, json_encoding::utf8>(bytes("[-45,72]"));
+    }, "The automatic Custom registration applies only to UTF-16 JSON.");
+    malformed([] {
+        (void)read_json_document<luminpack::detail::registered_custom_json_codec<coordinate>>(bytes(u"[-45,72]"));
+    }, "A Binary-only Custom contract has no registered JSON reader.");
 }
 
 void validation()

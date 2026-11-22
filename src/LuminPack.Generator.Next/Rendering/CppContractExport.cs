@@ -18,16 +18,19 @@ internal static class CppContractExport
 {
     internal const string MetadataKey = "LuminPack.Cpp.Contract.v1";
 
-    /// <summary>Renders contract rows in a stable type-identity order.</summary>
+    /// <summary>Renders contract rows in a stable order.</summary>
     /// <param name="roots">The complete payloads already analyzed by Next.</param>
     /// <param name="options">The compiled generator profile and target capabilities.</param>
     /// <param name="getNativeStorage">The optional native layout analysis for raw structs.</param>
     /// <param name="hasDenseTupleStorage">The layout proof for raw CLR tuple formatters.</param>
+    /// <param name="custom">The validated registrations whose representations are application-owned.</param>
+    /// <param name="assemblyPolicy">The document policy for the registered fallback.</param>
     /// <param name="cancellationToken">Cancels the projection.</param>
     /// <returns>Source containing assembly metadata only.</returns>
     internal static string Render(IEnumerable<TypeModel> roots, GeneratorOptions options,
         Func<StructModel, (int Strategy, FormatterStorageModel Layout)?> getNativeStorage,
         Func<FormatterModel, bool> hasDenseTupleStorage,
+        IEnumerable<(string Id, string Type, bool Reference, bool Json)> custom, WirePolicy assemblyPolicy,
         CancellationToken cancellationToken)
     {
         TypeModel[] declarations = roots.ToArray();
@@ -42,17 +45,31 @@ internal static class CppContractExport
         foreach (TypeModel model in contracts.Values)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            json.Clear();
             var orderedRuns = model is RecordModel && !model.Policy.TrackReferences &&
                 RenderModelFactory.Create(model, options, json: true) is { } jsonModel
                     ? JsonEmitter.FindGeneratedInt32Runs(jsonModel)
                     : null;
-            Value(json, Contract(model, model is StructModel value ? getNativeStorage(value) : null, orderedRuns, hasDenseTupleStorage));
+            Append(Contract(model, model is StructModel value ? getNativeStorage(value) : null, orderedRuns, hasDenseTupleStorage));
+        }
+        var ids = new HashSet<string>(contracts.Keys, StringComparer.Ordinal);
+        foreach (var declaration in custom.OrderBy(item => item.Id, StringComparer.Ordinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (ids.Add(declaration.Id))
+                Append(Object(("id", declaration.Id), ("type", declaration.Type), ("kind", "Custom"),
+                    ("typeParameters", Array.Empty<string>()), ("profile", Profile(assemblyPolicy)),
+                    ("customReference", declaration.Reference), ("customJson", declaration.Json)));
+        }
+        return source.ToString();
+
+        void Append(object contract)
+        {
+            json.Clear();
+            Value(json, contract);
             source.Append("[assembly: global::System.Reflection.AssemblyMetadataAttribute(\"")
                 .Append(MetadataKey).Append("\", ")
                 .Append(SymbolDisplay.FormatLiteral(json.ToString(), true)).Append(")]\n");
         }
-        return source.ToString();
     }
 
     /// <summary>Retains each reachable normalized definition once.</summary>

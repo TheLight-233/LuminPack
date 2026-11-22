@@ -454,8 +454,36 @@ struct json_custom_codec
     static void write(auto& output, const T& value) { Write(output, value); }
 };
 
+/// An application specializes this for an exported Custom identity and supplies its binary and optional JSON codec types.
+template<json_name Identity>
+struct custom_binding;
+
 namespace detail
 {
+template<class T, class Codec = void>
+struct registered_custom_json_codec
+{
+    using value_type = T;
+
+    template<json_encoding Encoding>
+    static T read(basic_json_reader<Encoding>& input)
+    {
+        if constexpr (Encoding == json_encoding::utf16 && !std::same_as<Codec, void>)
+            return Codec::read(input);
+        else
+            throw wire_error("No Custom JSON formatter is registered for this encoding.");
+    }
+
+    template<json_encoding Encoding>
+    static void write(basic_json_writer<Encoding>& output, const T& value)
+    {
+        if constexpr (Encoding == json_encoding::utf16 && !std::same_as<Codec, void>)
+            Codec::write(output, value);
+        else
+            throw wire_error("No Custom JSON formatter is registered for this encoding.");
+    }
+};
+
 template<class Value, class ReadCase>
 Value read_json_union_envelope(auto& input, ReadCase read_case)
 {

@@ -92,6 +92,7 @@ internal sealed partial class CppEmitter
             "Record" => EmitRecord(contract, name, binary),
             "Union" => rttiBases == null ? EmitUnion(contract, name, binary) : EmitRttiUnion(contract, name, binary),
             "Struct" => EmitStruct(contract, name, binary),
+            "Custom" => EmitCustom(contract, name),
             _ => throw Missing(type, "this value-type storage model")
         };
         building.Remove(key);
@@ -297,7 +298,7 @@ internal sealed partial class CppEmitter
             if (bare is "string" or "System.String" || bare.EndsWith("[]", StringComparison.Ordinal) ||
                 bare.StartsWith("System.Collections.Generic.List<", StringComparison.Ordinal) ||
                 bare.StartsWith("System.Collections.Generic.Dictionary<", StringComparison.Ordinal) ||
-                (contracts.TryGetValue(bare, out JsonElement reference) && Text(reference, "kind") is "Record" or "Union"))
+                (contracts.TryGetValue(bare, out JsonElement reference) && IsReferenceContract(reference)))
                 type = bare;
         }
         if (type is "string" or "System.String")
@@ -344,6 +345,16 @@ internal sealed partial class CppEmitter
         }
         throw Missing(label, "the type " + rawType);
     }
+
+    /// <summary>Identifies contracts whose nullable reference uses the same registration as the nonnullable spelling.</summary>
+    /// <param name="contract">The compiler-projected declaration.</param>
+    /// <returns>Whether the projected CLR declaration is a reference type.</returns>
+    private static bool IsReferenceContract(JsonElement contract) => Text(contract, "kind") switch
+    {
+        "Record" or "Union" => true,
+        "Custom" => Flag(contract, "customReference"),
+        _ => false
+    };
 
     /// <summary>Emits a metadata enum without changing its integral width or named constants.</summary>
     /// <param name="enumeration">The ordered enum fields.</param>
