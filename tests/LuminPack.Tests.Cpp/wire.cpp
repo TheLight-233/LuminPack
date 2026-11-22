@@ -518,21 +518,26 @@ void short_utf8_records(const std::filesystem::path& directory)
 {
     constexpr auto profile = luminpack::string_profile::utf8_length;
     using strings = luminpack::list_codec<luminpack::string_codec<profile>>;
-    const auto source = fixture(directory, "short-ascii.bin");
-    strings::value_type expected(std::in_place);
-    for (std::size_t length = 4; length <= 16; ++length)
-        expected->emplace_back(std::in_place, length, u'x');
-    std::vector<byte> fixture_output(source.size(), byte{204});
-    writer output(fixture_output);
-    strings::write(output, expected);
-    check(std::ranges::equal(output.written(), source), "Write .NET short ASCII fixture.");
+    const auto write_fixture = [&](const char* name, std::size_t first, std::size_t last)
+    {
+        const auto source = fixture(directory, name);
+        strings::value_type expected(std::in_place);
+        for (auto length = first; length <= last; ++length)
+            expected->emplace_back(std::in_place, length, u'x');
+        std::vector<byte> fixture_output(source.size(), byte{204});
+        writer output(fixture_output);
+        strings::write(output, expected);
+        check(std::ranges::equal(output.written(), source), name);
+    };
+    write_fixture("short-ascii.bin", 4, 16);
+    write_fixture("medium-ascii.bin", 17, 32);
 
     constexpr std::size_t header_size = 8;
-    for (std::size_t length = 3; length <= 17; ++length)
+    for (std::size_t length = 3; length <= 33; ++length)
     {
-        alignas(16) std::array<char16_t, 18> characters{};
+        alignas(32) std::array<char16_t, 34> characters{};
         const auto units = std::span(characters).subspan(1, length);
-        constexpr std::array pattern{u'\0', u'"', u'\\', u'\n', u'\x7f', u'~', u'x', u'Z'};
+        constexpr std::array pattern{u'\0', u'"', u'\\', u'\n', u'\x7f', u'~', u'x', u'Z', u';', u'@', u'}'};
         for (std::size_t index = 0; index < length; ++index)
             units[index] = pattern[index % pattern.size()];
         const auto text = std::u16string_view(units.data(), length);
@@ -546,15 +551,15 @@ void short_utf8_records(const std::filesystem::path& directory)
             input.require_end();
         };
 
-        std::array<byte, 28> storage;
+        std::array<byte, 44> storage;
         storage.fill(byte{204});
         const auto window = std::span(storage).subspan(1, header_size + length);
-        output = writer(window);
+        writer output(window);
         luminpack::write_string(output, profile, text);
         check_ascii(output.written());
         check(storage.front() == byte{204} && storage[1 + window.size()] == byte{204}, "Short ASCII write bounds.");
 
-        std::array<char16_t, 32> alias{};
+        std::array<char16_t, 48> alias{};
         std::ranges::copy(text, alias.begin() + 1);
         output = writer(std::as_writable_bytes(std::span(alias)).subspan(1, window.size()));
         luminpack::write_string(output, profile, std::u16string_view(alias.data() + 1, length));
@@ -569,18 +574,23 @@ void short_utf8_records(const std::filesystem::path& directory)
             check(output.written().empty() && std::ranges::all_of(storage, [](byte value) { return value == byte{204}; }),
                 "Publishes a failed short UTF-8 write.");
         };
-        units.back() = 0x80;
-        verify_failure(std::type_identity<std::length_error>{});
-
         const auto fallback = std::span(storage).subspan(1, window.size() + 1);
-        output = writer(fallback);
-        luminpack::write_string(output, profile, text);
-        reader input(output.written());
-        check(input.read<std::int32_t>() == static_cast<std::int32_t>(length + 1) &&
-            input.read<std::int32_t>() == static_cast<std::int32_t>(length), "Non-ASCII short UTF-8 length headers.");
-        check(std::ranges::equal(input.take(length - 1), text.substr(0, length - 1), ascii_byte) &&
-            input.read<std::uint8_t>() == 0xc2 && input.read<std::uint8_t>() == 0x80, "Non-ASCII short UTF-8 payload bytes.");
-        input.require_end();
+        for (std::size_t index = 0; index < length; ++index)
+        {
+            const auto original = units[index];
+            units[index] = 0x80;
+            verify_failure(std::type_identity<std::length_error>{});
+            output = writer(fallback);
+            luminpack::write_string(output, profile, text);
+            reader input(output.written());
+            check(input.read<std::int32_t>() == static_cast<std::int32_t>(length + 1) &&
+                input.read<std::int32_t>() == static_cast<std::int32_t>(length), "Non-ASCII short UTF-8 length headers.");
+            check(std::ranges::equal(input.take(index), text.substr(0, index), ascii_byte) &&
+                input.read<std::uint8_t>() == 0xc2 && input.read<std::uint8_t>() == 0x80 &&
+                std::ranges::equal(input.take(length - index - 1), text.substr(index + 1), ascii_byte), "Non-ASCII short UTF-8 payload bytes.");
+            input.require_end();
+            units[index] = original;
+        }
 
         units.back() = 0xd800;
         verify_failure(std::type_identity<std::invalid_argument>{});

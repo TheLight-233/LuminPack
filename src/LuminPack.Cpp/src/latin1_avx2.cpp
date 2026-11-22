@@ -31,6 +31,15 @@ void store_narrowed(std::byte* destination, __m256i first, __m256i second) noexc
     std::memcpy(destination, &ordered, sizeof(ordered));
 }
 
+void store_narrowed_halves(std::byte* destination, std::size_t tail, __m256i first, __m256i last) noexcept
+{
+    const auto packed = narrow_validated(first, last);
+    const auto low = _mm256_castsi256_si128(packed);
+    const auto high = _mm256_extracti128_si256(packed, 1);
+    std::memcpy(destination, &low, sizeof(low));
+    std::memcpy(destination + tail, &high, sizeof(high));
+}
+
 bool narrow_block(const char16_t* source, std::byte* destination) noexcept
 {
     const auto first = load256(source);
@@ -49,6 +58,17 @@ void widen_block(const std::byte* source, char16_t* destination) noexcept
     std::memcpy(destination, &first, sizeof(first));
     std::memcpy(destination + 16, &second, sizeof(second));
 }
+}
+
+bool try_encode_medium_ascii_avx2(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    const auto tail = source.size() - 16;
+    const auto first = load256(source.data());
+    const auto last = load256(source.data() + tail);
+    if (_mm256_testz_si256(_mm256_or_si256(first, last), _mm256_set1_epi16(-128)) == 0)
+        return false;
+    store_narrowed_halves(destination.data(), tail, first, last);
+    return true;
 }
 
 bool narrow_latin1_avx2(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
@@ -91,11 +111,7 @@ std::int32_t write_medium_utf16_payload_avx2(std::span<const char16_t> source, s
         const auto last_block = load256(chars + last);
         if (is_latin1(_mm256_or_si256(first, last_block)))
         {
-            const auto packed = narrow_validated(first, last_block);
-            const auto low = _mm256_castsi256_si128(packed);
-            const auto high = _mm256_extracti128_si256(packed, 1);
-            std::memcpy(payload, &low, sizeof(low));
-            std::memcpy(payload + last, &high, sizeof(high));
+            store_narrowed_halves(payload, last, first, last_block);
             return raw_size | 1;
         }
         std::memcpy(payload, chars, 32);

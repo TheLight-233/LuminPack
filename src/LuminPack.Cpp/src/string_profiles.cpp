@@ -228,18 +228,13 @@ bool is_ascii(__m128i chars) noexcept
     return _mm_movemask_epi8(_mm_cmpeq_epi16(high, _mm_setzero_si128())) == 0xffff;
 }
 
-bool try_write_short_ascii_utf8(writer& output, std::u16string_view text)
+bool try_encode_short_ascii(std::span<const char16_t> text, std::span<std::byte> payload) noexcept
 {
-    constexpr auto header_size = sizeof(std::uint64_t);
     const auto length = text.size();
-    if (length < 4 || length > 16 || output.remaining() < header_size + length || text.front() > 0x7f)
-        return false;
-
-    writer next = output;
-    const auto record = next.reserve(header_size + length);
-    const auto payload = record.subspan(header_size);
-    if (detail::overlaps(std::as_bytes(std::span(text.data(), length)), payload))
-        return false;
+#if defined(LUMINPACK_CPP_AVX2)
+    if (length > 16)
+        return detail::try_encode_medium_ascii(text, payload);
+#endif
 
     // Validate both bounded loads before storing either overlapping group.
     if (length < 8)
@@ -273,6 +268,27 @@ bool try_write_short_ascii_utf8(writer& output, std::u16string_view text)
         std::memcpy(payload.data(), &head, sizeof(head));
         std::memcpy(payload.data() + tail, &end, sizeof(end));
     }
+    return true;
+}
+
+bool try_write_short_ascii_utf8(writer& output, std::u16string_view text)
+{
+    constexpr auto header_size = sizeof(std::uint64_t);
+#if defined(LUMINPACK_CPP_AVX2)
+    constexpr std::size_t max_length = 32;
+#else
+    constexpr std::size_t max_length = 16;
+#endif
+    const auto length = text.size();
+    if (length < 4 || length > max_length || output.remaining() < header_size + length || text.front() > 0x7f)
+        return false;
+
+    writer next = output;
+    const auto record = next.reserve(header_size + length);
+    const auto payload = record.subspan(header_size);
+    const auto source = std::span(text.data(), length);
+    if (detail::overlaps(std::as_bytes(source), payload) || !try_encode_short_ascii(source, payload))
+        return false;
 
     // The byte count and UTF-16 code-unit count are equal for ASCII.
     const auto count = static_cast<std::uint64_t>(length);

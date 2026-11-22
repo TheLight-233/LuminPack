@@ -1,4 +1,5 @@
 #include "latin1.h"
+#include "cpu_isa.h"
 
 #include <cstring>
 
@@ -124,14 +125,28 @@ void widen_block(const std::byte* source, char16_t* destination) noexcept
 #endif
 }
 
+#if defined(LUMINPACK_CPP_AVX2)
+bool has_avx2() noexcept
+{
+    return available_isa().avx2;
+}
+#endif
+
+#if defined(LUMINPACK_CPP_AVX512BW)
+bool has_avx512bw() noexcept
+{
+    return available_isa().avx512bw;
+}
+#endif
+
 bool narrow_latin1(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
 {
 #if defined(LUMINPACK_CPP_AVX512BW)
-    if (source.size() >= 64 && available_isa().avx512bw)
+    if (source.size() >= 64 && has_avx512bw())
         return narrow_latin1_avx512(source, destination);
 #endif
 #if defined(LUMINPACK_CPP_AVX2)
-    if (source.size() >= 32 && available_isa().avx2)
+    if (source.size() >= 32 && has_avx2())
         return narrow_latin1_avx2(source, destination);
 #endif
 #if defined(LUMINPACK_CPP_SSE2)
@@ -152,7 +167,7 @@ bool narrow_latin1(std::span<const char16_t> source, std::span<std::byte> destin
 std::int32_t write_medium_utf16_payload(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
 {
 #if defined(LUMINPACK_CPP_AVX2)
-    if (available_isa().avx2)
+    if (has_avx2())
         return write_medium_utf16_payload_avx2(source, destination);
 #endif
 
@@ -166,17 +181,24 @@ std::int32_t write_medium_utf16_payload(std::span<const char16_t> source, std::s
 }
 #endif
 
+#if defined(LUMINPACK_CPP_AVX2)
+bool try_encode_medium_ascii(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    return has_avx2() && try_encode_medium_ascii_avx2(source, destination);
+}
+#endif
+
 void widen_latin1(std::span<const std::byte> source, std::span<char16_t> destination) noexcept
 {
 #if defined(LUMINPACK_CPP_AVX512BW)
-    if (source.size() >= 64 && available_isa().avx512bw)
+    if (source.size() >= 64 && has_avx512bw())
     {
         widen_latin1_avx512(source, destination);
         return;
     }
 #endif
 #if defined(LUMINPACK_CPP_AVX2)
-    if (source.size() >= 32 && available_isa().avx2)
+    if (source.size() >= 32 && has_avx2())
     {
         widen_latin1_avx2(source, destination);
         return;
