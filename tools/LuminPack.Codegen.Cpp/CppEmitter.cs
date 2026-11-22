@@ -59,8 +59,10 @@ internal sealed partial class CppEmitter
         if (binaryProfile.HasValue)
             emitter.code.Append("_binary_").Append(Profiles[binaryProfile.Value]);
         emitter.code.Append("\n{\n");
+        emitter.AnalyzeRecursiveRecords(declaration);
         JsonElement profile = declaration.GetProperty("profile");
         Binding binding = emitter.BindContract(declaration, binaryProfile ?? profile.GetProperty("binary").GetInt32());
+        emitter.EmitRecursiveRecords();
         emitter.EmitDeferredRecordsAndRttiUnions();
         emitter.EmitRoot(binding, profile);
         emitter.code.Append("}\n");
@@ -103,6 +105,8 @@ internal sealed partial class CppEmitter
         string name = binary == declared ? storageName : storageName + "_profile" + binary.ToString(CultureInfo.InvariantCulture);
         if (Flag(profile, "trackReferences"))
             return DeclareTrackedRecord(contract, key, name, storageName);
+        if (recursiveRecords.Contains(type))
+            return DeclareRecursiveRecord(contract, key, name);
 
         if (!building.Add(key))
             throw Missing(type, "recursive type graphs");
@@ -191,15 +195,23 @@ internal sealed partial class CppEmitter
             EmitTrackedRecordCodec(name, trackedStorage, profile, version, binaryMembers, jsonMembers);
             return new Binding(storage + "*", name + "_binary", name + "_json", RecordStorage: storage);
         }
+        string type = Normalize(Text(contract, "type"));
+        bool recursive = recursiveRecords.Contains(type);
+        string binary = name + (recursive ? "_binary_body" : "_binary");
         if (version)
-            Alias(name + "_binary", "luminpack::version_codec", new[] { name, Profile(profile) }.Concat(binaryMembers));
+            Alias(binary, "luminpack::version_codec", new[] { name, Profile(profile) }.Concat(binaryMembers));
         else
-            Alias(name + "_binary", "luminpack::record_codec", new[] { name }.Concat(binaryMembers));
+            Alias(binary, "luminpack::record_codec", new[] { name }.Concat(binaryMembers));
         int[]? orderedRuns = contract.TryGetProperty("jsonInt32Runs", out JsonElement runs) && runs.ValueKind == JsonValueKind.Array
             ? runs.EnumerateArray().Select(static item => item.GetInt32()).ToArray()
             : null;
         EmitJsonBody(name + "_json_body", name, jsonMembers, orderedRuns,
             generatedIntegerProperties: ReadGeneratedJsonIntegerProperties(contract));
+        if (recursive)
+        {
+            recursiveRecordBodies.Add(name);
+            return generated[(type, profile)];
+        }
         Alias(name + "_json", "luminpack::json_optional_codec<" + name + "_json_body>");
         code.Append('\n');
         return new Binding("std::optional<" + name + ">", name + "_binary", name + "_json",
@@ -449,7 +461,7 @@ internal sealed partial class CppEmitter
     /// <param name="profile">The .NET declaration profile.</param>
     private void EmitRoot(Binding binding, JsonElement profile)
     {
-        Alias("root_binary", binding.Binary);
+        Alias("root_binary", RecursiveRootBinary(binding, profile));
         Alias("root_json", binding.Json);
         Alias("root_value", binding.Type);
         code.Append("inline constexpr bool root_requires_reference_graph = ")

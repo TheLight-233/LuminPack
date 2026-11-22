@@ -503,6 +503,7 @@ void write_tagged_array(writer& output, std::optional<std::span<const T>> value)
 
 #include "detail/reference_state.h"
 #include "detail/version_state.h"
+#include "detail/recursive_codecs.h"
 #include "detail/collections.h"
 #include "detail/storage_codecs.h"
 #include "detail/nullable.h"

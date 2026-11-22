@@ -165,6 +165,7 @@ internal static class CppContractExport
             ("namespace", model.Identity.Namespace), ("containingTypes", model.Identity.ContainingTypes),
             ("typeParameters", model.Identity.TypeParameters), ("kind", model.Kind.ToString()),
             ("profile", Profile(model.Policy)), ("versioned", version != null), ("dynamicVersion", version?.Dynamic),
+            ("recursive", record?.Recursive),
             ("storageKind", value?.Storage.ToString()), ("storage", Storage(value?.StoragePlan)),
             ("nativeStrategy", native?.Strategy), ("nativeStorage", Storage(native?.Layout)),
             ("jsonInt32Runs", orderedRuns), ("jsonGeneratedIntegerProperties", generatedIntegerProperties),

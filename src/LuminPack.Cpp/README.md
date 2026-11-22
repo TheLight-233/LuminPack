@@ -153,6 +153,8 @@ The emitter supports positional and Version class contracts, including tracked r
 
 The emitter maps C# `nint` and `nuint` to `std::intptr_t` and `std::uintptr_t` in scalar fields and supported collections. Binary preserves the managed native width, including inside length-delimited Version fields. Use matching 32-bit or 64-bit endpoints for Binary. JSON uses decimal integer tokens and follows the default managed 64-bit parse and native-width conversion.
 
+Ordinary recursive classes use `std::unique_ptr` for each recursive node, including values reached through List and Dictionary. Acyclic enclosing classes keep their ordinary value type. Default and Version use the Binary and JSON representations of their managed declarations. A Default Binary read follows the root's declared recursion depth. The native stack guard limits recursive record traversal to 512 levels. Generation diagnoses ordinary recursion combined with Union or tracked-reference codecs, an independently bounded descendant, or a finite Binary depth across isolated Version reads.
+
 ## Verify the benchmark models
 
 The integration test uses the actual `SimpleClass.Create()` and `CharacterSaveData.Create()` factories from the managed benchmark project. Emit the .NET documents and generate both headers into the same directory:

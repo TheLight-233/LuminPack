@@ -153,6 +153,8 @@ dotnet run --project tools/LuminPack.Codegen.Cpp -- generate .tmp/contracts.json
 
 标量字段及受支持的集合中的 C# `nint` 和 `nuint` 分别映射为 `std::intptr_t` 和 `std::uintptr_t`。二进制保留 C# 的原生位宽，带长度前缀的 Version 字段也使用这一位宽。二进制互通的两端须同为 32 位或同为 64 位。JSON 使用十进制整数，按 C# 默认行为解析为 64 位整数后转换为原生位宽。
 
+普通递归类用 `std::unique_ptr` 持有每个递归节点，包括 List 和 Dictionary 中的值。外围的非递归类沿用普通值类型。Default 和 Version 的 Binary 与 JSON 表示沿用托管声明。Default 的 Binary 读取器使用根类型声明的递归深度，原生栈保护将递归记录遍历限制为 512 层。普通递归图如果包含 Union 或引用跟踪 codec，或需要子类型独立的深度限制、隔离的 Version 读取中的有限 Binary 深度，生成器会给出诊断。
+
 ## 验证基准模型
 
 互通测试调用托管基准项目实际使用的 `SimpleClass.Create()` 和 `CharacterSaveData.Create()`。将 .NET 文档和两个生成头文件放在同一目录。

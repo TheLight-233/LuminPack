@@ -15,6 +15,8 @@ Match a C# built-in Binary operation profile with C++ `generate --binary-profile
 
 Generate a modeled closed generic root with its exact manifest `id` in quotes, for example `'Example.Box<string>'`. A concrete C# serialization call can reach that type directly or through a container.
 
+Ordinary recursive C++ records own each recursive node with `std::unique_ptr`, including List and Dictionary elements. Use the generated root codec to apply the operation's recursion context and the declared Default Binary depth.
+
 Use `generate --rtti` to project Next's exact and virtual Union dispatch tiers. Exact writers compare concrete RTTI types. Virtual writers call a generated slot for the active Binary profile or JSON encoding and share compile-time hashes for closed generic cases. Readers switch on the C# wire hash. A Union with all ordinary direct cases uses `std::unique_ptr`. A Union with a direct tracked case uses pointers borrowed from the reference graph for all cases.
 
 For an RTTI Union exported with registration enabled, register an application case derived from `root_binary::registry::base_type` using `root_binary::registry::register_case<Case, Binding>(tag)`. Supply Binary and JSON payload readers and tagged writers. The Binary codec writes the escape hash, then the binding writes the tag with `write_registered_union_tag<root_binary::registry::wide_tags>` and its payload. The JSON binding writes the numeric `$type` and application payload in the `$value` envelope. Match the C# runtime registration's tag and wire representation.
