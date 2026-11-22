@@ -166,6 +166,45 @@ void check_asymmetric_width_writes()
         text[index] = u'a';
     }
 }
+
+void check_surrogate_width_writes()
+{
+    constexpr auto canary = std::byte{0xcc};
+    constexpr std::size_t length = 81;
+    constexpr std::size_t payload_size = length + 3;
+    std::u16string text(length, u'a');
+    text.front() = u'\u00e9';
+
+    for (std::size_t index = 1; index + 1 < length; ++index)
+    {
+        text[index] = static_cast<char16_t>(0xd83d);
+        text[index + 1] = static_cast<char16_t>(0xde42);
+        std::vector<std::byte> expected(header_size + payload_size, std::byte{'a'});
+        luminpack::writer header(expected);
+        header.write(static_cast<std::int32_t>(payload_size));
+        header.write(static_cast<std::int32_t>(length));
+        expected[header_size] = std::byte{0xc3};
+        expected[header_size + 1] = std::byte{0xa9};
+        const std::array supplementary{std::byte{0xf0}, std::byte{0x9f}, std::byte{0x99}, std::byte{0x82}};
+        std::ranges::copy(supplementary, expected.begin() + header_size + index + 1);
+
+        std::vector<std::byte> storage(expected.size() + 2, canary);
+        const auto target = std::span(storage).subspan(1, expected.size());
+        luminpack::writer writer(target);
+        luminpack::write_string(writer, profile, text);
+        require(std::ranges::equal(writer.written(), expected), "UTF-8 surrogate pair changed the wire bytes.");
+        require(storage.front() == canary && storage.back() == canary, "UTF-8 surrogate pair exceeded the output window.");
+
+        std::ranges::fill(storage, canary);
+        text[index] = u'a';
+        luminpack::writer invalid(target);
+        expect_error<std::invalid_argument>([&] { luminpack::write_string(invalid, profile, text); });
+        require(invalid.written().empty(), "Standalone low surrogate published the writer cursor.");
+        require(std::ranges::all_of(storage, [](std::byte value) { return value == canary; }),
+            "Standalone low surrogate changed the output window.");
+        text[index + 1] = u'a';
+    }
+}
 }
 
 int main(int argc, char** argv)
@@ -178,6 +217,7 @@ int main(int argc, char** argv)
         managed_records(std::filesystem::path(argv[1]) / "medium-ascii.bin", 17, 32);
         check_ascii_records();
         check_asymmetric_width_writes();
+        check_surrogate_width_writes();
         std::cout << "LuminPack C++ UTF-8 Length ASCII reads passed.\n";
     }
     catch (const std::exception& error)

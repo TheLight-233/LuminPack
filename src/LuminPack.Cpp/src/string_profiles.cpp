@@ -8,6 +8,7 @@
 #include "short_ascii.h"
 #include "utf8_ascii_read.h"
 #include "utf8_runs.h"
+#include "utf8_width.h"
 
 #include <algorithm>
 
@@ -88,12 +89,24 @@ using detail::read_utf8_scalar;
 std::size_t utf8_bytes(std::u16string_view source)
 {
     auto index = source.size() > 32 && source.front() < 0x80 ? detail::first_non_ascii_utf16(std::span(source)) : 0;
+    constexpr auto max_bytes = static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max());
     auto bytes = index;
+#if defined(LUMINPACK_CPP_INLINE_SSE2) || defined(LUMINPACK_CPP_SHORT_ASCII_NEON)
+    if (source.size() > 32 && source.size() - index >= 8)
+    {
+        const auto prefix = detail::measure_utf8_vectors(std::span(source).subspan(index));
+        index += prefix.code_units;
+        const auto measured = index + prefix.additional_bytes;
+        if (measured > max_bytes)
+            throw std::length_error("LuminPack UTF-8 record exceeds the wire length.");
+        bytes = static_cast<std::size_t>(measured);
+    }
+#endif
     while (index < source.size())
     {
         const auto scalar = read_utf16_scalar(source, index);
         const auto width = scalar < 0x80 ? 1u : scalar < 0x800 ? 2u : scalar < 0x10000 ? 3u : 4u;
-        if (bytes > static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max()) - width)
+        if (bytes > max_bytes - width)
             throw std::length_error("LuminPack UTF-8 record exceeds the wire length.");
         bytes += width;
     }
