@@ -190,6 +190,45 @@ void text_vector_boundaries()
         "Publishes a short UTF-16 write.");
 }
 
+void short_utf16_records()
+{
+    using codec = luminpack::string_codec<luminpack::string_profile::utf16_length>;
+    using required = luminpack::required_codec<codec>;
+
+    std::array<char16_t, 16> characters{};
+    for (std::size_t index = 0; index < characters.size(); ++index)
+        characters[index] = static_cast<char16_t>(0xff - index * 11);
+
+    for (std::size_t length = 1; length <= characters.size(); ++length)
+    {
+        const std::u16string_view expected(characters.data(), length);
+        const auto raw_bound = sizeof(std::int32_t) + length * sizeof(char16_t);
+        const auto check_compact = [&](std::span<const byte> record)
+        {
+            reader input(record);
+            check(input.read<std::int32_t>() == static_cast<std::int32_t>(length * 2 + 1), "Short UTF-16 compact header.");
+            const auto payload = input.take(length);
+            check(std::ranges::equal(payload, expected, [](byte actual, char16_t unit) { return actual == static_cast<byte>(unit); }),
+                "Short UTF-16 compact bytes.");
+            input.require_end();
+        };
+
+        std::array<byte, 38> bytes;
+        bytes.fill(byte{204});
+        writer output(std::span<byte>(bytes).subspan(1, raw_bound));
+        codec::write(output, codec::value_type(std::in_place, expected));
+        check_compact(output.written());
+        check(bytes.front() == byte{204} && bytes[1 + output.written().size()] == byte{204}, "Short UTF-16 write bounds.");
+
+        std::array<char16_t, 20> alias;
+        alias.fill(u'\u0100');
+        std::ranges::copy(expected, alias.begin());
+        output = writer(std::as_writable_bytes(std::span(alias)).first(raw_bound));
+        required::write(output, std::u16string_view(alias.data(), length));
+        check_compact(output.written());
+    }
+}
+
 struct tagged32
 {
     std::int32_t key;
@@ -727,6 +766,7 @@ int main(int argc, char** argv)
         fixed_fixtures(directory);
         text_fixtures(directory);
         text_vector_boundaries();
+        short_utf16_records();
         tagged_fixtures(directory);
         object_and_input_checks();
         collection_contracts(directory);

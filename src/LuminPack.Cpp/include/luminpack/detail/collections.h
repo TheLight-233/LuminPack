@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <utility>
 
+#include "utf16_short.h"
+
 // Included by luminpack.h after the cursor and raw-storage declarations.
 namespace luminpack
 {
@@ -58,10 +60,11 @@ struct string_codec
 
     static void write(writer& output, const value_type& value)
     {
-        if (value)
-            write_string(output, Profile, std::u16string_view(*value));
+        const auto text = value ? std::optional<std::u16string_view>(*value) : std::nullopt;
+        if constexpr (Profile == string_profile::utf16_length)
+            detail::write_utf16_length(output, text);
         else
-            write_string(output, Profile, std::nullopt);
+            write_string(output, Profile, text);
     }
 };
 
@@ -85,7 +88,10 @@ struct required_codec<string_codec<Profile>>
 
     static void write(writer& output, std::u16string_view value)
     {
-        write_string(output, Profile, value);
+        if constexpr (Profile == string_profile::utf16_length)
+            detail::write_utf16_length(output, value);
+        else
+            write_string(output, Profile, value);
     }
 };
 

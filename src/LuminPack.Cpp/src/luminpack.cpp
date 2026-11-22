@@ -122,6 +122,11 @@ std::optional<std::u16string_view> read_utf16_into(reader& input, std::span<char
 
 void write_utf16(writer& output, std::optional<std::u16string_view> value)
 {
+    detail::write_utf16_length(output, value);
+}
+
+void detail::write_utf16_fallback(writer& output, std::optional<std::u16string_view> value)
+{
     if (!value || value->empty())
     {
         output.write<std::int32_t>(value ? 0 : -1);
