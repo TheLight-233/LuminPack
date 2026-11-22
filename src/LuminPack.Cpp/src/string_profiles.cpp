@@ -529,6 +529,15 @@ void write_string(writer& output, string_profile profile, std::optional<std::u16
                 bytes_written = run.written;
             }
 #endif
+#if defined(LUMINPACK_CPP_SHORT_ASCII_NEON)
+            if (profile == string_profile::utf8_length && text.size() > 32 && text.size() != size)
+            {
+                // On ARM64 Core uses its platform transcoder for general mixed text.
+                const auto tail = detail::encode_utf8_tail(std::span(text), destination);
+                prefix = tail.consumed;
+                bytes_written = tail.written;
+            }
+#endif
             if (prefix < text.size())
                 encode_utf8(text.substr(prefix), destination.subspan(bytes_written));
         }

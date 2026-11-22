@@ -1,11 +1,228 @@
 #include "utf8_runs.h"
+#include "short_ascii.h"
+
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
 
 #if defined(LUMINPACK_CPP_INLINE_SSE2)
 #include "cpu_isa.h"
+#include "latin1.h"
 
-#include <cstring>
-#include <emmintrin.h>
+#include <smmintrin.h>
+#endif
 
+namespace luminpack::detail
+{
+namespace
+{
+constexpr std::uint32_t ascii_pair_mask = 0xff80ff80u;
+
+template<class Word>
+Word load_utf16(const char16_t* source) noexcept
+{
+    Word value;
+    std::memcpy(&value, source, sizeof(value));
+    return value;
+}
+
+std::size_t narrow_ascii_four(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    const auto limit = std::min(source.size(), destination.size());
+    std::size_t count = 0;
+    for (; limit - count >= 4; count += 4)
+    {
+        const auto first = load_utf16<std::uint32_t>(source.data() + count);
+        const auto second = load_utf16<std::uint32_t>(source.data() + count + 2);
+        if (((first | second) & ascii_pair_mask) != 0)
+            break;
+        const auto head = static_cast<std::uint16_t>(first | (first >> 8));
+        const auto tail = static_cast<std::uint16_t>(second | (second >> 8));
+        std::memcpy(destination.data() + count, &head, sizeof(head));
+        std::memcpy(destination.data() + count + 2, &tail, sizeof(tail));
+    }
+    return count;
+}
+
+#if defined(LUMINPACK_CPP_INLINE_SSE2) || defined(LUMINPACK_CPP_SHORT_ASCII_NEON)
+#if defined(LUMINPACK_CPP_INLINE_SSE2) && (defined(__GNUC__) || defined(__clang__))
+[[gnu::target("sse4.1")]]
+#elif defined(_MSC_VER)
+__forceinline
+#endif
+std::size_t narrow_ascii_eight(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    const auto limit = std::min(source.size(), destination.size());
+    std::size_t count = 0;
+    for (; limit - count >= 8; count += 8)
+    {
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+        const auto units = load_utf16<__m128i>(source.data() + count);
+        if (_mm_testz_si128(units, _mm_set1_epi16(-128)) == 0)
+            break;
+        const auto packed = _mm_cvtsi128_si64(_mm_packus_epi16(units, units));
+#else
+        const auto units = load_utf16<uint16x8_t>(source.data() + count);
+        if (vmaxvq_u16(vandq_u16(units, vdupq_n_u16(0xff80))) != 0)
+            break;
+        const auto packed = vqmovun_s16(vreinterpretq_s16_u16(units));
+#endif
+        std::memcpy(destination.data() + count, &packed, 8);
+    }
+    return count;
+}
+#endif
+
+template<std::size_t Bytes, class Word>
+void store_tail_prefix(std::byte* output, Word packed, std::size_t& consumed, std::size_t& written, std::size_t units) noexcept
+{
+    std::memcpy(output, &packed, Bytes);
+    consumed += units;
+    written += Bytes;
+}
+
+constexpr bool is_surrogate(std::uint32_t value) noexcept
+{
+    return value >= 0xd800 && value <= 0xdfff;
+}
+
+constexpr std::uint32_t utf8_two_bytes(std::uint32_t value) noexcept
+{
+    return 0x80c0u | (value >> 6) | ((value & 0x3f) << 8);
+}
+
+constexpr std::uint32_t utf8_three_bytes(std::uint32_t value) noexcept
+{
+    return 0x8080e0u | (value >> 12) | ((value & 0xfc0) << 2) | ((value & 0x3f) << 16);
+}
+
+constexpr std::uint32_t utf8_four_bytes(std::uint32_t value) noexcept
+{
+    return 0x808080f0u | (value >> 18) | ((value & 0x3f000) >> 4) |
+        ((value & 0xfc0) << 10) | ((value & 0x3f) << 24);
+}
+}
+
+utf8_prefix encode_utf8_tail(std::span<const char16_t> source, std::span<std::byte> destination) noexcept
+{
+    std::size_t consumed = 0;
+    std::size_t written = 0;
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
+    const bool use_eight = has_sse41();
+#elif defined(LUMINPACK_CPP_SHORT_ASCII_NEON)
+    constexpr bool use_eight = true;
+#endif
+
+#if defined(LUMINPACK_CPP_AVX2)
+    constexpr std::uint64_t ascii_quad_mask = 0xff80ff80ff80ff80ull;
+    const auto limit = std::min(source.size(), destination.size());
+    if (limit >= 64 && (load_utf16<std::uint64_t>(source.data()) & ascii_quad_mask) == 0)
+    {
+#if defined(LUMINPACK_CPP_AVX512BW)
+        if (limit >= 128 && has_avx512bw())
+            consumed = encode_ascii_prefix_avx512(source, destination);
+        else
+#endif
+        if (has_avx2())
+            consumed = encode_ascii_prefix_avx2(source, destination);
+        written = consumed;
+    }
+#endif
+
+    // The platform UTF-8 encoder groups adjacent code units of equal width before handling a mixed pair.
+    while (source.size() - consumed >= 2)
+    {
+        const auto chars = load_utf16<std::uint32_t>(source.data() + consumed);
+        const auto first = chars & 0xffff;
+        const auto second = chars >> 16;
+        const auto room = destination.size() - written;
+        if (room == 0)
+            return {consumed, written};
+        auto* output = destination.data() + written;
+
+        if ((chars & ascii_pair_mask) == 0 && room >= 2)
+        {
+            const auto packed = static_cast<std::uint16_t>(chars | (chars >> 8));
+            std::memcpy(output, &packed, sizeof(packed));
+            consumed += 2;
+            written += 2;
+
+            std::size_t narrowed = 0;
+#if defined(LUMINPACK_CPP_INLINE_SSE2) || defined(LUMINPACK_CPP_SHORT_ASCII_NEON)
+            if (use_eight)
+                narrowed = narrow_ascii_eight(source.subspan(consumed), destination.subspan(written));
+#endif
+            narrowed += narrow_ascii_four(source.subspan(consumed + narrowed),
+                destination.subspan(written + narrowed));
+            consumed += narrowed;
+            written += narrowed;
+            continue;
+        }
+
+        if (first < 0x80)
+        {
+            store_tail_prefix<1>(output, first, consumed, written, 1);
+            continue;
+        }
+
+        if (first < 0x800)
+        {
+            if (room < 2)
+                return {consumed, written};
+            if (second >= 0x80 && second < 0x800 && room >= 4)
+            {
+                const auto packed = 0x80c080c0u | ((chars & 0x07c007c0u) >> 6) | ((chars & 0x003f003fu) << 8);
+                store_tail_prefix<4>(output, packed, consumed, written, 2);
+            }
+            else if (second < 0x80 && room >= 3)
+                store_tail_prefix<3>(output, utf8_two_bytes(first) | (second << 16), consumed, written, 2);
+            else
+                store_tail_prefix<2>(output, utf8_two_bytes(first), consumed, written, 1);
+            continue;
+        }
+
+        if (!is_surrogate(first))
+        {
+            if (room < 3)
+                return {consumed, written};
+            if (second >= 0x800 && !is_surrogate(second) && room >= 6)
+            {
+                const auto packed = utf8_three_bytes(first) | (std::uint64_t{utf8_three_bytes(second)} << 24);
+                store_tail_prefix<6>(output, packed, consumed, written, 2);
+            }
+            else if (second < 0x80 && room >= 4)
+                store_tail_prefix<4>(output, utf8_three_bytes(first) | (second << 24), consumed, written, 2);
+            else
+                store_tail_prefix<3>(output, utf8_three_bytes(first), consumed, written, 1);
+            continue;
+        }
+
+        if (first > 0xdbff || second < 0xdc00 || second > 0xdfff || room < 4)
+            return {consumed, written};
+        const auto scalar = 0x10000u + ((first - 0xd800u) << 10) + (second - 0xdc00u);
+        store_tail_prefix<4>(output, utf8_four_bytes(scalar), consumed, written, 2);
+    }
+
+    if (consumed != source.size())
+    {
+        const auto last = static_cast<std::uint32_t>(source.back());
+        if (!is_surrogate(last))
+        {
+            const auto bytes = last < 0x80 ? 1u : last < 0x800 ? 2u : 3u;
+            if (bytes <= destination.size() - written)
+            {
+                const auto packed = bytes == 1 ? last : bytes == 2 ? utf8_two_bytes(last) : utf8_three_bytes(last);
+                std::memcpy(destination.data() + written, &packed, bytes);
+                ++consumed;
+                written += bytes;
+            }
+        }
+    }
+    return {consumed, written};
+}
+}
+
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
 namespace luminpack::detail
 {
 namespace
@@ -170,6 +387,12 @@ utf8_prefix encode_non_ascii_utf8_prefix(std::span<const char16_t> source, std::
         prefix.written += consumed * 3;
     }
 #endif
+    if (prefix.consumed != 0 && source.size() - prefix.consumed >= 64)
+    {
+        const auto tail = encode_utf8_tail(source.subspan(prefix.consumed), destination.subspan(prefix.written));
+        prefix.consumed += tail.consumed;
+        prefix.written += tail.written;
+    }
     return prefix;
 }
 }

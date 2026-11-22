@@ -294,6 +294,23 @@ bool has_ssse3() noexcept
     return false;
 #endif
 }
+
+bool has_sse41() noexcept
+{
+#if defined(_MSC_VER)
+    static const bool supported = []
+    {
+        int registers[4];
+        __cpuid(registers, 1);
+        return (registers[2] & (1 << 19)) != 0;
+    }();
+    return supported;
+#elif defined(__GNUC__) || defined(__clang__)
+    return __builtin_cpu_supports("sse4.1") != 0;
+#else
+    return false;
+#endif
+}
 #endif
 
 #if defined(LUMINPACK_CPP_AVX2)

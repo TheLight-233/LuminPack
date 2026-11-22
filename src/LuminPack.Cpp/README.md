@@ -90,6 +90,8 @@ The UTF-8 byte-count pass finds the end of the leading ASCII run with AVX-512BW,
 
 When the homogeneous probe declines a Latin-1-leading string, the writer can use the C# mixed ASCII and Latin-1 path. All 256 lane masks and exact write widths are compile-time constants. The general UTF-8 encoder resumes at the first code unit outside Latin-1.
 
+After a homogeneous UTF-8 Length prefix, a remaining span of at least 64 code units uses the C# platform transcoder's paired conversion. ARM64 uses the same conversion for mixed input above 32 code units. Runs of ASCII use bounded SSE4.1 or NEON narrowing where available, with a packed four-code-unit fallback. The caller has already validated the complete string and reserved the output record.
+
 Fixed UTF-8 Length reads use bounded ASCII widening when both length headers agree. The short path checks every byte before storing. The long AVX2 path validates while widening into an unpublished string. The general UTF-8 reader classifies the complete payload as ASCII with bounded AVX2, SSE2, NEON, or packed-word checks before widening ASCII or entering the Unicode decoder.
 
 ### Tracked references

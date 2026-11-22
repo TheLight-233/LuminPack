@@ -5,13 +5,16 @@
 
 namespace luminpack::detail
 {
-#if defined(LUMINPACK_CPP_INLINE_SSE2)
 struct utf8_prefix
 {
     std::size_t consumed;
     std::size_t written;
 };
 
+/// Encodes a UTF-16 run within the supplied output window, stopping at an incomplete or invalid scalar.
+utf8_prefix encode_utf8_tail(std::span<const char16_t> source, std::span<std::byte> destination) noexcept;
+
+#if defined(LUMINPACK_CPP_INLINE_SSE2)
 /// Encodes a selected non-ASCII-leading prefix into a checked, disjoint payload.
 utf8_prefix encode_non_ascii_utf8_prefix(std::span<const char16_t> source, std::span<std::byte> destination) noexcept;
 #endif

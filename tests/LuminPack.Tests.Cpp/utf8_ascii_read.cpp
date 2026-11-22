@@ -205,6 +205,59 @@ void check_surrogate_width_writes()
         text[index + 1] = u'a';
     }
 }
+
+void check_heterogeneous_utf8_tail()
+{
+    constexpr auto canary = std::byte{0xcc};
+    constexpr auto chunk = std::u16string_view(u"Long ASCII runabcdefgh\u00e9\u07ff\u4e2d\u6587\U0001f642tail");
+    constexpr auto encoded = std::string_view("Long ASCII runabcdefgh\xc3\xa9\xdf\xbf\xe4\xb8\xad\xe6\x96\x87\xf0\x9f\x99\x82tail");
+    for (const auto length : {63u, 64u, 65u, 127u, 128u, 129u})
+    {
+        std::u16string text(64, u'\u4e2d');
+        std::string payload;
+        for (int index = 0; index < 64; ++index)
+            payload.append("\xe4\xb8\xad");
+        while (64 + length - text.size() >= chunk.size())
+        {
+            text.append(chunk);
+            payload.append(encoded);
+        }
+        payload.append(64 + length - text.size(), 'x');
+        text.resize(64 + length, u'x');
+
+        std::vector<std::byte> expected(header_size + payload.size());
+        luminpack::writer expected_writer(expected);
+        expected_writer.write(static_cast<std::int32_t>(payload.size()));
+        expected_writer.write(static_cast<std::int32_t>(text.size()));
+        std::memcpy(expected.data() + header_size, payload.data(), payload.size());
+
+        std::vector<std::byte> storage(expected.size() + 2, canary);
+        const auto target = std::span(storage).subspan(1, expected.size());
+        luminpack::writer writer(target);
+        luminpack::write_string(writer, profile, text);
+        require(std::ranges::equal(writer.written(), expected), "Heterogeneous UTF-8 tail changed the wire bytes.");
+        require(storage.front() == canary && storage.back() == canary, "UTF-8 tail exceeded the output window.");
+
+        auto aliased = text;
+        aliased.resize(text.size() + expected.size());
+        const auto overlapping = std::as_writable_bytes(std::span(aliased)).subspan(3, expected.size());
+        luminpack::writer overlap_writer(overlapping);
+        luminpack::write_string(overlap_writer, profile, std::u16string_view(aliased.data(), text.size()));
+        require(std::ranges::equal(overlap_writer.written(), expected), "Overlapping UTF-8 tail changed the wire bytes.");
+
+        std::ranges::fill(storage, canary);
+        luminpack::writer short_writer(target.first(target.size() - 1));
+        expect_error<std::length_error>([&] { luminpack::write_string(short_writer, profile, text); });
+        require(short_writer.written().empty(), "Short UTF-8 tail published the cursor.");
+
+        text.back() = static_cast<char16_t>(0xd800);
+        luminpack::writer malformed(target);
+        expect_error<std::invalid_argument>([&] { luminpack::write_string(malformed, profile, text); });
+        require(malformed.written().empty(), "Invalid UTF-8 tail published the cursor.");
+        require(std::ranges::all_of(storage, [=](std::byte value) { return value == canary; }),
+            "Failed UTF-8 tail changed the destination.");
+    }
+}
 }
 
 int main(int argc, char** argv)
@@ -218,6 +271,7 @@ int main(int argc, char** argv)
         check_ascii_records();
         check_asymmetric_width_writes();
         check_surrogate_width_writes();
+        check_heterogeneous_utf8_tail();
         std::cout << "LuminPack C++ UTF-8 Length ASCII reads passed.\n";
     }
     catch (const std::exception& error)
