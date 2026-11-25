@@ -26,6 +26,8 @@ export function jsonArray(value: JsonValue, max: number): JsonValue[] {
     return value;
 }
 
+const decimalPowers = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000];
+
 export const orderedJsonMiss = Symbol("LuminPack ordered JSON fallback");
 const escapedJsonUnit = /[\\\x00-\x1f]/;
 
@@ -71,6 +73,46 @@ export class OrderedJsonCursor {
         if (!match) throw orderedJsonMiss;
         this.position = this.numberPattern.lastIndex;
         return match[0];
+    }
+
+    floating(single: boolean): number {
+        const start = this.position;
+        let cursor = start;
+        const negative = this.text.charCodeAt(cursor) === 45;
+        if (negative) cursor++;
+        let digit = this.text.charCodeAt(cursor) - 48;
+        if (!(digit >= 0 && digit <= 9)) throw orderedJsonMiss;
+        let value = digit;
+        cursor++;
+        if (value !== 0) {
+            while ((digit = this.text.charCodeAt(cursor) - 48) >= 0 && digit <= 9 && cursor - start < 16) {
+                value = value * 10 + digit;
+                cursor++;
+            }
+        }
+        let places = 0;
+        if (this.text.charCodeAt(cursor) === 46) {
+            const point = ++cursor;
+            while ((digit = this.text.charCodeAt(cursor) - 48) >= 0 && digit <= 9 && cursor - start < 16) {
+                value = value * 10 + digit;
+                cursor++;
+            }
+            places = cursor - point;
+            if (places === 0 && cursor - start < 16) throw orderedJsonMiss;
+        }
+        const next = this.text.charCodeAt(cursor);
+        // Up to 15 digits and these powers of ten are exactly representable in binary64.
+        // Their quotient has the same single rounding as parsing the decimal token.
+        if (cursor - start <= 15 && places < decimalPowers.length && next !== 69 && next !== 101) {
+            this.position = cursor;
+            value /= decimalPowers[places];
+            if (negative) value = -value;
+        } else {
+            value = Number(this.number());
+        }
+        const result = single ? Math.fround(value) : value;
+        if (!Number.isFinite(result)) throw orderedJsonMiss;
+        return result;
     }
 
     int32(): number {

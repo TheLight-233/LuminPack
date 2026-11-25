@@ -1178,6 +1178,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         switch (wire.kind) {
             case "scalar":
                 if (wire.type === "int") return input.int32();
+                if (wire.type === "float" || wire.type === "double") return input.floating(wire.type === "float");
                 if (wire.type === "char") return readJsonScalar(input.string(), "char", this.nativeBytes, utf8);
                 if (wire.type === "bool") {
                     if (input.consume("true")) return true;

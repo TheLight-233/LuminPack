@@ -131,3 +131,19 @@ test("writes scalar struct fields with their declared types and own-property def
     }
     assert.throws(() => model.writeJson({ ...vector, X: Infinity }, "utf8"), WireError);
 });
+
+test("rounds ordered decimal scalars like the general JSON reader", () => {
+    for (const type of ["float", "double"]) {
+        const model = codec([{ name: "Value", wire: { kind: "scalar", type } }]);
+        for (const token of ["-0", "-0.00", "0.000000001", "781.08", "-2630.77", "999999999999999",
+            "9999999999999999", "1.000000059604644775390625", "-1e-45", "1e+20", "3.40282347e38"]) {
+            const expected = type === "float" ? Math.fround(Number(token)) : Number(token);
+            for (const [encoding, bufferEncoding] of [["utf8", "utf8"], ["utf16", "utf16le"]]) {
+                const bytes = Buffer.from('{"Value":' + token + '}', bufferEncoding);
+                assert.ok(Object.is(model.readJson(bytes, encoding).Value, expected), token);
+            }
+        }
+        for (const invalid of ["01", "1.", "1e", "1e999", ".1", "--0", "123456789012345."])
+            assert.throws(() => model.readJson(utf8('{"Value":' + invalid + '}'), "utf8"), WireError);
+    }
+});
