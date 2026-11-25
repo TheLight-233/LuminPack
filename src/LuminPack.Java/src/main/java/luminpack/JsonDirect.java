@@ -38,10 +38,14 @@ final class JsonDirect {
     }
 
     byte[] write(Object value) {
-        var output = new JsonUtf8Writer();
-        if (schema.rootWire == null) writeContract(output, schema.root, value, 0);
-        else writeWire(output, schema.rootWire, value, 0);
-        return output.finish();
+        var output = JsonUtf8Writer.acquire();
+        try {
+            if (schema.rootWire == null) writeContract(output, schema.root, value, 0);
+            else writeWire(output, schema.rootWire, value, 0);
+            return output.finish();
+        } finally {
+            output.release();
+        }
     }
 
     private Object readContract(Json.Reader reader, Schema.Contract type, int depth) {
@@ -107,6 +111,10 @@ final class JsonDirect {
 
     private Object readScalar(Json.Reader reader, String type, int depth) {
         return switch (type) {
+            case "float", "double" -> {
+                Number value = reader.shortDecimal();
+                yield general.scalar(type, value == null ? reader.value(depth) : value);
+            }
             case "int" -> Math.toIntExact(reader.signedInteger());
             case "long" -> reader.signedInteger();
             case "uint" -> checked(reader.signedInteger(), 0, UINT32_MAX);
@@ -261,6 +269,10 @@ final class JsonDirect {
     }
 
     private void writeScalar(JsonUtf8Writer output, String type, Object value) {
+        if (value instanceof Integer number && type.equals("int")) { output.integer32(number); return; }
+        if (value instanceof Long number && type.equals("long")) { output.integer(number); return; }
+        if (value instanceof Float number && type.equals("float")) { output.floating(number); return; }
+        if (value instanceof Double number && type.equals("double")) { output.floating(number); return; }
         Object scalar = value == null ? BinaryDocument.defaultScalar(type) : general.scalar(type, value);
         if (scalar instanceof Boolean flag) output.booleanValue(flag);
         else if (scalar instanceof Character character) output.string(character.toString());

@@ -150,6 +150,16 @@ public final class FastPathChecks {
     }
 
     private static void checkFloatingJson() {
+        for (String token : List.of("-0", "-0.00", "0.000001", "9999999", "-321.125", "9.999999", "12.123456",
+            "1.000000059604644775390625", "1e-38")) {
+            var reader = new Json.Reader(token, 4);
+            Number value = reader.shortDecimal();
+            if (value == null) value = (Number) reader.value(0);
+            require(reader.atEnd() && Double.doubleToRawLongBits(value.doubleValue()) ==
+                Double.doubleToRawLongBits(Double.parseDouble(token)), "Double decimal parsing");
+            require(Float.floatToRawIntBits(value.floatValue()) == Float.floatToRawIntBits(Float.parseFloat(token)),
+                "Float decimal parsing");
+        }
         var random = new SplittableRandom(881627);
         for (int index = 0; index < 4096; index++) {
             float single = Float.intBitsToFloat(random.nextInt());

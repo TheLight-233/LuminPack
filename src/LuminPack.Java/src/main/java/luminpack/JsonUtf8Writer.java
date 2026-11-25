@@ -14,6 +14,22 @@ final class JsonUtf8Writer {
     private byte[] buffer = new byte[512];
     private int position;
 
+    private static final ThreadLocal<JsonUtf8Writer> CACHE = new ThreadLocal<>();
+
+    static JsonUtf8Writer acquire() {
+        JsonUtf8Writer writer = CACHE.get();
+        if (writer == null) return new JsonUtf8Writer();
+        CACHE.set(null);
+        return writer;
+    }
+
+    void release() {
+        if (buffer.length <= 1024 * 1024) {
+            position = 0;
+            CACHE.set(this);
+        }
+    }
+
     byte[] finish() { return Arrays.copyOf(buffer, position); }
 
     private void reserve(int bytes) {
@@ -71,7 +87,16 @@ final class JsonUtf8Writer {
     void string(String text) {
         if (text == null) { nullValue(); return; }
         token('"');
-        for (int i = 0; i < text.length(); i++) {
+        // Copy an ordinary ASCII prefix with one capacity check. Escaped and
+        // non-ASCII tails retain the checked Unicode path.
+        reserve(text.length());
+        int i = 0;
+        for (; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c < ' ' || c >= 128 || c == '"' || c == '\\') break;
+            buffer[position++] = (byte) c;
+        }
+        for (; i < text.length(); i++) {
             char c = text.charAt(i);
             reserve(6);
             if (c >= ' ' && c < 128 && c != '"' && c != '\\') buffer[position++] = (byte) c;

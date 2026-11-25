@@ -349,6 +349,44 @@ final class Json {
             return Schema.longValue(value(0));
         }
 
+        // For at most seven significant digits and six decimal places both operands
+        // are exact even in binary32. A binary64 quotient can safely narrow here:
+        // a non-midpoint ratio is at least 1/(2^24 * 10^6) from a single midpoint
+        // relative to its binade, outside binary64 rounding error.
+        Double shortDecimal() {
+            space();
+            int cursor = position;
+            boolean negative = cursor < text.length() && text.charAt(cursor) == '-';
+            if (negative) cursor++;
+            int start = cursor;
+            int coefficient = 0;
+            while (cursor < text.length()) {
+                int digit = text.charAt(cursor) - '0';
+                if (digit < 0 || digit > 9) break;
+                if (cursor - start >= 7 || cursor != start && coefficient == 0) return null;
+                coefficient = coefficient * 10 + digit;
+                cursor++;
+            }
+            if (cursor == start) return null;
+            int scale = 1;
+            if (cursor < text.length() && text.charAt(cursor) == '.') {
+                int fraction = ++cursor;
+                while (cursor < text.length()) {
+                    int digit = text.charAt(cursor) - '0';
+                    if (digit < 0 || digit > 9) break;
+                    if (cursor - start > 7 || cursor - fraction >= 6) return null;
+                    coefficient = coefficient * 10 + digit;
+                    scale *= 10;
+                    cursor++;
+                }
+                if (cursor == fraction) return null;
+            }
+            if (cursor < text.length() && (text.charAt(cursor) == 'e' || text.charAt(cursor) == 'E')) return null;
+            position = cursor;
+            double value = (double) coefficient / scale;
+            return negative ? -value : value;
+        }
+
         private boolean fractionStarts() {
             if (atEnd()) return false;
             char c = text.charAt(position);
