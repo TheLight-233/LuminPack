@@ -40,6 +40,8 @@
 | Rust | [Typed models and native documents](src/LuminPack.Rust/README.md) |
 | Python | [Compiled dict/list codecs and native documents](src/LuminPack.Python/README.md) |
 
+After generating the model, each binary read or write takes one call, such as `luminpack::serialize(value)` in C++ or `message.serialize(value)` in Python. [Calls for all six languages](docs/portable-runtime.md#use-the-generated-binary-api)
+
 ```csharp
 [LuminPackable]
 public partial class Player

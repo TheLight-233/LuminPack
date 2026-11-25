@@ -16,7 +16,7 @@ void truncated_input()
 
 void short_output()
 {
-    throw std::length_error("Insufficient LuminPack destination storage.");
+    throw insufficient_output();
 }
 
 bool overlaps(std::span<const std::byte> source, std::span<const std::byte> destination) noexcept

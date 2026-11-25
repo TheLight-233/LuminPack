@@ -2,6 +2,16 @@
 
 [English](../../src/LuminPack.Go/README.md)
 
+## 一行读写二进制
+
+函数名带根名，允许一个包包含多个模型。普通记录优先走生成的强类型代码，其余根使用按需加载的默认 schema。需要应用注册时，配置 `LoadMessageLuminPack` 返回的 schema 并调用其方法。使用解码值前检查 `err`。
+
+```go
+data, err := generated.SerializeMessage(value)
+if err != nil { return err }
+copy, err := generated.DeserializeMessage(data)
+```
+
 Go 模块读写 LuminPack 二进制，以及 UTF-8 或 UTF-16LE JSON。生成的 Go 文件嵌入共享契约的根 schema。[跨语言契约](../portable-runtime.cn.md)
 
 ## 支持范围
@@ -28,7 +38,7 @@ replace github.com/TheLight-233/LuminPack/src/LuminPack.Go => ../LuminPack/src/L
 dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language go --package generated .tmp/contracts.json Example.Message .tmp/message.go
 ```
 
-## 读写数据
+## 通过 schema 转换为 JSON
 
 空类型标识选择根类型。遇到无效文档或与 schema 不匹配的模型值时，API 会返回 error。
 

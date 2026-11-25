@@ -2,6 +2,17 @@
 
 [简体中文](../../docs/modules/luminpack.typescript.cn.md)
 
+## Serialize and deserialize
+
+The generated module selects the root and returns a `Uint8Array`. For JSON or per-application bindings, use `codec` or `bindCodec(options)`.
+
+```ts
+import { serialize, deserialize } from "./message.js";
+
+const bytes = serialize({ Id: 7, Text: "ready", Measurements: [2, 5] });
+const copy = deserialize(bytes);
+```
+
 The TypeScript ESM runtime reads and writes LuminPack Binary and UTF-8 or UTF-16LE JSON. The generator emits model types, a root codec, and a function for applying application bindings. [Cross-language contracts](../../docs/portable-runtime.md)
 
 ## Supported contracts

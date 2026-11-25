@@ -2,6 +2,17 @@
 
 [English](../../src/LuminPack.TypeScript/README.md)
 
+## 一行读写二进制
+
+生成模块选择根契约，编码返回 `Uint8Array`。JSON 或自定义绑定使用 `codec` 或 `bindCodec(options)`。
+
+```ts
+import { serialize, deserialize } from "./message.js";
+
+const bytes = serialize({ Id: 7, Text: "ready", Measurements: [2, 5] });
+const copy = deserialize(bytes);
+```
+
 TypeScript ESM 运行时读写 LuminPack 二进制，以及 UTF-8 或 UTF-16LE JSON。生成器输出模型类型、根 codec 和用于绑定应用 codec 的入口。[跨语言契约](../portable-runtime.cn.md)
 
 ## 支持范围

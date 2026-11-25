@@ -2,6 +2,19 @@
 
 [English](../../src/LuminPack.Cpp/README.md)
 
+## 一行读写二进制
+
+独立标量和标准容器通过 `message::serialize(value)` 和 `message::deserialize(bytes)` 指定根契约。`message::serialize(value, output)` 单次写入已有缓冲区，含 Custom 或 RTTI Union 回调时使用这个重载。读取追踪对象时返回持有整张对象图的文档。
+
+```cpp
+#include "message.h"
+namespace message = luminpack_generated::root_Example_x002eMessage;
+
+// value 的类型为 message::root_value
+const auto bytes = luminpack::serialize(value);
+auto copy = luminpack::deserialize<message::root_value>(bytes);
+```
+
 C++20 运行时使用调用方提供的连续缓冲区读写 LuminPack 二进制，以及 UTF-8 或 UTF-16LE JSON。生成的 codec 包含公开头文件 `<luminpack/luminpack.h>`，链接 `LuminPack::Cpp` 静态库。运行时按硬件能力选择 SIMD 内核。[跨语言契约](../portable-runtime.cn.md)
 
 ## 支持范围
@@ -29,7 +42,7 @@ add_subdirectory(path/to/LuminPack/src/LuminPack.Cpp luminpack-cpp)
 target_link_libraries(my_app PRIVATE LuminPack::Cpp)
 ```
 
-## 读写位置对象
+## 底层游标示例
 
 Codec 按对应 .NET 契约声明的顺序写入成员。下面写入一个 `Int32` 成员和一个采用默认 UTF-16 Length profile 的字符串。
 

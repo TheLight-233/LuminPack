@@ -40,6 +40,8 @@
 | Rust | [强类型模型与原生文档](modules/luminpack.rust.cn.md) |
 | Python | [编译式 dict/list 读写器与原生文档](modules/luminpack.python.cn.md) |
 
+生成模型后，每次二进制读写只需调用一个函数，例如 C++ 的 `luminpack::serialize(value)` 或 Python 的 `message.serialize(value)`。[六种语言调用对照](portable-runtime.cn.md#使用生成的二进制-api)
+
 ```csharp
 [LuminPackable]
 public partial class Player

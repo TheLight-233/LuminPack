@@ -196,4 +196,5 @@ pub fn encode_json<'a>(codec:&luminpack::Codec, value:&Root, format:luminpack::F
     codec.decode(&binary,luminpack::Format::Binary)?.encode_into(output,format)
 }
 """)
+    out.append("pub use self::{encode_binary as serialize, decode_binary as deserialize};")
     return "\n".join(out) + "\n"

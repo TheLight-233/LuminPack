@@ -346,6 +346,11 @@ internal static partial class PortableGenerateCommand
             string pre = json ? "JSON" : "", api = json ? "JSON" : "Binary", n = Symbol(root), t = Model(root);
             Line($"func Decode{rootName}{api}(data []byte) ({t},error) {{return luminpack.Read{pre}Document(data,{limits},read{pre}{n})}}");
             Line($"func Encode{rootName}{api}(v {t}) ([]byte,error) {{return luminpack.Write{pre}Document(v,{limits}.{(json ? "JSONDepth" : "Depth")},write{pre}{n})}}");
+            if (!json)
+            {
+                Line($"func Serialize{rootName}(v {t}) ([]byte,error) {{return Encode{rootName}Binary(v)}}");
+                Line($"func Deserialize{rootName}(data []byte) ({t},error) {{return Decode{rootName}Binary(data)}}");
+            }
         }
         return outp.ToString();
     }

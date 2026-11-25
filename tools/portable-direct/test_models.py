@@ -77,6 +77,8 @@ value = {"text": chr(0xd800), "pairs": [[3, 7]]}
 wire = bytes.fromhex("02 02000000 00d8 01000000 03000000 07000000")
 assert message.encode_binary(value) == wire
 assert message.decode_binary(wire) == value
+assert message.serialize(value) == wire
+assert message.deserialize(wire) == value
 assert message.decode_binary(bytes([255])) is None
 for i in range(len(wire)):
     rejected(message.decode_binary, wire[:i])

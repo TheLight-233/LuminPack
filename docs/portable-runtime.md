@@ -14,6 +14,21 @@ LuminPack uses one contract for Binary and JSON across its runtimes. Define the 
 | Rust | [Generate a typed binary codec or load a native model library](../src/LuminPack.Rust/README.md) |
 | Python | [Compile a binary codec for dicts and lists or use native documents](../src/LuminPack.Python/README.md) |
 
+## Use the generated binary API
+
+Generate the binding once for the root model. Each call below reads or writes the positional record Example.Message as a complete binary document. Both Go calls return a result and an error. The TypeScript example uses `import * as message from "./message.js"`.
+
+| Language | Serialize | Deserialize |
+| --- | --- | --- |
+| C++ | `luminpack::serialize(value)` | `luminpack::deserialize<message::root_value>(bytes)` |
+| Java | `Message.serialize(value)` | `Message.deserialize(bytes)` |
+| Go | `generated.SerializeMessage(value)` | `generated.DeserializeMessage(data)` |
+| TypeScript | `message.serialize(value)` | `message.deserialize(bytes)` |
+| Rust | `message::serialize(&value)?` | `message::deserialize(&bytes)?` |
+| Python | `message.serialize(value)` | `message.deserialize(data)` |
+
+In C++, message aliases the generated root namespace. Use `message::serialize(value)` for standard containers or scalars and `message::serialize(value, output)` for single-pass Custom or RTTI Union writes. The Rust and Python short forms use their direct model generators. Their Document APIs handle versioned, tracked and Custom contracts. Each runtime guide covers its JSON operations and encoding options.
+
 ## Define and export a model
 
 Use the Next source generator in the .NET project that owns your contracts. This example defines a Default positional record. Each generated binding follows the exported member names and Binary order.

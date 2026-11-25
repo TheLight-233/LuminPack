@@ -2,6 +2,17 @@
 
 [English](../../src/LuminPack.Rust/README.md)
 
+## 一行读写二进制
+
+为支持的记录生成一次 `mod message`，传入 `message::Root`，编码得到独立的 `Vec<u8>`。引用追踪、版本容忍或 Custom 契约使用下文的原生 Document API。
+
+```rust
+let bytes = message::serialize(&value)?;
+let copy = message::deserialize(&bytes)?;
+```
+
+## 原生 Document API
+
 用导出的清单为每个根类型构建一个共享模型库。Rust 和 Python 可以加载同一个库。在 Windows 上，确保加载器能找到编译器运行时 DLL。
 
 ```sh

@@ -2,6 +2,17 @@
 
 [简体中文](../../docs/modules/luminpack.rust.cn.md)
 
+## Serialize and deserialize
+
+Generate `mod message` once for an eligible record and pass a `message::Root`. The binary result is an owned `Vec<u8>`. Use the native Document API below for tracked, versioned or Custom contracts.
+
+```rust
+let bytes = message::serialize(&value)?;
+let copy = message::deserialize(&bytes)?;
+```
+
+## Native Document API
+
 Build one shared model library per root from the exported manifest. Rust and the other native bindings can load the same library. On Windows, make the compiler runtime DLLs available to the loader.
 
 ```sh

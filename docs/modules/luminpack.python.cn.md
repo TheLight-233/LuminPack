@@ -2,6 +2,20 @@
 
 [English](../../src/LuminPack.Python/README.md)
 
+## 一行读写二进制
+
+为支持的记录编译一次 CPython 模块。编码返回 `bytes`，解码返回 Python 模型。引用追踪、版本容忍或 Custom 契约使用下文的原生 Document API。
+
+```python
+import message
+
+value = {"Id": 7, "Text": "ready", "Measurements": [2, 5]}
+data = message.serialize(value)
+copy = message.deserialize(data)
+```
+
+## 原生 Document API
+
 用导出的清单为每个根类型构建一个共享模型库。Rust 和 Python 可以加载同一个库。在 Windows 上，确保加载器能找到编译器运行时 DLL。
 
 ```sh

@@ -232,4 +232,5 @@ def emit(s):
         "def encode_json_into(codec,value,bytearray output,fmt=1)",
         ["return codec.decode(encode_binary(value)).encode_into(output,fmt)"],
     )
+    out.extend(["serialize = encode_binary", "deserialize = decode_binary"])
     return "\n\n".join(out) + "\n"

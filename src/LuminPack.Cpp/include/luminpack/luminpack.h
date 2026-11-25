@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <climits>
@@ -33,6 +34,21 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+/// Selects the generated root through its model type's associated namespace.
+template<class T>
+[[nodiscard]] auto serialize(const T& value) -> decltype(luminpack_serialize_root(std::type_identity<T>{}, value))
+{
+    return luminpack_serialize_root(std::type_identity<T>{}, value);
+}
+
+/// Returns the generated read result, including its graph owner for tracked roots.
+template<class T>
+[[nodiscard]] auto deserialize(std::span<const std::byte> input)
+    -> decltype(luminpack_deserialize_root(std::type_identity<T>{}, input))
+{
+    return luminpack_deserialize_root(std::type_identity<T>{}, input);
+}
+
 /// Numeric and character types whose C++ object representations match the wire.
 template<class T>
 concept scalar =
@@ -45,6 +61,35 @@ concept scalar =
 
 namespace detail
 {
+class insufficient_output : public std::length_error
+{
+public:
+    insufficient_output() : std::length_error("Insufficient LuminPack destination storage.") {}
+};
+
+template<class Write>
+[[nodiscard]] std::vector<std::byte> write_owned(Write write)
+{
+    // Each generated root has its own hint. No output storage survives the call.
+    static thread_local std::size_t hint = 256;
+    std::vector<std::byte> bytes(hint);
+    for (;;)
+    {
+        try
+        {
+            bytes.resize(write(std::span(bytes)).size());
+            hint = std::clamp<std::size_t>(bytes.size(), 32, 65536);
+            return bytes;
+        }
+        catch (const insufficient_output&)
+        {
+            if (bytes.size() == bytes.max_size())
+                throw;
+            bytes.resize(bytes.size() + std::min(bytes.size(), bytes.max_size() - bytes.size()));
+        }
+    }
+}
+
 [[noreturn]] void truncated_input();
 [[noreturn]] void short_output();
 

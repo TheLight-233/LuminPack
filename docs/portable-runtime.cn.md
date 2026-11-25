@@ -14,6 +14,21 @@ LuminPack 的各个运行时共用一份二进制和 JSON 契约。在 C# 中定
 | Rust | [生成强类型二进制读写器或加载原生模型库](modules/luminpack.rust.cn.md) |
 | Python | [为 dict 和 list 编译二进制读写器或使用原生文档](modules/luminpack.python.cn.md) |
 
+## 使用生成的二进制 API
+
+为根模型生成一次绑定。下面以位置编码记录 Example.Message 为例，每个单元格都是一次完整的二进制操作。Go 的两个调用均返回结果和 error。TypeScript 使用命名空间导入 `import * as message from "./message.js"`。
+
+| 语言 | 序列化 | 反序列化 |
+| --- | --- | --- |
+| C++ | `luminpack::serialize(value)` | `luminpack::deserialize<message::root_value>(bytes)` |
+| Java | `Message.serialize(value)` | `Message.deserialize(bytes)` |
+| Go | `generated.SerializeMessage(value)` | `generated.DeserializeMessage(data)` |
+| TypeScript | `message.serialize(value)` | `message.deserialize(bytes)` |
+| Rust | `message::serialize(&value)?` | `message::deserialize(&bytes)?` |
+| Python | `message.serialize(value)` | `message.deserialize(data)` |
+
+C++ 的 message 是生成的根命名空间别名。标准容器或标量根使用 `message::serialize(value)` 选择契约。C++ 的 Custom 或 RTTI Union 回调使用 `message::serialize(value, output)` 单次写入。Rust 和 Python 的短入口适用于支持直接生成的模型，版本容忍、引用追踪和 Custom 使用各自指南中的 Document API。JSON 的入口和编码选项见各模块指南。
+
 ## 定义并导出模型
 
 在定义契约的 .NET 项目中使用 Next 源代码生成器。下面的示例是一个 Default 位置记录。各语言生成的绑定采用导出文件中的成员名与二进制顺序。

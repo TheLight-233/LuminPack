@@ -2,6 +2,16 @@
 
 [English](../../src/LuminPack.Java/README.md)
 
+## 一行读写二进制
+
+导入生成的 `Message` 类以及 `java.util.Map` 和 `java.util.List`。生成类持有一个 codec，需要应用注册时先配置 `Message.CODEC`。
+
+```java
+var value = Map.of("Id", 7, "Text", "ready", "Measurements", List.of(2, 5));
+byte[] bytes = Message.serialize(value);
+Object copy = Message.deserialize(bytes);
+```
+
 Java 运行时读写 LuminPack 二进制，以及 UTF-8 或 UTF-16LE JSON。生成的 Java 类持有根 codec 和从 C# 模型导出的契约。[跨语言契约](../portable-runtime.cn.md)
 
 ## 支持范围

@@ -85,6 +85,7 @@ internal sealed partial class CppEmitter
         emitter.EmitDeferredRecordsAndRttiUnions();
         emitter.EmitRoot(binding, profile);
         emitter.EmitRootBinaryReadFacade(manifest.RootElement);
+        emitter.EmitRootOperations(manifest.RootElement);
         emitter.code.Append("}\n");
         OutputFile.Replace(manifestPath, headerPath, stream =>
         {

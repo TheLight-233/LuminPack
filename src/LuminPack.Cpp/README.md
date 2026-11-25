@@ -2,6 +2,19 @@
 
 [中文](../../docs/modules/luminpack.cpp.cn.md)
 
+## Serialize and deserialize
+
+For a standalone scalar or standard container, select the generated root explicitly with `message::serialize(value)` and `message::deserialize(bytes)`. `message::serialize(value, output)` writes once into a supplied span. Use this overload for Custom or RTTI Union callbacks. Tracked reads return the document that owns the graph.
+
+```cpp
+#include "message.h"
+namespace message = luminpack_generated::root_Example_x002eMessage;
+
+// value has type message::root_value
+const auto bytes = luminpack::serialize(value);
+auto copy = luminpack::deserialize<message::root_value>(bytes);
+```
+
 The C++20 runtime reads and writes LuminPack Binary and UTF-8 or UTF-16LE JSON over caller-owned contiguous buffers. Generated codecs include the public header `<luminpack/luminpack.h>` and link the `LuminPack::Cpp` static library. The runtime selects supported SIMD kernels at run time. [Cross-language contracts](../../docs/portable-runtime.md)
 
 ## Supported contracts
@@ -29,7 +42,7 @@ add_subdirectory(path/to/LuminPack/src/LuminPack.Cpp luminpack-cpp)
 target_link_libraries(my_app PRIVATE LuminPack::Cpp)
 ```
 
-## Write and read a positional record
+## Low-level cursor example
 
 A codec encodes members in the order declared by the matching .NET contract. This example writes one `Int32` member followed by one string using the default UTF-16 Length profile.
 

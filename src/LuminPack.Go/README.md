@@ -2,6 +2,16 @@
 
 [简体中文](../../docs/modules/luminpack.go.cn.md)
 
+## Serialize and deserialize
+
+The root name keeps multiple models in one package distinct. Eligible records use the generated typed functions. Other roots use a lazily loaded default schema. For application registrations, configure a schema returned by `LoadMessageLuminPack` and call its methods. Check `err` before using the decoded value.
+
+```go
+data, err := generated.SerializeMessage(value)
+if err != nil { return err }
+copy, err := generated.DeserializeMessage(data)
+```
+
 The Go module reads and writes LuminPack Binary and UTF-8 or UTF-16LE JSON. A generated Go file embeds the root schema from the shared contract. [Cross-language contracts](../../docs/portable-runtime.md)
 
 ## Supported contracts
@@ -28,7 +38,7 @@ From the LuminPack repository root, generate the shared guide's `Example.Message
 dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language go --package generated .tmp/contracts.json Example.Message .tmp/message.go
 ```
 
-## Read and write
+## Transcode to JSON with a schema
 
 Use the empty type identity to select the root. The schema reports invalid wire data or incompatible model values as errors.
 

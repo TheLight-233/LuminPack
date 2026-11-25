@@ -2,6 +2,20 @@
 
 [简体中文](../../docs/modules/luminpack.python.cn.md)
 
+## Serialize and deserialize
+
+Build the generated CPython module once for an eligible record. The encoder returns `bytes` and the decoder returns the Python model. Use the native Document API below for tracked, versioned or Custom contracts.
+
+```python
+import message
+
+value = {"Id": 7, "Text": "ready", "Measurements": [2, 5]}
+data = message.serialize(value)
+copy = message.deserialize(data)
+```
+
+## Native Document API
+
 Build one shared model library per root from the exported manifest. Python and the other native bindings can load the same library. On Windows, make the compiler runtime DLLs available to the loader.
 
 ```sh

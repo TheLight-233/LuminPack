@@ -2,6 +2,16 @@
 
 [简体中文](../../docs/modules/luminpack.java.cn.md)
 
+## Serialize and deserialize
+
+Import the generated `Message` class plus `java.util.Map` and `java.util.List`. The class holds one codec. Configure application registrations on `Message.CODEC` before using it.
+
+```java
+var value = Map.of("Id", 7, "Text", "ready", "Measurements", List.of(2, 5));
+byte[] bytes = Message.serialize(value);
+Object copy = Message.deserialize(bytes);
+```
+
 The Java runtime exchanges LuminPack Binary and UTF-8 or UTF-16LE JSON. A generated Java class holds the root codec and the contract exported from the C# model. [Cross-language contracts](../../docs/portable-runtime.md)
 
 ## Supported contracts

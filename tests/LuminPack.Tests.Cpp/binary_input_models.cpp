@@ -39,6 +39,8 @@ void exchange(const interop_models::path& directory, const std::string& name, st
     const auto joined = interop_models::load(directory / (name + "-joined.bin"));
     auto value = decode(exact);
     verify(value);
+    auto owned = luminpack::serialize(luminpack::deserialize<typename Codec::value_type>(exact));
+    require(std::ranges::equal(owned, exact), "One-call Binary operations preserve managed bytes and graph identity.");
     if constexpr (Complete)
         reject([&] { (void)decode(joined); }, "Require complete Binary input on opted-in roots.");
     else
