@@ -94,6 +94,12 @@ def suite_routes(suite):
             for fmt, suffix in FORMATS[1:]:
                 filename = "strings" + suffix
                 yield Route(root, filename, filename, fmt, fmt, reject=True)
+        case "recursive-lists":
+            for stem, model in (("list", "SelfList"), ("tracked", "SharedList"), ("wide", "SharedList"), ("tree", "UnionTree")):
+                root = "LuminPackPortableFixtures." + model
+                yield Route(root, stem + ".bin", stem + ".json", "binary", "json-utf8", exact=stem + ".json")
+                yield Route(root, stem + ".json", stem + ".bin", "json-utf8", "binary", exact=stem + ".bin")
+            yield Route("LuminPackPortableFixtures.SharedList", "invalid.bin", "rejected.bin", "binary", "binary", expected_failure=True)
         case "primitive-roots":
             derived = "LuminPackPortableFixtures.PrimitiveList"
             for name, root in (
@@ -354,7 +360,7 @@ def typescript_runner(args):
 
 
 def prepare_inputs(args, work, codegen, routes):
-    if args.suite in ("benchmarks", "strings", "ordered-json", "json-numbers", "primitive-roots"):
+    if args.suite in ("benchmarks", "strings", "ordered-json", "json-numbers", "primitive-roots", "recursive-lists"):
         project = HERE / "LuminPack.Tests.Portable.csproj"
     else:
         name = "LuminPack.Tests.Cpp." + SUITES[args.suite]
@@ -368,7 +374,7 @@ def prepare_inputs(args, work, codegen, routes):
                build_dotnet(project, work / "managed", export=True, properties=properties.get(args.suite, ())))
     inputs = work / "managed-models"
     operation = {"native-layout": "write-native", "strings": "write-strings", "ordered-json": "write-ordered-json",
-                 "primitive-roots": "write-primitive-roots", "json-numbers": "write-json-numbers"}.get(args.suite, "write")
+                 "recursive-lists": "write-recursive-lists", "primitive-roots": "write-primitive-roots", "json-numbers": "write-json-numbers"}.get(args.suite, "write")
     write = [args.managed_dotnet, managed, operation, inputs]
     if args.suite == "version-archive":
         write.append(ROOT / "tests/LuminPack.Tests.Aot/Fixtures/version-revision-1.bin")
@@ -401,7 +407,7 @@ def prepare_inputs(args, work, codegen, routes):
         if args.native_scalar_alignment:
             flags += ["--native-scalar-alignment", str(args.native_scalar_alignment)]
         invoke(["dotnet", codegen, "project", *flags, manifest, root, schema])
-        if args.suite == "primitive-roots":
+        if args.suite in ("primitive-roots", "recursive-lists"):
             first = next(route for route in routes if route.root == root)
             header = inputs / Path(first.input).with_suffix(".hpp")
             invoke(["dotnet", codegen, "generate", "--language", "cpp", manifest, root, header])
@@ -519,7 +525,7 @@ def verify_alternate_tagged(command, schema, canonical, outputs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("benchmarks", "strings", "ordered-json", "json-numbers", "primitive-roots", *SUITES), default="benchmarks")
+    parser.add_argument("--suite", choices=("benchmarks", "strings", "ordered-json", "json-numbers", "primitive-roots", "recursive-lists", *SUITES), default="benchmarks")
     parser.add_argument("--language", choices=LANGUAGES, action="append", help="Repeat to select multiple runtimes. The default runs all three.")
     parser.add_argument("--fixtures", type=Path, help="Reuse a manifest and documents emitted by the selected managed suite.")
     parser.add_argument("--manifest", type=Path, help="Use this manifest for reused fixtures stored separately from their manifest.")
@@ -564,7 +570,7 @@ def main():
         exchange(command, inputs, outputs, schemas, routes, args.fixtures / "out" if args.fixtures else None)
         verify_layout_edits(args.suite, command, inputs, outputs, schemas)
         operation = {"native-layout": "read-native", "strings": "read-strings", "ordered-json": "read-ordered-json",
-                     "primitive-roots": "read-primitive-roots", "json-numbers": "read-json-numbers"}.get(args.suite, "read")
+                     "recursive-lists": "read-recursive-lists", "primitive-roots": "read-primitive-roots", "json-numbers": "read-json-numbers"}.get(args.suite, "read")
         invoke([args.managed_dotnet, managed, operation, outputs])
         print(f"{backend}: verified {args.suite} managed round trips.", flush=True)
 

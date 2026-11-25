@@ -50,6 +50,8 @@ dotnet run --project tools/LuminPack.Codegen -c Release -- export path/to/Contra
 
 From the repository root, choose one target language and one root per command. Use the full model name or the exact closed generic `id` from the manifest. Quote names containing shell metacharacters, such as `'Example.Box<string>'`.
 
+A C# node derived from `List<Node>` is a nested list in Java, Go, and TypeScript. When tracking is enabled, use a record with a `$value` list so repeated elements can point to the same node.
+
 A root can also be a shared primitive or a closed collection, for example `int`, `float[]`, `System.Collections.Generic.List<int?>`, or `System.Collections.Generic.Dictionary<int,float>`. For nullable collection elements or values, include a closed serializer call for that exact collection in the exporting C# project and regenerate the manifest. This exports the CLR slot layout used by Binary. A derived List with `IncludeCollectionBase = true` exposes its inherited elements as `$items` in JSON and portable records (`collection_items` in C++). The Binary header counts only declared fields.
 
 ```sh

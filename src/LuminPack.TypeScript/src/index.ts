@@ -108,6 +108,8 @@ interface Member {
 interface UnionCase { id: string; type?: string; hash: number; tag?: number; }
 
 interface Contract {
+    sequenceBase?: string | null;
+    sequenceWire?: Wire;
     binaryMemberCount?: number;
     id: string;
     kind: string;
@@ -832,6 +834,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         try {
             const { contract } = plan;
             const profile = useProfile(contract.profile, inherited);
+            if (contract.sequenceWire) return this.readWire(contract.sequenceWire, input, profile, state);
             if (contract.kind === "Custom") return this.custom(plan).readBinary(input);
             if (contract.kind === "Union") return this.readUnion(plan, input, profile, state);
             if (contract.kind !== "Record" && contract.kind !== "Struct") throw new WireError("Unsupported LuminPack contract kind.");
@@ -844,12 +847,12 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 if (marker === 255) return null;
                 const id = readReferenceNumber(input);
                 if (marker === 250) return this.lookupReference(state, id, contract.id);
-                if (marker > 249 || input.peek() === 255 || state.references.has(id))
+                if (marker > 249 || (!contract.sequenceBase && input.peek() === 255) || state.references.has(id))
                     throw new WireError("Invalid LuminPack reference definition.");
                 state.references.set(id, { type: identity(contract.id), value: result });
             }
             if (contract.versioned) return this.readVersion(plan, input, profile, state, result);
-            if (contract.kind === "Record" && (!caseBody || tracked)) {
+            if (contract.kind === "Record" && !contract.sequenceBase && (!caseBody || tracked)) {
                 const marker = input.u8();
                 if (marker === 255) return null;
                 if (marker !== (contract.binaryMemberCount ?? contract.members.length) || marker > 249)
@@ -865,6 +868,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         try {
             const { contract } = plan;
             const profile = useProfile(contract.profile, inherited);
+            if (contract.sequenceWire) return this.writeWire(contract.sequenceWire, output, value, profile, state);
             if (contract.kind === "Custom") { this.custom(plan).writeBinary(output, value); return; }
             if (contract.kind === "Union") { this.writeUnion(plan, output, value, profile, state); return; }
             if (contract.kind !== "Record" && contract.kind !== "Struct") throw new WireError("Unsupported LuminPack contract kind.");
@@ -879,12 +883,12 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             const tracked = contract.profile.trackReferences === true;
             if (tracked) {
                 const reference = this.referenceIndex(state, record, contract.id);
-                output.u8(reference.existing ? 250 : contract.members.length);
+                output.u8(reference.existing ? 250 : (contract.binaryMemberCount ?? contract.members.length));
                 writeReferenceNumber(output, reference.id);
                 if (reference.existing) return;
             }
             if (contract.versioned) { this.writeVersion(plan, output, record, profile, state); return; }
-            if (contract.kind === "Record" && (!caseBody || tracked)) output.u8(contract.binaryMemberCount ?? contract.members.length);
+            if (contract.kind === "Record" && !contract.sequenceBase && (!caseBody || tracked)) output.u8(contract.binaryMemberCount ?? contract.members.length);
             for (const member of contract.members) this.writeMember(member, output, this.field(record, member), profile, state);
         } finally { state.depth--; }
     }
@@ -1137,6 +1141,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
 
     private readOrderedJsonContract(plan: Plan, input: OrderedJsonCursor, utf8: boolean, depth: number): unknown {
         const { contract, jsonHeads } = plan;
+        if (contract.sequenceWire) return this.readOrderedJsonWire(contract.sequenceWire, input, utf8, depth);
         if (contract.kind !== "Struct" && input.consume("null")) return null;
         input.depth(depth);
         if (contract.kind === "Union") {
@@ -1419,6 +1424,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
 
     private readJsonContract(plan: Plan, value: JsonValue, encoding: JsonEncoding, state: ReadState): unknown {
         const { contract } = plan;
+        if (contract.sequenceWire) return this.readJsonWire(contract.sequenceWire, value, encoding, state);
         if (contract.kind === "Custom") {
             const codec = this.custom(plan);
             if (!contract.customJson || encoding !== "utf16" || !codec.readJson)
@@ -1466,6 +1472,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         if (state.depth++ >= this.jsonDepth) throw new WireError("LuminPack JSON nesting exceeds its limit.");
         try {
             const { contract } = plan;
+            if (contract.sequenceWire) return this.writeJsonWire(contract.sequenceWire, value, encoding, state, parts);
             if (contract.kind === "Custom") {
                 const codec = this.custom(plan);
                 if (!contract.customJson || encoding !== "utf16" || !codec.writeJson)

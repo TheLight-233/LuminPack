@@ -6,6 +6,7 @@ internal sealed partial class CppEmitter
     private readonly HashSet<string> recursiveReferenceTypes = new(StringComparer.Ordinal);
     private readonly HashSet<string> recursiveReferenceBindings = new(StringComparer.Ordinal);
     private readonly Queue<(JsonElement Contract, string Name, int Profile)> deferredRecursiveRecords = new();
+    private readonly HashSet<string> recursiveLists = new(StringComparer.Ordinal);
     private readonly List<string> recursiveRecordBodies = new();
     private bool isolatedRecursiveEntries;
 
@@ -40,8 +41,8 @@ internal sealed partial class CppEmitter
                 HasFiniteLimit(rootType, "maxString");
             if (isolatedRecursiveEntries)
             {
-                if (recursiveRecords.Any(type => Reaches(type, IsUnion)))
-                    throw Missing(rootType, "an owning recursive subtree that reaches a Union");
+                if (recursiveRecords.Any(type => Reaches(type, child => IsUnion(child) && Reaches(child, recursiveRecords.Contains))))
+                    throw Missing(rootType, "a Union below owning recursion that leads back to an owning recursive record");
                 if (boundaries.Any(type => IsUnion(type) && reachable[type].Any(recursiveRecords.Contains)))
                     throw Missing(rootType, "an owning recursive record used directly as a Union case");
                 if (boundaries.Any(type => Reaches(type, recursiveRecords.Contains) &&
@@ -113,6 +114,8 @@ internal sealed partial class CppEmitter
             IEnumerable<string> cases = contract.TryGetProperty("cases", out JsonElement types) && types.ValueKind == JsonValueKind.Array
                 ? types.EnumerateArray().Select(item => Text(item, "type"))
                 : [];
+            if (contract.TryGetProperty("sequenceBase", out JsonElement sequence) && sequence.ValueKind == JsonValueKind.String)
+                members = members.Append(sequence.GetString()!);
             if (contract.TryGetProperty("collectionBase", out JsonElement collection) && collection.ValueKind == JsonValueKind.Object)
                 members = members.Append(Text(collection, "type"));
             string[] dependencies = members.Concat(cases).SelectMany(RecursiveDependencies).Distinct(StringComparer.Ordinal).ToArray();
@@ -169,9 +172,10 @@ internal sealed partial class CppEmitter
             recursiveReferenceBindings.Add(name);
         string readState = tracking ? ", luminpack::reference_read_state&" : string.Empty;
         string writeState = tracking ? ", luminpack::reference_write_state&" : string.Empty;
+        bool listBody = contract.GetProperty("sequenceBase").ValueKind == JsonValueKind.String;
         code.Append("struct ").Append(name).Append(";\nstruct ").Append(binding.Binary)
             .Append("\n{\n    using value_type = ").Append(binding.Type).Append(";\n")
-            .Append("    static constexpr std::size_t minimum_size = 1;\n")
+            .Append("    static constexpr std::size_t minimum_size = ").Append(listBody ? "4" : "1").Append(";\n")
             .Append("    static value_type read(luminpack::reader&, luminpack::version_state&").Append(readState)
             .Append(", luminpack::detail::recursive_record_depth&);\n")
             .Append("    static void write(luminpack::writer&, const value_type&, luminpack::version_state&").Append(writeState)
@@ -198,6 +202,36 @@ internal sealed partial class CppEmitter
         return binding;
     }
 
+    /// <summary>Binds a list-derived node to collection framing while retaining its recursive or graph-owned identity.</summary>
+    /// <param name="contract">The self-referential declaration.</param>
+    /// <param name="name">The active profile codec prefix.</param>
+    /// <param name="profile">The active binary profile.</param>
+    /// <param name="trackedStorage">The shared graph storage name for a tracked node.</param>
+    /// <returns>The previously declared recursive binding.</returns>
+    private Binding EmitSelfList(JsonElement contract, string name, int profile, string? trackedStorage)
+    {
+        string storage = trackedStorage ?? name;
+        var binding = generated[(Normalize(Text(contract, "type")), profile)];
+        if (trackedStorage == null || definedReferenceStorage.Add(storage))
+            code.Append("struct ").Append(storage).Append(RttiInheritance(Normalize(Text(contract, "type"))))
+                .Append("\n{\n    std::vector<").Append(binding.Type).Append("> items;\n};\n");
+        string body = Apply("luminpack::detail::self_list_binary", [storage, binding.Binary]);
+        string jsonItems = Apply("luminpack::detail::self_list_json_items", [binding.Json]);
+        if (trackedStorage != null)
+        {
+            EmitTrackedRecordCodec(name, storage, profile, false, [],
+                [new JsonMember("$value", "&" + storage + "::items", jsonItems, [])], body);
+        }
+        else
+        {
+            recursiveLists.Add(name);
+            recursiveRecordBodies.Add(name);
+            Alias(name + "_binary_body", body);
+            Alias(name + "_json_body", "luminpack::detail::self_list_json_body", [name, jsonItems]);
+        }
+        return binding;
+    }
+
     /// <summary>Emits recursive storage and discovers the concrete codecs of its dependencies.</summary>
     private void EmitRecursiveStorage()
     {
@@ -219,6 +253,7 @@ internal sealed partial class CppEmitter
         string binary = name + "_binary";
         string json = name + "_json";
         string binaryCodec = $"luminpack::detail::recursive_binary_record<{name}, {binary}_body>";
+        if (recursiveLists.Contains(name)) binaryCodec = name + "_binary_body";
         string jsonCodec = $"luminpack::detail::recursive_json_record<{name}, {json}_body>";
         bool tracking = recursiveReferenceBindings.Contains(name);
         string references = tracking ? ", references" : string.Empty;

@@ -33,6 +33,8 @@ Use `generate --language cpp --rtti` to project Next's exact and virtual Union d
 
 For an RTTI Union exported with registration enabled, register an application case derived from `root_binary::registry::base_type` using `root_binary::registry::register_case<Case, Binding>(tag)`. Supply Binary and JSON payload readers and tagged writers. The Binary codec writes the escape hash, then the binding writes the tag with `write_registered_union_tag<root_binary::registry::wide_tags>` and its payload. The JSON binding writes the numeric `$type` and application payload in the `$value` envelope. Match the C# runtime registration's tag and wire representation.
 
+Model a self-referential List as a nested list, or as a record with a `$value` list when tracking references. Generated C++ nodes expose `items` and borrow tracked pointers from the graph document.
+
 For standalone primitive Array, List, and Dictionary roots with nullable elements or values, include a closed serializer call for the exact collection in the contract-exporting assembly. Regenerate the manifest and bindings to pick up its physical nullable layout. Derived List records with `IncludeCollectionBase` expose their elements as `$items` (`collection_items` in generated C++).
 
 Pass generated `root_binary_limits` or `root_json_options` to the corresponding C++ document reader to enforce the root's declared `MaxInputBytes` before decoding.

@@ -44,6 +44,7 @@ final class JsonDocument {
     }
 
     Object readContract(Schema.Contract type, Object value) {
+        if (type.sequenceWire != null) return readWire(type.sequenceWire, value);
         if (type.kind.equals("Custom")) return customJson(type).readJson(value);
         if (value == null) {
             if (type.kind.equals("Struct")) throw fail("Missing LuminPack JSON struct");
@@ -77,6 +78,7 @@ final class JsonDocument {
     }
 
     private Object writeContract(Schema.Contract type, Object value) {
+        if (type.sequenceWire != null) return writeWire(type.sequenceWire, value);
         if (type.kind.equals("Custom")) return new Json.Opaque(customJson(type).writeJson(value));
         if (value == null) {
             if (type.kind.equals("Struct")) throw fail("Missing LuminPack JSON struct");

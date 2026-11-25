@@ -532,6 +532,35 @@ private:
 };
 
 /// JSON object codec for a nullable class DTO.
+namespace detail
+{
+template<class Element>
+struct self_list_json_items
+{
+    using value_type = std::vector<typename Element::value_type>;
+    static value_type read(auto& input)
+    {
+        auto values = json_list_codec<Element>::read(input);
+        if (!values) throw wire_error("Null collection in a reference definition.");
+        return std::move(*values);
+    }
+
+    static void write(auto& output, const value_type& values) { json_list_codec<Element>::write_elements(output, values); }
+};
+
+template<class T, class Items>
+struct self_list_json_body
+{
+    static T read(auto& input)
+    {
+        T result;
+        result.items = Items::read(input);
+        return result;
+    }
+    static void write(auto& output, const T& value) { Items::write(output, value.items); }
+};
+}
+
 /// Validates the inherited List<T> when its JSON property is present.
 template<class Codec>
 struct collection_base_json

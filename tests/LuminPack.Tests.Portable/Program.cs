@@ -7,6 +7,12 @@ using LuminPack.Option;
 using LuminPackPortableFixtures;
 using BenchmarkSerializer = Benchmark::LuminPack.LuminPackSerializer;
 
+if (args is ["write-recursive-lists" or "read-recursive-lists", var recursiveDirectory])
+{
+    RecursiveListFixtures.Exchange(recursiveDirectory, args[0] == "write-recursive-lists");
+    return 0;
+}
+
 if (args is ["write-primitive-roots" or "read-primitive-roots", var primitiveDirectory])
 {
     PrimitiveRootFixtures.Exchange(primitiveDirectory, args[0] == "write-primitive-roots");

@@ -104,8 +104,6 @@ internal sealed class PortableManifest
             throw new InvalidOperationException("No exported LuminPack contract for " + type + ".");
         if (source["typeParameters"] is JsonArray { Count: > 0 })
             throw new InvalidOperationException("A portable root requires closed contracts: " + type + ".");
-        if (source["sequenceBase"] != null)
-            throw new InvalidOperationException("A self-referential collection body requires a portable sequence codec: " + type + ".");
         if (source["dynamicVersion"]?.GetValue<bool>() == true)
             throw new InvalidOperationException("A portable Version contract requires closed field descriptors: " + type + ".");
         var contract = (JsonObject)source.DeepClone();
@@ -120,6 +118,21 @@ internal sealed class PortableManifest
                 wire["type"]?.GetValue<string>() is "nint" or "nuint" && size.GetValue<int>() is 4 or 8 &&
                 size.GetValue<int>() != nativeIntegerBytes)
                 throw new InvalidOperationException("Native integer width differs from the manifest at " + label + ".");
+        }
+        if (contract["sequenceBase"] != null)
+        {
+            JsonObject list = Sequence(Describe("contract", type));
+            if (contract["profile"]?["trackReferences"]?.GetValue<bool>() == true)
+            {
+                list["required"] = true;
+                contract["binaryMemberCount"] = 0;
+                ((JsonArray)contract["members"]!).Add(new JsonObject
+                {
+                    ["name"] = "$value", ["profile"] = new JsonObject(), ["wire"] = list
+                });
+            }
+            else
+                contract["sequenceWire"] = list;
         }
         if (contract["collectionBase"] is JsonObject collection)
         {

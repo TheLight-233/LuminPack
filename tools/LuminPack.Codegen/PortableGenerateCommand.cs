@@ -121,6 +121,11 @@ internal static class PortableGenerateCommand
         foreach (var (type, contract) in declarations)
         {
             string name = "Contract_" + Identifier(type) + "<_ArrayViews extends boolean = false>";
+            if (contract["sequenceWire"] is JsonObject sequence)
+            {
+                result.Append("export type ").Append(name).Append(" = ").Append(TypeScriptType(sequence, declarations, "_ArrayViews")).Append(";\n\n");
+                continue;
+            }
             switch (PortableManifest.Text(contract, "kind"))
             {
                 case "Union":

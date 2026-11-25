@@ -47,13 +47,16 @@ internal sealed partial class CppEmitter
     /// <param name="version">Whether the binary body is version tolerant.</param>
     /// <param name="binaryMembers">The existing ordered body codecs.</param>
     /// <param name="jsonMembers">The projected JSON names, aliases and field codecs.</param>
+    /// <param name="listBody">The list body codec for a tracked self-referential collection.</param>
     private void EmitTrackedRecordCodec(string name, string storage, int profile, bool version,
-        IReadOnlyList<string> binaryMembers, IReadOnlyList<JsonMember> jsonMembers)
+        IReadOnlyList<string> binaryMembers, IReadOnlyList<JsonMember> jsonMembers, string? listBody = null)
     {
         string binary = name + "_binary";
         string json = name + "_json";
         string binaryBody = binary + "_body";
-        if (version)
+        if (listBody != null)
+            Alias(binaryBody, listBody);
+        else if (version)
             Alias(binaryBody, "luminpack::version_codec", new[] { storage, Profile(profile) }.Concat(binaryMembers));
         else
             Alias(binaryBody, "luminpack::record_codec", new[] { storage }.Concat(binaryMembers));

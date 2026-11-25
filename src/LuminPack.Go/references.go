@@ -75,7 +75,7 @@ func (r *binaryReader) tracked(c *contract, p int) any {
 	r.refs[id] = reference{id, c, value}
 	r.descend()
 	defer func() { r.depth-- }()
-	if r.body(c, p, false, value) == nil {
+	if r.body(c, p, c.SequenceBase != "", value) == nil {
 		fail(r.pos, "tracked reference contains null body")
 	}
 	return value
@@ -110,9 +110,9 @@ func (w *binaryWriter) tracked(c *contract, data any, p int) {
 	if len(c.Members) > 249 {
 		fail(-1, "too many tracked record fields")
 	}
-	w.byte(byte(len(c.Members)))
+	w.byte(byte(c.headerCount()))
 	w.refID(id)
 	w.descend()
 	defer func() { w.depth-- }()
-	w.body(c, p, false, value)
+	w.body(c, p, c.SequenceBase != "", value)
 }

@@ -50,6 +50,8 @@ dotnet run --project tools/LuminPack.Codegen -c Release -- export path/to/Contra
 
 在仓库根目录运行，每条命令指定一种目标语言和一个根类型。使用完整模型名，或导出文件中的闭合泛型 `id`。包含命令行特殊字符的名称需要用引号包裹，例如 `'Example.Box<string>'`。
 
+对于继承 `List<Node>` 的 C# 节点，Java、Go 和 TypeScript 用嵌套列表表示。启用引用跟踪时，用带 `$value` 列表的记录表示节点，重复元素可以指向同一节点。
+
 根类型也可以是四端共有的基础类型或闭合的集合，例如 `int`、`float[]`、`System.Collections.Generic.List<int?>` 和 `System.Collections.Generic.Dictionary<int,float>`。如果集合元素或字典值可空，请在导出契约的 C# 项目中为该集合保留闭合的序列化调用，重新生成清单，以导出 Binary 使用的 CLR 存储布局。启用 `IncludeCollectionBase = true` 的 List 派生类通过 JSON 和可移植记录的 `$items` 访问继承的元素，C++ 字段名为 `collection_items`。Binary 头部只计入声明的字段。
 
 ```sh

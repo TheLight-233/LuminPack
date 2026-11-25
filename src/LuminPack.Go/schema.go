@@ -121,13 +121,17 @@ func (c *contract) headerCount() int {
 
 func (c *contract) newJSONRecord() Record {
 	result := make(Record, len(c.Members))
-	if c.BinaryMemberCount != nil {
+	if c.SequenceBase != "" {
+		result["$value"] = []any{}
+	} else if c.BinaryMemberCount != nil {
 		result["$items"] = []any{}
 	}
 	return result
 }
 
 type contract struct {
+	SequenceWire                     *descriptor
+	SequenceBase                     string
 	BinaryMemberCount                *int
 	ID, Type, Kind, StorageKind      string
 	Profile                          profile

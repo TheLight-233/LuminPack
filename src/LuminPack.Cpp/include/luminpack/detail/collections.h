@@ -312,6 +312,50 @@ struct list_codec
     }
 };
 
+namespace detail
+{
+/// Binary storage for List<Node> bodies, with the same checked count as an ordinary list.
+template<class T, class Element>
+struct self_list_binary
+{
+    static constexpr bool list_body = true;
+    using sequence = list_codec<Element>;
+
+    static void read_into(reader& input, T& destination, auto&... context)
+    {
+        auto values = sequence::read(input, context...);
+        if (!values) throw wire_error("Null collection in a reference definition.");
+        destination.items = std::move(*values);
+    }
+
+    static void write_body(writer& output, const T& value, auto&... context)
+    {
+        sequence::write_elements(output, value.items, context...);
+    }
+
+    static std::unique_ptr<T> read(reader& input, version_state& version, recursive_record_depth& depth)
+    {
+        reader next = input;
+        if (next.read<std::int32_t>() == -1)
+        {
+            input = next;
+            return {};
+        }
+        recursive_record_depth::scope nesting(depth);
+        auto result = std::make_unique<T>();
+        read_into(input, *result, version, depth);
+        return result;
+    }
+
+    static void write(writer& output, const std::unique_ptr<T>& value, version_state& version, recursive_record_depth& depth)
+    {
+        if (!value) { output.write<std::int32_t>(-1); return; }
+        recursive_record_depth::scope nesting(depth);
+        write_body(output, *value, version, depth);
+    }
+};
+}
+
 /// Dictionary<TKey,TValue> uses a count followed by key/value pairs in wire order.
 template<class Key, class Value, class Hash = detail::key_hash<typename Key::value_type>,
     class Equal = detail::key_equal<typename Key::value_type>>

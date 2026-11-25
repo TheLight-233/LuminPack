@@ -57,6 +57,10 @@ final class BinaryDocument {
 
     private Object readContract(BinaryCursor.Reader input, Schema.Contract type, int inherited, int depth, boolean caseBody) {
         int profile = type.profile.binary(inherited);
+        if (type.sequenceWire != null) {
+            checkDepth(depth, depthLimit);
+            return readWire(input, type.sequenceWire, profile, depth + 1);
+        }
         if (type.kind.equals("Union")) return readUnion(input, type, profile, depth);
         if (type.kind.equals("Custom")) return bindings.custom(type).readBinary(new LuminPack.WireReader(input, profile));
         boolean markerPresent = type.versioned || (!isInlineStruct(type) && (!caseBody || type.profile.track()));
@@ -78,7 +82,7 @@ final class BinaryDocument {
                 return entry.value;
             }
             result = new LinkedHashMap<>(type.members.size());
-            if (input.peekU8() == NULL || references.putIfAbsent(id, new Reference(type, result, id)) != null)
+            if ((!type.sequenceBase && input.peekU8() == NULL) || references.putIfAbsent(id, new Reference(type, result, id)) != null)
                 throw fail("Invalid LuminPack reference definition");
         } else {
             result = new LinkedHashMap<>(type.members.size());
@@ -88,7 +92,7 @@ final class BinaryDocument {
         if (type.versioned) {
             return readVersion(input, type, result, profile, depth + 1) ? result : null;
         }
-        if (markerPresent) {
+        if (markerPresent && !type.sequenceBase) {
             int count = input.readU8();
             if (count == NULL) return null;
             if (count != type.binaryMemberCount) throw fail("Unexpected LuminPack member count in " + type.id);
@@ -100,6 +104,11 @@ final class BinaryDocument {
 
     private void writeContract(BinaryCursor.Writer output, Schema.Contract type, Object value, int inherited, int depth, boolean caseBody) {
         int profile = type.profile.binary(inherited);
+        if (type.sequenceWire != null) {
+            checkDepth(depth, depthLimit);
+            writeWire(output, type.sequenceWire, value, profile, depth + 1);
+            return;
+        }
         if (type.kind.equals("Union")) {
             writeUnion(output, type, value, profile, depth);
             return;
@@ -119,7 +128,7 @@ final class BinaryDocument {
             }
             long id = written.size();
             written.put(value, new Reference(type, value, id));
-            output.writeU8(type.members.size());
+            output.writeU8(type.binaryMemberCount);
             writeReferenceId(output, id);
         }
         if (value == null) {
@@ -134,7 +143,7 @@ final class BinaryDocument {
             return;
         }
         if (type.kind.equals("Struct") && Layout.writeStruct(this, output, type, map, profile, depth + 1, false)) return;
-        if (!isInlineStruct(type) && (!caseBody || type.profile.track())) output.writeU8(type.binaryMemberCount);
+        if (!type.sequenceBase && !isInlineStruct(type) && (!caseBody || type.profile.track())) output.writeU8(type.binaryMemberCount);
         writeMembers(output, type, map, profile, depth + 1);
     }
 

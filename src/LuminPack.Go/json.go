@@ -147,6 +147,9 @@ func (s *Schema) encodeJSON(typeID string, value any, encoding JSONEncoding) (da
 }
 
 func (r *jsonReader) contract(c *contract, value any) any {
+	if c.SequenceWire != nil {
+		return r.shape(c.SequenceWire, value)
+	}
 	if c.Kind == "Custom" {
 		c.requireCustomJSON(r.encoding)
 		return readCustomJSON(r.s.custom[normalize(c.ID)], c.ID, value)
@@ -423,6 +426,10 @@ func (w *jsonWriter) contract(c *contract, data any) {
 	}
 	w.depth++
 	defer func() { w.depth-- }()
+	if c.SequenceWire != nil {
+		w.shape(c.SequenceWire, data)
+		return
+	}
 	if c.Kind == "Union" {
 		value, ok := data.(Union)
 		if !ok {

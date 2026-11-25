@@ -92,6 +92,9 @@ func (s *jsonScanner) begin(depth int) int {
 }
 
 func (r *directJSONReader) contract(c *contract, depth int) any {
+	if c.SequenceWire != nil {
+		return r.shape(c.SequenceWire, depth)
+	}
 	if r.scan.null() {
 		return nil
 	}

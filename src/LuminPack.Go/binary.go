@@ -158,6 +158,9 @@ func (r *binaryReader) contract(c *contract, inherited int, body bool) any {
 	}
 	r.descend()
 	defer func() { r.depth-- }()
+	if c.SequenceWire != nil {
+		return r.shape(c.SequenceWire, p)
+	}
 	switch c.Kind {
 	case "Union":
 		hash := r.u32()
@@ -239,6 +242,10 @@ func (w *binaryWriter) contract(c *contract, data any, inherited int, body bool)
 	}
 	w.descend()
 	defer func() { w.depth-- }()
+	if c.SequenceWire != nil {
+		w.shape(c.SequenceWire, data, p)
+		return
+	}
 	switch c.Kind {
 	case "Union":
 		if data == nil {

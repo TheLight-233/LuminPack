@@ -93,8 +93,11 @@ struct tracked_binary_codec
             const auto id = detail::read_reference_id(next);
             if (next.unread().empty())
                 detail::truncated_input();
-            if (next.unread().front() == static_cast<std::byte>(detail::null_reference_marker))
-                throw wire_error("A LuminPack reference definition must contain a non-null body.");
+            if constexpr (!requires { Body::list_body; })
+            {
+                if (next.unread().front() == static_cast<std::byte>(detail::null_reference_marker))
+                    throw wire_error("A LuminPack reference definition must contain a non-null body.");
+            }
 
             reference_read_state::depth_scope depth(references);
             auto transaction = detail::version_transaction(version, references);

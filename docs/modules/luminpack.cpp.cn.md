@@ -163,7 +163,9 @@ dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language c
 
 普通递归类用 `std::unique_ptr` 持有每个递归节点，包括 List 和 Dictionary 中的值。外围的非递归类沿用普通值类型。Default 和 Version 的 Binary 与 JSON 表示沿用托管声明。Default 的 Binary 读取器使用根类型声明的递归深度，原生栈保护将递归记录遍历限制为 512 层。
 
-启用引用跟踪的对象或普通 RTTI Union case 可以通过字段持有普通递归子树。普通递归子树也可以引用非递归的跟踪对象。图文档拥有跟踪对象，递归字段独立拥有各自解码的值。递归类直接作为 Union case、递归子树包含 Union 后代，或跟踪对象重新进入递归时，生成器会给出诊断。诊断也覆盖后代独立的输入限制、混合递归图的有限深度，以及隔离 Version 读取的有限深度。
+自引用 List 类在 Binary 中使用集合长度，在 JSON 中使用数组。生成的 C++ 节点通过 `items` 向量访问元素。启用引用跟踪时，由图持有节点，JSON 使用 `$id` 和 `$value`。普通递归树可以包含分支无环的 Union 字段。
+
+启用引用跟踪的对象或普通 RTTI Union case 可以通过字段持有普通递归子树。普通递归子树也可以引用非递归的跟踪对象。图文档拥有跟踪对象，递归字段独立拥有各自解码的值。递归类直接作为 Union case、递归子树的 Union 后代再次进入拥有型递归，或跟踪对象重新进入递归时，生成器会给出诊断。诊断也覆盖后代独立的输入限制、混合递归图的有限深度，以及隔离 Version 读取的有限深度。
 
 普通 Version 类可以作为生成的 variant 或 RTTI Union case。其二进制载荷与外层文档共享 Version schema 注册表。Binary 和 JSON 读取器接受已知 Version case 内的 null 载荷，返回 null Union 值。
 

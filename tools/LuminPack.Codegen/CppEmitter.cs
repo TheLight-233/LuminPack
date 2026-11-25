@@ -141,8 +141,9 @@ internal sealed partial class CppEmitter
     private Binding EmitRecord(JsonElement contract, string name, int profile, string? trackedStorage = null)
     {
         string owner = Text(contract, "id");
-        if (contract.GetProperty("sequenceBase").ValueKind != JsonValueKind.Null ||
-            Flag(contract, "dynamicVersion"))
+        if (contract.GetProperty("sequenceBase").ValueKind == JsonValueKind.String)
+            return EmitSelfList(contract, name, profile, trackedStorage);
+        if (Flag(contract, "dynamicVersion"))
             throw Missing(owner, "an inherited collection body or dynamic Version schema");
 
         bool version = Flag(contract, "versioned");

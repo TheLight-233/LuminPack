@@ -71,6 +71,8 @@ final class Schema {
         final String type;
         final String kind;
         final Profile profile;
+        final Wire sequenceWire;
+        final boolean sequenceBase;
         final int binaryMemberCount;
         final boolean versioned;
         final boolean wideTags;
@@ -103,6 +105,8 @@ final class Schema {
                 members.add(field);
                 if (names.putIfAbsent(field.name, field) != null) throw fail("Duplicate member " + field.name);
             }
+            sequenceBase = metadata.get("sequenceBase") instanceof String;
+            sequenceWire = metadata.get("sequenceWire") instanceof Map<?, ?> wire ? new Wire(wire) : null;
             binaryMemberCount = integer(metadata.get("binaryMemberCount"), members.size());
             if (metadata.containsKey("binaryMemberCount") && binaryMemberCount != members.size() - 1)
                 throw fail("Invalid LuminPack collection base member count");
@@ -128,6 +132,7 @@ final class Schema {
         void resolve(Map<String, Contract> contracts) {
             if (resolved) return;
             resolved = true;
+            if (sequenceWire != null) sequenceWire.resolve(contracts);
             if (!list(metadata.get("typeParameters")).isEmpty()) throw fail("Open LuminPack type " + id);
             if (!List.of("Record", "Struct", "Union", "Custom").contains(kind)) throw fail("Unsupported contract kind " + kind);
             if (binaryMemberCount < 0 || binaryMemberCount > 249) throw fail("LuminPack records support up to 249 members");

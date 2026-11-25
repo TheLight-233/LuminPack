@@ -45,6 +45,7 @@ final class JsonDirect {
     }
 
     private Object readContract(Json.Reader reader, Schema.Contract type, int depth) {
+        if (type.sequenceWire != null) return readWire(reader, type.sequenceWire, depth);
         if (reader.consumeNull()) {
             if (type.kind.equals("Struct")) throw Schema.fail("Missing LuminPack JSON struct");
             return null;
@@ -204,6 +205,7 @@ final class JsonDirect {
     }
 
     private void writeContract(JsonUtf8Writer output, Schema.Contract type, Object value, int depth) {
+        if (type.sequenceWire != null) { writeWire(output, type.sequenceWire, value, depth); return; }
         if (value == null) {
             if (type.kind.equals("Struct")) throw Schema.fail("Missing LuminPack JSON struct");
             output.nullValue();
