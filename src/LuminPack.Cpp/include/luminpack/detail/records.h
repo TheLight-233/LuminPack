@@ -159,13 +159,27 @@ private:
     static constexpr bool read_owned = std::is_aggregate_v<T> && !std::is_union_v<T> &&
         std::is_default_constructible_v<T> && (detail::record_read_field<T, Members>::has_dictionary || ...);
 
-    template<class Result, class... Context>
-    static Result read_value(reader& input, Context&... context)
+public:
+    /// Decodes a newly constructed field or Union case in its final storage.
+    template<class... Context>
+    static void read_fresh_payload(reader& input, T& value, Context&... context)
     {
         reader next = input;
         auto transaction = detail::version_transaction(context...);
         if (minimum_size > next.remaining())
             detail::truncated_input();
+        if constexpr (has_batch)
+            transfer_fields(next, value, std::index_sequence_for<Members...>{}, context...);
+        else
+            (detail::record_read_field<T, Members>::read_member(next, value, context...), ...);
+        input = next;
+        transaction.commit();
+    }
+
+private:
+    template<class Result, class... Context>
+    static Result read_value(reader& input, Context&... context)
+    {
         auto result = []
         {
             if constexpr (std::same_as<Result, T>)
@@ -180,12 +194,7 @@ private:
             else
                 return *result;
         }();
-        if constexpr (has_batch)
-            transfer_fields(next, value, std::index_sequence_for<Members...>{}, context...);
-        else
-            (detail::record_read_field<T, Members>::read_member(next, value, context...), ...);
-        input = next;
-        transaction.commit();
+        read_fresh_payload(input, value, context...);
         return result;
     }
 
@@ -448,18 +457,25 @@ struct union_codec
     template<class... Context>
     static value_type read(reader& input, Context&... context)
     {
+        value_type result;
+        read_fresh_union(input, result, context...);
+        return result;
+    }
+
+    /// Constructs the selected case directly in an empty destination slot.
+    template<class... Context>
+    static void read_fresh_union(reader& input, value_type& result, Context&... context)
+    {
         reader next = input;
         const auto hash = next.read<std::uint32_t>();
-        if (hash == 0)
+        if (hash != 0)
         {
-            input = next;
-            return std::nullopt;
+            auto transaction = detail::version_transaction(context...);
+            read_case(result, hash, next, indices{}, context...);
+            transaction.commit();
         }
-        auto transaction = detail::version_transaction(context...);
-        auto result = read_case(hash, next, indices{}, context...);
+        else result.reset();
         input = next;
-        transaction.commit();
-        return result;
     }
 
     template<class... Context>
@@ -513,18 +529,23 @@ private:
             if (auto value = codec::read_union_case(input, context...))
                 result.emplace(std::in_place_index<Index>, std::move(*value));
         }
+        else if constexpr (std::is_aggregate_v<typename codec::value_type> &&
+            std::is_nothrow_default_constructible_v<typename codec::value_type> &&
+            requires(typename codec::value_type& value) { codec::read_fresh_payload(input, value, context...); })
+        {
+            auto& selected = result.emplace(std::in_place_index<Index>);
+            codec::read_fresh_payload(input, std::get<Index>(selected), context...);
+        }
         else
             result.emplace(std::in_place_index<Index>, detail::read_codec<codec>(input, context...));
         return true;
     }
 
     template<std::size_t... Index, class... Context>
-    static value_type read_case(std::uint32_t hash, reader& input, std::index_sequence<Index...>, Context&... context)
+    static void read_case(value_type& result, std::uint32_t hash, reader& input, std::index_sequence<Index...>, Context&... context)
     {
-        value_type result;
         if (!(read_if<Index>(result, hash, input, context...) || ...))
             throw wire_error("Unknown LuminPack Union case hash.");
-        return result;
     }
 
     template<std::size_t Index, class... Context>

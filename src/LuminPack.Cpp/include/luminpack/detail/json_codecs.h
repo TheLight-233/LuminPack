@@ -410,6 +410,20 @@ protected:
         T result{};
         bool first = true;
         std::size_t next_property = 0;
+        if constexpr (!std::same_as<Lookup, void> && can_read_ordered_names<reader_type>())
+        {
+            // The canonical prefix has a known call target for every field. Commit each match
+            // so a late alias, unknown property or duplicate resumes at the same cursor.
+            if constexpr (requires { Lookup::read_int32_runs(input, result, next_property, first); })
+                Lookup::read_int32_runs(input, result, next_property, first);
+            [&]<std::size_t... Index>(std::index_sequence<Index...>)
+            {
+                ((next_property == Index && Members::try_read_ordered(input, result, first) &&
+                    (++next_property, first = false, true)), ...);
+            }(std::index_sequence_for<Members...>{});
+            if (next_property == sizeof...(Members) && input.consume('}'))
+                return result;
+        }
         for (;;)
         {
             if constexpr (can_read_ordered_names<reader_type>())

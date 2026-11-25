@@ -251,7 +251,15 @@ struct list_codec
             }
 #endif
             for (; index < *count; ++index)
-                items.emplace_back(detail::read_codec<Element>(next, context...));
+            {
+                if constexpr (requires(element_type& slot) { Element::read_fresh_union(next, slot, context...); })
+                {
+                    auto& slot = items.emplace_back();
+                    try { Element::read_fresh_union(next, slot, context...); }
+                    catch (...) { items.pop_back(); throw; }
+                }
+                else items.emplace_back(detail::read_codec<Element>(next, context...));
+            }
         }
         input = next;
         transaction.commit();
@@ -426,9 +434,19 @@ public:
                 auto key = detail::read_codec<Key>(next, context...);
                 if (detail::is_null_key(key))
                     throw wire_error("Null LuminPack dictionary key.");
-                auto value = detail::read_codec<Value>(next, context...);
-                if (!entries.try_emplace(std::move(key), std::move(value)).second)
-                    throw wire_error("Duplicate LuminPack dictionary key.");
+                if constexpr (requires(typename Value::value_type& slot) { Value::read_fresh_union(next, slot, context...); })
+                {
+                    auto [entry, inserted] = entries.try_emplace(std::move(key));
+                    if (!inserted) throw wire_error("Duplicate LuminPack dictionary key.");
+                    try { Value::read_fresh_union(next, entry->second, context...); }
+                    catch (...) { entries.erase(entry); throw; }
+                }
+                else
+                {
+                    auto value = detail::read_codec<Value>(next, context...);
+                    if (!entries.try_emplace(std::move(key), std::move(value)).second)
+                        throw wire_error("Duplicate LuminPack dictionary key.");
+                }
             }
         }
         input = next;
