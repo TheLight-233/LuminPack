@@ -29,14 +29,14 @@ export function jsonArray(value: JsonValue, max: number): JsonValue[] {
 const decimalPowers = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000];
 
 export const orderedJsonMiss = Symbol("LuminPack ordered JSON fallback");
-const escapedJsonUnit = /[\\\x00-\x1f]/;
+
 
 /** A bounded cursor for the canonical heads emitted by the contract. */
 export class OrderedJsonCursor {
     private readonly numberPattern = /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/y;
     private position = 0;
 
-    constructor(private readonly text: string, private readonly maxDepth: number) {}
+    constructor(private readonly text: string, private readonly maxDepth: number, private readonly maxString = 2147483647, private readonly maximumCount = 2147483647) {}
 
     consume(token: string): boolean {
         if (!this.text.startsWith(token, this.position)) return false;
@@ -59,12 +59,62 @@ export class OrderedJsonCursor {
     string(): string {
         if (this.text.charCodeAt(this.position) !== 34) throw orderedJsonMiss;
         const start = this.position + 1;
-        const end = this.text.indexOf('"', start);
-        if (end < 0) throw orderedJsonMiss;
-        const value = this.text.slice(start, end);
-        if (escapedJsonUnit.test(value)) throw orderedJsonMiss;
-        this.position = end + 1;
+        for (let end = start; end < this.text.length; end++) {
+            const code = this.text.charCodeAt(end);
+            if (code === 34) {
+                this.position = end + 1;
+                return this.text.slice(start, end);
+            }
+            if (code === 92 || code < 32) throw orderedJsonMiss;
+        }
+        throw orderedJsonMiss;
+    }
+
+    miss(): never { throw orderedJsonMiss; }
+    count(index: number): void { if (index >= this.maximumCount) throw orderedJsonMiss; }
+    key(value: string): void { if (value.length > this.maxString) throw orderedJsonMiss; }
+    checkedString(): string | null {
+        if (this.consume("null")) return null;
+        const value = this.string();
+        if (value.length > this.maxString) throw orderedJsonMiss;
         return value;
+    }
+
+    boolean(): boolean {
+        if (this.consume("true")) return true;
+        this.expect("false");
+        return false;
+    }
+
+    byte(): number {
+        const n = this.int32();
+        if (n < 0 || n > 255) throw orderedJsonMiss;
+        return n;
+    }
+
+    long(): bigint {
+        const start = this.position;
+        let cursor = start;
+        const negative = this.text.charCodeAt(cursor) === 45;
+        if (negative) cursor++;
+        const first = cursor;
+        let value = 0;
+        for (; cursor - first < 15; cursor++) {
+            const digit = this.text.charCodeAt(cursor) - 48;
+            if (!(digit >= 0 && digit <= 9)) break;
+            if (cursor > first && value === 0) throw orderedJsonMiss;
+            value = value * 10 + digit;
+        }
+        const next = this.text.charCodeAt(cursor);
+        if (cursor > first && (next === 44 || next === 125 || next === 93 || cursor === this.text.length)) {
+            this.position = cursor;
+            return BigInt(negative ? -value : value);
+        }
+        const token = this.number();
+        if (/[.eE]/.test(token)) throw orderedJsonMiss;
+        const n = BigInt(token);
+        if (BigInt.asIntN(64, n) !== n) throw orderedJsonMiss;
+        return n;
     }
 
     number(): string {

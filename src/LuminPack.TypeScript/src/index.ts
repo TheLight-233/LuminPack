@@ -2,6 +2,7 @@ import { BinaryReader, BinaryWriter, WireError, decodeUtf16, decodeUtf8, default
     readString, writeString, type Limits } from "./binary.ts";
 import { JsonNumber, OrderedJsonCursor, jsonArray, jsonObject, orderedJsonMiss, parseJson, put, stringifyJson,
     type JsonValue } from "./json.ts";
+import { JsonByteOutput } from "./json-output.ts";
 import { formatJsonInteger } from "./json-number.ts";
 import { compressLum2, decompressLum2 } from "./lum2.ts";
 import { defaultScalar, fixedScalarRead, fixedScalarWrite, readJsonNumericScalar, readJsonScalar, readScalar, readScalars,
@@ -12,6 +13,13 @@ import { VersionState, nameKey, readLegacyMetadata, readReferenceNumber, schemaH
 
 export { BinaryReader, BinaryWriter, WireError, type Limits } from "./binary.ts";
 export { JsonNumber, type JsonValue } from "./json.ts";
+
+export type { OrderedJsonCursor as DocumentCursor } from "./json.ts";
+export type { JsonByteOutput as DocumentOutput } from "./json-output.ts";
+export interface GeneratedDocument {
+    read(input: OrderedJsonCursor, depth: number): unknown;
+    write(output: JsonByteOutput, value: unknown, depth: number): void;
+}
 
 export type JsonEncoding = "utf8" | "utf16";
 
@@ -139,6 +147,8 @@ interface Manifest {
     contracts: Contract[];
 }
 
+type JsonSink = string[] | JsonByteOutput;
+
 type Target = Record<string, unknown>;
 
 export interface GeneratedFixedRecord {
@@ -190,7 +200,28 @@ function compileFixedRecord(contract: Contract, nativeBytes: number, generated?:
     };
 }
 
+/** Generated ordered object bodies share the runtime's checked scalar and nested readers. */
+export interface GeneratedJsonRecord {
+    type: string;
+    names: readonly string[];
+    kinds: readonly string[];
+    read(input: OrderedJsonCursor, utf8: boolean, depth: number, nested: JsonReadField[]): Target;
+    write(value: Target, encoding: JsonEncoding, state: WriteState, parts: JsonSink, nested: JsonWriteField[]): void;
+    readBinary(input: BinaryReader, profile: number, state: ReadState, nested: BinaryReadField[]): Target;
+    writeBinary(output: BinaryWriter, value: Target, profile: number, state: WriteState, nested: BinaryWriteField[]): void;
+    writeBytes(value: Target, state: WriteState, out: JsonByteOutput, nested: JsonWriteField[]): void;
+}
+
+type BinaryReadField = (input: BinaryReader, profile: number, state: ReadState) => unknown;
+type BinaryWriteField = (output: BinaryWriter, value: Target, profile: number, state: WriteState) => void;
+type JsonReadField = (input: OrderedJsonCursor, utf8: boolean, depth: number) => unknown;
+type JsonWriteField = (value: Target, encoding: JsonEncoding, state: WriteState, parts: JsonSink) => void;
+
+export { writeJsonScalar as formatGeneratedJsonScalar, writeScalar as writeGeneratedScalar } from "./scalar.ts";
+
 interface Plan {
+    binaryBody?: { body: GeneratedJsonRecord; reads: BinaryReadField[]; writes: BinaryWriteField[] };
+    jsonBody?: { body: GeneratedJsonRecord; reads: JsonReadField[]; writes: JsonWriteField[] };
     fixed?: FixedRecord;
     contract: Contract;
     byHash: Map<number, string>;
@@ -317,10 +348,12 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
     private readonly limits: Limits;
     private readonly jsonDepth: number;
     private readonly jsonEncoding: JsonEncoding;
+    private readonly graph?: GeneratedDocument;
+    private spareJson?: JsonByteOutput;
     private readonly orderedJson: boolean;
     private readonly trackedJson: boolean;
 
-    constructor(manifest: unknown, options: CodecOptions, fixedRecords?: readonly GeneratedFixedRecord[]) {
+    constructor(manifest: unknown, options: CodecOptions, fixedRecords?: readonly GeneratedFixedRecord[], bodies?: readonly GeneratedJsonRecord[], graph?: GeneratedDocument) {
         this.manifest = manifest as Manifest;
         this.options = options;
         if (!this.manifest || this.manifest.version !== 1 || typeof this.manifest.root !== "string" ||
@@ -331,6 +364,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         if (this.nativeScalarAlignment !== 4 && this.nativeScalarAlignment !== 8)
             throw new WireError("Invalid LuminPack native scalar alignment.");
         const fixed = fixedRecords && new Map(fixedRecords.map(row => [identity(row.type), row]));
+        const generatedBodies = bodies && new Map(bodies.map(body => [identity(body.type), body]));
         let orderedJson = true;
         for (const contract of this.manifest.contracts) {
             const type = identity(contract.id);
@@ -357,6 +391,22 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                     member, head: index === 0 ? head : next, type: (member.wire as Extract<Wire, { kind: "scalar" }>).type,
                 }));
             }
+            const body = generatedBodies?.get(type);
+            if (body && !contract.profile.trackReferences && (contract.kind === "Struct" || contract.kind === "Record") &&
+                body.names.length === jsonHeads.length && jsonHeads.every(({member}, i) => member.name === body.names[i] &&
+                    body.kinds[i] === (member.wire.kind === "scalar" ? member.wire.type : member.wire.kind))) {
+                plan.jsonBody = { body,
+                    reads: [],
+                    writes: jsonHeads.map(({ member }) => (value, encoding, state, parts) =>
+                        this.writeJsonWire(member.wire, this.field(value, member), encoding, state, parts)) };
+            }
+            if (body && plan.jsonBody && !contract.versioned && !contract.sequenceBase && !contract.sequenceWire &&
+                members.every(m => !m.compressed && !m.fixedNullable)) {
+                plan.binaryBody = { body,
+                    reads: members.map(m => (input, profile, state) => this.readMember(m, input, profile, state)),
+                    writes: members.map(m => (output, value, profile, state) =>
+                        this.writeMember(m, output, this.field(value, m), profile, state)) };
+            }
             const declaredCases = contract.cases ?? [];
             for (const entry of declaredCases) {
                 if (!Number.isInteger(entry.hash) || entry.hash <= 0 || entry.hash >= 0xffff_ffff ||
@@ -382,6 +432,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             this.plans.set(identity((contract as Contract & { type?: string }).type ?? type), plan);
         }
         this.orderedJson = orderedJson;
+        if (orderedJson) this.graph = graph;
         this.trackedJson = this.manifest.contracts.some(contract => contract.profile.trackReferences);
         this.rootWire = this.manifest.rootWire;
         this.root = this.rootWire ? undefined : this.plan(this.manifest.root);
@@ -398,6 +449,11 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             maxDepth: limit(profile.maxDepth, options.limits?.maxDepth, defaultLimits.maxDepth),
         };
         this.jsonDepth = limit(profile.jsonDepth || undefined, options.limits?.maxDepth, 1024);
+        for (const plan of new Set(this.plans.values())) {
+            if (plan.jsonBody) {
+                plan.jsonBody.reads = plan.jsonHeads.map(({ member }) => this.bindOrderedReader(member.wire));
+            }
+        }
     }
 
     private plan(type: string): Plan {
@@ -435,9 +491,9 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         const text = encoding === "utf8" ? decodeUtf8(bytes, true) : decodeUtf16(bytes);
         // The ordered attempt has no callbacks or reference registrations to replay.
         if (this.orderedJson) {
-            const input = new OrderedJsonCursor(text, this.jsonDepth);
+            const input = new OrderedJsonCursor(text, this.jsonDepth, this.limits.maxString, this.limits.maxCollection);
             try {
-                const value = this.rootWire ? this.readOrderedJsonWire(this.rootWire, input, encoding === "utf8", 1) :
+                const value = this.graph ? this.graph.read(input, 1) : this.rootWire ? this.readOrderedJsonWire(this.rootWire, input, encoding === "utf8", 1) :
                     this.readOrderedJsonContract(this.root!, input, encoding === "utf8", 1);
                 input.end();
                 return value as T;
@@ -454,6 +510,18 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
 
     writeJson(value: TInput, encoding: JsonEncoding = this.jsonEncoding): Uint8Array {
         const state = new WriteState();
+        if (encoding === "utf8" && this.root && (this.graph || this.root.jsonBody)) {
+            const output = this.spareJson ?? new JsonByteOutput(this.jsonDepth, this.limits.maxCollection,
+                (id, ordinal) => this.zero(this.plan(id).contract.members[ordinal].wire));
+            this.spareJson = undefined;
+            try {
+                if (this.graph) this.graph.write(output, value, 1);
+                else this.writeJsonContract(this.root, value, encoding, state, output);
+                return output.finish();
+            } finally {
+                if (output.reset()) this.spareJson = output;
+            }
+        }
         const parts: string[] = [];
         if (this.rootWire) this.writeJsonWire(this.rootWire, value, encoding, state, parts);
         else this.writeJsonContract(this.root!, value, encoding, state, parts);
@@ -937,6 +1005,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 if (marker !== (contract.binaryMemberCount ?? contract.members.length) || marker > 249)
                     throw new WireError("Invalid LuminPack positional member count.");
             }
+            if (plan.binaryBody) return plan.binaryBody.body.readBinary(input, profile, state, plan.binaryBody.reads);
             for (const member of contract.members) put(result, member.name, this.readMember(member, input, profile, state));
             return result;
         } finally { state.depth--; }
@@ -973,6 +1042,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             }
             if (contract.versioned) { this.writeVersion(plan, output, record, profile, state); return; }
             if (contract.kind === "Record" && !contract.sequenceBase && (!caseBody || tracked)) output.u8(contract.binaryMemberCount ?? contract.members.length);
+            if (plan.binaryBody) return plan.binaryBody.body.writeBinary(output, record, profile, state, plan.binaryBody.writes);
             for (const member of contract.members) this.writeMember(member, output, this.field(record, member), profile, state);
         } finally { state.depth--; }
     }
@@ -1239,6 +1309,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             input.expect("}");
             return value === null ? null : { type, value };
         }
+        if (plan.jsonBody) return plan.jsonBody.body.read(input, utf8, depth + 1, plan.jsonBody.reads);
         const value: Target = {};
         if (jsonHeads.length === 0) input.expect("{");
         for (let index = 0; index < jsonHeads.length; index++) {
@@ -1248,6 +1319,45 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         }
         input.expect("}");
         return value;
+    }
+
+    private bindOrderedReader(wire: Wire): JsonReadField {
+        switch (wire.kind) {
+            case "contract": {
+                const target = this.jsonPlan(wire.type);
+                return (r, utf8, d) => this.readOrderedJsonContract(target, r, utf8, d);
+            }
+            case "string": return r => r.checkedString();
+            case "scalar":
+                switch (wire.type) {
+                    case "int": return r => r.int32();
+                    case "float": return r => r.floating(true);
+                    case "double": return r => r.floating(false);
+                    case "long": return r => r.long();
+                    case "byte": return r => r.byte();
+                    case "bool": return r => r.boolean();
+                }
+                break;
+            case "sequence": {
+                const element = this.bindOrderedReader(wire.element);
+                const maximum = this.limits.maxCollection;
+                return (r, utf8, d) => {
+                    if (r.consume("null")) return nullSequence(wire);
+                    r.depth(d);
+                    r.expect("[");
+                    const values = [];
+                    if (!r.consume("]")) {
+                        do {
+                            if (values.length >= maximum) throw orderedJsonMiss;
+                            values.push(element(r, utf8, d + 1));
+                        } while (r.consume(","));
+                        r.expect("]");
+                    }
+                    return values;
+                };
+            }
+        }
+        return (r, utf8, d) => this.readOrderedJsonWire(wire, r, utf8, d);
     }
 
     private readOrderedJsonWire(wire: Wire, input: OrderedJsonCursor, utf8: boolean, depth: number): unknown {
@@ -1385,7 +1495,16 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         }
     }
 
-    private writeJsonElements(wire: Wire, values: ArrayLike<unknown>, encoding: JsonEncoding, state: WriteState, parts: string[]): void {
+    private writeJsonElements(wire: Wire, values: ArrayLike<unknown>, encoding: JsonEncoding, state: WriteState, parts: JsonSink): void {
+        if (parts instanceof JsonByteOutput && wire.kind === "scalar" && wire.type === "int") {
+            parts.token(91);
+            for (let i = 0; i < values.length; i++) {
+                if (i) parts.token(44);
+                parts.int(values[i]);
+            }
+            parts.token(93);
+            return;
+        }
         parts.push("[");
         for (let index = 0; index < values.length; index++) {
             if (index !== 0) parts.push(",");
@@ -1394,7 +1513,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         parts.push("]");
     }
 
-    private writeJsonDimensions(values: readonly number[], parts: string[]): void {
+    private writeJsonDimensions(values: readonly number[], parts: JsonSink): void {
         parts.push("[");
         for (let index = 0; index < values.length; index++) {
             if (index !== 0) parts.push(",");
@@ -1403,7 +1522,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         parts.push("]");
     }
 
-    private writeJsonWire(wire: Wire, value: unknown, encoding: JsonEncoding, state: WriteState, parts: string[]): void {
+    private writeJsonWire(wire: Wire, value: unknown, encoding: JsonEncoding, state: WriteState, parts: JsonSink): void {
         switch (wire.kind) {
             case "scalar": parts.push(writeJsonScalar(wire.type, value, this.nativeBytes)); return;
             case "string":
@@ -1553,7 +1672,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         return result;
     }
 
-    private writeJsonContract(plan: Plan, value: unknown, encoding: JsonEncoding, state: WriteState, parts: string[]): void {
+    private writeJsonContract(plan: Plan, value: unknown, encoding: JsonEncoding, state: WriteState, parts: JsonSink): void {
         if (state.depth++ >= this.jsonDepth) throw new WireError("LuminPack JSON nesting exceeds its limit.");
         try {
             const { contract } = plan;
@@ -1584,6 +1703,12 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 parts.push("}");
                 return;
             }
+            if (plan.jsonBody) {
+                if (parts instanceof JsonByteOutput)
+                    plan.jsonBody.body.writeBytes(record, state, parts, plan.jsonBody.writes);
+                else plan.jsonBody.body.write(record, encoding, state, parts, plan.jsonBody.writes);
+                return;
+            }
             if (plan.scalarJsonBody) {
                 let body = "";
                 for (const { member, head, type } of plan.scalarJsonBody)
@@ -1611,6 +1736,6 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
 
 /** Compiles the shared portable contract to a checked Binary and JSON codec. */
 export function createCodec<T = unknown, TInput = T>(manifest: unknown, options: CodecOptions = {},
-    fixedRecords?: readonly GeneratedFixedRecord[]): Codec<T, TInput> {
-    return new CompiledCodec<T, TInput>(manifest, options, fixedRecords);
+    fixedRecords?: readonly GeneratedFixedRecord[], bodies?: readonly GeneratedJsonRecord[], graph?: GeneratedDocument): Codec<T, TInput> {
+    return new CompiledCodec<T, TInput>(manifest, options, fixedRecords, bodies, graph);
 }

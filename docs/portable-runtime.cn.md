@@ -61,6 +61,10 @@ dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language g
 dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language typescript .tmp/contracts.json Example.Message .tmp/message.ts
 ```
 
+对于符合条件的 Go 根记录（例如 `Message`），Codegen 生成 `MessageModel` 以及 `DecodeMessageBinary`、`EncodeMessageBinary`、`DecodeMessageJSON` 和 `EncodeMessageJSON`。JSON 入口使用 UTF-8。集合使用具体类型的切片，字典使用保序的 `[]luminpack.TypedEntry[K,V]`，已声明的 Union 分支使用 Go 接口。字段名由前缀 `F` 和编码后的成员名组成。文本用 `luminpack.Text{Present: true, Value: "hello"}` 表示，零值表示 null。可选的 `Units` 指针可在二进制路径上保留原始 UTF-16 码元。直接模型支持普通位置记录、纯标量原始结构体及其支持的集合。对于版本容忍、引用追踪、Custom、动态注册的 Union 分支、UTF-16 JSON 或其他投影，使用生成的 `LoadMessageLuminPack`。
+
+TypeScript 继续通过生成模块的 `codec` 和 `bindCodec(options)` 访问。符合条件的记录会生成专用二进制读写函数，符合条件的闭合类型图还会生成 UTF-8 写入函数和顺序 JSON 读取函数。旧字段名、缺失字段或其他非规范顺序的输入继续遵循 manifest 读取器的语义。
+
 Java、Go 和 TypeScript 也可以直接加载投影后的 JSON 契约。`project` 支持将受支持的独立类型表达式用作根，例如 `'System.Collections.Generic.List<Example.Message>'`。
 
 ```sh
@@ -107,6 +111,8 @@ python tests/LuminPack.Tests.Portable/verify.py --help
 ## 运行基准测试并绘制图表
 
 为各目标语言准备相同的托管基准数据。需要运行 C++ 基准时，在准备命令中加上 `--cpp`，一并生成 C++ 头文件。
+
+准备基准样本时，传入 `--generated` 可同时生成 Go 和 TypeScript 基准模块。跨语言基准工作流会编译并测量这些入口。
 
 ```sh
 python benchmarks/LuminPack.Benchmark.Portable/prepare.py .tmp/portable-benchmark/models

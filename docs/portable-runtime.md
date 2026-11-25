@@ -61,6 +61,10 @@ dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language g
 dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language typescript .tmp/contracts.json Example.Message .tmp/message.ts
 ```
 
+For an eligible closed Go record such as `Message`, Codegen emits `MessageModel`, `DecodeMessageBinary`, `EncodeMessageBinary`, `DecodeMessageJSON` and `EncodeMessageJSON`. The JSON functions use UTF-8. The model uses typed slices, ordered `[]luminpack.TypedEntry[K,V]` dictionaries and Go interfaces for declared Union cases. Fields use the prefix `F` followed by the encoded member name. Use `luminpack.Text{Present: true, Value: "hello"}` for text and the zero value for null. The optional `Units` pointer retains exact UTF-16 units on Binary paths. The direct model supports ordinary positional records, scalar-only raw structs and their supported collections. Use the generated `LoadMessageLuminPack` schema for versioned or tracked graphs, Custom formatters, registered Union cases, UTF-16 JSON or other projections.
+
+The generated TypeScript module exposes the same `codec` and `bindCodec(options)` entry points. Eligible records include specialized Binary bodies. Eligible closed graphs also include a UTF-8 writer and an ordered JSON reader. Former names, missing properties and other noncanonical inputs retain the manifest reader's behavior.
+
 Java, Go, and TypeScript can also load a projected JSON contract. The `project` command accepts supported standalone type expressions, such as `'System.Collections.Generic.List<Example.Message>'`.
 
 ```sh
@@ -106,7 +110,7 @@ python tests/LuminPack.Tests.Portable/verify.py --help
 
 ## Run and chart language benchmarks
 
-Prepare the same managed benchmark fixtures for each target. Add `--cpp` to the prepare command if you plan to run the C++ benchmark so it also generates the C++ headers.
+Prepare the same managed benchmark fixtures for each target. Pass `--generated` to emit the Go and TypeScript benchmark modules. The portable benchmark workflow compiles and times those entry points. Add `--cpp` to the prepare command if you plan to run the C++ benchmark so it also generates the C++ headers.
 
 ```sh
 python benchmarks/LuminPack.Benchmark.Portable/prepare.py .tmp/portable-benchmark/models
