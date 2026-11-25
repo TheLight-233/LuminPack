@@ -74,11 +74,13 @@ final class JsonDirect {
             Object[] result = new Object[fields.length];
             int index = 0;
             for (; index < fields.length; index++) {
-                reader.space();
-                if (index != 0 && !reader.consume(',')) break;
-                reader.space();
                 Schema.Field field = fields[index];
-                if (!reader.match(field.jsonName.token())) break;
+                if (!reader.match(index == 0 ? field.jsonName.token() : field.nextJsonToken)) {
+                    reader.space();
+                    if (index != 0 && !reader.consume(',')) break;
+                    reader.space();
+                    if (!reader.match(field.jsonName.token())) break;
+                }
                 result[index] = type.floatRow ? readFloat(reader, depth + 1) : readWire(reader, field.wire, depth + 1);
             }
             reader.space();

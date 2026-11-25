@@ -171,6 +171,7 @@ final class Schema {
     static final class Field {
         final String name;
         final Json.Name jsonName;
+        final String nextJsonToken;
         final byte[] firstJsonHead;
         final byte[] nextJsonHead;
         final String[] aliases;
@@ -185,8 +186,9 @@ final class Schema {
         Field(Map<?, ?> metadata) {
             name = string(metadata.get("name"));
             jsonName = Json.name(name);
+            nextJsonToken = "," + jsonName.token();
             firstJsonHead = jsonName.token().getBytes(StandardCharsets.UTF_8);
-            nextJsonHead = ("," + jsonName.token()).getBytes(StandardCharsets.UTF_8);
+            nextJsonHead = nextJsonToken.getBytes(StandardCharsets.UTF_8);
             aliases = list(metadata.get("oldNames")).stream().map(Schema::string).toArray(String[]::new);
             nameKeys = list(metadata.get("nameKeys")).stream().mapToInt(key -> (int) longValue(key)).toArray();
             profile = Profile.from(object(metadata.get("profile")));
