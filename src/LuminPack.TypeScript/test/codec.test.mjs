@@ -68,6 +68,18 @@ test("applies LUM2 to the contiguous leaf of a jagged collection", () => {
     assert.throws(() => codec.readBinary(corrupted), /compressed field/);
 });
 
+test("applies maxInput to the compressed document and maxCollection to decoded elements", () => {
+    const members = [{ name: "Values", compressed: true, wire: vector(scalar("int")) }];
+    const manifest = { version: 1, root: "R", contracts: [{ id: "R", kind: "Record", profile, members }] };
+    const value = { Values: Array(16384).fill(7) };
+    const bytes = createCodec(manifest).writeBinary(value);
+    const bounded = createCodec(manifest, { limits: { maxInput: bytes.length } });
+    assert.deepEqual(bounded.writeBinary(value), bytes);
+    assert.deepEqual(bounded.readBinary(bytes), value);
+    assert.throws(() => createCodec(manifest, { limits: { maxInput: bytes.length - 1 } }).readBinary(bytes), WireError);
+    assert.throws(() => createCodec(manifest, { limits: { maxCollection: 16383 } }).readBinary(bytes), WireError);
+});
+
 test("keeps isolated UTF-16 units in unaligned binary length records", () => {
     const codec = record([{ name: "Text", wire: { kind: "string" } }]);
     const text = "\ufeff" + "文字😀".repeat(200) + "\ud800";

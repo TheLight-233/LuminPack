@@ -48,7 +48,7 @@ func (r *binaryReader) readCompressed(d *descriptor, p int) any {
 	}
 	expected := n * width
 	length := r.u32()
-	if length > math.MaxInt32-8 || expected/256 > int(length) {
+	if length > math.MaxInt32-8 {
 		fail(r.pos, "invalid compressed collection frame length")
 	}
 	frame := r.take(int(length))

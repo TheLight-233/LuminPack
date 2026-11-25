@@ -1085,13 +1085,13 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             return values;
         }
         const width = this.compressedWidth(wire.element, profile);
-        if (width === 0 || count > Math.floor(this.limits.maxInput / width))
+        if (width === 0 || count > Math.floor(0x7fff_ffff / width))
             throw new WireError("LuminPack compressed field exceeds its decompressed size limit.");
         const frame = input.take(input.i32());
         let bytes: Uint8Array;
         try { bytes = decompressLum2(frame, count * width); }
         catch { throw new WireError("Invalid LuminPack compressed field."); }
-        const payload = new BinaryReader(bytes, this.limits);
+        const payload = new BinaryReader(bytes, { ...this.limits, maxInput: bytes.length });
         const values = this.readElements(wire.element, count, payload, profile, state);
         payload.end();
         return values;
@@ -1108,7 +1108,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             return;
         }
         const width = this.compressedWidth(wire.element, profile);
-        if (width === 0 || elements.length > Math.floor(this.limits.maxInput / width))
+        if (width === 0 || elements.length > Math.floor(0x7fff_ffff / width))
             throw new WireError("LuminPack compressed field exceeds its decompressed size limit.");
         let storage: Uint8Array;
         if (littleEndian && ArrayBuffer.isView(elements)) {

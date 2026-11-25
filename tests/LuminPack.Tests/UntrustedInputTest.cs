@@ -297,6 +297,18 @@ public class UntrustedInputTest
         Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(new byte[] { 9, 1 }, ref shape));
     }
 
+    /// <summary>High-ratio collection frames produced by the writer retain their exact values.</summary>
+    [Fact]
+    public void HighRatioCompressedArraysRoundTrip()
+    {
+        var value = new SafeCompressed { Values = Enumerable.Repeat(7, 16384).ToArray() };
+        byte[] bytes = LuminPackSerializer.Serialize(value);
+        Assert.True(bytes.Length * 256 < value.Values.Length * sizeof(int));
+        SafeCompressed? copy = null;
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref copy));
+        Assert.Equal(value.Values, copy!.Values);
+    }
+
     /// <summary>A compressed collection's count must be producible by its payload before storage is allocated.</summary>
     [Fact]
     public void CompressedCountsAreBoundedByTheirPayload()

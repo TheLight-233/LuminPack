@@ -605,9 +605,6 @@ namespace LuminPack.Core
 
             if ((uint)payloadBytes > (uint)(source.Length - offset))
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(offset + payloadBytes));
-            // LuminZ produces at most 255 bytes per encoded byte, so a larger claim is rejected before its storage is allocated.
-            if (compressed && decodedBytes / 256 > payloadBytes)
-                LuminPackExceptionHelper.ThrowInvalidDataException("Compressed collection output length exceeds what its payload can encode.");
             if (compressed && LuminCompressor.GetDecompressedSize(source.Slice(offset, payloadBytes)) != decodedBytes)
                 LuminPackExceptionHelper.ThrowInvalidDataException("Compressed collection output length does not match its element count.");
             return checked(offset + payloadBytes);

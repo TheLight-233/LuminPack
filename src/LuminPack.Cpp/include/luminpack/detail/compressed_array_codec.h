@@ -31,7 +31,7 @@ struct compressed_array_codec
         if (length < 0 || static_cast<std::size_t>(length) > maximum - header_size)
             throw wire_error("Invalid LuminPack compressed collection frame length.");
         const auto frame = next.take(static_cast<std::size_t>(length));
-        if (width / 256 > frame.size() || compression::decompressed_size(frame) != width)
+        if (compression::decompressed_size(frame) != width)
             throw wire_error("LuminPack compressed collection length does not match its frame.");
 
         std::vector<element_type> elements(*count);
