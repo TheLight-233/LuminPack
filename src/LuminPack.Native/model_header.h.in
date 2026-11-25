@@ -1,0 +1,3 @@
+@binding_include@
+#include "@header@"
+@registration_include@
