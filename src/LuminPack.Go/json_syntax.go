@@ -98,6 +98,80 @@ func (r *jsonScanner) value(depth int) any {
 	}
 }
 
+// skip validates the same JSON grammar without retaining fields, strings or number tokens.
+func (r *jsonScanner) skip(depth int) {
+	r.space()
+	if r.pos == len(r.data) {
+		fail(r.pos, "truncated JSON value")
+	}
+	switch r.data[r.pos] {
+	case '{', '[':
+		if depth <= 0 {
+			fail(r.pos, "configured JSON depth exceeded")
+		}
+		object := r.data[r.pos] == '{'
+		end := byte(']')
+		if object {
+			end = '}'
+		}
+		r.pos++
+		if r.accept(end) {
+			return
+		}
+		for {
+			if object {
+				r.expect('"')
+				r.skipText()
+				r.expect(':')
+			}
+			r.skip(depth - 1)
+			if !r.accept(',') {
+				break
+			}
+		}
+		r.expect(end)
+	case '"':
+		r.pos++
+		r.skipText()
+	case 't':
+		r.literal("true")
+	case 'f':
+		r.literal("false")
+	case 'n':
+		r.literal("null")
+	default:
+		r.numberToken()
+	}
+}
+
+// skipText starts after the opening quote and validates escapes with bounded scratch.
+func (r *jsonScanner) skipText() {
+	var scratch [utf8.UTFMax]byte
+	for r.pos < len(r.data) {
+		r.pos += jsonLiteralPrefix(r.data[r.pos:])
+		if r.pos == len(r.data) {
+			break
+		}
+		switch ch := r.data[r.pos]; {
+		case ch == '"':
+			r.pos++
+			return
+		case ch == '\\':
+			r.pos++
+			r.escape(scratch[:0])
+		case ch < 0x20:
+			fail(r.pos, "unescaped JSON control byte")
+		default:
+			ch, width := utf8.DecodeRune(r.data[r.pos:])
+			if ch == utf8.RuneError && width == 1 {
+				fail(r.pos, "invalid JSON UTF-8")
+			}
+			r.pos += width
+		}
+	}
+	fail(r.pos, "unterminated JSON string")
+}
+
 func (r *jsonScanner) literal(text string) {
 	if !bytes.HasPrefix(r.data[r.pos:], []byte(text)) {
 		fail(r.pos, "invalid JSON literal")

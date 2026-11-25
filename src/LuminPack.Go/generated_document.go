@@ -265,7 +265,7 @@ func (r *DocumentJSONReader) CheckCount(n int) {
 		fail(r.pos, "collection limit")
 	}
 }
-func (r *DocumentJSONReader) Skip(depth int) { r.value(depth) }
+func (r *DocumentJSONReader) Skip(depth int) { r.skip(depth) }
 func (r *DocumentJSONReader) Capture(depth int) *DocumentJSONReader {
 	r.space()
 	start := r.pos

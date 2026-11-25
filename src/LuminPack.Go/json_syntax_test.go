@@ -15,15 +15,26 @@ func TestJSONSyntax(t *testing.T) {
 		`1.`, `1e`, `1e+`, `1e--1`, `"`, `"\u12"`, `"\u12x4"`, `"\z"`,
 	} {
 		err := syntaxError([]byte(input))
+		if (err == nil) != (skipError([]byte(input)) == nil) {
+			t.Errorf("skip and read disagree for %q", input)
+		}
 		if (err == nil) != json.Valid([]byte(input)) {
 			t.Errorf("unexpected parsing result for %q: %v", input, err)
 		}
 	}
 	for _, invalid := range []string{`"\ud800"`, `"\udfff"`, "\"\xff\""} {
-		if err := syntaxError([]byte(invalid)); err == nil {
+		if syntaxError([]byte(invalid)) == nil || skipError([]byte(invalid)) == nil {
 			t.Errorf("accepted malformed text %q", invalid)
 		}
 	}
+}
+
+func skipError(data []byte) (err error) {
+	defer recoverFormat(&err)
+	r := jsonScanner{data: data}
+	r.skip(32)
+	r.end()
+	return
 }
 
 func syntaxError(data []byte) (err error) {

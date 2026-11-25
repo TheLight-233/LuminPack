@@ -130,7 +130,7 @@ func (r *directJSONReader) record(c *contract, depth int) Record {
 		r.scan.expect(':')
 		m := c.byName[name]
 		if m == nil {
-			r.scan.value(depth)
+			r.scan.skip(depth)
 		} else {
 			result[m.Name] = r.shape(m.Wire, depth)
 		}
@@ -158,7 +158,7 @@ func (r *directJSONReader) union(c *contract, depth int) any {
 						r.scan.expect('"')
 						r.scan.text()
 						r.scan.expect(':')
-						r.scan.value(childDepth)
+						r.scan.skip(childDepth)
 					}
 					if payload == nil {
 						return nil
