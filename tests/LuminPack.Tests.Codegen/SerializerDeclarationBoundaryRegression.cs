@@ -160,9 +160,9 @@ internal static class SerializerDeclarationBoundaryRegression
                         using var document = System.Text.Json.JsonDocument.Parse(unionJson);
                         const uint caseHash = 0x5035AA42u;
                         if (System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(unionBytes) != caseHash ||
-                            document.RootElement.GetProperty("$type").GetUInt32() != 7 ||
+                            document.RootElement.GetProperty("$type").GetUInt32() != caseHash ||
                             binaryRoot is not @case { Number: 19 } || jsonRoot is not @case { Number: 19 })
-                            throw new InvalidOperationException("An escaped Union identifier lost its dispatch.");
+                            throw new InvalidOperationException($"An escaped Union identifier lost its dispatch: binary={Convert.ToHexString(unionBytes)}, json={unionJson}, binaryType={binaryRoot?.GetType()}, jsonType={jsonRoot?.GetType()}.");
                     }
                 }
             }
