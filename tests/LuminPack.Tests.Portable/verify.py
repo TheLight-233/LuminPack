@@ -287,7 +287,9 @@ def invoke(command, cwd=ROOT, **options):
 
 
 def build_dotnet(project, artifacts, *, export=False, properties=()):
-    settings = [f"-p:ArtifactsPath={artifacts}", *properties]
+    # The Satori compiler host uses its own shared output and restore paths; the
+    # isolated artifact tree is for the portable fixtures, not the compiler.
+    settings = [f"-p:ArtifactsPath={artifacts}", "-p:LuminPackUseSatori=false", *properties]
     if export:
         settings.append("-p:LuminPackExportContract=true")
     invoke(["dotnet", "build", project, "-c", "Release", *settings])
