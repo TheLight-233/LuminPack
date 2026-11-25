@@ -6,8 +6,12 @@ using LuminPack.Utility;
 namespace LuminPack.Option;
 
 /// <summary>Implements UTF-16 strings with token framing.</summary>
-public readonly struct LuminPackUtf16TokenStrings : ILuminPackStringCodec
+public readonly struct LuminPackUtf16TokenStrings : ILuminPackStringCodec, ILuminPackStringReadLimit
 {
+    /// <inheritdoc/>
+    StringLengthCheck ILuminPackStringReadLimit.Check =>
+        static (scoped ref LuminPackReader reader, int maximum) => reader.CheckStringLength<char, TokenStringFraming>(maximum);
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)

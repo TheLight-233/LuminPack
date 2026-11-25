@@ -207,7 +207,8 @@ public static partial class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static string? ReadString<TOptions>(ref LuminPackReader reader, string? current, int maximum) where TOptions : struct, ILuminPackOptions
     {
-        // Every record's characters are bounded by its consumed bytes, so the decoder cannot allocate beyond the input.
+        if (maximum != int.MaxValue)
+            StringReadLimit<TOptions>.Check(ref reader, maximum);
         string? value = reader.Read<TOptions>(current);
         if (value is not null && value.Length > maximum)
             Fail("string length");

@@ -90,17 +90,7 @@ namespace LuminPack.Core
         {
             if ((typeof(TFraming) == typeof(TokenStringFraming)))
             {
-                var remaining = buffer.Slice(index);
-                if ((typeof(TUnit) == typeof(byte)))
-                {
-                    length = remaining.IndexOf((byte)0);
-                }
-                else
-                {
-                    var characters = MemoryMarshal.Cast<byte, ushort>(remaining.Slice(0, remaining.Length & ~1));
-                    var characterLength = characters.IndexOf((ushort)0);
-                    length = characterLength < 0 ? -1 : checked(characterLength * sizeof(ushort));
-                }
+                length = FindStringTerminator<TUnit>(buffer.Slice(index));
 
                 if (length < 0)
                     LuminPackExceptionHelper.ThrowInvalidDataException("String token terminator was not found.");
@@ -114,6 +104,19 @@ namespace LuminPack.Core
             length = LuminPackReader.Read<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(MemoryMarshal.GetReference(buffer)), (nint)(uint)index));
 #endif
             ValidateStringLength<TUnit, TFraming>(buffer, index, length);
+        }
+
+        /// <summary>Finds the first aligned terminator in a bounded token payload.</summary>
+        /// <typeparam name="TUnit">The codec's encoding unit.</typeparam>
+        /// <param name="source">The available input.</param>
+        /// <returns>The payload byte length, or minus one for a missing terminator.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int FindStringTerminator<TUnit>(ReadOnlySpan<byte> source) where TUnit : unmanaged
+        {
+            if (typeof(TUnit) == typeof(byte))
+                return source.IndexOf((byte)0);
+            int end = MemoryMarshal.Cast<byte, ushort>(source).IndexOf((ushort)0);
+            return end < 0 ? -1 : end * sizeof(ushort);
         }
 
         /// <summary>

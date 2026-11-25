@@ -7,8 +7,12 @@ namespace LuminPack.Option;
 /// <summary>Selects each known type's declared profile inside the generated generic dispatch.</summary>
 /// <remarks>This marker is used by generated forwarding methods; it is never a mutable operation configuration.</remarks>
 [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-public readonly struct LuminPackDeclaredOptions : ILuminPackOptions
+public readonly struct LuminPackDeclaredOptions : ILuminPackOptions, ILuminPackStringReadLimit
 {
+    /// <inheritdoc/>
+    StringLengthCheck ILuminPackStringReadLimit.Check =>
+        StringReadLimit<LuminPackUtf16LengthStrings>.Check;
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
@@ -220,8 +224,12 @@ public readonly struct LuminPackDeclaredOptions : ILuminPackOptions
 }
 
 /// <summary>Provides the fixed UTF-8 length profile for generated or caller-authored kernels.</summary>
-public readonly struct LuminPackUtf8LengthOptions : ILuminPackOptions
+public readonly struct LuminPackUtf8LengthOptions : ILuminPackOptions, ILuminPackStringReadLimit
 {
+    /// <inheritdoc/>
+    StringLengthCheck ILuminPackStringReadLimit.Check =>
+        StringReadLimit<LuminPackUtf8LengthStrings>.Check;
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
@@ -433,8 +441,12 @@ public readonly struct LuminPackUtf8LengthOptions : ILuminPackOptions
 }
 
 /// <summary>Provides the fixed UTF-8 token profile for generated or caller-authored kernels.</summary>
-public readonly struct LuminPackUtf8TokenOptions : ILuminPackOptions
+public readonly struct LuminPackUtf8TokenOptions : ILuminPackOptions, ILuminPackStringReadLimit
 {
+    /// <inheritdoc/>
+    StringLengthCheck ILuminPackStringReadLimit.Check =>
+        StringReadLimit<LuminPackUtf8TokenStrings>.Check;
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
@@ -646,8 +658,12 @@ public readonly struct LuminPackUtf8TokenOptions : ILuminPackOptions
 }
 
 /// <summary>Provides the fixed UTF-16 length profile for generated or caller-authored kernels.</summary>
-public readonly struct LuminPackUtf16LengthOptions : ILuminPackOptions
+public readonly struct LuminPackUtf16LengthOptions : ILuminPackOptions, ILuminPackStringReadLimit
 {
+    /// <inheritdoc/>
+    StringLengthCheck ILuminPackStringReadLimit.Check =>
+        StringReadLimit<LuminPackUtf16LengthStrings>.Check;
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
@@ -859,8 +875,12 @@ public readonly struct LuminPackUtf16LengthOptions : ILuminPackOptions
 }
 
 /// <summary>Provides the fixed UTF-16 token profile for generated or caller-authored kernels.</summary>
-public readonly struct LuminPackUtf16TokenOptions : ILuminPackOptions
+public readonly struct LuminPackUtf16TokenOptions : ILuminPackOptions, ILuminPackStringReadLimit
 {
+    /// <inheritdoc/>
+    StringLengthCheck ILuminPackStringReadLimit.Check =>
+        StringReadLimit<LuminPackUtf16TokenStrings>.Check;
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
@@ -1072,8 +1092,12 @@ public readonly struct LuminPackUtf16TokenOptions : ILuminPackOptions
 }
 
 /// <summary>Provides opt-in base-128 UTF-8 length headers with distinct null and empty records.</summary>
-public readonly struct LuminPackUtf8VarIntOptions : ILuminPackOptions
+public readonly struct LuminPackUtf8VarIntOptions : ILuminPackOptions, ILuminPackStringReadLimit
 {
+    /// <inheritdoc/>
+    StringLengthCheck ILuminPackStringReadLimit.Check =>
+        StringReadLimit<LuminPackUtf8VarIntStrings>.Check;
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
@@ -1285,8 +1309,12 @@ public readonly struct LuminPackUtf8VarIntOptions : ILuminPackOptions
 }
 
 /// <summary>Provides opt-in base-128 UTF-16 length headers while retaining compact Latin-1 payloads.</summary>
-public readonly struct LuminPackUtf16VarIntOptions : ILuminPackOptions
+public readonly struct LuminPackUtf16VarIntOptions : ILuminPackOptions, ILuminPackStringReadLimit
 {
+    /// <inheritdoc/>
+    StringLengthCheck ILuminPackStringReadLimit.Check =>
+        StringReadLimit<LuminPackUtf16VarIntStrings>.Check;
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
@@ -1633,12 +1661,16 @@ public readonly struct LuminPackStrictJson : ILuminPackValidationOptions
 /// <typeparam name="TFormat">The fixed standard format.</typeparam>
 /// <typeparam name="TDepth">The complete JSON document depth bound.</typeparam>
 /// <typeparam name="TValidation">The complete JSON document grammar policy.</typeparam>
-public readonly struct LuminPackOptions<TStrings, TFormat, TDepth, TValidation> : ILuminPackOptions
+public readonly struct LuminPackOptions<TStrings, TFormat, TDepth, TValidation> : ILuminPackOptions, ILuminPackStringReadLimit
     where TStrings : struct, ILuminPackStringCodec
     where TFormat : struct, ILuminPackFormatOptions
     where TDepth : struct, ILuminPackDepthOptions
     where TValidation : struct, ILuminPackValidationOptions
 {
+    /// <inheritdoc/>
+    StringLengthCheck ILuminPackStringReadLimit.Check =>
+        StringReadLimit<TStrings>.Check;
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)

@@ -59,8 +59,12 @@ public interface ILuminPackOptions : ILuminPackStringCodec
 }
 
 /// <summary>Provides the fixed UTF-16, length-prefixed, trusted-JSON library defaults.</summary>
-public readonly struct LuminPackDefaultOptions : ILuminPackOptions
+public readonly struct LuminPackDefaultOptions : ILuminPackOptions, ILuminPackStringReadLimit
 {
+    /// <inheritdoc/>
+    StringLengthCheck ILuminPackStringReadLimit.Check =>
+        StringReadLimit<LuminPackUtf16LengthStrings>.Check;
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)

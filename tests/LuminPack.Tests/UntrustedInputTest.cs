@@ -29,6 +29,66 @@ public class UntrustedInputTest
         Assert.Equal(new List<bool> { false, true }, copy.List);
     }
 
+    /// <summary>Rejects a large string before allocating its result for each built-in binary profile.</summary>
+    [Fact]
+    public void StringQuotasApplyBeforeMaterialization()
+    {
+        CheckStringQuota<LuminPackUtf8LengthOptions>();
+        CheckStringQuota<LuminPackUtf8TokenOptions>();
+        CheckStringQuota<LuminPackUtf8VarIntOptions>();
+        CheckStringQuota<LuminPackUtf16LengthOptions>();
+        CheckStringQuota<LuminPackUtf16TokenOptions>();
+        CheckStringQuota<LuminPackUtf16VarIntOptions>();
+        CheckStringQuota<LuminPackFixedOptions<LuminPackUtf8TokenOptions>>();
+        CheckStringQuota<LuminPackFallbackOptions<LuminPackDeclaredOptions, LuminPackUtf8VarIntOptions>>();
+    }
+
+    /// <summary>Keeps replacement decoding for UTF-8 tokens and length records without a count hint.</summary>
+    [Fact]
+    public void StringQuotaUsesTheMaterializingDecoderFallback()
+    {
+        Assert.Equal("\uFFFD", ReadLimitedString<LuminPackUtf8TokenOptions>([0xe2, 0x82, 0], 1));
+        Assert.Equal("\uFFFD", ReadLimitedString<LuminPackUtf8LengthOptions>([2, 0, 0, 0, 0, 0, 0, 0, 0xe2, 0x82], 1));
+    }
+
+    /// <summary>Checks exact UTF-16 units, ordinary rejection, and bounded allocations on a producer-written record.</summary>
+    /// <typeparam name="TOptions">The binary profile under test.</typeparam>
+    private static void CheckStringQuota<TOptions>() where TOptions : struct, ILuminPackOptions
+    {
+        const string boundary = "a\u6587\U0001F600";
+        byte[] exact = EncodeString<TOptions>(boundary);
+        Assert.Equal(boundary, ReadLimitedString<TOptions>(exact, boundary.Length));
+        Assert.Throws<InvalidDataException>(() => ReadLimitedString<TOptions>(exact, boundary.Length - 1));
+        byte[] large = EncodeString<TOptions>(new string('x', 256 * 1024));
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        Assert.Throws<InvalidDataException>(() => ReadLimitedString<TOptions>(large, 8));
+        Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0L, 32 * 1024L);
+    }
+
+    /// <summary>Encodes a single string using its ordinary compiled codec.</summary>
+    /// <typeparam name="TOptions">The binary profile under test.</typeparam>
+    /// <param name="value">The input text.</param>
+    /// <returns>The record bytes.</returns>
+    private static byte[] EncodeString<TOptions>(string value) where TOptions : struct, ILuminPackOptions
+    {
+        using var owner = new LuminPack.Utility.LuminBufferWriter(true);
+        var writer = new LuminPack.Core.LuminPackWriter(owner);
+        default(TOptions).Write(ref writer, value);
+        return writer.Buffer.Slice(0, writer.Position).ToArray();
+    }
+
+    /// <summary>Reads a single record through the generated untrusted-input helper.</summary>
+    /// <typeparam name="TOptions">The binary profile under test.</typeparam>
+    /// <param name="bytes">The record bytes.</param>
+    /// <param name="maximum">The maximum UTF-16 code units.</param>
+    /// <returns>The decoded string.</returns>
+    private static string? ReadLimitedString<TOptions>(byte[] bytes, int maximum) where TOptions : struct, ILuminPackOptions
+    {
+        Span<byte> source = bytes;
+        var reader = new LuminPack.Core.LuminPackReader(ref source);
+        return LuminPack.Security.LuminPackInputPolicy.ReadString<TOptions>(ref reader, null, maximum);
+    }
+
     /// <summary>Reading into an existing graph keeps the ordinary reuse rules.</summary>
     [Fact]
     public void UntrustedReadsReuseExistingStorage()

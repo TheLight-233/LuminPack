@@ -7,8 +7,12 @@ namespace LuminPack.Option;
 /// <summary>Marks a declaration-owned profile which an ambient operation profile cannot override.</summary>
 /// <typeparam name="TOptions">The complete profile selected by the declaration.</typeparam>
 [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-public readonly struct LuminPackFixedOptions<TOptions> : ILuminPackOptions where TOptions : struct, ILuminPackOptions
+public readonly struct LuminPackFixedOptions<TOptions> : ILuminPackOptions, ILuminPackStringReadLimit where TOptions : struct, ILuminPackOptions
 {
+    /// <inheritdoc/>
+    StringLengthCheck ILuminPackStringReadLimit.Check =>
+        StringReadLimit<TOptions>.Check;
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
@@ -223,9 +227,13 @@ public readonly struct LuminPackFixedOptions<TOptions> : ILuminPackOptions where
 /// <typeparam name="TOptions">The explicit operation profile or declaration marker.</typeparam>
 /// <typeparam name="TFallback">The consuming assembly's compiled defaults for unknown registered types.</typeparam>
 [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-public readonly struct LuminPackFallbackOptions<TOptions, TFallback> : ILuminPackOptions
+public readonly struct LuminPackFallbackOptions<TOptions, TFallback> : ILuminPackOptions, ILuminPackStringReadLimit
     where TOptions : struct, ILuminPackOptions where TFallback : struct, ILuminPackOptions
 {
+    /// <inheritdoc/>
+    StringLengthCheck ILuminPackStringReadLimit.Check =>
+        typeof(TOptions) == typeof(LuminPackDeclaredOptions) ? StringReadLimit<TFallback>.Check : StringReadLimit<TOptions>.Check;
+
     /// <inheritdoc/>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TResult ReadJsonValue<TOperation, TResult>(scoped ref LuminPackJsonReader reader)
