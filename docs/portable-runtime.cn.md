@@ -115,18 +115,23 @@ python tests/LuminPack.Tests.Portable/verify.py --help
 准备基准样本时，传入 `--generated` 可同时生成 Go 和 TypeScript 基准模块。跨语言基准工作流会编译并测量这些入口。
 
 ```sh
-python benchmarks/LuminPack.Benchmark.Portable/prepare.py .tmp/portable-benchmark/models
+python benchmarks/LuminPack.Benchmark.Portable/prepare.py .tmp/portable-benchmark/models --generated --cpp
 ```
 
 在仓库根目录执行对应语言的命令。C++ 脚本使用 Bash 和 CMake，TypeScript 基准使用 Node.js 22 或更高版本。
 
 ```sh
 python benchmarks/LuminPack.Benchmark.Java/run.py .tmp/portable-benchmark/models .tmp/portable-benchmark/java.csv
-(cd benchmarks/LuminPack.Benchmark.Go && go run . ../../.tmp/portable-benchmark/models ../../.tmp/portable-benchmark/go.csv)
+mkdir -p benchmarks/LuminPack.Benchmark.Go/generated
+cp .tmp/portable-benchmark/models/go/*.go benchmarks/LuminPack.Benchmark.Go/generated/
+(cd benchmarks/LuminPack.Benchmark.Go && go run -tags luminpack_generated . ../../.tmp/portable-benchmark/models ../../.tmp/portable-benchmark/go.csv)
 npm ci --prefix src/LuminPack.TypeScript
 npm run build --prefix src/LuminPack.TypeScript
 npm ci --prefix benchmarks/LuminPack.Benchmark.TypeScript
-node benchmarks/LuminPack.Benchmark.TypeScript/benchmark.mjs .tmp/portable-benchmark/models .tmp/portable-benchmark/typescript.csv
+mkdir -p benchmarks/LuminPack.Benchmark.TypeScript/generated
+cp .tmp/portable-benchmark/models/typescript/*.ts benchmarks/LuminPack.Benchmark.TypeScript/generated/
+src/LuminPack.TypeScript/node_modules/.bin/tsc --strict --target ES2022 --module NodeNext --moduleResolution NodeNext benchmarks/LuminPack.Benchmark.TypeScript/generated/*.ts
+node benchmarks/LuminPack.Benchmark.TypeScript/benchmark.mjs --generated .tmp/portable-benchmark/models .tmp/portable-benchmark/typescript.csv
 bash benchmarks/LuminPack.Benchmark.Portable/run-cpp.sh .tmp/portable-benchmark/models .tmp/portable-benchmark
 ```
 

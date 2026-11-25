@@ -113,18 +113,23 @@ python tests/LuminPack.Tests.Portable/verify.py --help
 Prepare the same managed benchmark fixtures for each target. Pass `--generated` to emit the Go and TypeScript benchmark modules. The portable benchmark workflow compiles and times those entry points. Add `--cpp` to the prepare command if you plan to run the C++ benchmark so it also generates the C++ headers.
 
 ```sh
-python benchmarks/LuminPack.Benchmark.Portable/prepare.py .tmp/portable-benchmark/models
+python benchmarks/LuminPack.Benchmark.Portable/prepare.py .tmp/portable-benchmark/models --generated --cpp
 ```
 
 Run the command for your language from the repository root. The C++ script uses Bash and CMake, and the TypeScript benchmark uses Node.js 22 or later.
 
 ```sh
 python benchmarks/LuminPack.Benchmark.Java/run.py .tmp/portable-benchmark/models .tmp/portable-benchmark/java.csv
-(cd benchmarks/LuminPack.Benchmark.Go && go run . ../../.tmp/portable-benchmark/models ../../.tmp/portable-benchmark/go.csv)
+mkdir -p benchmarks/LuminPack.Benchmark.Go/generated
+cp .tmp/portable-benchmark/models/go/*.go benchmarks/LuminPack.Benchmark.Go/generated/
+(cd benchmarks/LuminPack.Benchmark.Go && go run -tags luminpack_generated . ../../.tmp/portable-benchmark/models ../../.tmp/portable-benchmark/go.csv)
 npm ci --prefix src/LuminPack.TypeScript
 npm run build --prefix src/LuminPack.TypeScript
 npm ci --prefix benchmarks/LuminPack.Benchmark.TypeScript
-node benchmarks/LuminPack.Benchmark.TypeScript/benchmark.mjs .tmp/portable-benchmark/models .tmp/portable-benchmark/typescript.csv
+mkdir -p benchmarks/LuminPack.Benchmark.TypeScript/generated
+cp .tmp/portable-benchmark/models/typescript/*.ts benchmarks/LuminPack.Benchmark.TypeScript/generated/
+src/LuminPack.TypeScript/node_modules/.bin/tsc --strict --target ES2022 --module NodeNext --moduleResolution NodeNext benchmarks/LuminPack.Benchmark.TypeScript/generated/*.ts
+node benchmarks/LuminPack.Benchmark.TypeScript/benchmark.mjs --generated .tmp/portable-benchmark/models .tmp/portable-benchmark/typescript.csv
 bash benchmarks/LuminPack.Benchmark.Portable/run-cpp.sh .tmp/portable-benchmark/models .tmp/portable-benchmark
 ```
 
