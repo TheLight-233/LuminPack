@@ -91,8 +91,10 @@ internal static partial class PortableGenerateCommand
                 string k = Shape((JsonObject)wire["key"]!), v = Shape((JsonObject)wire["value"]!);
                 if (k == "Text")
                 {
-                    Line("  if (r.consume('{')) { const fields: Record<string,unknown> = Object.create(null); let count=0;");
-                    Line($"    if (!r.consume('}}')) {{ do {{ const key=r.string(); r.key(key); if (!Object.prototype.hasOwnProperty.call(fields,key)) r.count(count++); r.expect(':'); fields[key]=gr{v}(r,d+1); }} while(r.consume(',')); r.expect('}}'); }} return new Map(Object.entries(fields)); }}");
+                    Line("  if (r.consume('{')) { const fields=new Map<string,unknown>(); let numeric=false;");
+                    Line($"    if (!r.consume('}}')) {{ do {{ const key=r.string(); r.key(key); r.countKey(fields,key); const first=key.charCodeAt(0); numeric ||= first>=48 && first<=57; r.expect(':'); fields.set(key,gr{v}(r,d+1)); }} while(r.consume(',')); r.expect('}}'); }}");
+                    // Only array-index property names can change order when a JSON object becomes a Map.
+                    Line("    return numeric ? new Map(Object.entries(Object.fromEntries(fields))) : fields; }");
                 }
                 Line("  const entries=new Map(); let count=0; r.expect('['); if(r.consume(']')) return entries;");
                 Line($"  do {{ r.count(count++); r.count(1); r.depth(d+1); r.expect('['); const key=gr{k}(r,d+2); if(key===null) r.miss(); r.expect(','); entries.set(key,gr{v}(r,d+2)); r.expect(']'); }} while(r.consume(',')); r.expect(']'); return entries;");

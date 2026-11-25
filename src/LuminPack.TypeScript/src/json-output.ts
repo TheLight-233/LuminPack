@@ -1,6 +1,6 @@
 import { WireError, encodeUtf8 } from "./binary.ts";
 import { scalarCollectionView } from "./scalar.ts";
-import { formatJsonNumber } from "./json-number.ts";
+import { formatJsonNumber, jsonNumberCapacity, writeFloat32Bytes } from "./json-number.ts";
 
 const quads = new Uint8Array(40000);
 for (let i = 0; i < 10000; i++) {
@@ -14,6 +14,7 @@ for (let i = 0; i < 10000; i++) {
 /** Operation-local UTF-8 cursor. The returned document owns its bytes. */
 export class JsonByteOutput {
     private bytes = new Uint8Array(1024);
+    private words = new DataView(this.bytes.buffer);
     private position = 0;
 
     constructor(private readonly maxDepth: number, private readonly maxCollection: number,
@@ -70,14 +71,15 @@ export class JsonByteOutput {
         const grown = new Uint8Array(Math.max(this.bytes.length * 2, this.position + n));
         grown.set(this.bytes.subarray(0, this.position));
         this.bytes = grown;
+        this.words = new DataView(grown.buffer);
     }
 
     // Short property heads are packed into two compile-time constants by Codegen.
     head(first: number, last: number, length: number): void {
         this.room(length);
-        const p = this.position, q = p + length - 4, b = this.bytes;
-        b[p] = first; b[p+1] = first >>> 8; b[p+2] = first >>> 16; b[p+3] = first >>> 24;
-        b[q] = last; b[q+1] = last >>> 8; b[q+2] = last >>> 16; b[q+3] = last >>> 24;
+        const p = this.position;
+        this.words.setUint32(p, first, true);
+        if (length !== 4) this.words.setUint32(p + length - 4, last, true);
         this.position += length;
     }
 
@@ -126,6 +128,11 @@ export class JsonByteOutput {
     }
 
     private magnitude(x: number): void {
+        if (x < 100) {
+            if (x >= 10) this.bytes[this.position++] = quads[x * 4 + 2];
+            this.bytes[this.position++] = quads[x * 4 + 3];
+            return;
+        }
         let high = x, middle = -1, low = -1;
         if (high >= 10000) {
             high = Math.trunc(x / 10000);
@@ -176,7 +183,10 @@ export class JsonByteOutput {
                 return;
             }
         }
-        this.ascii(formatJsonNumber(x, single));
+        if (single) {
+            this.room(jsonNumberCapacity);
+            this.position += writeFloat32Bytes(x, this.bytes, this.position);
+        } else this.ascii(formatJsonNumber(x, false));
     }
 
     finish(): Uint8Array { return this.bytes.slice(0, this.position); }

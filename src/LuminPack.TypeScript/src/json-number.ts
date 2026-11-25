@@ -11,7 +11,7 @@ interface NumberKernels {
     readonly float64: (value: number) => number;
 }
 
-const tokenCapacity = 32;
+export const jsonNumberCapacity = 32;
 const wordMask = 0xffff_ffff_ffff_ffffn;
 const float32Mask = 0x7f_ffff;
 const float64Mask = 0x000f_ffff_ffff_ffffn;
@@ -74,7 +74,7 @@ function numberKernels(): NumberKernels | null {
         const memory = operations.memory as WebAssembly.Memory;
         const bufferAddress = (operations.json_number_buffer as () => number)();
         kernels = {
-            buffer: new Uint8Array(memory.buffer, bufferAddress, tokenCapacity),
+            buffer: new Uint8Array(memory.buffer, bufferAddress, jsonNumberCapacity),
             float32: operations.format_float32 as NumberKernels["float32"],
             float64: operations.format_float64 as NumberKernels["float64"],
         };
@@ -247,4 +247,18 @@ export function formatJsonNumber(value: number, single: boolean): string {
     const length = (single ? native.float32 : native.float64)(value);
     if (length < 1 || length > native.buffer.length) throw new WireError("Invalid LuminPack JSON numeric token length.");
     return String.fromCharCode(...native.buffer.subarray(0, length));
+}
+
+/** Copy the kernel's ASCII token into the writer's reserved output window. */
+export function writeFloat32Bytes(value: number, target: Uint8Array, offset: number): number {
+    const native = numberKernels();
+    if (native === null) {
+        const text = formatJsonNumber(value, true);
+        for (let i = 0; i < text.length; i++) target[offset + i] = text.charCodeAt(i);
+        return text.length;
+    }
+    const length = native.float32(value);
+    if (length < 1 || length > native.buffer.length) throw new WireError("Invalid LuminPack JSON numeric token.");
+    for (let i = 0; i < length; i++) target[offset + i] = native.buffer[i];
+    return length;
 }

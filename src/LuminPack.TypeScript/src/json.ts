@@ -39,13 +39,20 @@ export class OrderedJsonCursor {
     constructor(private readonly text: string, private readonly maxDepth: number, private readonly maxString = 2147483647, private readonly maximumCount = 2147483647) {}
 
     consume(token: string): boolean {
+        if (token.length === 1) {
+            if (this.text.charCodeAt(this.position) !== token.charCodeAt(0)) return false;
+            this.position++;
+            return true;
+        }
         if (!this.text.startsWith(token, this.position)) return false;
         this.position += token.length;
         return true;
     }
 
     expect(token: string): void {
-        if (!this.consume(token)) throw orderedJsonMiss;
+        if (token.length === 1 ? this.text.charCodeAt(this.position) !== token.charCodeAt(0) :
+            !this.text.startsWith(token, this.position)) throw orderedJsonMiss;
+        this.position += token.length;
     }
 
     depth(depth: number): void {
@@ -72,6 +79,9 @@ export class OrderedJsonCursor {
 
     miss(): never { throw orderedJsonMiss; }
     count(index: number): void { if (index >= this.maximumCount) throw orderedJsonMiss; }
+    countKey(map: Map<string, unknown>, key: string): void {
+        if (map.size >= this.maximumCount && !map.has(key)) throw orderedJsonMiss;
+    }
     key(value: string): void { if (value.length > this.maxString) throw orderedJsonMiss; }
     checkedString(): string | null {
         if (this.consume("null")) return null;

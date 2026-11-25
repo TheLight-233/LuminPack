@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCodec, WireError } from "../dist/index.js";
+import { JsonByteOutput } from "../dist/json-output.js";
 
 const scalar = type => createCodec({ version: 1, contracts: [], root: type, rootWire: { kind: "scalar", type } });
 const view = new DataView(new ArrayBuffer(8));
@@ -22,8 +23,12 @@ test("writes exact C# XJB float spellings and notation boundaries", () => {
         [0x4e6e6b28, "1000000000"], [0x501502f9, "1E+10"], [0x7f7fffff, "3.4028235E+38"],
     ];
     const codec = scalar("float");
+    const output = new JsonByteOutput(8, 8, () => 0);
     for (const [bits, expected] of values) {
         const value = single(bits);
+        output.reset();
+        output.float(value, true);
+        assert.deepEqual(Buffer.from(output.finish()), Buffer.from(expected), bits.toString(16));
         for (const [encoding, bufferEncoding] of [["utf8", "utf8"], ["utf16", "utf16le"]]) {
             const bytes = codec.writeJson(value, encoding);
             assert.deepEqual(Buffer.from(bytes), Buffer.from(expected, bufferEncoding), bits.toString(16));
