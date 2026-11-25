@@ -1,6 +1,7 @@
 package luminpack
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"math"
@@ -113,7 +114,7 @@ func (s *Schema) decodeBinary(typeID string, data []byte, selected int) (value a
 
 // EncodeBinary writes a document using the root's declared string profile.
 func (s *Schema) EncodeBinary(typeID string, value any) ([]byte, error) {
-	return s.AppendBinary(nil, typeID, value)
+	return s.encodeOwnedBinary(typeID, value, -1)
 }
 
 // AppendBinary appends a complete document to a reusable caller-owned buffer.
@@ -123,7 +124,19 @@ func (s *Schema) AppendBinary(output []byte, typeID string, value any) ([]byte, 
 
 // EncodeBinaryWithProfile overrides the root operation's built-in binary profile.
 func (s *Schema) EncodeBinaryWithProfile(typeID string, value any, profile int) ([]byte, error) {
-	return s.encodeBinary(nil, typeID, value, profile)
+	return s.encodeOwnedBinary(typeID, value, profile)
+}
+
+func (s *Schema) encodeOwnedBinary(typeID string, value any, selected int) ([]byte, error) {
+	slot := encodeScratch.Get().(*[]byte)
+	data, err := s.encodeBinary((*slot)[:0], typeID, value, selected)
+	if err != nil {
+		releaseEncodeScratch(slot, *slot)
+		return nil, err
+	}
+	result := bytes.Clone(data)
+	releaseEncodeScratch(slot, data)
+	return result, nil
 }
 
 func (s *Schema) encodeBinary(out []byte, typeID string, value any, selected int) (data []byte, err error) {
@@ -196,7 +209,11 @@ func (r *binaryReader) contract(c *contract, inherited int, body bool) any {
 			return r.readStorage(c, nil, c.Storage, p)
 		}
 		if c.rawFields != nil {
-			return c.rawFields.read(r.take(c.rawFields.width))
+			data := r.take(c.rawFields.width)
+			if generated := c.rawFields.generated; generated != nil {
+				return generated.Read(data)
+			}
+			return c.rawFields.read(data)
 		}
 		return r.body(c, p, body, nil)
 	case "Custom":
@@ -227,9 +244,18 @@ func (r *binaryReader) body(c *contract, p int, body bool, target Record) any {
 	if target == nil {
 		target = make(Record, len(c.Members))
 	}
-	for i := range c.Members {
+	for i := 0; i < len(c.Members); {
 		m := &c.Members[i]
+		if run := m.readRun; run != nil {
+			data := r.take(run.width)
+			for _, field := range run.fields {
+				target[field.name] = field.read(data)
+			}
+			i += len(run.fields)
+			continue
+		}
 		target[m.Name] = r.readMember(m, m.Wire, p)
+		i++
 	}
 	return target
 }
@@ -498,6 +524,13 @@ func (r *binaryReader) elements(d *descriptor, n, p int) []any {
 		}
 		data := r.take(n * raw.width)
 		values := make([]any, n)
+		if generated := raw.generated; generated != nil {
+			for i := range values {
+				values[i] = generated.Read(data[:raw.width:raw.width])
+				data = data[raw.width:]
+			}
+			return values
+		}
 		for i := range values {
 			offset := i * raw.width
 			values[i] = raw.read(data[offset : offset+raw.width])

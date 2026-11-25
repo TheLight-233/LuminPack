@@ -78,6 +78,8 @@ dotnet run --project tools/LuminPack.Codegen -c Release -- project .tmp/contract
 | `--native-integer-bytes <4 或 8>` | 为 Java、Go 和 TypeScript 指定托管端 `nint`、`nuint` 的宽度，默认 8。C++ 由目标 ABI 决定。 |
 | `--native-scalar-alignment <4 或 8>` | 为 Java、Go 和 TypeScript 指定托管端 64 位标量的对齐方式，默认 8。托管端的原生整数可以是 4 字节，标量仍按 8 字节对齐。 |
 
+当原始布局结构体的字段全部为 `int` 或 `float` 时，生成的 Go 加载器和 TypeScript 编解码器会自动绑定使用固定偏移量的二进制读写函数。绑定时检查导出的字段名称、类型、顺序和布局。请使用与应用运行时配套的版本重新生成绑定。其他契约继续使用原有编解码路径，包括版本容忍、引用追踪和自定义处理器。
+
 ## 对齐两端的数据格式设置
 
 - 两端使用相同的根类型和二进制配置，默认是 UTF-16 Length。Length 和 VarInt 区分 `null` 与空字符串。Token 使用零码元作为终止符，将 `null` 写成空字符串。需要保留内嵌零码元时，使用 Length 或 VarInt。

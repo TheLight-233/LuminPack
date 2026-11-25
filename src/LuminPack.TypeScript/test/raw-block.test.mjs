@@ -46,3 +46,20 @@ test("keeps the fixed UTF-16 Length framing at every short and medium bound", ()
         }
     }
 });
+
+test("binds a generated fixed record only to matching checked row windows", () => {
+    const manifest = { version: 1, root: "Rows", rootWire: sequence({ kind: "contract", type: "Row" }),
+        contracts: [{ id: "Row", kind: "Struct", storageKind: "RawUnmanaged", profile: { binary: 2 },
+            members: [{ name: "X", wire: int }] }] };
+    let reads = 0, writes = 0;
+    const row = { type: "Row", names: ["X"], scalars: ["int"],
+        read(view, p) { reads++; return { X: view.getInt32(p, true) }; },
+        write(view, p, value) { writes++; view.setInt32(p, value.X, true); } };
+    for (const names of [["X"], ["Y"]]) {
+        const model = createCodec(manifest, {}, [{ ...row, names }]);
+        const bytes = model.writeBinary([{ X: -5 }, { X: 42 }]);
+        assert.deepEqual(model.readBinary(bytes), [{ X: -5 }, { X: 42 }]);
+        assert.throws(() => model.readBinary(bytes.subarray(0, 11)), WireError);
+        assert.deepEqual([reads, writes], [2, 2]);
+    }
+});

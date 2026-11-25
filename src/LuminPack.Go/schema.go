@@ -150,6 +150,7 @@ type contract struct {
 }
 
 type member struct {
+	readRun               *packedStorage
 	Name                  string
 	Profile               profile
 	Wire                  *descriptor
@@ -205,6 +206,21 @@ func normalize(id string) string { return strings.TrimSpace(strings.ReplaceAll(i
 
 // LoadSchema indexes the portable compiler projection produced by the .NET tool.
 func LoadSchema(data []byte) (*Schema, error) {
+	return LoadSchemaWithFixedRecords(data, nil)
+}
+
+// FixedRecordCodec describes a source-generated little-endian Int32/Float32 record body.
+// Read receives one validated row. Write returns false for values requiring scalar conversion.
+type FixedRecordCodec struct {
+	Type           string
+	Names, Scalars []string
+	Read           func([]byte) Record
+	Write          func([]byte, Record) bool
+}
+
+// LoadSchemaWithFixedRecords binds generated functions only to matching raw field layouts.
+func LoadSchemaWithFixedRecords(data []byte, fixed []FixedRecordCodec) (*Schema, error) {
+
 	var wire schemaWire
 	if err := json.Unmarshal(data, &wire); err != nil {
 		return nil, err
@@ -300,6 +316,27 @@ func LoadSchema(data []byte) (*Schema, error) {
 	if s.rootWire != nil {
 		s.rootJSONDirect = s.jsonShapeEligible(s.rootWire, make(map[*contract]bool))
 		s.compileShapeStorage(s.rootWire)
+	}
+	for _, codec := range fixed {
+		c := s.types[normalize(codec.Type)]
+		if c == nil || c.rawFields == nil || codec.Read == nil || codec.Write == nil {
+			continue
+		}
+		raw := c.rawFields
+		if len(codec.Names) != len(raw.fields) || len(codec.Scalars) != len(raw.fields) {
+			continue
+		}
+		matches := true
+		for i, f := range raw.fields {
+			if f.name != codec.Names[i] || f.scalar != codec.Scalars[i] ||
+				(f.scalar != "int" && f.scalar != "float") || f.offset != 4*i || f.width != 4 {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			raw.generated = &codec
+		}
 	}
 	return s, nil
 }

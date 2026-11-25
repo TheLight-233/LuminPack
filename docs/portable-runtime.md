@@ -78,6 +78,8 @@ Place options before the manifest path.
 | `--native-integer-bytes <4 or 8>` | Set the managed `nint` and `nuint` width for Java, Go, and TypeScript. The default is 8. C++ uses the target ABI. |
 | `--native-scalar-alignment <4 or 8>` | Set the managed storage alignment of 64-bit scalars for Java, Go, and TypeScript. The default is 8. A managed endpoint can use 4-byte native integers and 8-byte scalar alignment. |
 
+Generated Go loaders and TypeScript codecs automatically bind fixed-offset binary readers and writers for raw structs made entirely of `int` and `float` fields. The binding checks the exported field names, types, order and layout. Regenerate with the runtime version used by the application. Other contracts continue through the schema codec, including versioned objects, tracked references and custom handlers.
+
 ## Match the wire options
 
 - Use the same root and Binary profile at both endpoints. The default is UTF-16 Length. Length and VarInt preserve null and empty strings separately. Token uses a zero terminator and represents null as an empty string. Use Length or VarInt for embedded zero units.

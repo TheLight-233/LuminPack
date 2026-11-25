@@ -141,7 +141,57 @@ interface Manifest {
 
 type Target = Record<string, unknown>;
 
+export interface GeneratedFixedRecord {
+    type: string;
+    names: readonly string[];
+    scalars: readonly string[];
+    read(view: DataView, offset: number): Record<string, unknown>;
+    write(view: DataView, offset: number, value: Record<string, unknown>): void;
+}
+
+interface FixedRecord {
+    width: number;
+    read(view: DataView, offset: number): Target;
+    write(view: DataView, offset: number, value: Target): void;
+}
+
+function compileFixedRecord(contract: Contract, nativeBytes: number, generated?: GeneratedFixedRecord): FixedRecord | undefined {
+    if (contract.kind !== "Struct" || contract.storageKind !== "RawUnmanaged" || contract.storage ||
+        contract.nativeStorage || contract.versioned || contract.sequenceWire || contract.profile.trackReferences ||
+        !contract.members?.length || (contract.binaryMemberCount ?? contract.members.length) > 249) return;
+    const fields: { name: string; offset: number; read: FixedScalarRead; write: FixedScalarWrite; zero: unknown }[] = [];
+    let width = 0;
+    for (const member of contract.members) {
+        if (member.wire.kind !== "scalar" || (member.wire.type !== "int" && member.wire.type !== "float") ||
+            member.compressed || member.fixedNullable) return;
+        const type = member.wire.type;
+        const size = scalarWidth(type, nativeBytes);
+        fields.push({ name: member.name, offset: width, read: fixedScalarRead(type, nativeBytes),
+            write: fixedScalarWrite(type, nativeBytes), zero: defaultScalar(type, nativeBytes) });
+        width += size;
+    }
+    const matches = generated && generated.names.length === fields.length && generated.scalars.length === fields.length &&
+        fields.every((field, i) => field.name === generated.names[i] &&
+            (contract.members[i].wire as { type: string }).type === generated.scalars[i] &&
+            (generated.scalars[i] === "int" || generated.scalars[i] === "float"));
+    const readRow = matches ? generated.read : undefined;
+    const writeRow = matches ? generated.write : undefined;
+    return {
+        width,
+        read: readRow ?? function(view, offset) {
+            const record: Target = {};
+            for (const field of fields) put(record, field.name, field.read(view, offset + field.offset));
+            return record;
+        },
+        write: writeRow ?? function(view, offset, record) {
+            for (const field of fields) field.write(view, offset + field.offset,
+                own(record, field.name) ? record[field.name] : field.zero);
+        },
+    };
+}
+
 interface Plan {
+    fixed?: FixedRecord;
     contract: Contract;
     byHash: Map<number, string>;
     byId: Map<string, number>;
@@ -270,7 +320,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
     private readonly orderedJson: boolean;
     private readonly trackedJson: boolean;
 
-    constructor(manifest: unknown, options: CodecOptions) {
+    constructor(manifest: unknown, options: CodecOptions, fixedRecords?: readonly GeneratedFixedRecord[]) {
         this.manifest = manifest as Manifest;
         this.options = options;
         if (!this.manifest || this.manifest.version !== 1 || typeof this.manifest.root !== "string" ||
@@ -280,6 +330,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         this.nativeScalarAlignment = this.manifest.nativeScalarAlignment ?? 8;
         if (this.nativeScalarAlignment !== 4 && this.nativeScalarAlignment !== 8)
             throw new WireError("Invalid LuminPack native scalar alignment.");
+        const fixed = fixedRecords && new Map(fixedRecords.map(row => [identity(row.type), row]));
         let orderedJson = true;
         for (const contract of this.manifest.contracts) {
             const type = identity(contract.id);
@@ -299,7 +350,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 return [member.name, { member, head: "{" + name, next: "," + name }];
             })));
             const plan: Plan = { contract, byHash: new Map(), byId: new Map(), registeredByTag: new Map(),
-                registeredByType: new Map(), jsonByName, jsonHeads };
+                registeredByType: new Map(), jsonByName, jsonHeads, fixed: compileFixedRecord(contract, this.nativeBytes, fixed?.get(type)) };
             if (contract.kind === "Struct" && !contract.profile.trackReferences && jsonHeads.length > 0 &&
                 jsonHeads.every(entry => entry.member.wire.kind === "scalar")) {
                 plan.scalarJsonBody = jsonHeads.map(({ member, head, next }, index) => ({
@@ -704,6 +755,13 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         const values: unknown[] = [];
         if (wire.kind === "contract") {
             const plan = this.plan(wire.type);
+            if (count > 0 && plan.fixed && state.depth < this.limits.maxDepth) {
+                const fixed = plan.fixed;
+                let offset = input.reserve(count * fixed.width);
+                const rows = new Array<unknown>(count);
+                for (let i = 0; i < count; i++, offset += fixed.width) rows[i] = fixed.read(input.view, offset);
+                return rows;
+            }
             for (let index = 0; index < count; index++) values.push(this.readContract(plan, input, profile, state));
         } else {
             for (let index = 0; index < count; index++) values.push(this.readWire(wire, input, profile, state));
@@ -833,6 +891,19 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             }
             return;
         }
+        if (wire.kind === "contract" && state.depth < this.limits.maxDepth) {
+            const fixed = this.plan(wire.type).fixed;
+            if (fixed) {
+                const bytes = output.writable(elements.length * fixed.width);
+                const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+                let offset = 0;
+                for (const item of elements) {
+                    fixed.write(view, offset, object(item));
+                    offset += fixed.width;
+                }
+                return;
+            }
+        }
         for (const item of elements) this.writeWire(wire, output, item, profile, state);
     }
 
@@ -847,6 +918,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             if (contract.kind !== "Record" && contract.kind !== "Struct") throw new WireError("Unsupported LuminPack contract kind.");
             const storage = this.contractStorage(contract);
             if (storage) return this.readStorage(input, storage, this.standaloneModel(storage));
+            if (plan.fixed) return plan.fixed.read(input.view, input.reserve(plan.fixed.width));
             const tracked = contract.profile.trackReferences === true;
             const result: Target = {};
             if (tracked) {
@@ -886,6 +958,11 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 return;
             }
             const record = object(value);
+            if (plan.fixed) {
+                const bytes = output.writable(plan.fixed.width);
+                plan.fixed.write(new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), 0, record);
+                return;
+            }
             if ((contract.binaryMemberCount ?? contract.members.length) > 249) throw new WireError("Too many LuminPack record members.");
             const tracked = contract.profile.trackReferences === true;
             if (tracked) {
@@ -1533,6 +1610,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
 }
 
 /** Compiles the shared portable contract to a checked Binary and JSON codec. */
-export function createCodec<T = unknown, TInput = T>(manifest: unknown, options: CodecOptions = {}): Codec<T, TInput> {
-    return new CompiledCodec<T, TInput>(manifest, options);
+export function createCodec<T = unknown, TInput = T>(manifest: unknown, options: CodecOptions = {},
+    fixedRecords?: readonly GeneratedFixedRecord[]): Codec<T, TInput> {
+    return new CompiledCodec<T, TInput>(manifest, options, fixedRecords);
 }

@@ -3,6 +3,7 @@ package luminpack
 import (
 	"encoding/binary"
 	"math"
+	"slices"
 )
 
 type storageTransfer struct {
@@ -62,9 +63,10 @@ func (p *valueLayout) transfer(index int) storageTransfer {
 }
 
 type packedStorage struct {
-	fields []packedField
-	width  int
-	tuple  bool
+	generated *FixedRecordCodec
+	fields    []packedField
+	width     int
+	tuple     bool
 }
 
 type packedField struct {
@@ -81,6 +83,31 @@ func (s *Schema) compileContractStorage(c *contract) {
 	if c.NativeStorage != nil {
 		c.NativeStorage.compileTransfers()
 		c.NativeStorage.program = s.compileStorageFields(c, nil, c.NativeStorage)
+	}
+	if c.Kind == "Record" && !c.Versioned && !c.Profile.TrackReferences && c.SequenceWire == nil {
+		for i := 0; i < len(c.Members); {
+			first := i
+			run := packedStorage{}
+			for i < len(c.Members) {
+				m := &c.Members[i]
+				if m.Wire == nil || m.Wire.Kind != "scalar" || m.Compressed || m.FixedNullable || m.Wire.Type == "bool" {
+					break
+				}
+				width := s.knownScalarWidth(m.Wire.Type)
+				if width == 0 {
+					break
+				}
+				run.fields = append(run.fields, packedField{name: m.Name, scalar: m.Wire.Type, offset: run.width, width: width})
+				run.width += width
+				i++
+			}
+			if len(run.fields) >= 2 {
+				c.Members[first].readRun = &run
+			}
+			if i == first {
+				i++
+			}
+		}
 	}
 	if c.Kind != "Struct" || c.StorageKind != "RawUnmanaged" || c.Versioned || c.Profile.TrackReferences ||
 		c.Storage != nil || c.NativeStorage != nil {
@@ -267,6 +294,15 @@ func (p *packedStorage) write(w *binaryWriter, data any) {
 		return
 	}
 	value := asRecord(data)
+	if p.generated != nil {
+		start := len(w.data)
+		buffer := slices.Grow(w.data, p.width)[:start+p.width]
+		if p.generated.Write(buffer[start:], value) {
+			w.data = buffer
+			return
+		}
+		w.data = buffer[:start]
+	}
 	for _, field := range p.fields {
 		field.write(w, value[field.name])
 	}

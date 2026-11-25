@@ -1,9 +1,11 @@
 package luminpack
 
 import (
+	"bytes"
 	"encoding/json"
 	"math"
 	"strconv"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -121,6 +123,16 @@ func (s *Schema) EncodeJSONWithEncoding(typeID string, value any, encoding JSONE
 	return s.encodeJSON(typeID, value, encoding)
 }
 
+// Scratch buffers never escape the encoder. Each returned document owns its bytes.
+var encodeScratch = sync.Pool{New: func() any { return new([]byte) }}
+
+func releaseEncodeScratch(slot *[]byte, data []byte) {
+	if cap(data) <= 1<<20 {
+		*slot = data[:0]
+		encodeScratch.Put(slot)
+	}
+}
+
 func (s *Schema) encodeJSON(typeID string, value any, encoding JSONEncoding) (data []byte, err error) {
 	defer recoverFormat(&err)
 	c, shape, p := s.operation(typeID)
@@ -131,7 +143,9 @@ func (s *Schema) encodeJSON(typeID string, value any, encoding JSONEncoding) (da
 	if depth <= 0 {
 		depth = 1024
 	}
-	w := jsonWriter{s: s, maxDepth: min(depth, 1024), encoding: encoding}
+	slot := encodeScratch.Get().(*[]byte)
+	w := jsonWriter{s: s, maxDepth: min(depth, 1024), encoding: encoding, data: (*slot)[:0]}
+	defer func() { releaseEncodeScratch(slot, w.data) }()
 	if shape != nil {
 		w.shape(shape, value)
 	} else {
@@ -143,7 +157,7 @@ func (s *Schema) encodeJSON(typeID string, value any, encoding JSONEncoding) (da
 	if encoding != UTF8 {
 		fail(-1, "unsupported JSON encoding")
 	}
-	return w.data, nil
+	return bytes.Clone(w.data), nil
 }
 
 func (r *jsonReader) contract(c *contract, value any) any {

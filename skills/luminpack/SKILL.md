@@ -13,6 +13,8 @@ For standalone C++ LUM2 frames, use `luminpack::compression` with non-overlappin
 
 Enable `LuminPackExportContract` in the Next model build. Run `LuminPack.Codegen export` on the assembly and `LuminPack.Codegen generate --language <cpp|java|go|typescript>` on the resulting manifest. Java and Go use records keyed by .NET member name. TypeScript emits model types and uses `bigint` for 64-bit integers. Use `LuminPack.Codegen project` for a runtime-loadable JSON contract in Java, Go, or TypeScript. Match the Binary profile and JSON encoding across endpoints. [Cross-language contracts](../../docs/portable-runtime.md)
 
+Use matching Codegen and runtime versions for generated Go and TypeScript bindings. The loaders automatically bind fixed-offset binary operations for matching raw structs containing only Int32 and Single members.
+
 Portable JSON writers use the C# number format for supported scalar types, including XJB conversion for `float` and `double`. Custom JSON callbacks own the text they emit.
 
 For a TypeScript fixed-width numeric array or List, pass the matching TypedArray to use a checked Binary block copy on little-endian platforms. For example, write a C# `int[]` field using `Int32Array`. The usual array representation remains available. [TypeScript runtime](../../src/LuminPack.TypeScript/README.md)

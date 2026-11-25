@@ -2,6 +2,7 @@ package luminpack
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -85,6 +86,42 @@ func TestBooleanBlockRejectsInvalidLanesAndTail(t *testing.T) {
 		copy[i] = 0x81
 		if _, err := schema.DecodeBinary("", copy); err == nil {
 			t.Fatalf("accepted noncanonical Boolean byte at %d", i)
+		}
+	}
+}
+
+func TestGeneratedFixedRecordBinding(t *testing.T) {
+	manifest := []byte(`{"version":1,"root":"Pair","contracts":[{"id":"Pair","type":"Pair","kind":"Struct","storageKind":"RawUnmanaged","members":[{"name":"X","wire":{"kind":"scalar","type":"int"}},{"name":"Y","wire":{"kind":"scalar","type":"int"}}]}]}`)
+	reads, writes := 0, 0
+	codec := FixedRecordCodec{Type: "Pair", Names: []string{"X", "Y"}, Scalars: []string{"int", "int"},
+		Read: func(data []byte) Record {
+			reads++
+			return Record{"X": int32(binary.LittleEndian.Uint32(data)), "Y": int32(binary.LittleEndian.Uint32(data[4:]))}
+		},
+		Write: func(data []byte, r Record) bool { writes++; binary.LittleEndian.PutUint32(data, 99); return false },
+	}
+	for _, match := range []bool{true, false} {
+		if !match {
+			codec.Names = []string{"Y", "X"}
+		}
+		schema, err := LoadSchemaWithFixedRecords(manifest, []FixedRecordCodec{codec})
+		if err != nil {
+			t.Fatal(err)
+		}
+		row := Record{"X": int32(-1), "Y": int32(42)}
+		wire, err := schema.EncodeBinary("", row)
+		if err != nil || !bytes.Equal(wire, []byte{255, 255, 255, 255, 42, 0, 0, 0}) {
+			t.Fatalf("fallback output %x: %v", wire, err)
+		}
+		again, err := schema.DecodeBinary("", wire)
+		if err != nil || !reflect.DeepEqual(row, again) {
+			t.Fatalf("decoded %v: %v", again, err)
+		}
+		if _, err = schema.DecodeBinary("", wire[:7]); err == nil {
+			t.Fatal("accepted incomplete row")
+		}
+		if reads != 1 || writes != 1 {
+			t.Fatalf("unexpected generated binding calls %d/%d", reads, writes)
 		}
 	}
 }

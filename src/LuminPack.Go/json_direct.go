@@ -207,9 +207,25 @@ func (r *directJSONReader) sequence(element *descriptor, depth int) []any {
 	if r.scan.accept(']') {
 		return []any{}
 	}
+	int32Elements := element.Kind == "scalar" && element.Type == "int"
+
 	values := make([]any, 0, 8)
 	for {
-		values = append(values, r.shape(element, depth))
+		var value any
+		if int32Elements {
+			r.scan.space()
+			if r.scan.pos == len(r.scan.data) {
+				fail(r.scan.pos, "truncated JSON integer sequence")
+			}
+			if n, ok := r.scan.int32(); ok {
+				value = n
+			} else {
+				value = r.scalar(element, depth)
+			}
+		} else {
+			value = r.shape(element, depth)
+		}
+		values = append(values, value)
 		if !r.scan.accept(',') {
 			break
 		}

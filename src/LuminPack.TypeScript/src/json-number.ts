@@ -184,8 +184,8 @@ function shortDecimal(magnitude: number, single: boolean): string | undefined {
             scaled /= 10;
             places--;
         }
+        if (scaled >= (single ? 1_000_000 : 1_000_000_000_000_000)) return;
         const digits = unsignedNumber(scaled);
-        if (digits.length > (single ? 6 : 15)) return;
         return emitFixed(digits, digits.length - places);
     }
 }
@@ -199,8 +199,6 @@ function formatPortable(value: number, magnitude: number, single: boolean): stri
         const raw = bits.getUint32(0);
         const exponent = (raw >>> 23) & 255;
         legacy = exponent >= 95 && exponent <= 159;
-        const shortcut = legacy ? shortDecimal(magnitude, true) : undefined;
-        if (shortcut !== undefined) return sign + shortcut;
         decimal = shortestFloat32(raw, exponent);
     } else {
         bits.setFloat64(0, magnitude);
@@ -238,6 +236,12 @@ export function formatJsonNumber(value: number, single: boolean): string {
     // The double integral bound also intersects the historical exponent window at 2^33.
     if (magnitude < (single ? 16777216 : 8589934592) && Number.isInteger(value)) return formatJsonInteger(value);
 
+    // The single-precision shortcut uses the same round-trip and digit bounds
+    // as the portable formatter. Resolve it before crossing into WebAssembly.
+    if (single && magnitude >= 0.0001 && magnitude <= 2147483648) {
+        const shortcut = shortDecimal(magnitude, true);
+        if (shortcut !== undefined) return value < 0 ? "-" + shortcut : shortcut;
+    }
     const native = numberKernels();
     if (native === null) return formatPortable(value, magnitude, single);
     const length = (single ? native.float32 : native.float64)(value);

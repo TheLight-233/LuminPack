@@ -33,6 +33,8 @@ The history of individual approvals lives in Git. When this document, the code a
 
 ### Representations
 
+- **Portable fixed record bindings.** Go and TypeScript generators may bind fixed-offset binary operations for raw unmanaged structs containing only Int32 and Single fields. Check identity, field names, order, scalar widths and layout before selecting them. The containing operation owns bounds checks, nesting limits, framing and the public value representation. Versioned, reference-tracked, custom and layout-converted contracts use their respective codecs.
+
 - **Object mode** is positional with a one-byte member count (0 to 249, `255` = null).
 - **Version tolerance** uses descriptor tables and scoped schema registration. Full revision 4 records convey the schema hash and ordered name-key, type-contract and width descriptors. Revision 5 uses an ordinal in the active registration table. `LuminPackOldName` preserves the oldest key on write. Width 254 follows the record's string framing. Width 255 uses a four-byte length and a nested registration scope, which is truncated at the end of the member. Revision 1 reads remain available in a cold decoder.
 - **Reference tracking** is selected through `TrackReferences` on a concrete class. The established null marker, explicit id and compact back reference remain. After the first-occurrence header, the selected Object or VersionTolerant format supplies the body. Writers start with a short identity scan before hashing. Readers store reference ids in an indexed table and keep early shell registration and the reuse probe.
