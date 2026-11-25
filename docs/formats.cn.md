@@ -8,6 +8,8 @@
 
 所有值都是小端序。
 
+二进制 `float` 和 `double` 保留存储中的 IEEE 754 位模式。在 Windows x86 上，CLR 按值返回独立的浮点数时，可能把信号 NaN 转为静默 NaN。需要在二进制往返中保留信号位时，请用 `LuminPackSerializer.Deserialize(bytes, ref value)`。
+
 ### 非托管值
 
 不含引用的结构体按原始内存存储（包括 padding），除非它的 `StructLayout` 选项另有规定（见 [32/64 位结构体布局](options.cn.md#struct-layout)）。

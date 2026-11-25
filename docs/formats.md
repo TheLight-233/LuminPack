@@ -8,6 +8,8 @@ Binary and JSON are two separate protocols. Never pass `Serialize` output to `De
 
 All values are little-endian.
 
+Binary `float` and `double` preserve their IEEE 754 bits in storage. On Windows x86, returning a standalone floating-point value through the CLR calling convention can quiet a signaling NaN. Use `LuminPackSerializer.Deserialize(bytes, ref value)` when the signaling bit must survive a binary round trip.
+
 ### Unmanaged values
 
 A struct without references is stored as its raw memory, padding included, unless its `StructLayout` option says otherwise (see [32/64-bit struct layouts](options.md#struct-layout)).

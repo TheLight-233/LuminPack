@@ -104,6 +104,8 @@ Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
 LuminPackSerializer.DeserializeJson(json, ref fromJson);  // reuses the existing JSON graph
 ```
 
+On Windows x86, use the binary `Deserialize(bytes, ref value)` overload for standalone `float` or `double` values when the signaling NaN bit must be preserved across the call.
+
 `LuminPackSerializer` is generated into the consuming assembly (namespace `LuminPack`). For 2.0, use the single `LuminPack` package or reference `src/LuminPack.Core` and `src/LuminPack.Generator.Next` (as an analyzer) from source. See [Getting started](../../docs/getting-started.md#installation) for the package version and project references.
 
 IDE quick actions are bundled in `LuminPack.Generator`, which comes automatically with `LuminPack`; no additional package is needed. They fix supported generator diagnostics such as missing packable markers, Union partial declarations, invalid attributes and accessibility. Constructor diagnostics offer an explicit choice; other mechanical fixes support Fix All. Review edits that change modifiers. See [IDE code fixes](../../docs/code-fixes.md) for supported IDs and loading requirements.

@@ -147,8 +147,26 @@ public sealed class NinoCoverageRegressionTest
         BinaryPrimitives.WriteUInt64LittleEndian(wideBytes, wide);
 
         Assert.Equal(halfBytes, LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<Half>(halfBytes)));
-        Assert.Equal(singleBytes, LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<float>(singleBytes)));
-        Assert.Equal(wideBytes, LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<double>(wideBytes)));
+        float singleValue = default;
+        double wideValue = default;
+        LuminPackSerializer.Deserialize(singleBytes, ref singleValue);
+        LuminPackSerializer.Deserialize(wideBytes, ref wideValue);
+        Assert.Equal(singleBytes, LuminPackSerializer.Serialize(in singleValue));
+        Assert.Equal(wideBytes, LuminPackSerializer.Serialize(in wideValue));
+
+        var singleReturn = LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<float>(singleBytes));
+        var wideReturn = LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<double>(wideBytes));
+        CheckReturnBits(single, BinaryPrimitives.ReadUInt32LittleEndian(singleReturn), 0x7f800000u, 0x00400000u);
+        CheckReturnBits(wide, BinaryPrimitives.ReadUInt64LittleEndian(wideReturn), 0x7ff0000000000000ul, 0x0008000000000000ul);
+
+        static void CheckReturnBits(ulong expected, ulong actual, ulong exponent, ulong quietBit)
+        {
+            // A scalar return through x87 ST(0) can quiet a signaling NaN at the managed call boundary.
+            if (System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.X86 &&
+                actual != expected && (expected & exponent) == exponent && (expected & (quietBit - 1)) != 0)
+                expected |= quietBit;
+            Assert.Equal(expected, actual);
+        }
     }
 
     /// <summary>Checks versioned sequence records and preserves a previously borrowed read-only memory slice.</summary>
