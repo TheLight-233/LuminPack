@@ -114,3 +114,20 @@ test("preserves shared references across numeric-looking object keys in wire ord
         assert.equal(decoded.get("10"), decoded.get("__proto__"));
     }
 });
+
+test("writes scalar struct fields with their declared types and own-property defaults", () => {
+    const model = createCodec({ version: 1, root: "Vector", contracts: [
+        { id: "Vector", kind: "Struct", profile, members: [
+            { name: "X", wire: { kind: "scalar", type: "float" } },
+            { name: "Magnitude", wire: { kind: "scalar", type: "ulong" } },
+            { name: "Tail", wire: int },
+        ] },
+    ] });
+    const vector = Object.assign(Object.create({ Tail: 99 }), { X: -0, Magnitude: 0xffff_ffff_ffff_ffffn });
+    for (const encoding of ["utf8", "utf16"]) {
+        const bytes = model.writeJson(vector, encoding);
+        assert.equal(Buffer.from(bytes).toString(encoding === "utf8" ? "utf8" : "utf16le"),
+            '{"X":-0,"Magnitude":18446744073709551615,"Tail":0}');
+    }
+    assert.throws(() => model.writeJson({ ...vector, X: Infinity }, "utf8"), WireError);
+});

@@ -148,6 +148,7 @@ interface Plan {
     registeredByTag: Map<number, RegisteredCase>;
     registeredByType: Map<string, RegisteredCase>;
     jsonByName: Map<string, Member>;
+    scalarJsonBody?: { member: Member; head: string; type: string }[];
     jsonHeads: readonly { member: Member; head: string; next: string }[];
     descriptors?: bigint[];
     versionHash?: bigint;
@@ -299,6 +300,12 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             })));
             const plan: Plan = { contract, byHash: new Map(), byId: new Map(), registeredByTag: new Map(),
                 registeredByType: new Map(), jsonByName, jsonHeads };
+            if (contract.kind === "Struct" && !contract.profile.trackReferences && jsonHeads.length > 0 &&
+                jsonHeads.every(entry => entry.member.wire.kind === "scalar")) {
+                plan.scalarJsonBody = jsonHeads.map(({ member, head, next }, index) => ({
+                    member, head: index === 0 ? head : next, type: (member.wire as Extract<Wire, { kind: "scalar" }>).type,
+                }));
+            }
             const declaredCases = contract.cases ?? [];
             for (const entry of declaredCases) {
                 if (!Number.isInteger(entry.hash) || entry.hash <= 0 || entry.hash >= 0xffff_ffff ||
@@ -1497,6 +1504,13 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                         stringifyJson(registered.codec.writeJson(record.value, encoding), this.encodedJsonNames));
                 }
                 parts.push("}");
+                return;
+            }
+            if (plan.scalarJsonBody) {
+                let body = "";
+                for (const { member, head, type } of plan.scalarJsonBody)
+                    body += head + writeJsonScalar(type, this.field(record, member), this.nativeBytes);
+                parts.push(body + "}");
                 return;
             }
             let first = true;
