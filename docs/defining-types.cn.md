@@ -65,6 +65,8 @@ public partial class Inventory
 
 LuminPack 不要求无参构造函数。标了 `[LuminPackConstructor]` 的构造函数（或自动选中的构造函数）的参数名必须与被序列化的成员同名，读取时这些成员作为参数传入。读入已有对象时（见[复用](reuse.cn.md)）根对象完全不会被构造。
 
+Next 可通过序列化存储初始化 C# `required` 字段和自动属性。如果必需成员由选定的构造函数负责，或者新实例需要保留字段读取前的初始值，请由构造函数初始化全部必需成员，并为该构造函数添加 `[SetsRequiredMembers]`。无法安全生成初始化器时，Next 会在对应成员处报告 `LuminPack124`。
+
 标了 `[LuminPackPoolRent]` 的静态方法会在需要实例时代替 `new`。对 `Default` 模式类型的二进制读取，租到的对象随后被原地填充，和读入已有对象完全一样，因此它原本持有的内容（List、子对象、字符串）都会被复用：
 
 ```csharp

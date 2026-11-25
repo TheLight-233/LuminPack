@@ -59,6 +59,73 @@ public sealed unsafe class JsonDeepLookaheadTest
             }
         }
     }
+    /// <summary>Checks number-token grammar and cursor preservation when counting the current array.</summary>
+    [Fact]
+    public void NumberLookaheadValidatesCompleteTokens()
+    {
+        Check<LuminPackUtf8LengthOptions>(Encoding.UTF8);
+        Check<LuminPackUtf16LengthOptions>(Encoding.Unicode);
+        Check<Strict8>(Encoding.UTF8);
+        Check<Strict16>(Encoding.Unicode);
+
+        static void Check<TOptions>(Encoding encoding) where TOptions : struct, ILuminPackOptions
+        {
+            CheckCount<TOptions>(encoding, "[0,-0,9999999999999999999999999999,1.25,1e+4,[12],{\"number\":-42}]", 7);
+            // The trusted grammar treats adjacent numbers after a leading zero as separate tokens.
+            int? leadingZeroCount = default(TOptions).TracksJsonGrammar() ? null : 4;
+            CheckCount<TOptions>(encoding, "[1,01,2]", leadingZeroCount);
+            CheckCount<TOptions>(encoding, "[1,-01,2]", leadingZeroCount);
+            foreach (string number in new[] { "-", "1x", "0.", "1e+", "12\uFF11" })
+                CheckCount<TOptions>(encoding, "[1," + number + ",2]", null);
+            CheckCount<TOptions>(encoding, "[1,234", null);
+        }
+
+        static void CheckCount<TOptions>(Encoding encoding, string text, int? expected) where TOptions : struct, ILuminPackOptions
+        {
+            ReadOnlySpan<byte> bytes = encoding.GetBytes(text);
+            var reader = new LuminPackJsonReader(ref bytes, null!);
+            Assert.True(reader.Read<TOptions>());
+            int originalPosition = reader.Position;
+            int? count = null;
+            try { count = reader.CountArrayElements<TOptions>(); }
+            catch (FormatException) { }
+            Assert.Equal(expected, count);
+            Assert.Equal(originalPosition, reader.Position);
+            Assert.Equal(1, reader.Depth);
+            Assert.Equal(LuminPackJsonReader.JsonTokenType.ArrayStart, reader.CurrentTokenType);
+        }
+    }
+
+    /// <summary>Checks UTF-16 lookahead with quotes and invalid characters at the vector boundary.</summary>
+    [Fact]
+    public void Utf16StringLookaheadValidatesThePrefixBeforeAQuote()
+    {
+        for (int length = 0; length <= 8; length++)
+        {
+            string prefix = new string('a', length);
+            Check("[\"" + prefix + "\",\"following\"]", 2);
+            Check("[\"" + prefix + "\\\"b\",\"following\"]", 2);
+            Check("[\"" + prefix + "\\q\",\"following\"]", null);
+            Check("[\"" + prefix + "\u001f\",\"following\"]", null);
+        }
+        Check("[\"a\"]", 1);
+        Check("[\"unterminated", null);
+
+        static void Check(string text, int? expected)
+        {
+            ReadOnlySpan<byte> input = Encoding.Unicode.GetBytes(text);
+            var reader = new LuminPackJsonReader(ref input, null!);
+            Assert.True(reader.Read<LuminPackUtf16LengthOptions>());
+            int position = reader.Position;
+            int? count = null;
+            try { count = reader.CountArrayElements<LuminPackUtf16LengthOptions>(); }
+            catch (FormatException) { }
+            Assert.Equal(expected, count);
+            Assert.Equal(position, reader.Position);
+            Assert.Equal(LuminPackJsonReader.JsonTokenType.ArrayStart, reader.CurrentTokenType);
+        }
+    }
+
     /// <summary>Checks ordinary deep grammar state stays inline through the supported depth window.</summary>
     /// <param name="depth">The nesting depth to exercise.</param>
     /// <param name="utf16">Whether the complete input contains UTF-16 code units.</param>

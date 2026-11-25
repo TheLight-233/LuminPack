@@ -268,6 +268,43 @@ internal static class SerializerBinaryEntryShapeRegression
                     buffer.ResetWrittenCount();
                     LuminPackSerializer.Serialize(new ObservedNullableCell { Total = 37L }, buffer);
                     buffer.ResetWrittenCount();
+                    CheckBoundedNullableLists();
+                }
+
+                private static void CheckBoundedNullableLists()
+                {
+                    foreach (int count in new[] { 7, 9_000 })
+                    {
+                        using var output = new LuminBufferWriter(true);
+                        Span<byte> storage = new byte[sizeof(int) + count * 14];
+                        var expected = new LuminPackWriter(ref storage);
+                        expected.WriteCollectionHeader(count);
+                        var values = new List<BoundedNullableCell>(count);
+                        for (int index = 0; index < count; index++)
+                        {
+                            if (index % 5 == 0)
+                            {
+                                values.Add(null);
+                                expected.WriteNullObjectHeader();
+                                continue;
+                            }
+                            var value = new BoundedNullableCell
+                            {
+                                Id = (ushort)index,
+                                Total = index % 2 == 0 ? null : 0x1122334455667788L - index,
+                                Flag = index % 3 == 0 ? null : index % 2 == 0,
+                            };
+                            values.Add(value);
+                            expected.WriteObjectHeader(3);
+                            expected.Write(value.Id);
+                            expected.WriteNullable(value.Total);
+                            expected.WriteNullable(value.Flag);
+                        }
+
+                        LuminPackSerializer.Serialize(values, output);
+                        if (!output.GetSpan().SequenceEqual(expected.GetSpan()))
+                            throw new Exception("The nullable list changed its checked or reserved record bytes.");
+                    }
                 }
 
                 private static void CheckManagedNullablePolicies(ManagedCell value)

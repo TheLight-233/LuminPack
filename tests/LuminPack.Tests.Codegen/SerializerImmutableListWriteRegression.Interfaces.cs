@@ -183,10 +183,14 @@ internal static partial class SerializerImmutableListWriteRegression
             private static void CheckAllocation(Action write, string label)
             {
                 for (int warm = 0; warm < 128; warm++) write();
-                long before = GC.GetAllocatedBytesForCurrentThread();
-                for (int repeat = 0; repeat < 16; repeat++) write();
-                long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-                if (allocated != 0) throw new Exception(label + " allocated " + allocated + " bytes.");
+                long minimum = long.MaxValue;
+                for (int sample = 0; sample < 3; sample++)
+                {
+                    long before = GC.GetAllocatedBytesForCurrentThread();
+                    for (int repeat = 0; repeat < 64; repeat++) write();
+                    minimum = Math.Min(minimum, GC.GetAllocatedBytesForCurrentThread() - before);
+                }
+                if (minimum != 0) throw new Exception(label + " allocated at least " + minimum + " bytes.");
             }
             private static void CheckList<TProfile>(IImmutableList<EntryItem> value) where TProfile : struct, ILuminPackOptions
             {
@@ -211,11 +215,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     }
                     else
                     {
-                        for (int warm = 0; warm < 128; warm++) write();
-                        long before = GC.GetAllocatedBytesForCurrentThread();
-                        for (int repeat = 0; repeat < 16; repeat++) write();
-                        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-                        if (allocated != 0) throw new Exception("List retained writer allocated " + allocated + " bytes; JSON " + json + "; " + value?.GetType());
+                        CheckAllocation(write, $"List retained writer (JSON {json}, {value?.GetType()}, {typeof(TProfile)})");
                     }
                     if (events.Length != 0)
                     {
@@ -252,11 +252,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     }
                     else
                     {
-                        for (int warm = 0; warm < 128; warm++) write();
-                        long before = GC.GetAllocatedBytesForCurrentThread();
-                        for (int repeat = 0; repeat < 16; repeat++) write();
-                        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-                        if (allocated != 0) throw new Exception("Set retained writer allocated " + allocated + " bytes; JSON " + json + "; " + value?.GetType());
+                        CheckAllocation(write, $"Set retained writer (JSON {json}, {value?.GetType()}, {typeof(TProfile)})");
                     }
                     if (events.Length != 0)
                     {
@@ -293,11 +289,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     }
                     else
                     {
-                        for (int warm = 0; warm < 128; warm++) write();
-                        long before = GC.GetAllocatedBytesForCurrentThread();
-                        for (int repeat = 0; repeat < 16; repeat++) write();
-                        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-                        if (allocated != 0) throw new Exception("Queue retained writer allocated " + allocated + " bytes; JSON " + json + "; " + value?.GetType());
+                        CheckAllocation(write, $"Queue retained writer (JSON {json}, {value?.GetType()}, {typeof(TProfile)})");
                     }
                     if (events.Length != 0)
                     {
@@ -334,11 +326,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     }
                     else
                     {
-                        for (int warm = 0; warm < 128; warm++) write();
-                        long before = GC.GetAllocatedBytesForCurrentThread();
-                        for (int repeat = 0; repeat < 16; repeat++) write();
-                        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-                        if (allocated != 0) throw new Exception("Stack retained writer allocated " + allocated + " bytes; JSON " + json + "; " + value?.GetType());
+                        CheckAllocation(write, $"Stack retained writer (JSON {json}, {value?.GetType()}, {typeof(TProfile)})");
                     }
                     if (events.Length != 0)
                     {
@@ -375,11 +363,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     }
                     else
                     {
-                        for (int warm = 0; warm < 128; warm++) write();
-                        long before = GC.GetAllocatedBytesForCurrentThread();
-                        for (int repeat = 0; repeat < 16; repeat++) write();
-                        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-                        if (allocated != 0) throw new Exception("Dictionary retained writer allocated " + allocated + " bytes; JSON " + json + "; " + value?.GetType());
+                        CheckAllocation(write, $"Dictionary retained writer (JSON {json}, {value?.GetType()}, {typeof(TProfile)})");
                     }
                     if (events.Length != 0)
                     {

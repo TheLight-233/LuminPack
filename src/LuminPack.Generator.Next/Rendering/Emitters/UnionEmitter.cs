@@ -85,7 +85,8 @@ internal static class UnionEmitter
         w.Blank();
         w.Suppressed = !reads;
         w.Line(w.Preserve);
-        if (ReadKeepsInline(model, w))
+        var fixedReads = PlanFixedReads(model, w);
+        if (ReadKeepsInline(model, fixedReads))
             w.Line(inline);
         w.Line("internal static void RootRead" + (model.UnionReadGeneric ? model.TypeArguments(Profile) : model.TypeArguments()) + "(scoped ref " + reader +
             " reader, scoped ref " + type + "? value)");
@@ -94,7 +95,7 @@ internal static class UnionEmitter
         else if (constraints.Length != 0)
             w.Indented(() => w.Line(model.TypeConstraintText));
         w.Open();
-        ReadSwitch(model, w);
+        ReadSwitch(model, w, fixedReads);
         w.Close();
         w.Suppressed = false;
         w.Close();
@@ -339,14 +340,6 @@ internal static class UnionEmitter
         }
     }
 
-    /// <summary>The running name counters of the two read switches, which share one method scope.</summary>
-    private sealed class SwitchCounters
-    {
-        internal int Members;
-        internal int Instances;
-        internal int Cursors;
-    }
-
     /// <summary>Emits the isolated Union member read under its enclosing record's input policy.</summary>
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
@@ -375,16 +368,22 @@ internal static class UnionEmitter
     /// <summary>Reads the Union marker and dispatches the same case switch in either input scope.</summary>
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
-    internal static void ReadSwitch(PayloadRenderModel model, CodeWriter w)
+    internal static void ReadSwitch(PayloadRenderModel model, CodeWriter w) => ReadSwitch(model, w, PlanFixedReads(model, w));
+
+    /// <summary>Emits a reusable read switch with its expanded case bodies already captured.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="fixedReads">The planned fixed reads in case order.</param>
+    private static void ReadSwitch(PayloadRenderModel model, CodeWriter w, BinaryEmitter.UnionCaseRead[] fixedReads)
     {
         Reject(model, w);
         w.Line("uint tag = reader.Read<uint>();");
         w.Blank();
-        var blocks = SharedBlocks.Plan(model, w, reuse: true, "reader", "readBlock");
+        var blocks = SharedBlocks.Plan(fixedReads, "readBlock");
         blocks.Declare(model, w, reuse: true);
         w.Line("switch (tag)");
         w.Open();
-        ReadArms(model, w, true, "reader", new SwitchCounters(), blocks: blocks);
+        ReadArms(model, w, fixedReads, blocks, true, "reader", "value", "return;");
         w.Close();
         blocks.Emit(w, "reader", reuse: true, "value", "return;");
     }
@@ -392,20 +391,19 @@ internal static class UnionEmitter
     /// <summary>Emits the marked case switch of a read root, fresh or seeded from an existing instance.</summary>
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
+    /// <param name="fixedReads">The planned fixed reads in case order.</param>
+    /// <param name="blocks">The checked block reads that same-width fixed cases share.</param>
     /// <param name="reuse">Whether to reuse the existing destination.</param>
     /// <param name="reader">The reader positioned at the input value.</param>
-    /// <param name="counters">The counters supplied to <c>ReadArms</c>.</param>
-    /// <param name="freshTarget">The fresh target supplied to <c>ReadArms</c>.</param>
-    /// <param name="freshExit">The fresh exit supplied to <c>ReadArms</c>.</param>
-    /// <param name="blocks">The checked block reads that same-width fixed cases share, or null to expand every case.</param>
-    private static void ReadArms(PayloadRenderModel model, CodeWriter w, bool reuse, string reader, SwitchCounters counters,
-        string? freshTarget = null, string? freshExit = null, SharedBlocks? blocks = null)
+    /// <param name="target">The destination the cases publish.</param>
+    /// <param name="exit">The statement that leaves a completed case.</param>
+    private static void ReadArms(PayloadRenderModel model, CodeWriter w, BinaryEmitter.UnionCaseRead[] fixedReads,
+        SharedBlocks blocks, bool reuse, string reader, string target, string exit)
     {
-        string target = freshTarget ?? "value";
-        string exit = freshExit ?? "return;";
-        foreach (var item in model.UnionCases)
+        int instances = 0, cursors = 0;
+        for (int member = 0; member < model.UnionCases.Length; member++)
         {
-            int member = counters.Members++;
+            var item = model.UnionCases[member];
             w.Line("case " + NameHash(item) + ":");
             w.Open();
             if (item.OwnEntry)
@@ -433,14 +431,12 @@ internal static class UnionEmitter
             w.Line(item.Type + " member" + Number(member) + " = " + (reuse
                 ? w.A("LuminPackMarshal") + ".AsExact<" + item.Type + ">(" + target + ")!;"
                 : "default !;"));
-            var body = FixedCaseRead(model, item, w, fresh: !reuse);
-            bool hasInstance = body.Count != 0 && body[0].StartsWith("var instance = ", StringComparison.Ordinal);
-            int instance = counters.Instances;
-            if (hasInstance)
-                counters.Instances++;
-            body = RenameLocals(body, member, hasInstance ? instance : -1, ref counters.Cursors, reader);
-            if (blocks != null)
-                body = blocks.Redirect(body, reader, reuse ? null : target, "member" + Number(member));
+            var fixedRead = fixedReads[member];
+            var lines = fixedRead.Lines;
+            int instance = lines.Count != 0 && lines[0].StartsWith("var instance = ", StringComparison.Ordinal) ? instances++ : -1;
+            var body = RenameLocals(lines, member, instance, ref cursors, reader);
+            if (fixedRead.SharedBlock is { } sharedBlock)
+                body = blocks.Redirect(body, sharedBlock, w, "instance" + Number(instance), reuse ? null : target, "member" + Number(member));
             foreach (string line in body)
                 w.Line(line);
             w.Blank();
@@ -500,12 +496,13 @@ internal static class UnionEmitter
         Reject(model, w);
         w.Line("uint tag = " + reader + ".Read<uint>();");
         w.Blank();
-        var blocks = SharedBlocks.Plan(model, w, reuse: false, reader, label + "Block");
+        var fixedReads = PlanFixedReads(model, w);
+        var blocks = SharedBlocks.Plan(fixedReads, label + "Block");
         blocks.Declare(model, w, reuse: false);
         w.Line("// Union cases");
         w.Line("switch (tag)");
         w.Open();
-        ReadArms(model, w, false, reader, new SwitchCounters(), target, "goto " + label + ";", blocks);
+        ReadArms(model, w, fixedReads, blocks, false, reader, target, "goto " + label + ";");
         w.Close();
         blocks.Emit(w, reader, reuse: false, target, "goto " + label + ";");
     }
@@ -530,23 +527,18 @@ internal static class UnionEmitter
         }
 
         /// <summary>Finds the payload widths that two or more fixed cases read as one checked block.</summary>
-        /// <param name="model">The Union root.</param>
-        /// <param name="w">The source writer.</param>
-        /// <param name="reuse">Whether the switch reuses the existing destination.</param>
-        /// <param name="reader">The reader local.</param>
+        /// <param name="fixedReads">The planned fixed reads in case order.</param>
         /// <param name="prefix">The label and local prefix.</param>
         /// <returns>The plan, empty when no width repeats.</returns>
-        internal static SharedBlocks Plan(PayloadRenderModel model, CodeWriter w, bool reuse, string reader, string prefix)
+        internal static SharedBlocks Plan(BinaryEmitter.UnionCaseRead[] fixedReads, string prefix)
         {
             var counts = new Dictionary<string, int>(StringComparer.Ordinal);
             var order = new List<string>();
-            foreach (var item in model.UnionCases)
+            foreach (var read in fixedReads)
             {
-                if (item.OwnEntry)
+                if (read.SharedBlock is not { } block)
                     continue;
-                var body = FixedCaseRead(model, item, w, fresh: !reuse);
-                if (!Split(body, "reader", out _, out string width))
-                    continue;
+                string width = block.Width;
                 if (counts.TryGetValue(width, out int count))
                     counts[width] = count + 1;
                 else
@@ -573,23 +565,26 @@ internal static class UnionEmitter
 
         /// <summary>Replaces a proven case's own block read with the jump to its shared read.</summary>
         /// <param name="body">The renamed case body.</param>
-        /// <param name="reader">The reader local.</param>
+        /// <param name="block">The checked block selected by the case's proof.</param>
+        /// <param name="w">The source writer.</param>
+        /// <param name="instance">The renamed instance local.</param>
         /// <param name="freshTarget">The fresh local target, or null for a reused destination.</param>
         /// <param name="member">The case object local.</param>
         /// <returns>The case body.</returns>
-        internal List<string> Redirect(List<string> body, string reader, string? freshTarget, string member)
+        internal List<string> Redirect(List<string> body, BinaryEmitter.CheckedUnionBlock block, CodeWriter w, string instance,
+            string? freshTarget, string member)
         {
-            if (_widths.Count == 0 || !Split(body, reader, out string block, out string width))
-                return body;
-            int index = _widths.IndexOf(width);
+            int index = _widths.IndexOf(block.Width);
             if (index < 0)
                 return body;
-            var result = new List<string>(body.Count + 4) { body[0], body[1], "{" };
-            result.Add(_prefix + "Target = ref " + block + ";");
+            var result = new List<string>(body.Count + 4);
+            result.AddRange(body.Take(block.ReadIndex));
+            result.Add("{");
+            result.Add(_prefix + "Target = ref " + BinaryEmitter.Bytes(w, block.First, instance, readOnly: false, plain: true) + ";");
             result.Add((freshTarget ?? _prefix + "Owner") + " = " + member + ";");
             result.Add("goto " + Label(index) + ";");
             result.Add("}");
-            result.AddRange(body.Skip(3));
+            result.AddRange(body.Skip(block.ReadIndex + 1));
             return result;
         }
 
@@ -617,47 +612,6 @@ internal static class UnionEmitter
         /// <returns>The label.</returns>
         private string Label(int index) => _prefix + Number(index);
 
-        /// <summary>Splits a fixed case body that consists of one proven checked block read and its field-wise fallback.</summary>
-        /// <param name="body">The case body.</param>
-        /// <param name="reader">The reader local the body reads from.</param>
-        /// <param name="block">Receives the proven destination block.</param>
-        /// <param name="width">Receives the payload width expression.</param>
-        /// <returns>Whether the body has that shape.</returns>
-        private static bool Split(List<string> body, string reader, out string block, out string width)
-        {
-            block = width = null;
-            if (body.Count < 6 || !body[0].StartsWith("var instance", StringComparison.Ordinal) ||
-                !body[1].StartsWith("if (", StringComparison.Ordinal) || body[3] != "else" || body[4] != "{")
-                return false;
-            // The fallback must be the last statement: a body with later members or callbacks keeps its own read.
-            int close = body.IndexOf("}", 5);
-            if (close < 0 || body.Skip(5).Take(close - 5).Any(line => line.Length != 0 && (line[0] == '{' || line[0] == '}')) ||
-                body.Skip(close + 1).Any(line => line.Length != 0))
-                return false;
-            string prefix = "\t" + reader + ".Read(ref ";
-            string line = body[2];
-            if (!line.StartsWith(prefix, StringComparison.Ordinal) || !line.EndsWith(");", StringComparison.Ordinal))
-                return false;
-            string inner = line.Substring(prefix.Length, line.Length - prefix.Length - 2);
-            int depth = 0;
-            for (int index = 0; index + 1 < inner.Length; index++)
-            {
-                switch (inner[index])
-                {
-                    case '(' or '<' or '[':
-                        depth++;
-                        break;
-                    case ')' or '>' or ']':
-                        depth--;
-                        break;
-                    case ',' when depth == 0 && inner[index + 1] == ' ':
-                        block = inner.Substring(0, index);
-                        width = inner.Substring(index + 2);
-                        return true;
-                }
-            }
-            return false;
-        }
     }
 
     /// <summary>Rejects an input-selected case graph before reading or writing its framing.</summary>
@@ -678,7 +632,8 @@ internal static class UnionEmitter
     /// <returns>The original statement layout with only the generated identifiers changed.</returns>
     private static List<string> RenameLocals(List<string> body, int member, int instance, ref int cursorCount, string reader)
     {
-        string source = "{\n" + string.Join("\n", body) + "\n}";
+        const string opening = "{\n";
+        string source = opening + string.Join("\n", body) + "\n}";
         var block = SyntaxFactory.ParseStatement(source);
         var names = new Dictionary<string, string>(StringComparer.Ordinal) { ["value"] = "member" + Number(member) };
         if (instance >= 0)
@@ -699,8 +654,37 @@ internal static class UnionEmitter
         }
         if (changes.Count == 0)
             return body;
-        return SourceText.From(source).WithChanges(changes).Lines.Skip(1).Take(body.Count).Select(line => line.ToString()).ToList();
+        // Token spans are in physical source order. Keep Roslyn's line mapping when any input entry spans multiple lines.
+        if (body.Any(static line => line.IndexOfAny(PhysicalLineBreaks) >= 0))
+            return SourceText.From(source).WithChanges(changes).Lines.Skip(1).Take(body.Count).Select(line => line.ToString()).ToList();
+
+        var result = new List<string>(body);
+        using var buffer = new PooledTextBuffer(128);
+        int lineStart = opening.Length, changeIndex = 0;
+        for (int lineIndex = 0; lineIndex < body.Count && changeIndex < changes.Count; lineIndex++)
+        {
+            string line = body[lineIndex];
+            int lineEnd = lineStart + line.Length;
+            if (changes[changeIndex].Span.Start < lineEnd)
+            {
+                int copied = 0;
+                buffer.Length = 0;
+                do
+                {
+                    TextChange edit = changes[changeIndex++];
+                    int start = edit.Span.Start - lineStart;
+                    buffer.Append(line, copied, start - copied).Append(edit.NewText);
+                    copied = edit.Span.End - lineStart;
+                }
+                while (changeIndex < changes.Count && changes[changeIndex].Span.Start < lineEnd);
+                result[lineIndex] = buffer.Append(line, copied, line.Length - copied).ToString();
+            }
+            lineStart = lineEnd + 1;
+        }
+        return result;
     }
+
+    private static readonly char[] PhysicalLineBreaks = { '\n', '\r', '\u0085', '\u2028', '\u2029' };
 
     /// <summary>Distinguishes a local declaration or use from a member, named argument, or type name.</summary>
     /// <param name="token">An identifier matching one of the generated local names.</param>
@@ -724,30 +708,35 @@ internal static class UnionEmitter
 
     /// <summary>Whether the read root stays inside the runtime's sixteen-call inlining budget.</summary>
     /// <param name="model">The normalized model for this contract.</param>
-    /// <param name="w">The generated source writer.</param>
-    /// <returns>Whether the input satisfies the read keeps inline check.</returns>
-    private static bool ReadKeepsInline(PayloadRenderModel model, CodeWriter w)
+    /// <param name="fixedReads">The planned fixed reads in case order.</param>
+    /// <returns>Whether the read root qualifies for the original inline hint.</returns>
+    private static bool ReadKeepsInline(PayloadRenderModel model, BinaryEmitter.UnionCaseRead[] fixedReads)
     {
-        // The two switches share the peek and the existing-instance call, and each repeats the three registered-member calls.
+        // Preserve the budget's two contributions per expanded fixed case, which both use the same statements.
         int calls = 8;
-        foreach (var item in model.UnionCases)
-            calls += item.OwnEntry ? 2 : InvocationCounter.Count(FixedCaseRead(model, item, w, fresh: true)) +
-                InvocationCounter.Count(FixedCaseRead(model, item, w, fresh: false)) + 1;
+        for (int index = 0; index < model.UnionCases.Length; index++)
+            calls += model.UnionCases[index].OwnEntry ? 2 : InvocationCounter.Count(fixedReads[index].Lines) * 2 + 1;
         return calls <= 16;
     }
 
-    /// <summary>Builds the fixed case read in the Union root's input scope.</summary>
+    /// <summary>Builds each expanded fixed case once in the Union root's input scope.</summary>
     /// <param name="root">The Union root.</param>
-    /// <param name="item">The expanded fixed case.</param>
     /// <param name="w">The source writer.</param>
-    /// <param name="fresh">Whether a new case object receives the input.</param>
-    /// <returns>The case's checked statements.</returns>
-    private static List<string> FixedCaseRead(PayloadRenderModel root, UnionRenderCase item, CodeWriter w, bool fresh)
+    /// <returns>The checked read plans in case order. Cases with their own read entry leave their slot empty.</returns>
+    private static BinaryEmitter.UnionCaseRead[] PlanFixedReads(PayloadRenderModel root, CodeWriter w)
     {
-        PayloadRenderModel model = item.Model;
-        if ((model.Trusted || root.Redirect != null) && root.Limits is { } limits)
-            model = model.WithInput(limits, recursive: false, root.Redirect);
-        return BinaryEmitter.UnionReadBody(model, w, fresh);
+        var reads = new BinaryEmitter.UnionCaseRead[root.UnionCases.Length];
+        for (int index = 0; index < reads.Length; index++)
+        {
+            var item = root.UnionCases[index];
+            if (item.OwnEntry)
+                continue;
+            PayloadRenderModel model = item.Model;
+            if ((model.Trusted || root.Redirect != null) && root.Limits is { } limits)
+                model = model.WithInput(limits, recursive: false, root.Redirect);
+            reads[index] = BinaryEmitter.UnionReadBody(model, w);
+        }
+        return reads;
     }
 
     /// <summary>Whether the case needs its own copy under a different Union root policy.</summary>

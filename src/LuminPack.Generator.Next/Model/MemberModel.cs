@@ -43,7 +43,11 @@ internal abstract class MemberModel : IEquatable<MemberModel>
 
     /// <inheritdoc/>
     public bool Equals(MemberModel? other) => ReferenceEquals(this, other) || other != null && other.GetType() == GetType() &&
-        Name == other.Name && Storage == other.Storage && Policy.Equals(other.Policy) && Compressed == other.Compressed && EqualsCore(other);
+        Name == other.Name && Storage == other.Storage && Policy.Equals(other.Policy) && Compressed == other.Compressed &&
+        DirectDictionaryField == other.DirectDictionaryField && EqualsCore(other);
+
+    /// <summary>Whether the dictionary uses a direct non-volatile field and its ordinary formatter.</summary>
+    internal bool DirectDictionaryField { get; set; }
 
     /// <summary>Whether a <c>[LuminPackCompress]</c> declaration writes and reads the member through its compressed kernels.</summary>
     internal bool Compressed { get; private set; }

@@ -1157,7 +1157,7 @@ internal static partial class BinaryEmitter
     /// <summary>Spells instance creation for a read: the pool rent call of a pooled type, or its parameterless constructor.</summary>
     /// <param name="model">The normalized model for this contract.</param>
     /// <returns>The resulting text.</returns>
-    private static string NewInstance(PayloadRenderModel model) => model.Rent ?? "new " + model.GlobalName + "()";
+    private static string NewInstance(PayloadRenderModel model) => model.Rent ?? PayloadEmitter.ParameterlessConstruction(model);
 
     /// <summary>Binds ordinary object storage and calls the instance hooks on a newly selected receiver.</summary>
     /// <param name="body">The statements preceding member reads.</param>
@@ -1170,7 +1170,7 @@ internal static partial class BinaryEmitter
             body.Add("var instance = value!;");
             return;
         }
-        string construction = bindLocal ? NewInstance(model) : "new " + model.GlobalName + "()";
+        string construction = bindLocal ? NewInstance(model) : PayloadEmitter.ParameterlessConstruction(model);
         if (!Array.Exists(model.ReadBefore, IsInstanceCallback))
         {
             body.Add((bindLocal ? "var instance = " : string.Empty) + "value ??= " + construction + ";");
@@ -1322,13 +1322,50 @@ internal static partial class BinaryEmitter
                 body.Add(CallbackReceiver(callback, receiver));
     }
 
-    /// <summary>Builds the statement lines that read a covered fixed case's Union payload.</summary>
+    /// <summary>Builds a covered fixed case's read and identifies its complete checked block, when present.</summary>
     /// <param name="model">The case's covered model, whose members are all fixed.</param>
     /// <param name="w">The file writer that spells helper aliases.</param>
-    /// <param name="fresh">Whether the case is read into a new destination.</param>
-    /// <returns>The body lines, opening with the instance local.</returns>
-    internal static List<string> UnionReadBody(PayloadRenderModel model, CodeWriter w, bool fresh)
-        => AddReadCallbacks(model, ReadBody(model, w, union: true, freshUnion: fresh));
+    /// <returns>The body lines and the optional checked block eligible for sharing.</returns>
+    internal static UnionCaseRead UnionReadBody(PayloadRenderModel model, CodeWriter w)
+    {
+        var lines = ReadBody(model, w, union: true, out CheckedUnionBlock? sharedBlock);
+        return new UnionCaseRead(AddReadCallbacks(model, lines), sharedBlock);
+    }
+
+    /// <summary>Retains one expanded Union case body and the checked block its proof can select.</summary>
+    internal readonly struct UnionCaseRead
+    {
+        internal readonly List<string> Lines;
+        internal readonly CheckedUnionBlock? SharedBlock;
+
+        /// <summary>Records an expanded case's generated statements and shareable block, if any.</summary>
+        /// <param name="lines">The complete generated payload read.</param>
+        /// <param name="sharedBlock">The checked block eligible for grouping by width.</param>
+        internal UnionCaseRead(List<string> lines, CheckedUnionBlock? sharedBlock)
+        {
+            Lines = lines;
+            SharedBlock = sharedBlock;
+        }
+    }
+
+    /// <summary>Identifies a complete checked Union run while its field proof and fallback are emitted.</summary>
+    internal readonly struct CheckedUnionBlock
+    {
+        internal readonly RenderMember First;
+        internal readonly string Width;
+        internal readonly int ReadIndex;
+
+        /// <summary>Captures the checked block transfer selected by a successful field-address proof.</summary>
+        /// <param name="first">The first field of the destination block.</param>
+        /// <param name="width">The complete checked payload width expression.</param>
+        /// <param name="readIndex">The statement replaced when another case shares the block read.</param>
+        internal CheckedUnionBlock(RenderMember first, string width, int readIndex)
+        {
+            First = first;
+            Width = width;
+            ReadIndex = readIndex;
+        }
+    }
 
     /// <summary>Emits an existing payload read under the enclosing root's checked input policy.</summary>
     /// <param name="model">The payload with its enclosing policy and nested read redirects applied.</param>
@@ -1458,7 +1495,8 @@ internal static partial class BinaryEmitter
             // A type-parameter member is written in place by the generic serializer itself.
             if (member.Kind == RenderMemberKind.Parameter)
             {
-                body.Add(w.A("LuminPackSerializer") + ".Serialize" + MemberArguments(member, Profile) + "(ref writer, value." + member.Name + ");");
+                // Use the member's registered dispatch directly so publication cannot bind a payload-specific adapter.
+                body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.Serialize" + MemberArguments(member, Profile) + "(ref writer, value." + member.Name + ");");
                 index++;
                 continue;
             }
@@ -2146,7 +2184,7 @@ internal static partial class BinaryEmitter
             // A type-parameter member is written by the generic serializer itself.
             if (member.Kind == RenderMemberKind.Parameter)
             {
-                body.Add(w.A("LuminPackSerializer") + ".Serialize" + MemberArguments(member, Profile) + "(ref writer, " + owner + "." + member.Name + ");");
+                body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.Serialize" + MemberArguments(member, Profile) + "(ref writer, " + owner + "." + member.Name + ");");
                 continue;
             }
             if (member.Kind == RenderMemberKind.Object)
@@ -2818,19 +2856,7 @@ internal static partial class BinaryEmitter
         body.Add("// Construct the object and populate its members.");
         string arguments = string.Join(", ", model.ConstructorArguments.Select(name =>
             name == null ? "default" : locals[name] + "Temp!"));
-        string construction = "value = new " + model.GlobalName + "(" + arguments + ")";
-        var initialized = members.Where(member => !member.Mirrored &&
-            (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
-        if (initialized.Length == 0)
-            body.Add(construction + ";");
-        else
-        {
-            body.Add(construction);
-            body.Add("{");
-            foreach (var member in initialized)
-                body.Add(member.Name + " = " + locals[member.Name] + "Temp!,");
-            body.Add("};");
-        }
+        PayloadEmitter.AddStagedConstruction(body, model, arguments, member => locals[member.Name] + "Temp!");
         var mirrored = model.Mirror == null ? Array.Empty<RenderMember>() : members.Where(member => member.Mirrored &&
             (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
         if (mirrored.Length != 0)
@@ -2873,7 +2899,7 @@ internal static partial class BinaryEmitter
         if (member.Kind == RenderMemberKind.Parameter)
         {
             AddParameterReset(body, member, w, "reader2", owner + "." + member.Name);
-            body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
+            body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.Deserialize" + MemberArguments(member, Profile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
             return;
         }
         AddMemberRead(body, model, member, w, "reader2", owner + "." + member.Name);
@@ -2922,13 +2948,25 @@ internal static partial class BinaryEmitter
     /// <param name="model">The normalized model for this contract.</param>
     /// <param name="w">The generated source writer.</param>
     /// <param name="union">Whether to enable union for this operation.</param>
-    /// <param name="freshUnion">Whether a Union case reads into a new destination.</param>
     /// <param name="freshPayload">Whether the payload body of a record root may read a fixed run of a newly created instance
     /// through the object body's proven checked batch; both framing bodies then declare the freshness test.</param>
     /// <param name="allowStringPairs">Whether this scope permits grouping direct field reads.</param>
     /// <returns>The body.</returns>
-    private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, bool freshUnion = false, bool freshPayload = false, bool allowStringPairs = true)
+    private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, bool freshPayload = false, bool allowStringPairs = true) =>
+        ReadBody(model, w, union, out _, freshPayload, allowStringPairs);
+
+    /// <summary>Builds a root read body and captures the complete checked Union run for an expanded case.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="union">Whether the Union discriminator already framed this record.</param>
+    /// <param name="sharedBlock">Receives a complete checked run that can be shared with equal-width cases.</param>
+    /// <param name="freshPayload">Whether the payload body may use the fixed batch when it allocates the destination.</param>
+    /// <param name="allowStringPairs">Whether this scope permits grouping direct field reads.</param>
+    /// <returns>The unmodified read body.</returns>
+    private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, out CheckedUnionBlock? sharedBlock,
+        bool freshPayload = false, bool allowStringPairs = true)
     {
+        sharedBlock = null;
         // A list-derived payload reads the list base body; the list owner's own length framing replaces the record marker.
         if (model.SequenceBase != null)
             return SequenceReadBody(model, w);
@@ -2998,7 +3036,13 @@ internal static partial class BinaryEmitter
                     body.Add("if (" + (freshBlock ? "freshInstance && " : string.Empty) + Proof(w, members, index, last, "instance", readOnly: false, coreLayout: true) + ")");
                     string block = Bytes(w, member, "instance", readOnly: false, plain: true);
                     if (offsets.Count == 0 || trusted)
+                    {
+                        // Sharing requires exactly one run, immediately after the instance declaration, with no later work.
+                        if (union && fixedUnionBlock && index == 0 && last == members.Length - 1 &&
+                            body.Count == 2 && model.CollectionBase == null)
+                            sharedBlock = new CheckedUnionBlock(member, widthText, body.Count);
                         body.Add("\treader.Read(ref " + block + ", " + widthText + ");");
+                    }
                     else if (BatchMask(offsets, width) is { } batch)
                         body.Add("\t" + Policy() + ".ReadBatch(ref reader, ref " + block + ", " + widthText + ", " + batch + ");");
                     else
@@ -3240,7 +3284,7 @@ internal static partial class BinaryEmitter
             if (member.Kind == RenderMemberKind.Parameter)
             {
                 AddParameterReset(body, member, w, "reader", owner + "." + member.Name);
-                body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader, ref " + owner + "." + member.Name + "!);");
+                body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.Deserialize" + MemberArguments(member, Profile) + "(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
             // A fused dictionary reads through its generated formatter, which keeps its own entry framing and profile.

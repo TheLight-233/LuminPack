@@ -65,6 +65,8 @@ The `Default` mode writes members by position, parents before children, in decla
 
 LuminPack does not require a parameterless constructor. A constructor marked `[LuminPackConstructor]`, or otherwise the selected constructor, must name its parameters after serialized members; those members are passed to it. Deserialization into an existing object (see [Reuse](reuse.md)) does not construct the root at all.
 
+Next can initialize C# `required` fields and auto-properties from serialized storage. If the selected constructor owns a required member, or a fresh instance needs an initial value that must survive until the first field read, have the constructor initialize all required members and mark it with `[SetsRequiredMembers]`. Next reports `LuminPack124` at the affected member when it cannot generate the initializer safely.
+
 A static method marked `[LuminPackPoolRent]` replaces `new` whenever an instance is needed. In binary reads of `Default`-mode types the rented object is then filled in place, exactly like a read into an existing object, so anything it already holds (lists, child objects, strings) is reused:
 
 ```csharp

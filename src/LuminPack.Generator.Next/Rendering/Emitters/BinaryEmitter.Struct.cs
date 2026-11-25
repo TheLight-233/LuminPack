@@ -302,25 +302,14 @@ internal static partial class BinaryEmitter
             body.Add("// Construct the object and populate its members.");
             string arguments = string.Join(", ", (model.ConstructorArguments ?? Array.Empty<string>()).Select(name =>
                 name == null ? "default" : locals[name] + "Temp!"));
-            string construction = "value = new " + model.GlobalName + "(" + arguments + ")";
-            var initialized = members.Where(member => !member.Mirrored &&
-                (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
             if (model.Rent != null)
             {
                 body.Add("value = " + (model.RentByRef ? "ref " : string.Empty) + model.Rent + ";");
                 foreach (RenderMember member in members.Where(item => !item.Mirrored))
                     body.Add("value." + member.Name + " = " + locals[member.Name] + "Temp!;");
             }
-            else if (initialized.Length == 0)
-                body.Add(construction + ";");
             else
-            {
-                body.Add(construction);
-                body.Add("{");
-                foreach (var member in initialized)
-                    body.Add(member.Name + " = " + locals[member.Name] + "Temp!,");
-                body.Add("};");
-            }
+                PayloadEmitter.AddStagedConstruction(body, model, arguments, member => locals[member.Name] + "Temp!");
             AddStructMirrorAssignments(body, model, w, locals, mirrored.Where(member => model.ConstructorMembers == null ||
                 !model.ConstructorMembers.Contains(member.Name)).ToArray());
         }
@@ -358,7 +347,7 @@ internal static partial class BinaryEmitter
     private static void AddFreshStructFields(List<string> body, PayloadRenderModel model, CodeWriter w, bool seedExisting,
         IReadOnlyDictionary<string, string> locals = null)
     {
-        body.Add("var result = new " + model.GlobalName + "();");
+        body.Add("var result = " + PayloadEmitter.ParameterlessConstruction(model) + ";");
         if (seedExisting)
         {
             foreach (var member in model.Members.Where(item => item.SeedExisting && !item.Mirrored))
@@ -395,7 +384,7 @@ internal static partial class BinaryEmitter
         if (member.Kind == RenderMemberKind.Parameter)
         {
             AddParameterReset(body, member, w, "reader2", owner + "." + member.Name);
-            body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, StructProfile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
+            body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.Deserialize" + MemberArguments(member, StructProfile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
             return;
         }
         AddMemberRead(body, model, member, w, "reader2", owner + "." + member.Name);

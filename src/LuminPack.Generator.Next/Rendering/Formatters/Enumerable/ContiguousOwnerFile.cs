@@ -37,6 +37,8 @@ internal static class ContiguousOwnerFile
         FormatterModel element = model.Arguments[0];
         PayloadRenderModel? fixedObject = shape == ContiguousShape.Array && (operations & GeneratedOperations.BinaryWrite) != 0
             ? FormatterElementEmitter.FixedObject(set, element) : null;
+        bool boundedNullableObject = shape == ContiguousShape.List && (operations & GeneratedOperations.BinaryWrite) != 0 &&
+            FormatterElementEmitter.BoundedNullableObject(set, element);
         string suffix = ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type));
         bool reference = shape is ContiguousShape.Array or ContiguousShape.List;
         // Only a concrete flat element can inline its entire state-accessing read path.
@@ -188,6 +190,8 @@ internal static class ContiguousOwnerFile
                 w.Open();
                 if (fixedObject != null)
                     WriteFixedWindow(w, fixedObject);
+                if (boundedNullableObject)
+                    WriteBoundedNullableWindow(w);
                 // Growth can release the caller's old storage before a later element throws.
                 w.Line("ref var current = ref " + MemoryMarshal + ".GetReference(items);");
                 w.Line("do");
@@ -201,6 +205,28 @@ internal static class ContiguousOwnerFile
             }
 
             w.Line("writer.CheckBuffer();");
+        }
+
+        void WriteBoundedNullableWindow(CodeWriter w)
+        {
+            string owner = "global::LuminPack.LuminPackSerializer.LuminRoots_" + ReadableTypeName.Of(GeneratedNames.PayloadKey(element.Type));
+            w.Line("ref byte cursor = ref writer.Cursor;");
+            w.Line("if (writer.RecordRoom(ref cursor) >= (long)length * " + owner + ".NullableRootBound())");
+            w.Open();
+            w.Line("foreach (var item in items)");
+            w.Open();
+            w.Line("if (item is null)");
+            w.Open();
+            w.Line("cursor = (byte)255;");
+            w.Line("cursor = ref " + Unsafe + ".Add(ref cursor, 1);");
+            w.Close();
+            w.Line("else");
+            w.Line("    cursor = ref " + Unsafe + ".Add(ref cursor, " + owner + ".WriteBoundedNullableRoot(ref cursor, item));");
+            w.Close();
+            w.Line("writer.Cursor = ref cursor;");
+            w.Line("writer.CheckBuffer();");
+            w.Line("return;");
+            w.Close();
         }
 
         void WriteFixedWindow(CodeWriter w, PayloadRenderModel record)

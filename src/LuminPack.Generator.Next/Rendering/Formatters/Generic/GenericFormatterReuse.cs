@@ -296,6 +296,7 @@ internal static class GenericFormatterReuse
             // Keep that write root concrete while sharing the other eligible operations.
             GeneratedOperations closedOperations = (operations & GeneratedOperations.BinaryWrite) != 0 &&
                 (shape == ArrayFamily && FormatterElementEmitter.FixedObject(_set, item) != null ||
+                    shape.Definition == "System.Collections.Generic.List" && FormatterElementEmitter.BoundedNullableObject(_set, item) ||
                     FormatterCapabilities.SequenceInterface(shape.Definition) &&
                     FormatterElementEmitter.ReservableCollectionElement(_set, item) != null)
                 ? GeneratedOperations.BinaryWrite : GeneratedOperations.None;

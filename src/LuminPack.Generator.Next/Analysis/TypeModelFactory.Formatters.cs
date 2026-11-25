@@ -26,8 +26,7 @@ internal static partial class TypeModelFactory
         {
             ITypeSymbol type = member.Type;
             // A closed unconstrained T? can carry an annotation even when substituted with a non-nullable value type.
-            if (policy.TrackReferences && type.IsValueType && type.NullableAnnotation == NullableAnnotation.Annotated &&
-                type is INamedTypeSymbol namedValue && namedValue.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T)
+            if (type.IsValueType && type.NullableAnnotation == NullableAnnotation.Annotated && !IsNullableValueType(type))
             {
                 type = type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
                 member = new MemberSite(member.Name, type, member.Volatile, member.Containing);
@@ -412,7 +411,13 @@ internal static partial class TypeModelFactory
         /// <summary>Canonicalizes nullable values, tuple syntax and native integer aliases.</summary>
         /// <param name = "type">The declared type or its source-ready spelling.</param>
         /// <returns>The generated source or selected source-ready name.</returns>
-        internal static string FormatterSpelling(ITypeSymbol type)
+        internal static string FormatterSpelling(ITypeSymbol type) => FormatterSpelling(type, source: true);
+
+        /// <summary>Spells the formatter type with source escapes or the original generated identity convention.</summary>
+        /// <param name="type">The declared type to spell.</param>
+        /// <param name="source">Whether to escape the declaring identifiers for generated C#.</param>
+        /// <returns>The spelling of the type under the requested convention.</returns>
+        internal static string FormatterSpelling(ITypeSymbol type, bool source)
         {
             if (type is IArrayTypeSymbol array)
             {
@@ -424,15 +429,18 @@ internal static partial class TypeModelFactory
                     element = level.ElementType;
                 }
 
-                return FormatterSpelling(element) + ranks;
+                return FormatterSpelling(element, source) + ranks;
             }
 
             if (type is INamedTypeSymbol named && named.IsGenericType)
             {
-                string prefix = named.ContainingType != null ? FormatterSpelling(named.ContainingType) + "." : named.ContainingNamespace.IsGlobalNamespace ? "global::" : "global::" + named.ContainingNamespace.ToDisplayString() + ".";
+                string prefix = named.ContainingType != null ? FormatterSpelling(named.ContainingType, source) + "." :
+                    named.ContainingNamespace.IsGlobalNamespace ? "global::" :
+                    "global::" + (source ? NamespaceOf(named) : named.ContainingNamespace.ToDisplayString()) + ".";
+                string name = source ? Identifier(named.Name) : named.Name;
                 // A type generic only through its containing type spells the arguments on that level.
-                return named.Arity == 0 ? prefix + named.Name :
-                    prefix + named.Name + "<" + string.Join(", ", named.TypeArguments.Select(FormatterSpelling)) + ">";
+                return named.Arity == 0 ? prefix + name :
+                    prefix + name + "<" + string.Join(", ", named.TypeArguments.Select(argument => FormatterSpelling(argument, source))) + ">";
             }
 
             return FormatterTypeName(type);

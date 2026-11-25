@@ -160,6 +160,7 @@ internal static partial class TypeModelFactory
     {
         private readonly Compilation _compilation;
         private readonly WirePolicy _assemblyPolicy;
+        private readonly bool _versionDenseRawDictionary;
         private readonly Dictionary<AnalysisKey, ModelResult> _completed = new Dictionary<AnalysisKey, ModelResult>();
         private readonly Dictionary<ITypeSymbol, MemberModel?> _roots = new Dictionary<ITypeSymbol, MemberModel?>(SymbolEqualityComparer.Default);
         private readonly Dictionary<INamedTypeSymbol, bool> _packedFields = new Dictionary<INamedTypeSymbol, bool>(SymbolEqualityComparer.Default);
@@ -174,6 +175,7 @@ internal static partial class TypeModelFactory
             Options = options;
             _compilation = compilation;
             _assemblyPolicy = Apply(WirePolicy.Default, compilation.Assembly);
+            _versionDenseRawDictionary = options.Net8 && !options.Unity && FormatterConcurrentTraits.HasVersionDenseRawDictionaryWriter(compilation);
         }
 
         /// <summary>The project facts this session analyzes under.</summary>
@@ -329,7 +331,8 @@ internal static partial class TypeModelFactory
                 rent: managed && Rent(symbol), constructors: managed && Constructors(symbol),
                 callbacks: managed && Callbacks(symbol), storagePlan: unmanaged && generatorType == PayloadGeneration.Default ? FormatterStorage(symbol) : null,
                 mirror: mirror, mirrorFields: mirrorFields, mirrorOffsets: mirrorOffsets, mirrorLayout: mirrorLayout,
-                construction: construction, serializationCallbacks: callbacks, version: version, rentCall: rentCall, rentByRef: rentByRef);
+                construction: construction, serializationCallbacks: callbacks, version: version, rentCall: rentCall, rentByRef: rentByRef,
+                requiredConstruction: RequiredInitialization(symbol, members, generatorType, rentCall != null, issues));
         }
 
         /// <summary>Classifies one payload and builds the model shared by every payload kind.</summary>
@@ -434,7 +437,7 @@ internal static partial class TypeModelFactory
                     return new UnionModel(identity, accessibility, policy, constraints, cases,
                         isInterface: symbol.TypeKind == TypeKind.Interface, wideTags: wide, unionSuffix: suffix,
                         tier: tier,
-                        cursor: fixedCases.Count != 0, readGeneric: readGeneric, chain: Chain(symbol), @namespace: identity.Namespace,
+                        cursor: fixedCases.Count != 0, readGeneric: readGeneric, chain: Chain(symbol), @namespace: NamespaceOf(symbol),
                         binarySlots: UnionSlots(json: false, encoding, recording), jsonSlots: UnionSlots(json: true, encoding, 0),
                         canonical: CanonicalUnionProfiles(),
                         standardBinary: UnionProfileAlias(encoding, recording),
@@ -504,7 +507,8 @@ internal static partial class TypeModelFactory
                             !symbol.GetMembers().OfType<IFieldSymbol>().Any(field => field.IsVolatile),
                         rentByRef: rentByRef, referenceConstruction: rent == null && (policy.TrackReferences ||
                             versioned && constructor == null && callbacks is { ReadBefore.Length: > 0 })
-                            ? ReferenceConstruction(symbol, identity.GlobalName) : null);
+                            ? ReferenceConstruction(symbol, identity.GlobalName) : null,
+                        requiredConstruction: RequiredInitialization(symbol, members, generatorType, rent != null, issues));
                 }
             }
         }
@@ -541,6 +545,9 @@ internal static partial class TypeModelFactory
                 MemberModel? model = Classify(MemberSite.Of(member), storage, policy, symbol, depth, issues, path, ownFormatter);
                 if (model == null)
                     continue;
+                if (_versionDenseRawDictionary && !ownFormatter && member is IFieldSymbol { IsVolatile: false } && storage == MemberStorage.Field &&
+                    model is Model.DictionaryMember or SpecialMember { Formatter.Definition: "System.Collections.Generic.Dictionary" })
+                    model.DirectDictionaryField = true;
                 if (HasAttribute(member, CompressAttribute) && CompressibleCollection(StorageType(member), ownFormatter))
                     model = model.WithCompression();
                 if (!names.Add(model.Name))
@@ -654,7 +661,7 @@ internal static partial class TypeModelFactory
                     issues.Add("member '" + name + "' uses the foreign type parameter '" + parameter.Name + "'");
                     return null;
                 }
-                return new TypeParameterMember(name, storage, policy, parameter.Name, parameter.HasValueTypeConstraint,
+                return new TypeParameterMember(name, storage, policy, Identifier(parameter.Name), parameter.HasValueTypeConstraint,
                     parameter.HasReferenceTypeConstraint);
             }
             if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType)
@@ -1513,10 +1520,10 @@ internal static partial class TypeModelFactory
                 Accessibility.ProtectedOrInternal => "protected internal ",
                 _ => string.Empty,
             };
-            string name = SyntaxFacts.GetKeywordKind(type.Name) == SyntaxKind.None ? type.Name : "@" + type.Name;
+            string name = Identifier(type.Name);
             // A generic declaration repeats its own type parameters; a containing type's parameters belong to its own line.
             if (type.Arity != 0)
-                name += "<" + string.Join(", ", type.OriginalDefinition.TypeParameters.Select(parameter => parameter.Name)) + ">";
+                name += "<" + string.Join(", ", type.OriginalDefinition.TypeParameters.Select(parameter => Identifier(parameter.Name))) + ">";
             return accessibility + "partial " + (type.TypeKind == TypeKind.Interface ? "interface " : type.TypeKind == TypeKind.Struct ? "struct " : "class ") + name;
         }
 
@@ -1525,7 +1532,10 @@ internal static partial class TypeModelFactory
         /// <returns>The namespace, or null.</returns>
         private static string? NamespaceOf(INamedTypeSymbol type)
             => type.ContainingNamespace == null || type.ContainingNamespace.IsGlobalNamespace
-                ? null : type.ContainingNamespace.ToDisplayString();
+                ? null : type.ContainingNamespace.ToDisplayString(SourceNamespaceDisplay);
+
+        private static readonly SymbolDisplayFormat SourceNamespaceDisplay = SymbolDisplayFormat.FullyQualifiedFormat
+            .WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted);
 
         /// <summary>Selects the compiled dispatch tier of a local class Union root.</summary>
         /// <param name="root">The Union root.</param>
@@ -2910,17 +2920,17 @@ internal static partial class TypeModelFactory
         /// <param name="type">The class declaration whose instance must exist before its members are read.</param>
         /// <param name="name">The generated spelling of the class.</param>
         /// <returns>The constructor and any required initializer assignments.</returns>
-        private static string ReferenceConstruction(INamedTypeSymbol type, string name)
+        private string ReferenceConstruction(INamedTypeSymbol type, string name)
         {
             IMethodSymbol? constructor = SelectConstructor(type, out _);
             string arguments = constructor == null ? string.Empty : string.Join(", ", constructor.Parameters.Select(parameter =>
                 "default(" + parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ")!"));
             string expression = "new " + name + "(" + arguments + ")";
-            if (constructor != null && HasAttribute(constructor, "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute"))
+            if (SetsRequired(constructor))
                 return expression;
-            string[] required = Levels(type).SelectMany(level => level.GetMembers()).Where(IsRequiredMember)
-                .Select(member => "@" + member.Name + " = default!").Distinct(StringComparer.Ordinal).ToArray();
-            return required.Length == 0 ? expression : expression + " { " + string.Join(", ", required) + " }";
+            return RequiredMembers(type) is { Length: > 0 } required
+                ? expression + " { " + string.Join(", ", required.Select(member => "@" + member.Name + " = default!")) + " }"
+                : expression;
         }
 
         /// <summary>Recognizes required members without depending on a newer Roslyn symbol API.</summary>
@@ -2930,7 +2940,7 @@ internal static partial class TypeModelFactory
         {
             if (member is not (IFieldSymbol or IPropertySymbol))
                 return false;
-            if (HasAttribute(member, "System.Runtime.CompilerServices.RequiredMemberAttribute"))
+            if (HasAttribute(member, RequiredMemberAttribute))
                 return true;
             foreach (SyntaxReference reference in member.DeclaringSyntaxReferences)
             {
@@ -3175,7 +3185,7 @@ internal static partial class TypeModelFactory
         /// <summary>Spells a name the way a declaration does, escaping language keywords.</summary>
         /// <param name="name">The declared name.</param>
         /// <returns>The identifier spelling.</returns>
-        private static string Identifier(string name)
+        internal static string Identifier(string name)
             => SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None || SyntaxFacts.GetContextualKeywordKind(name) != SyntaxKind.None
                 ? "@" + name : name;
 
@@ -3878,7 +3888,10 @@ internal static partial class TypeModelFactory
         }
         string? @namespace = symbol.ContainingNamespace == null || symbol.ContainingNamespace.IsGlobalNamespace
             ? null : symbol.ContainingNamespace.ToDisplayString();
-        return new TypeIdentity(@namespace, containing, definition ? symbol.Name : ClosedName(symbol), parameters, arities);
+        string sourceName = Session.FormatterSpelling(symbol);
+        bool escaped = sourceName.IndexOf('@') >= 0;
+        return new TypeIdentity(@namespace, containing, definition ? symbol.Name : ClosedName(symbol), parameters, arities,
+            escaped ? sourceName : null, escaped && definition ? parameters.Select(Session.Identifier).ToArray() : null);
     }
 
     /// <summary>Spells one closed level of a nested type: its name and its own type arguments.</summary>
@@ -3890,7 +3903,7 @@ internal static partial class TypeModelFactory
             return symbol.Name;
         var text = new System.Text.StringBuilder(symbol.Name, 32).Append('<');
         for (int index = 0; index < symbol.TypeArguments.Length; index++)
-            (index == 0 ? text : text.Append(", ")).Append(Session.FormatterSpelling(symbol.TypeArguments[index]));
+            (index == 0 ? text : text.Append(", ")).Append(Session.FormatterSpelling(symbol.TypeArguments[index], source: false));
         return text.Append('>').ToString();
     }
 
@@ -3962,7 +3975,7 @@ internal static partial class TypeModelFactory
     private static string SlotSuffix(TypeIdentity identity)
     {
         // Slot names are a public override contract, so this spelling stays as the original FNV identity.
-        string name = identity.GlobalName;
+        string name = "global::" + identity.DisplayName;
         uint hash = 2166136261;
         foreach (char character in name)
         {

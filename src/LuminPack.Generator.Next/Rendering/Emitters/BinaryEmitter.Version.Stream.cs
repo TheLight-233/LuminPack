@@ -42,7 +42,7 @@ internal static partial class BinaryEmitter
         else if (member.Kind == RenderMemberKind.Text)
             body.Add("writer.Write<" + profile + ">(" + target + ");");
         else if (member.Kind == RenderMemberKind.Parameter)
-            body.Add(w.A("LuminPackSerializer") + ".Serialize" + MemberArguments(member, profile) + "(ref writer, in " + target + ");");
+            body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.Serialize" + MemberArguments(member, profile) + "(ref writer, in " + target + ");");
         else
             body.Add(member.Formatter + ".Write<" + profile + ">(ref writer, in " + target + ");");
     }

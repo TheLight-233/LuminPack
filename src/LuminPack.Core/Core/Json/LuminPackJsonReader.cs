@@ -1638,8 +1638,73 @@ namespace LuminPack.Core
         private void SkipNumberToken<TOptions>()
             where TOptions : struct, ILuminPackOptions
         {
+#if NET8_0_OR_GREATER
+            if (LuminPackMarshal.ConstantStringProfile<TOptions>() && TrySkipPlainNumber(default(TOptions).JsonByteCount(1)))
+                return;
+#endif
             Position = ScanJsonNumber<TOptions>(Position).End;
         }
+
+#if NET8_0_OR_GREATER
+        /// <summary>Validates and skips a plain integer token without computing its value.</summary>
+        /// <param name="step">The code-unit width of the current built-in JSON profile.</param>
+        /// <returns>Whether a complete plain token was consumed.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TrySkipPlainNumber(int step)
+        {
+            long remaining = (long)Remaining;
+            if ((ulong)remaining > (uint)Buffer.Length || remaining < step)
+                return false;
+
+            ref byte start = ref Current;
+            int limit = (int)remaining - step;
+            int code = LoadPlainNumberCodeUnit(ref start, 0, step);
+            int offset = 0;
+            if (code == '-')
+            {
+                offset = step;
+                if (offset > limit)
+                    return false;
+                code = LoadPlainNumberCodeUnit(ref start, offset, step);
+            }
+
+            uint firstDigit = (uint)(code - '0');
+            if (firstDigit > 9)
+                return false;
+
+            offset += step;
+            while (offset <= limit)
+            {
+                code = LoadPlainNumberCodeUnit(ref start, offset, step);
+                if ((uint)(code - '0') > 9)
+                {
+                    if (code is not (' ' or '\t' or '\r' or '\n' or ',' or ']' or '}'))
+                        return false;
+                    break;
+                }
+                if (firstDigit == 0)
+                    return false;
+                offset += step;
+            }
+
+            // The last inspected code unit fit entirely in the validated window.
+            // Fractions, exponents and malformed tokens reach the full scanner at their original cursor.
+            Cursor = ref Unsafe.Add(ref start, (nint)(uint)offset);
+            return true;
+        }
+
+        /// <summary>Loads a code unit inside the caller's validated number window.</summary>
+        /// <param name="start">The first byte of the number token.</param>
+        /// <param name="offset">The checked byte offset.</param>
+        /// <param name="step">The code-unit width of the current built-in JSON profile.</param>
+        /// <returns>The UTF-8 byte or UTF-16 code unit.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int LoadPlainNumberCodeUnit(ref byte start, int offset, int step)
+        {
+            ref byte source = ref Unsafe.Add(ref start, (nint)(uint)offset);
+            return step == 1 ? source : Unsafe.ReadUnaligned<ushort>(ref source);
+        }
+#endif
 
 #endregion
 

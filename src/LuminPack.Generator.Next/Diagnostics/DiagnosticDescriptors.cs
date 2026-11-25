@@ -13,6 +13,11 @@ internal static class DiagnosticDescriptors
     private const string Category = "LuminPack.SourceGeneration";
     private const string UnionCategory = "LuminPack.SourceGeneration.Union";
 
+    /// <summary>Reports required initialization that must remain the responsibility of the user's constructor.</summary>
+    public static readonly DiagnosticDescriptor RequiredMemberConstruction = Error(
+        "LuminPack124", "Required member needs constructor initialization",
+        "Cannot initialize required member '{0}' in generated reads for '{1}' because {2}. If the constructor initializes it, annotate that constructor with SetsRequiredMembers.");
+
     /// <summary>Rejects payloads hidden by file scope or by an inaccessible containing type.</summary>
     public static readonly DiagnosticDescriptor InaccessiblePayloadScope = Error(
         "LuminPack120", "Payload scope is inaccessible to generated code",
@@ -364,6 +369,7 @@ internal static class DiagnosticDescriptors
 
     private static readonly Dictionary<string, DiagnosticDescriptor> Catalog = new Dictionary<string, DiagnosticDescriptor>(StringComparer.Ordinal)
     {
+        [RequiredMemberConstruction.Id] = RequiredMemberConstruction,
         [InaccessiblePayloadScope.Id] = InaccessiblePayloadScope,
         [InaccessiblePoolRent.Id] = InaccessiblePoolRent,
         [ConstructorParameterCannotReceiveMember.Id] = ConstructorParameterCannotReceiveMember,

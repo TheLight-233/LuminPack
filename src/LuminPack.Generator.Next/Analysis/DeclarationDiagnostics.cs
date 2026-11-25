@@ -123,7 +123,10 @@ internal static partial class TypeModelFactory
                 ValidateReferenceJsonNames(type, members, ref diagnostics);
             ValidateCallbacks(type, ref diagnostics);
             if (!union && !type.IsStatic)
+            {
                 ValidateConstructors(type, members, ref diagnostics);
+                ValidateRequiredConstruction(type, members, mode, ref diagnostics);
+            }
             ValidatePoolRent(type, ref diagnostics);
         }
 

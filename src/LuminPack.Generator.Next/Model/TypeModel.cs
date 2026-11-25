@@ -27,6 +27,35 @@ internal enum PayloadKind
 
 }
 
+/// <summary>Required members initialized before reading or from staged decoded storage.</summary>
+internal sealed class RequiredConstructionModel : IEquatable<RequiredConstructionModel>
+{
+    /// <summary>The members a parameterless construction initializes to their storage defaults.</summary>
+    internal readonly string[] Defaults;
+
+    /// <summary>The members a staged construction initializes from the decoded record.</summary>
+    internal readonly string[] Decoded;
+
+    /// <summary>Captures the initialization requirements for the existing construction paths.</summary>
+    /// <param name="defaults">The members that need initializers on early construction.</param>
+    /// <param name="decoded">The members that need initializers on staged construction.</param>
+    internal RequiredConstructionModel(string[] defaults, string[] decoded)
+    {
+        Defaults = defaults;
+        Decoded = decoded;
+    }
+
+    /// <inheritdoc/>
+    public bool Equals(RequiredConstructionModel? other) => ReferenceEquals(this, other) ||
+        other != null && Defaults.SequenceEqual(other.Defaults) && Decoded.SequenceEqual(other.Decoded);
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as RequiredConstructionModel);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => Defaults.Length * 397 ^ Decoded.Length;
+}
+
 /// <summary>A normalized payload type. The model owns no Roslyn or legacy analysis object.</summary>
 internal abstract class TypeModel : IEquatable<TypeModel>
 {
@@ -48,6 +77,9 @@ internal abstract class TypeModel : IEquatable<TypeModel>
     /// <summary>The constraint clauses of a generic definition, in declaration order.</summary>
     internal readonly string[] Constraints;
 
+    /// <summary>The explicit initializers required by the selected C# construction paths.</summary>
+    internal readonly RequiredConstructionModel? RequiredConstruction;
+
     /// <summary>Captures the facts shared by every payload kind.</summary>
     /// <param name="identity">The identity supplied to <c>TypeModel</c>.</param>
     /// <param name="accessibility">The accessibility supplied to <c>TypeModel</c>.</param>
@@ -55,8 +87,9 @@ internal abstract class TypeModel : IEquatable<TypeModel>
     /// <param name="members">The members supplied to <c>TypeModel</c>.</param>
     /// <param name="policy">The policy supplied to <c>TypeModel</c>.</param>
     /// <param name="constraints">The constraints supplied to <c>TypeModel</c>.</param>
+    /// <param name="requiredConstruction">The required initialization facts.</param>
     protected TypeModel(TypeIdentity identity, TypeAccessibility accessibility, PayloadKind kind, MemberModel[] members, WirePolicy policy,
-        string[] constraints)
+        string[] constraints, RequiredConstructionModel? requiredConstruction = null)
     {
         Identity = identity;
         Accessibility = accessibility;
@@ -64,12 +97,14 @@ internal abstract class TypeModel : IEquatable<TypeModel>
         Members = members;
         Policy = policy;
         Constraints = constraints;
+        RequiredConstruction = requiredConstruction;
     }
 
     /// <inheritdoc/>
     public virtual bool Equals(TypeModel? other) => ReferenceEquals(this, other) || other != null && Kind == other.Kind &&
         Identity.Equals(other.Identity) && Accessibility == other.Accessibility && Policy.Equals(other.Policy) &&
-        Members.Length == other.Members.Length && Same(Members, other.Members) && Same(Constraints, other.Constraints);
+        Members.Length == other.Members.Length && Same(Members, other.Members) && Same(Constraints, other.Constraints) &&
+        Equals(RequiredConstruction, other.RequiredConstruction);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as TypeModel);
@@ -402,14 +437,15 @@ internal sealed class RecordModel : TypeModel
     /// <param name="rentByRef">Whether the rental returns storage by reference.</param>
     /// <param name="referenceConstruction">Creates a shell to register before decoding its members.</param>
     /// <param name="collectionBase">The appended list record.</param>
+    /// <param name="requiredConstruction">The required initialization facts.</param>
     internal RecordModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
         bool versioned, bool fixedUnionCase, bool derived, bool proven, bool recordWidth, bool freshResult, string? mirror,
         string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, VersionSchemaModel? version,
         ConstructorModel? constructor = null, CallbackModel? callbacks = null, string? rent = null, StorageMirrorModel[]? mirrors = null,
         string? rejection = null, bool recursive = false, bool implicitPayload = false,
         string? sequenceBase = null, string? sequenceElement = null, bool scalarHeader = false, bool stringPairs = false, bool rentByRef = false,
-        string? referenceConstruction = null, FormatterModel? collectionBase = null)
-        : base(identity, accessibility, PayloadKind.Record, members, policy, constraints)
+        string? referenceConstruction = null, FormatterModel? collectionBase = null, RequiredConstructionModel? requiredConstruction = null)
+        : base(identity, accessibility, PayloadKind.Record, members, policy, constraints, requiredConstruction)
     {
         StringPairs = stringPairs;
         Implicit = implicitPayload;
@@ -551,10 +587,12 @@ internal sealed class StructModel : TypeModel
     /// <param name="rentCall">The rent call supplied to <c>StructModel</c>.</param>
     /// <param name="rentByRef">Whether to enable rent by ref for this operation.</param>
     /// <param name="rejection">The rejection supplied to <c>StructModel</c>.</param>
+    /// <param name="requiredConstruction">The required initialization facts.</param>
     internal StructModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
         StructStorage storage, PortableLayout? layout, bool recordWidth, bool versioned, bool rent, bool constructors, bool callbacks, FormatterStorageModel? storagePlan = null, string? mirror = null, string[]? mirrorFields = null, int[]? mirrorOffsets = null, string? mirrorLayout = null, ConstructorModel? construction = null, CallbackModel? serializationCallbacks = null,
-        VersionSchemaModel? version = null, string? rentCall = null, bool rentByRef = false, string? rejection = null)
-        : base(identity, accessibility, PayloadKind.Struct, members, policy, constraints)
+        VersionSchemaModel? version = null, string? rentCall = null, bool rentByRef = false, string? rejection = null,
+        RequiredConstructionModel? requiredConstruction = null)
+        : base(identity, accessibility, PayloadKind.Struct, members, policy, constraints, requiredConstruction)
     {
         Rejection = rejection;
         Mirror = mirror;

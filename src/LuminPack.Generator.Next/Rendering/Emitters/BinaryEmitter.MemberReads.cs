@@ -61,7 +61,7 @@ internal static partial class BinaryEmitter
         {
             if (!fresh)
                 AddParameterReset(body, member, w, state, target);
-            body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, profile) + "(ref " + state + ", ref " + target + "!);");
+            body.Add(w.A("LuminPackSerializer") + ".FormatterDispatch.Deserialize" + MemberArguments(member, profile) + "(ref " + state + ", ref " + target + "!);");
             return;
         }
         if (member.Kind == RenderMemberKind.Array && member.Scalar == "bool" && !model.Trusted)

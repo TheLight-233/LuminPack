@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using LuminPack;
+using LuminPack.Attribute;
 using LuminPack.Code;
 using LuminPack.Core;
 using LuminPack.Option;
@@ -84,6 +85,77 @@ public sealed class SmallDenseDictionaryWriteTest
         Assert.Equal(offset, writer.Position);
         Assert.All(bytes, value => Assert.Equal(0xA5, value));
     }
+
+#if LUMINPACK_NEXT_GENERATOR
+    /// <summary>Checks dense and sparse dictionary fields publish the same Version frame and following value.</summary>
+    /// <param name="count">The number of live pairs to write at the capacity boundary.</param>
+    [Theory]
+    [InlineData(3)]
+    [InlineData(15)]
+    [InlineData(16)]
+    [InlineData(17)]
+    [InlineData(120)]
+    public void DenseRawDictionaryKeepsTheVersionMemberBoundary(int count)
+    {
+        var dense = new DictionaryRecord { Tail = 123 };
+        for (int i = 0; i < count; i++)
+        {
+            int key = -2 * i - 1;
+            dense.Pairs.Add(key, 0x100000003L - 0x200000001L * i);
+            dense.Scores.Add(key, i - 0.25);
+            dense.Flags.Add(key, (byte)(i * 11));
+        }
+        var sparse = new DictionaryRecord
+        {
+            Pairs = new Dictionary<int, long>(dense.Pairs) { [0] = 1 },
+            Scores = new Dictionary<int, double>(dense.Scores) { [0] = 1 },
+            Flags = new Dictionary<int, byte>(dense.Flags) { [0] = 1 },
+            Tail = dense.Tail
+        };
+        Assert.True(sparse.Pairs.Remove(0));
+        Assert.True(sparse.Scores.Remove(0));
+        Assert.True(sparse.Flags.Remove(0));
+
+        byte[] bytes = LuminPackSerializer.Serialize(sparse);
+        Assert.Equal(bytes, LuminPackSerializer.Serialize(dense));
+
+        byte[] guarded = new byte[bytes.Length + 2];
+        guarded.AsSpan().Fill(0xA5);
+        Span<byte> window = guarded.AsSpan(1, bytes.Length);
+        var writer = new LuminPackWriter(ref window);
+        LuminPackSerializer.Serialize<DictionaryRecord, LuminPackUtf16LengthOptions>(ref writer, dense);
+        Assert.Equal(bytes.Length, writer.Position);
+        Assert.Equal(bytes, window.ToArray());
+        Assert.Equal(0xA5, guarded[0]);
+        Assert.Equal(0xA5, guarded[^1]);
+
+        int offset = 3 + sizeof(ulong) + 4 * sizeof(ulong);
+        foreach (int width in new[] { sizeof(long), sizeof(double), sizeof(byte) })
+        {
+            int payload = sizeof(int) + count * (sizeof(int) + width);
+            Assert.Equal(payload, BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(offset)));
+            Assert.Equal(count, BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(offset + sizeof(int))));
+            offset += sizeof(int) + payload;
+        }
+        Assert.Equal(123, BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(offset)));
+
+        DictionaryRecord? decoded = null;
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref decoded));
+        Assert.Equal(dense.Pairs.ToArray(), decoded!.Pairs.ToArray());
+        Assert.Equal(dense.Scores.ToArray(), decoded.Scores.ToArray());
+        Assert.Equal(dense.Flags.ToArray(), decoded.Flags.ToArray());
+        Assert.Equal(123, decoded.Tail);
+    }
+
+    [LuminPackable, LuminPackOption(GeneratorType = GeneratorType.Version)]
+    public sealed class DictionaryRecord
+    {
+        [LuminPackOrder(0)] public Dictionary<int, long> Pairs = new();
+        [LuminPackOrder(1)] public Dictionary<int, double> Scores = new();
+        [LuminPackOrder(2)] public Dictionary<int, byte> Flags = new();
+        [LuminPackOrder(3)] public int Tail;
+    }
+#endif
 
     /// <summary>Creates integer pairs whose enumeration order differs from sorted order.</summary>
     /// <param name="count">The final number of pairs.</param>

@@ -72,6 +72,15 @@ internal static class FormatterElementEmitter
         RenderModelFactory.Create(record, set.Options) is { } rendered && BinaryEmitter.CanReserveFixedObject(rendered)
             ? rendered : null;
 
+    /// <summary>Finds a list element that can write through the bounded nullable record kernel.</summary>
+    /// <param name="set">The shared formatter publication facts.</param>
+    /// <param name="model">The closed element formatter contract.</param>
+    /// <returns>Whether the direct record write can use a proved list window.</returns>
+    internal static bool BoundedNullableObject(SharedFormatterSet set, FormatterModel model) =>
+        model is { OrdinaryObject: true, Payload: RecordModel record } && set.Options?.Net8 == true &&
+        RenderModelFactory.Create(record, set.Options) is { DeclaredProfile: null } rendered &&
+        BinaryEmitter.CanReserveBoundedNullableObject(rendered);
+
     /// <summary>Finds an ordinary positional element with public fixed, string or raw-list fields and no callbacks.</summary>
     /// <param name="set">The shared formatter publication facts.</param>
     /// <param name="model">The closed element formatter contract.</param>

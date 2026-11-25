@@ -167,6 +167,8 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     internal readonly bool Property;
     /// <summary>The entry shape of a dictionary member, or null.</summary>
     internal readonly RenderDictionary Dictionary;
+    /// <summary>Whether the member has the statically selected raw dictionary framing.</summary>
+    internal bool VersionDenseDictionary { get; set; }
     /// <summary>The entry shape of a sorted, paired or nested collection member, or null.</summary>
     internal readonly RenderCollection Collection;
     /// <summary>Whether a type-parameter member's parameter is constrained to a value type, whose read assigns no reset guard.</summary>
@@ -322,7 +324,7 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <inheritdoc/>
     public bool Equals(RenderMember other) => other != null && Name == other.Name && Kind == other.Kind && Scalar == other.Scalar &&
         TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter &&
-        FieldType == other.FieldType && Mirrored == other.Mirrored &&
+        FieldType == other.FieldType && Mirrored == other.Mirrored && VersionDenseDictionary == other.VersionDenseDictionary &&
         Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin && FormatterCall == other.FormatterCall &&
         Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Collection, other.Collection) &&
         ValueTypeParameter == other.ValueTypeParameter && BareParameter == other.BareParameter &&
@@ -493,6 +495,9 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
 
     /// <summary>The construction expression for a tracked instance before its members are read.</summary>
     internal readonly string ReferenceConstruction;
+
+    /// <summary>The explicit C# initializers required by the payload's construction paths.</summary>
+    internal readonly RequiredConstructionModel RequiredConstruction;
     /// <summary>Whether a declaration disables hostile-input handling for this type's roots, whose reads then keep the plain
     /// marker, batch and Boolean checks of the trusted template.</summary>
     internal bool Trusted { get; private set; }
@@ -692,6 +697,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <param name="stringPairs">Whether this record can group direct string field reads.</param>
     /// <param name="referenceConstruction">Creates the instance before its members are read.</param>
     /// <param name="collectionBase">The type of the appended list record.</param>
+    /// <param name="requiredConstruction">The required initialization facts.</param>
     internal PayloadRenderModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         RenderMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
@@ -707,7 +713,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         string rejection = null, InputLimits limits = null, bool recursive = false, bool registration = true,
         bool generatedPropertyHeads = false, bool generatedInt32Runs = false,
         string sequenceBase = null, string sequenceElement = null, bool scalarHeader = false, bool stringPairs = false,
-        string referenceConstruction = null, string collectionBase = null)
+        string referenceConstruction = null, string collectionBase = null, RequiredConstructionModel requiredConstruction = null)
     {
         StringPairs = stringPairs;
         SequenceBase = sequenceBase;
@@ -733,6 +739,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         ManagedStruct = managedStruct;
         TrackReferences = trackReferences;
         ReferenceConstruction = referenceConstruction;
+        RequiredConstruction = requiredConstruction;
         UnionTier = unionTier;
         UnionHidesGetType = unionHidesGetType;
         UnionStandardJson = unionStandardJson;
@@ -812,6 +819,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         Same(UnionChain, other.UnionChain) && UnionReferenced == other.UnionReferenced &&
          Same(UnionBinarySlots, other.UnionBinarySlots) && Same(UnionJsonSlots, other.UnionJsonSlots) &&
         Same(Mirrors, other.Mirrors) && TrackReferences == other.TrackReferences && ReferenceConstruction == other.ReferenceConstruction &&
+        Equals(RequiredConstruction, other.RequiredConstruction) &&
         Same(UnionCases, other.UnionCases) && Same(TypeParameters, other.TypeParameters) && Same(TypeConstraints, other.TypeConstraints) &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Same(MirrorOffsets, other.MirrorOffsets) &&

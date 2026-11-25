@@ -25,19 +25,27 @@ internal sealed class TypeIdentity : IEquatable<TypeIdentity>
     /// empty for a closed definition.</summary>
     internal readonly string[] TypeParameters;
 
+    private readonly string[] _declaredTypeParameters;
+    private readonly string? _escapedGlobalName;
+
     /// <summary>Captures a type identity.</summary>
     /// <param name="namespace">The namespace supplied to <c>TypeIdentity</c>.</param>
     /// <param name="containingTypes">The containing types supplied to <c>TypeIdentity</c>.</param>
     /// <param name="name">The name to look up or emit.</param>
     /// <param name="typeParameters">The type parameters supplied to <c>TypeIdentity</c>.</param>
     /// <param name="containingArities">The containing arities supplied to <c>TypeIdentity</c>.</param>
-    internal TypeIdentity(string? @namespace, string[] containingTypes, string name, string[] typeParameters, int[]? containingArities = null)
+    /// <param name="escapedGlobalName">The source spelling when any component needs a C# escape.</param>
+    /// <param name="escapedTypeParameters">The parameter names to emit, when they differ from the declared names.</param>
+    internal TypeIdentity(string? @namespace, string[] containingTypes, string name, string[] typeParameters,
+        int[]? containingArities = null, string? escapedGlobalName = null, string[]? escapedTypeParameters = null)
     {
         Namespace = @namespace;
         ContainingTypes = containingTypes;
         ContainingArities = containingArities ?? new int[containingTypes.Length];
         Name = name;
-        TypeParameters = typeParameters;
+        _declaredTypeParameters = typeParameters;
+        _escapedGlobalName = escapedGlobalName;
+        TypeParameters = escapedTypeParameters ?? typeParameters;
     }
 
     /// <summary>Whether the definition declares type parameters, including those of a generic containing type.</summary>
@@ -78,7 +86,7 @@ internal sealed class TypeIdentity : IEquatable<TypeIdentity>
         }
     }
 
-    /// <summary>The C# display name, such as <c>N.Outer&lt;T&gt;.Inner&lt;U&gt;</c>.</summary>
+    /// <summary>The original identity spelling, such as <c>N.Outer&lt;T&gt;.Inner&lt;U&gt;</c>, used by the Union slot contract.</summary>
     internal string DisplayName
     {
         get
@@ -112,17 +120,18 @@ internal sealed class TypeIdentity : IEquatable<TypeIdentity>
         {
             if (index != 0)
                 text.Append(", ");
-            text.Append(TypeParameters[parameter++]);
+            text.Append(_declaredTypeParameters[parameter++]);
         }
         text.Append('>');
     }
 
     /// <summary>The fully qualified C# spelling.</summary>
-    internal string GlobalName => "global::" + DisplayName;
+    internal string GlobalName => _escapedGlobalName ?? "global::" + DisplayName;
 
     /// <inheritdoc/>
     public bool Equals(TypeIdentity? other) => ReferenceEquals(this, other) || other != null && Namespace == other.Namespace &&
-        Name == other.Name && ContainingTypes.SequenceEqual(other.ContainingTypes) && ContainingArities.SequenceEqual(other.ContainingArities) &&
+        Name == other.Name && _escapedGlobalName == other._escapedGlobalName &&
+        ContainingTypes.SequenceEqual(other.ContainingTypes) && ContainingArities.SequenceEqual(other.ContainingArities) &&
         TypeParameters.SequenceEqual(other.TypeParameters);
 
     /// <inheritdoc/>

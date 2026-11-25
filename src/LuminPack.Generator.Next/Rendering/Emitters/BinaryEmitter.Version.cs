@@ -61,11 +61,21 @@ internal static partial class BinaryEmitter
                 index--;
                 continue;
             }
+            string field = "value." + member.Name;
+            bool tryDenseDictionary = width == 255 && member.VersionDenseDictionary && !scoped[index] && !model.HasCallbacks;
+            if (tryDenseDictionary)
+            {
+                string captured = "versionDictionary" + VersionNumber(index);
+                body.Add("var " + captured + " = " + field + ";");
+                body.Add("if (!global::LuminPack.Code.LuminPackMarshal.TryWriteVersionDenseRawDictionary(ref writer, " + captured + "))");
+                body.Add("{");
+                field = captured;
+            }
             if (width == 255)
                 body.Add("length = writer.ReserveVersionLength();");
             if (scoped[index])
                 body.Add("scope = writer.EnterVersionScope();");
-            body.Add("Write" + VersionMemberName(member) + "(ref writer, value." + member.Name + ");");
+            body.Add("Write" + VersionMemberName(member) + "(ref writer, " + field + ");");
             if (scoped[index])
             {
                 body.Add("writer.ExitVersionScope(scope);");
@@ -73,6 +83,8 @@ internal static partial class BinaryEmitter
             }
             if (width == 255)
                 body.Add("writer.CompleteVersionLength(length);");
+            if (tryDenseDictionary)
+                body.Add("}");
         }
         if (hasScope)
         {
@@ -405,8 +417,6 @@ internal static partial class BinaryEmitter
     {
         var members = model.Members;
         bool mirroredMembers = model.Members.Any(member => member.Mirrored);
-        var initializer = members.Where(member => !member.Mirrored &&
-            (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
         if (model.IsStruct)
         {
             if (model.Rent != null)
@@ -417,7 +427,7 @@ internal static partial class BinaryEmitter
                         body.Add("value." + members[index].Name + " = " + temps[index] + "!;");
             }
             else
-                AddVersionConstruction(model, body, initializer, temps);
+                AddVersionConstruction(model, body, temps);
             if (mirroredMembers)
             {
                 body.Add("ref var local = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value);");
@@ -447,7 +457,7 @@ internal static partial class BinaryEmitter
         }
         else
         {
-            AddVersionConstruction(model, body, initializer, temps);
+            AddVersionConstruction(model, body, temps);
             if (mirroredMembers)
             {
                 body.Add("// Assign private fields.");
@@ -476,25 +486,15 @@ internal static partial class BinaryEmitter
     }
 
 
-    /// <summary>Spells the fresh construction of a version-tolerant value, with the object initializer only for visible members.</summary>
+    /// <summary>Spells the fresh construction of a version-tolerant value from its staged fields.</summary>
     /// <param name="model">The render model.</param>
     /// <param name="body">The receiving statements.</param>
-    /// <param name="initializer">The members assigned by the object initializer.</param>
     /// <param name="temps">The temporary local of each member.</param>
-    private static void AddVersionConstruction(PayloadRenderModel model, List<string> body, RenderMember[] initializer, string[] temps)
+    private static void AddVersionConstruction(PayloadRenderModel model, List<string> body, string[] temps)
     {
         string arguments = model.ConstructorArguments == null ? string.Empty : string.Join(", ", model.ConstructorArguments.Select(name =>
             name == null ? "default" : temps[Array.FindIndex(model.Members, member => member.Name == name)] + "!"));
-        if (initializer.Length == 0)
-        {
-            body.Add("value = new " + model.GlobalName + "(" + arguments + ");");
-            return;
-        }
-        body.Add("value = new " + model.GlobalName + "(" + arguments + ")");
-        body.Add("{");
-        foreach (var member in initializer)
-            body.Add(member.Name + " = " + temps[System.Array.IndexOf(model.Members, member)] + "!,");
-        body.Add("};");
+        PayloadEmitter.AddStagedConstruction(body, model, arguments, member => temps[Array.IndexOf(model.Members, member)] + "!");
     }
 
     /// <summary>Emits version-tolerant value roots through their non-nullable state and schema contracts.</summary>

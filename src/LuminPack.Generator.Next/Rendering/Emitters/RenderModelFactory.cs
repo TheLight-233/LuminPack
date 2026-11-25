@@ -118,7 +118,8 @@ internal static class RenderModelFactory
             trackReferences: model.Policy.TrackReferences, referenceConstruction: record?.ReferenceConstruction!,
             generatedPropertyHeads: model.Policy.TrackReferences && options.GeneratedJsonPropertyWriter && options.CSharpVersion >= 1100,
             sequenceBase: record?.SequenceBase!, sequenceElement: record?.SequenceElement!, scalarHeader: record?.ScalarHeader ?? false,
-            stringPairs: !json && record?.StringPairs == true, collectionBase: record?.CollectionBase?.Type!);
+            stringPairs: !json && record?.StringPairs == true, collectionBase: record?.CollectionBase?.Type!,
+            requiredConstruction: model.RequiredConstruction);
     }
 
     /// <summary>Maps a Union root when its declared profile, slots, cases and framing are the ones the direct Union emitters
@@ -216,6 +217,9 @@ internal static class RenderModelFactory
         RenderMember? rendered = MemberCore(member, extension, options, reserveRawSpans);
         if (rendered != null && member.Compressed)
             rendered = rendered.Compressed("global::LuminPack." + GeneratedNames.Owner(extension, rendered.TypeName));
+        if (rendered is { Dictionary: { Pair: true, KeyType: "int", ValueType: "byte" or "double" or "long" } } &&
+            member.DirectDictionaryField && !member.Policy.Declared)
+            rendered.VersionDenseDictionary = true;
         return rendered == null || !member.Policy.Declared ? rendered : rendered.WithScope(ProfileNames.Type(member.Policy.Strings));
     }
 

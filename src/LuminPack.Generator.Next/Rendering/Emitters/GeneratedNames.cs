@@ -264,17 +264,24 @@ internal static class ReadableTypeName
         {
             var segment = new StringBuilder();
             var qualifier = new StringBuilder();
-            while (index < text.Length && (char.IsLetterOrDigit(text[index]) || text[index] is '_' or '.' or ':'))
+            bool escaped = false;
+            while (index < text.Length && (char.IsLetterOrDigit(text[index]) || text[index] is '_' or '.' or ':' or '@'))
             {
                 if (text[index] == '.')
                 {
                     qualifier.Append(segment);
                     segment.Clear();
+                    escaped = false;
                 }
                 else if (text[index] == ':')
                 {
                     qualifier.Clear();
                     segment.Clear();
+                    escaped = false;
+                }
+                else if (text[index] == '@')
+                {
+                    escaped = true;
                 }
                 else
                 {
@@ -286,6 +293,9 @@ internal static class ReadableTypeName
             // A simple name the compilation declares in several namespaces keeps its namespace and containing types.
             if (_ambiguous != null && qualifier.Length != 0 && _ambiguous.Contains(simple))
                 part.Append(qualifier).Append(simple);
+            // Verbatim identifiers such as @int name declarations rather than the built-in scalar.
+            else if (escaped)
+                part.Append("Verbatim").Append(simple);
             else
                 part.Append(Keyword(simple));
             if (index < text.Length && text[index] == '<')

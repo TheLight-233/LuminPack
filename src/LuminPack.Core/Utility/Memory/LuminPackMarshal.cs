@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -729,6 +730,57 @@ public static partial class LuminPackMarshal
 
         LuminPackWriter.Write(ref destination, count);
         writer.CompleteRun(bytes);
+        return true;
+    }
+
+    /// <summary>Writes a version-framed dictionary as one bounded raw record when the dense layout is proven.</summary>
+    /// <typeparam name="TValue">The selected primitive value type.</typeparam>
+    /// <param name="writer">The writer at the uncommitted outer length prefix.</param>
+    /// <param name="dictionary">The concrete dictionary whose pairs occupy the member.</param>
+    /// <returns>Whether the complete framed member was written.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static bool TryWriteVersionDenseRawDictionary<TValue>(scoped ref LuminPackWriter writer, Dictionary<int, TValue>? dictionary)
+        where TValue : unmanaged
+    {
+        if (IntPtr.Size != 8 || (typeof(TValue) != typeof(byte) && typeof(TValue) != typeof(double) && typeof(TValue) != typeof(long)) ||
+            dictionary is null || dictionary.GetType() != typeof(Dictionary<int, TValue>))
+            return false;
+        int count = dictionary.Count;
+        if (count == 0)
+            return false;
+
+        long bytes = 2 * sizeof(int) + (long)count * (sizeof(int) + Unsafe.SizeOf<TValue>());
+        Span<byte> window = writer.Buffer;
+        ref byte destination = ref writer.CurrentReference;
+        nint position = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(window), ref destination);
+        if ((nuint)position > (uint)window.Length || bytes > writer.RecordRoom() ||
+            !TryGetDictionaryView(dictionary, out var view) || view._count != count || view._freeCount != 0 ||
+            view._entries is not { } entries || count > entries.Length)
+            return false;
+
+        ref var entry = ref GetArrayReference(entries);
+        ref byte source = ref Unsafe.As<DictionaryView<int, TValue>.Entry, byte>(ref entry);
+        nint displacement = Unsafe.ByteOffset(ref source, ref destination);
+        long sourceBytes = (long)count * Unsafe.SizeOf<DictionaryView<int, TValue>.Entry>();
+        if (displacement > -bytes && displacement < sourceBytes)
+            return false;
+
+        int version = view._version;
+        // The existing owner commits only the outer reservation if collection mutation throws.
+        writer.CompleteRun(sizeof(int));
+        ref byte collection = ref Unsafe.Add(ref destination, sizeof(int));
+        ref byte payload = ref Unsafe.Add(ref collection, sizeof(int));
+        int copied = CopyVersionDensePairPrefix(ref payload, ref entry, count);
+        CopyDenseRawPairEntries(ref Unsafe.Add(ref payload, (nint)(uint)copied * (sizeof(int) + Unsafe.SizeOf<TValue>())),
+            ref Unsafe.Add(ref entry, (nint)(uint)copied), count - copied);
+        if (view._version != version || view._count != count || view._freeCount != 0 || !ReferenceEquals(view._entries, entries))
+            LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
+
+        int payloadLength = (int)bytes - sizeof(int);
+        LuminPackWriter.Write(ref collection, count);
+        LuminPackWriter.Write(ref destination, BitConverter.IsLittleEndian ? payloadLength : BinaryPrimitives.ReverseEndianness(payloadLength));
+        writer.CompleteRun(payloadLength);
         return true;
     }
 
