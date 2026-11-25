@@ -108,6 +108,9 @@ func (s *Schema) compileShapeStorage(d *descriptor) {
 	if d == nil {
 		return
 	}
+	if d.Kind == "contract" {
+		d.contract = s.types[normalize(d.Type)]
+	}
 	for _, layout := range []*valueLayout{d.Layout, d.RawCompoundStorage} {
 		if layout != nil {
 			layout.compileTransfers()

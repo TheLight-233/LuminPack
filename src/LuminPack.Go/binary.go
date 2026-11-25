@@ -342,7 +342,7 @@ func (s *Schema) minimum(d *descriptor, p int) int {
 			return 1
 		}
 	case "contract":
-		c := s.get(d.Type)
+		c := d.target(s)
 		if c.Kind == "Union" {
 			return 4
 		}
@@ -377,7 +377,7 @@ func (r *binaryReader) shape(d *descriptor, p int) any {
 	case "string":
 		return r.text(p)
 	case "contract":
-		return r.contract(r.s.get(d.Type), p, false)
+		return r.contract(d.target(r.s), p, false)
 	case "sequence":
 		return r.sequence(d, p)
 	case "dictionary":
@@ -558,7 +558,7 @@ func (w *binaryWriter) shape(d *descriptor, value any, p int) {
 	case "string":
 		w.text(value, p)
 	case "contract":
-		w.contract(w.s.get(d.Type), value, p, false)
+		w.contract(d.target(w.s), value, p, false)
 	case "sequence":
 		if value == nil && !nullSequenceIsEmpty(d) {
 			w.count(-1)

@@ -3,7 +3,9 @@ package luminpack
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -91,5 +93,37 @@ func TestDirectJSONRejectsInvalidHeadsAndNumbers(t *testing.T) {
 	}
 	if _, err := limited.DecodeJSONWithEncoding("", []byte("{\"Scores\":[[1,2]]}"), UTF8); err == nil {
 		t.Fatal("direct dictionary reader accepted a pair beyond the configured depth")
+	}
+}
+
+func TestDirectJSONFloatIntegerTokens(t *testing.T) {
+	for _, scalar := range []string{"float", "double"} {
+		schema, err := LoadSchema([]byte(`{"version":1,"root":"number","rootWire":{"kind":"scalar","type":"` + scalar + `"},"contracts":[]}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		bits := 64
+		if scalar == "float" {
+			bits = 32
+		}
+		for _, token := range []string{"0", "-0", "16777217", "-2147483648", "2147483647", "2147483648", "0.125", "1e-2"} {
+			got, err := schema.DecodeJSONWithEncoding("", []byte(token), UTF8)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err := strconv.ParseFloat(token, bits)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var actual float64
+			if bits == 32 {
+				actual = float64(got.(float32))
+			} else {
+				actual = got.(float64)
+			}
+			if math.Float64bits(actual) != math.Float64bits(want) {
+				t.Errorf("%s token %q: got %v, want %v", scalar, token, actual, want)
+			}
+		}
 	}
 }

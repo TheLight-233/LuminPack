@@ -177,7 +177,7 @@ func (r *directJSONReader) union(c *contract, depth int) any {
 func (r *directJSONReader) shape(d *descriptor, depth int) any {
 	switch d.Kind {
 	case "contract":
-		return r.contract(r.fallback.s.get(d.Type), depth)
+		return r.contract(d.target(r.fallback.s), depth)
 	case "scalar":
 		return r.scalar(d, depth)
 	}
@@ -286,6 +286,18 @@ func (r *directJSONReader) scalar(d *descriptor, depth int) any {
 			}
 			return n
 		case "float", "double":
+			// Integer tokens within Int32 can be converted directly, with one IEEE rounding.
+			// Preserve the sign of negative zero by leaving that spelling to ParseFloat.
+			start := r.scan.pos
+			if n, ok := r.scan.int32(); ok {
+				if n != 0 || r.scan.data[start] != '-' {
+					if d.Type == "float" {
+						return float32(n)
+					}
+					return float64(n)
+				}
+				r.scan.pos = start
+			}
 			width := r.fallback.s.scalarWidth(d.Type) * 8
 			n, err := strconv.ParseFloat(jsonNumberView(r.scan.numberToken()), width)
 			if err != nil {

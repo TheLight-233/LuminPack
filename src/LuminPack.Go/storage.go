@@ -242,7 +242,7 @@ func (r *binaryReader) readStorageField(d *descriptor, p *valueLayout, profile i
 		return r.shape(d, profile)
 	}
 	if d.Kind == "contract" {
-		return r.readStorage(r.s.get(d.Type), nil, p, profile)
+		return r.readStorage(d.target(r.s), nil, p, profile)
 	}
 	return r.readStorage(nil, d, p, profile)
 }
@@ -254,7 +254,7 @@ func (w *binaryWriter) writeStorageField(d *descriptor, p *valueLayout, value an
 	if len(p.Fields) == 0 {
 		w.shape(d, value, profile)
 	} else if d.Kind == "contract" {
-		w.writeStorage(w.s.get(d.Type), nil, p, value, profile)
+		w.writeStorage(d.target(w.s), nil, p, value, profile)
 	} else {
 		w.writeStorage(nil, d, p, value, profile)
 	}
@@ -340,7 +340,7 @@ func (s *Schema) rawWidth(d *descriptor, depth int) int {
 	case "scalar":
 		return s.scalarWidth(d.Type)
 	case "contract":
-		c := s.get(d.Type)
+		c := d.target(s)
 		if c.StorageKind == "RawUnmanaged" && !c.Versioned && c.Storage == nil {
 			if c.NativeStorage != nil {
 				width, _ := c.NativeStorage.model(0)

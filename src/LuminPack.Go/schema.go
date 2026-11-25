@@ -83,6 +83,7 @@ type Schema struct {
 }
 
 type descriptor struct {
+	contract              *contract
 	Kind                  string
 	Type                  string
 	Element, Key, Value   *descriptor
@@ -290,6 +291,7 @@ func LoadSchema(data []byte) (*Schema, error) {
 	}
 	for _, c := range wire.Contracts {
 		c.jsonDirect = s.jsonContractEligible(c, make(map[*contract]bool))
+		s.compileShapeStorage(c.SequenceWire)
 		s.compileContractStorage(c)
 		for i := range c.Members {
 			s.compileShapeStorage(c.Members[i].Wire)
@@ -342,6 +344,13 @@ func (s *Schema) WithCustom(typeID string, codec CustomCodec) (*Schema, error) {
 
 func (codec CustomCodec) complete() bool {
 	return codec.ReadBinary != nil && codec.WriteBinary != nil && codec.ReadJSON != nil && codec.WriteJSON != nil
+}
+
+func (d *descriptor) target(s *Schema) *contract {
+	if d.contract != nil {
+		return d.contract
+	}
+	return s.get(d.Type)
 }
 
 func (s *Schema) get(typeID string) *contract {

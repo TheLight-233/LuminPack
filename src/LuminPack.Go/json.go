@@ -220,7 +220,7 @@ func (r *jsonReader) shape(d *descriptor, value any) any {
 		fail(-1, "missing portable JSON descriptor")
 	}
 	if d.Kind == "contract" {
-		return r.contract(r.s.get(d.Type), value)
+		return r.contract(d.target(r.s), value)
 	}
 	if value == nil {
 		if d.Kind == "sequence" && nullSequenceIsEmpty(d) {
@@ -533,7 +533,7 @@ func (w *jsonWriter) shape(d *descriptor, value any) {
 		fail(-1, "missing portable JSON descriptor")
 	}
 	if d.Kind == "contract" {
-		w.contract(w.s.get(d.Type), value)
+		w.contract(d.target(w.s), value)
 		return
 	}
 	if value == nil {
