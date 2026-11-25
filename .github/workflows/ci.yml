@@ -11,7 +11,7 @@ on:
         type: boolean
         default: false
       run_portable_benchmarks:
-        description: Compare C++, Java, Go, and TypeScript serializers on the shared fixtures
+        description: Compare C++, Java, Go, TypeScript, Rust, and Python serializers on the shared fixtures
         type: boolean
         default: false
       benchmark_jit:

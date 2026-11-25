@@ -1,4 +1,4 @@
-"""Export the same managed benchmark models for all four language runners."""
+"""Export the same managed benchmark models for all language runners."""
 
 import argparse
 from pathlib import Path

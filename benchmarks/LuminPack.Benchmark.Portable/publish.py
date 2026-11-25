@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[2]
-LANGUAGES = {"cpp": "C++", "java": "Java", "go": "Go", "typescript": "TypeScript"}
+LANGUAGES = {"cpp": "C++", "java": "Java", "go": "Go", "typescript": "TypeScript", "rust": "Rust", "python": "Python"}
 START = "<!-- portable-benchmark-charts:start -->"
 END = "<!-- portable-benchmark-charts:end -->"
 ASSETS = Path("docs/assets/benchmarks/portable")
@@ -37,7 +37,7 @@ def publish(artifact):
     with (artifact / "summary.csv").open(encoding="utf-8-sig", newline="") as stream:
         rows = list(csv.DictReader(stream))
     if {row["language"] for row in rows} != LANGUAGES.keys() or any(row["source_url"] != source for row in rows):
-        raise ValueError("The summary must identify all four languages and the same CI run.")
+        raise ValueError("The summary must identify all six languages and the same CI run.")
 
     images = [artifact / f"{language}-{theme}.svg" for language in LANGUAGES for theme in ("light", "dark")]
     for image in images:

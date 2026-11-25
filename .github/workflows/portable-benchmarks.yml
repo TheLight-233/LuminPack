@@ -37,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [cpp, java, go, typescript]
+        language: [cpp, java, go, typescript, rust, python]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -58,6 +58,10 @@ jobs:
         if: matrix.language == 'typescript'
         with:
           node-version: '22'
+      - uses: actions/setup-python@v5
+        if: matrix.language == 'python' || matrix.language == 'rust'
+        with:
+          python-version: '3.13'
       - name: Record runner information
         env:
           LANGUAGE: ${{ matrix.language }}
@@ -65,6 +69,32 @@ jobs:
           mkdir -p .tmp/portable-benchmark/results
           lscpu > ".tmp/portable-benchmark/results/$LANGUAGE-cpu.txt"
           uname -a > ".tmp/portable-benchmark/results/$LANGUAGE-os.txt"
+      - name: Build native model libraries for the JSON operations
+        if: matrix.language == 'rust' || matrix.language == 'python'
+        run: |
+          export LP_MODELS="$PWD/.tmp/portable-benchmark/models"
+          echo "LP_MODELS=$LP_MODELS" >> "$GITHUB_ENV"
+          for model in simple serialize; do
+            build=".tmp/native-$model"
+            cmake -S src/LuminPack.Native -B "$build" -DCMAKE_BUILD_TYPE=Release -DLUMINPACK_HEADER="$LP_MODELS/$model-benchmark.hpp"
+            cmake --build "$build" --target luminpack_model --parallel 2
+            cp "$build/libluminpack_model.so" "$LP_MODELS/$model.so"
+          done
+      - name: Benchmark Rust
+        if: matrix.language == 'rust'
+        run: |
+          rustc -Vv > .tmp/portable-benchmark/results/rust-runtime.txt
+          cargo run --locked --release --manifest-path benchmarks/LuminPack.Benchmark.Rust/Cargo.toml > .tmp/portable-benchmark/results/rust.csv
+      - name: Benchmark Python
+        if: matrix.language == 'python'
+        run: |
+          python -m pip install 'Cython>=3,<4' setuptools msgspec msgpack orjson ./src/LuminPack.Python
+          python --version > .tmp/portable-benchmark/results/python-runtime.txt
+          python -m pip freeze >> .tmp/portable-benchmark/results/python-runtime.txt
+          for model in simple serialize; do
+            python tools/portable-direct/build_python.py "$LP_MODELS/$model.manifest.json" "$model" "$LP_MODELS"
+          done
+          python benchmarks/LuminPack.Benchmark.Python/benchmark.py > .tmp/portable-benchmark/results/python.csv
       - name: Benchmark C++
         if: matrix.language == 'cpp'
         run: bash benchmarks/LuminPack.Benchmark.Portable/run-cpp.sh .tmp/portable-benchmark/models .tmp/portable-benchmark/results
@@ -116,9 +146,9 @@ jobs:
           source="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           python3 benchmarks/LuminPack.Benchmark.Portable/chart.py "$work/charts" \
             --input "$work/raw/cpp.csv" --input "$work/raw/java.csv" --input "$work/raw/go.csv" \
-            --input "$work/raw/typescript.csv" --source-url "$source" --host 'GitHub Actions Ubuntu x64'
+            --input "$work/raw/typescript.csv" --input "$work/raw/rust.csv" --input "$work/raw/python.csv" --source-url "$source" --host 'GitHub Actions Ubuntu x64'
           printf '{"source_url":"%s","commit":"%s"}\n' "$source" "$GITHUB_SHA" > "$work/charts/provenance.json"
-          echo 'Download `portable-benchmark-charts` for the four light/dark chart pairs and summary.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Download `portable-benchmark-charts` for the six light/dark chart pairs and summary.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: portable-benchmark-charts

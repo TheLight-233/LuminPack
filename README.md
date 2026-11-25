@@ -2,7 +2,7 @@
 
 # ✨ LuminPack
 
-**Binary and JSON serialization for .NET, C++, Java, Go, and TypeScript**
+**Binary and JSON serialization for .NET, C++, Java, Go, TypeScript, Rust, and Python**
 
 *Shared wire contracts · Source-generated .NET serializers · Unity and NativeAOT support*
 
@@ -28,7 +28,7 @@
 
 ---
 
-**LuminPack** is a high-performance serializer for game saves, network packets, and real-time applications. The .NET source generator builds Binary and JSON serializers for `[LuminPackable]` types. Export the same contract to generate bindings for C++, Java, Go, and TypeScript. Each runtime reads and writes LuminPack documents using the selected model and wire options. [Cross-language guide](docs/portable-runtime.md)
+**LuminPack** is a high-performance serializer for game saves, network packets, and real-time applications. The .NET source generator builds Binary and JSON serializers for `[LuminPackable]` types. Export the same contract to generate bindings for C++, Java, Go, TypeScript, Rust, and Python. Each runtime reads and writes LuminPack documents using the selected model and wire options. [Cross-language guide](docs/portable-runtime.md)
 
 | Language | Runtime guide |
 | --- | --- |
@@ -37,6 +37,8 @@
 | Java | [JDK runtime and generated bindings](src/LuminPack.Java/README.md) |
 | Go | [Go module and generated bindings](src/LuminPack.Go/README.md) |
 | TypeScript | [TypeScript runtime and generated types](src/LuminPack.TypeScript/README.md) |
+| Rust | [Typed models and native documents](src/LuminPack.Rust/README.md) |
+| Python | [Compiled dict/list codecs and native documents](src/LuminPack.Python/README.md) |
 
 ```csharp
 [LuminPackable]
@@ -355,6 +357,8 @@ The language runners use the same `SimpleClass` and `CharacterSaveData` models. 
 | Java | Kryo, MessagePack, Jackson CBOR, Fastjson2 JSONB | Jackson, Gson, Fastjson2 |
 | Go | CBOR, MessagePack, encoding/gob | encoding/json, goccy/go-json, jsoniter |
 | TypeScript | @msgpack/msgpack, msgpackr, cbor-x | V8 JSON, @jsonjoy.com/json-pack, fast-json-stringify + V8 |
+| Rust | bincode, Postcard, rmp-serde | serde_json |
+| Python | msgspec (MessagePack), msgpack, pickle (protocol 5) | orjson, msgspec, json |
 
 <!-- portable-benchmark-charts:start -->
 

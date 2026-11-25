@@ -2,7 +2,7 @@
 
 # ✨ LuminPack
 
-**面向 .NET、C++、Java、Go 与 TypeScript 的二进制和 JSON 序列化库**
+**面向 .NET、C++、Java、Go、TypeScript、Rust 与 Python 的二进制和 JSON 序列化库**
 
 *共享数据契约 · .NET 源代码生成 · 支持 Unity 与 NativeAOT*
 
@@ -28,7 +28,7 @@
 
 ---
 
-**LuminPack** 是面向游戏存档、网络封包和实时应用的高性能序列化库。.NET 源代码生成器为 `[LuminPackable]` 类型构建二进制和 JSON 序列化器，并可导出同一份契约，为 C++、Java、Go 和 TypeScript 生成绑定。各运行时按选定的模型和数据格式配置读写 LuminPack 文档。[跨语言指南](portable-runtime.cn.md)
+**LuminPack** 是面向游戏存档、网络封包和实时应用的高性能序列化库。.NET 源代码生成器为 `[LuminPackable]` 类型构建二进制和 JSON 序列化器，并可导出同一份契约，为 C++、Java、Go、TypeScript、Rust 和 Python 生成绑定。各运行时按选定的模型和数据格式配置读写 LuminPack 文档。[跨语言指南](portable-runtime.cn.md)
 
 | 语言 | 运行时指南 |
 | --- | --- |
@@ -37,6 +37,8 @@
 | Java | [JDK 运行时与生成绑定](modules/luminpack.java.cn.md) |
 | Go | [Go 模块与生成绑定](modules/luminpack.go.cn.md) |
 | TypeScript | [TypeScript 运行时与生成类型](modules/luminpack.typescript.cn.md) |
+| Rust | [强类型模型与原生文档](modules/luminpack.rust.cn.md) |
+| Python | [编译式 dict/list 读写器与原生文档](modules/luminpack.python.cn.md) |
 
 ```csharp
 [LuminPackable]
@@ -355,6 +357,8 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter "Lumi
 | Java | Kryo、MessagePack、Jackson CBOR、Fastjson2 JSONB | Jackson、Gson、Fastjson2 |
 | Go | CBOR、MessagePack、encoding/gob | encoding/json、goccy/go-json、jsoniter |
 | TypeScript | @msgpack/msgpack、msgpackr、cbor-x | V8 JSON、@jsonjoy.com/json-pack、fast-json-stringify + V8 |
+| Rust | bincode, Postcard, rmp-serde | serde_json |
+| Python | msgspec (MessagePack), msgpack, pickle (protocol 5) | orjson, msgspec, json |
 
 <!-- portable-benchmark-charts:start -->
 

@@ -12,7 +12,7 @@ Pushes to `main` and `refactor`, and pull requests, trigger the hosted checks. T
 | `unity.yml`, `unity-extensions.yml` | Unity Editor tests, IL2CPP and WebGL players, Unity object and Burst contracts. |
 | `benchmark-matrix.yml` | Round-trip validation of the serialization matrix; timing on manual runs. |
 | `benchmark-matrix-paired.yml` | Manual same-runner comparison of two or three revisions for selected Matrix fixtures, in FullOpts and TieredPGO. |
-| `portable-benchmarks.yml` | Manual Binary and UTF-8 JSON comparisons with native C++, Java, Go, and TypeScript libraries. |
+| `portable-benchmarks.yml` | Manual Binary and UTF-8 JSON comparisons with C++, Java, Go, TypeScript, Rust, and Python libraries. |
 | `fuzz.yml` | Bounded SharpFuzz/libFuzzer campaigns; see [fuzzing](fuzzing.md). |
 | `release.yml` | Release candidate builds, API comparison and NuGet publishing from the configured version tag. See [releasing](releasing.md). |
 
@@ -43,6 +43,8 @@ Manually dispatching `ci.yml` with `run_benchmarks` enabled times the BenchmarkD
 ### Language runtime benchmarks
 
 Run `ci.yml` with `run_portable_benchmarks` enabled. The workflow exports `SimpleClass` and `CharacterSaveData` once and supplies the same .NET documents to every language. Compare libraries within a language, model, format, and operation. The chart bars are medians, the thin lines show the sample range, and the multiplier divides LuminPack's time by the peer's time. The raw artifacts record the runner, runtime, timing, encoded bytes, and allocation figures where the runner can collect them.
+
+Rust decodes into typed business models and CPython into dicts and lists. Encoders return owned bytes. JSON decoders within a language share the same UTF-8 input. Both runners check round trips, warm up and collect nine samples per operation. Their allocation columns are empty. Download `portable-benchmark-charts` from the run for per-language light and dark SVGs and the summary CSV.
 
 The Java runner uses JMH with fresh JVM forks. Go runs rotated time windows with allocation sampling. TypeScript measures Node APIs over byte buffers and does not collect allocated bytes. These runners time complete encode and decode APIs with pre-built input values and preloaded documents. Reference adapters use their natural typed or tree/object representations and verify that they recover the same logical fields. Construction of those inputs stays outside the timed operation. The C++ runner compares generated typed DTOs, reuses supported output buffers, and reports medians across independent process runs. Its simdjson entry measures decode only.
 

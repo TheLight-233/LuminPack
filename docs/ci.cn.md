@@ -12,7 +12,7 @@
 | `unity.yml`、`unity-extensions.yml` | Unity Editor 测试、IL2CPP 与 WebGL Player、Unity 对象与 Burst 契约。 |
 | `benchmark-matrix.yml` | 序列化矩阵的往返校验；手动运行时计时。 |
 | `benchmark-matrix-paired.yml` | 手动在同一 runner 上以 FullOpts 和 TieredPGO 对照两个或三个版本的指定 Matrix 用例。 |
-| `portable-benchmarks.yml` | 手动运行 C++、Java、Go、TypeScript 各自生态的 Binary 与 UTF-8 JSON 对照。 |
+| `portable-benchmarks.yml` | 手动运行 C++、Java、Go、TypeScript、Rust、Python 各自生态的 Binary 与 UTF-8 JSON 对照。 |
 | `fuzz.yml` | 有预算上限的 SharpFuzz/libFuzzer 测试，见 [Fuzz 测试](fuzzing.cn.md)。 |
 | `release.yml` | 构建候选包、比较 API，并通过配置的版本标签发布到 NuGet。见[发布](releasing.cn.md)。 |
 
@@ -41,6 +41,8 @@ Unity 2022.3.51f1 和 6000.0.43f1 依次运行 Editor 测试、IL2CPP smoke Play
 ### 各语言 Runtime 基准
 
 手动运行 `ci.yml` 时勾选 `run_portable_benchmarks`。工作流一次导出 `SimpleClass` 和 `CharacterSaveData`，为每种语言提供同样的 .NET 文档。对比限定在同一语言、模型、格式和读写操作内。图表条形为耗时中位数，细线为样本范围，倍率用 LuminPack 耗时除以对照库耗时。原始产物记录运行主机、运行时版本、耗时、编码大小和各测试可采集的分配数据。
+
+Rust 和 CPython 分别解码到强类型业务模型及 dict/list。编码时间包含独立输出字节的分配，每种语言的 JSON 解码器读取相同的 UTF-8 输入。两套读写器均在验证往返后预热，随后为每项操作采集九个样本。这两种语言的 CSV 将分配列留空。下载本次运行的 `portable-benchmark-charts` 产物可查看每种语言的明暗主题 SVG 和汇总 CSV。
 
 Java 通过 JMH 启动独立 JVM。Go 轮换运行各计时窗口并采集分配量。TypeScript 通过 Node 对字节输入与输出进行计时，分配列留空。三者都在计时前准备模型与输入字节，计时覆盖完整编码或解码调用。对照库使用其常用的类型化结构、树或对象，并验证还原到相同的逻辑字段。C++ 使用生成的类型化 DTO，按库支持的方式复用写缓冲，汇总独立进程的中位数。simdjson 只测读取。
 

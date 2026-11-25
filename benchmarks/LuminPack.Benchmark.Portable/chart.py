@@ -15,7 +15,7 @@ from xml.etree import ElementTree as xml
 
 
 README_CHARTS = runpy.run_path(str(Path(__file__).resolve().parents[1] / "make-charts.py"))
-LANGUAGES = {"cpp": "C++", "java": "Java", "go": "Go", "typescript": "TypeScript"}
+LANGUAGES = {"cpp": "C++", "java": "Java", "go": "Go", "typescript": "TypeScript", "rust": "Rust", "python": "Python"}
 MODELS = {"simple": "SimpleClass", "serialize": "CharacterSaveData"}
 FORMATS = {"binary": "Binary", "json": "UTF-8 JSON"}
 OPERATIONS = {"encode": "Serialize", "decode": "Deserialize"}
