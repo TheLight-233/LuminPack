@@ -13,6 +13,30 @@ namespace LuminPackUnitTest;
 /// <summary>Checks occupied reference slots and malformed string records.</summary>
 public class AuditSafetyRegressionTest
 {
+#if LUMINPACK_NEXT_GENERATOR
+    /// <summary>Only an actual wide tag zero may dispatch the registered reader for zero.</summary>
+    [Fact]
+    public void RegisteredWideUnionHeadersPreserveTagZero()
+    {
+        int calls = 0;
+        LuminPackSerializer.Register<AuditWideRoot, AuditWideCase>(0,
+            static (ref LuminPackWriter writer, ref AuditWideRoot value) => { },
+            (ref LuminPackReader reader, ref AuditWideRoot value) => { calls++; value = new AuditWideCase(); },
+            static (ref LuminPackJsonWriter writer, ref AuditWideRoot value) => { },
+            static (ref LuminPackJsonReader reader, ref AuditWideRoot value) => { });
+        byte[] record = [255, 255, 255, 255, 0];
+        AuditWideRoot? target = null;
+        Assert.Equal(record.Length, LuminPackSerializer.Deserialize(record, ref target));
+        Assert.IsType<AuditWideCase>(target);
+        for (int marker = 251; marker <= byte.MaxValue; marker++)
+        {
+            record[4] = (byte)marker;
+            Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize(record, ref target));
+        }
+        Assert.Equal(1, calls);
+    }
+#endif
+
     /// <summary>Retains the aligned span through collection and preserves data when moving to larger pooled storage.</summary>
     [Fact]
     public void BufferWriterKeepsEachRentalAlignedAcrossCompaction()
@@ -300,6 +324,16 @@ public class AuditSafetyRegressionTest
         Assert.Equal("second", value);
     }
 }
+
+#if LUMINPACK_NEXT_GENERATOR
+/// <summary>A wide Union with one statically reserved case.</summary>
+[LuminPackable, LuminPackWideTag, LuminPackUnion(17, typeof(AuditWideCase))]
+public abstract partial class AuditWideRoot { }
+
+/// <summary>A concrete case for the registered reader to return.</summary>
+[LuminPackable]
+public sealed partial class AuditWideCase : AuditWideRoot { }
+#endif
 
 /// <summary>A packed record containing opaque framework storage.</summary>
 [LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]
