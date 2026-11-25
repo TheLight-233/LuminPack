@@ -1335,9 +1335,14 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                     const properties: Record<string, string> = {};
                     for (const [key, item] of value) {
                         if (typeof key !== "string") throw new WireError("Invalid LuminPack JSON dictionary key.");
-                        const member = [JSON.stringify(key) + ":"];
-                        this.writeJsonWire(wire.value, item, encoding, state, member);
-                        put(properties, key, member.join(""));
+                        const head = JSON.stringify(key) + ":";
+                        if (wire.value.kind === "scalar") {
+                            put(properties, key, head + writeJsonScalar(wire.value.type, item, this.nativeBytes));
+                        } else {
+                            const member = [head];
+                            this.writeJsonWire(wire.value, item, encoding, state, member);
+                            put(properties, key, member.join(""));
+                        }
                     }
                     parts.push("{", Object.values(properties).join(","), "}");
                 } else {
