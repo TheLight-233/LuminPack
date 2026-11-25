@@ -1,4 +1,5 @@
 //! Checked whole-document bindings to a generated LuminPack model library.
+pub mod direct;
 pub mod primitive;
 use libloading::Library;
 use std::{

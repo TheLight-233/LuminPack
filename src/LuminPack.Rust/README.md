@@ -23,3 +23,27 @@ fn copy_binary(path: &std::path::Path, input: &[u8], output: &mut [u8]) -> Resul
 Reuse the codec and output buffer. A document owns its decoded native model and borrows the codec for its lifetime. Enable the Cargo feature `values` to convert a Serde business type through the UTF-8 JSON representation with `from_value` and `to_value`. Match the wire field names, Union envelope and dictionary shapes. For ordinary binary Array/List roots of i32 or f32, `primitive::encode_list` and `decode_list` run directly in Rust. `None` represents a null collection.
 
 Binary, UTF-8 JSON and UTF-16LE JSON use the generated C++ contract, including its limits, Version state, Union cases and tracked graph ownership. Configure `LUMINPACK_BINDINGS` with an application C++ header for Custom specializations, or supply an existing generated root through `LUMINPACK_HEADER`. For registered Union cases, set `LUMINPACK_RTTI=ON` and point `LUMINPACK_REGISTRATION` to a C++ header defining `void luminpack_register_model()`. This function runs once per model library before its first operation. Choose output capacity for your data. A failed encode may partially overwrite the destination. [Model and recursion rules](../LuminPack.Cpp/README.md)
+
+## Generate a binary codec for a business model
+
+Run these commands from the repository root. Project the exported manifest to the root type first.
+
+```sh
+dotnet run --project tools/LuminPack.Codegen -c Release -- project contracts.json Example.Message message.contract.json
+python tools/portable-direct/generate.py rust message.contract.json message.rs
+```
+
+Add `luminpack` as a path dependency on `src/LuminPack.Rust` and place the generated file at `src/message.rs` in the consuming crate.
+
+```rust
+mod message;
+
+fn round_trip(input: &[u8], output: &mut Vec<u8>) -> luminpack::direct::Result<()> {
+    let value = message::decode_binary(input)?;
+    message::encode_binary_into(&value, output)
+}
+```
+
+`Root` uses concrete structs and enums. `encode_binary` returns an owned `Vec<u8>`. `encode_binary_into` appends to a reusable buffer and restores its original length on error. Use Document for isolated UTF-16 surrogates, which Rust `String` cannot represent.
+
+Binary operations use the UTF-16 Length wire profile directly without loading the model library. Eligible projections include acyclic positional records, statically known Union cases, int32, int64, float32, byte, bool, strings and nested collections. The generator checks eligibility. Use the Document API above for version tolerance, reference tracking, Custom, runtime-registered Union cases and other unsupported profiles. The generated JSON helpers require the matching model library and convert through its binary and JSON codecs.

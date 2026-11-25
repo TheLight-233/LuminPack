@@ -11,8 +11,8 @@ LuminPack uses one contract for Binary and JSON across its runtimes. Define the 
 | Java | [Compile the runtime and bind a contract](../src/LuminPack.Java/README.md) |
 | Go | [Use the source module and generated schema](../src/LuminPack.Go/README.md) |
 | TypeScript | [Use the ESM package and generated types](../src/LuminPack.TypeScript/README.md) |
-| Rust | [Rust crate and shared model library](../src/LuminPack.Rust/README.md) |
-| Python | [Python bindings and native documents](../src/LuminPack.Python/README.md) |
+| Rust | [Generate a typed binary codec or load a native model library](../src/LuminPack.Rust/README.md) |
+| Python | [Compile a binary codec for dicts and lists or use native documents](../src/LuminPack.Python/README.md) |
 
 ## Define and export a model
 

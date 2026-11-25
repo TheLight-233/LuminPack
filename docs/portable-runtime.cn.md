@@ -11,8 +11,8 @@ LuminPack 的各个运行时共用一份二进制和 JSON 契约。在 C# 中定
 | Java | [编译运行时并绑定契约](modules/luminpack.java.cn.md) |
 | Go | [使用源码模块和生成的 schema](modules/luminpack.go.cn.md) |
 | TypeScript | [使用 ESM 包和生成的类型](modules/luminpack.typescript.cn.md) |
-| Rust | [Rust crate 和共享模型库](modules/luminpack.rust.cn.md) |
-| Python | [Python 绑定与原生文档](modules/luminpack.python.cn.md) |
+| Rust | [生成强类型二进制读写器或加载原生模型库](modules/luminpack.rust.cn.md) |
+| Python | [为 dict 和 list 编译二进制读写器或使用原生文档](modules/luminpack.python.cn.md) |
 
 ## 定义并导出模型
 
