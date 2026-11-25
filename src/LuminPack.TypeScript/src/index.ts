@@ -153,6 +153,7 @@ interface Plan {
 interface Reference { type: string; value: Target; }
 
 class ReadState {
+    keyOrder?: WeakMap<object, string[]>;
     readonly references = new Map<number, Reference>();
     readonly version = new VersionState();
     depth = 0;
@@ -258,6 +259,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
     private readonly jsonDepth: number;
     private readonly jsonEncoding: JsonEncoding;
     private readonly orderedJson: boolean;
+    private readonly trackedJson: boolean;
 
     constructor(manifest: unknown, options: CodecOptions) {
         this.manifest = manifest as Manifest;
@@ -311,6 +313,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             this.plans.set(identity((contract as Contract & { type?: string }).type ?? type), plan);
         }
         this.orderedJson = orderedJson;
+        this.trackedJson = this.manifest.contracts.some(contract => contract.profile.trackReferences);
         this.rootWire = this.manifest.rootWire;
         this.root = this.rootWire ? undefined : this.plan(this.manifest.root);
         const profile = this.root?.contract.profile ?? this.manifest.rootProfile ??
@@ -373,8 +376,9 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 if (error !== orderedJsonMiss && !(error instanceof WireError)) throw error;
             }
         }
-        const value = parseJson(text, this.jsonDepth, this.limits.maxCollection);
         const state = new ReadState();
+        if (this.trackedJson) state.keyOrder = new WeakMap();
+        const value = parseJson(text, this.jsonDepth, this.limits.maxCollection, state.keyOrder);
         return (this.rootWire ? this.readJsonWire(this.rootWire, value, encoding, state) :
             this.readJsonContract(this.root!, value, encoding, state)) as T;
     }
@@ -1251,10 +1255,11 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 if (value === null) return null;
                 const dictionary = new Map<unknown, unknown>();
                 if (wire.key.kind === "string" && !Array.isArray(value)) {
-                    const items = Object.entries(jsonObject(value));
-                    if (items.length > this.limits.maxCollection) throw new WireError("LuminPack JSON dictionary exceeds its limit.");
-                    for (const [key, item] of items) dictionary.set(this.readJsonWire(wire.key, key, encoding, state),
-                        this.readJsonWire(wire.value, item, encoding, state));
+                    const object = jsonObject(value);
+                    const keys = state.keyOrder?.get(object) ?? Object.keys(object);
+                    if (keys.length > this.limits.maxCollection) throw new WireError("LuminPack JSON dictionary exceeds its limit.");
+                    for (const key of keys) dictionary.set(this.readJsonWire(wire.key, key, encoding, state),
+                        this.readJsonWire(wire.value, object[key], encoding, state));
                 } else {
                     for (const item of jsonArray(value, this.limits.maxCollection)) {
                         const pair = jsonArray(item, 2);
@@ -1332,6 +1337,19 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 if (!(value instanceof Map) || value.size > this.limits.maxCollection)
                     throw new WireError("Expected a LuminPack JSON dictionary Map.");
                 if (wire.key.kind === "string") {
+                    if (this.trackedJson && wire.value.kind !== "scalar") {
+                        parts.push("{");
+                        let first = true;
+                        for (const [key, item] of value) {
+                            if (typeof key !== "string") throw new WireError("Invalid LuminPack JSON dictionary key.");
+                            if (!first) parts.push(",");
+                            first = false;
+                            parts.push(JSON.stringify(key), ":");
+                            this.writeJsonWire(wire.value, item, encoding, state, parts);
+                        }
+                        parts.push("}");
+                        return;
+                    }
                     const properties: Record<string, string> = {};
                     for (const [key, item] of value) {
                         if (typeof key !== "string") throw new WireError("Invalid LuminPack JSON dictionary key.");
@@ -1415,7 +1433,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         }
         const result: Target = {};
         const tracked = contract.profile.trackReferences === true;
-        for (const key of Object.keys(encoded)) {
+        for (const key of state.keyOrder?.get(encoded) ?? Object.keys(encoded)) {
             if (tracked && key === "$ref") return this.lookupReference(state, jsonUint(encoded[key]), contract.id);
             if (tracked && key === "$id") {
                 const id = jsonUint(encoded[key]);

@@ -97,3 +97,20 @@ test("uses Custom JSON callbacks once when the contract has no reflected members
     assert.equal(reads, 1);
     assert.equal(Buffer.from(model.writeJson("文", "utf16")).toString("utf16le"), '"文"');
 });
+
+test("preserves shared references across numeric-looking object keys in wire order", () => {
+    const model = createCodec({ version: 1, root: "Map", contracts: [
+        { id: "Node", kind: "Record", profile: { ...profile, trackReferences: true }, members: [] },
+    ], rootWire: { kind: "dictionary", key: string, value: { kind: "contract", type: "Node" } } });
+    const node = {};
+    const value = new Map([["10", node], ["2", node], ["__proto__", node]]);
+    for (const encoding of ["utf8", "utf16"]) {
+        const bytes = model.writeJson(value, encoding);
+        assert.equal(Buffer.from(bytes).toString(encoding === "utf8" ? "utf8" : "utf16le"),
+            '{"10":{"$id":0},"2":{"$ref":0},"__proto__":{"$ref":0}}');
+        const decoded = model.readJson(bytes, encoding);
+        assert.deepEqual([...decoded.keys()], [...value.keys()]);
+        assert.equal(decoded.get("10"), decoded.get("2"));
+        assert.equal(decoded.get("10"), decoded.get("__proto__"));
+    }
+});

@@ -97,7 +97,7 @@ export class OrderedJsonCursor {
 }
 
 /** Retains number lexemes until the member codec knows their CLR width. */
-export function parseJson(text: string, maxDepth: number, maxCollection: number): JsonValue {
+export function parseJson(text: string, maxDepth: number, maxCollection: number, keyOrder?: WeakMap<object, string[]>): JsonValue {
     let index = 0;
     const number = /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/y;
     const bad = () => { throw new WireError("Invalid LuminPack JSON document."); };
@@ -146,6 +146,7 @@ export function parseJson(text: string, maxDepth: number, maxCollection: number)
                 return bad();
             }
             const object: JsonObject = {};
+            let keys: string[] | undefined;
             if (text[index] === "}") { index++; return object; }
             do {
                 space();
@@ -153,6 +154,16 @@ export function parseJson(text: string, maxDepth: number, maxCollection: number)
                 const key = string();
                 space();
                 if (text[index++] !== ":") return bad();
+                // JavaScript moves index properties ahead of earlier keys. Retain source order only
+                // when that can change the order in which a reference definition is visited.
+                if (keyOrder && !keys && key.charCodeAt(0) >= 48 && key.charCodeAt(0) <= 57) {
+                    const index = Number(key) >>> 0;
+                    if (index !== 0xffff_ffff && String(index) === key) {
+                        keys = Object.keys(object);
+                        keyOrder.set(object, keys);
+                    }
+                }
+                if (keys && !Object.prototype.hasOwnProperty.call(object, key)) keys.push(key);
                 put(object, key, value(depth + 1));
                 space();
                 if (text[index] === "}") { index++; return object; }
