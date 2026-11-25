@@ -28,6 +28,26 @@ inline bool write_short_latin1_wide(std::byte* destination, std::u16string_view 
     return true;
 }
 
+/// For 17 to 32 units, snapshot the complete source before narrowing into a possibly overlapping record.
+inline bool write_medium_latin1(std::byte* destination, std::u16string_view value) noexcept
+{
+    const auto tail = value.size() - 16;
+    __m128i a, b, c, d;
+    std::memcpy(&a, value.data(), sizeof(a));
+    std::memcpy(&b, value.data() + 8, sizeof(b));
+    std::memcpy(&c, value.data() + tail, sizeof(c));
+    std::memcpy(&d, value.data() + tail + 8, sizeof(d));
+    const auto lanes = _mm_or_si128(_mm_or_si128(a, b), _mm_or_si128(c, d));
+    const auto high = _mm_and_si128(lanes, _mm_set1_epi16(-256));
+    if (_mm_movemask_epi8(_mm_cmpeq_epi16(high, _mm_setzero_si128())) != 0xffff)
+        return false;
+    const auto first = _mm_packus_epi16(a, b);
+    const auto last = _mm_packus_epi16(c, d);
+    std::memcpy(destination, &first, sizeof(first));
+    std::memcpy(destination + tail, &last, sizeof(last));
+    return true;
+}
+
 /// Narrows 1 to 16 UTF-16 code units after the caller proves the raw output bound.
 /// Every source lane is loaded and validated before either overlapping store.
 inline bool write_short_latin1(std::span<std::byte> destination, std::u16string_view value) noexcept
@@ -71,12 +91,13 @@ inline bool try_write_short_utf16(writer& output, std::u16string_view value)
 {
     constexpr auto header_size = sizeof(std::int32_t);
     const auto length = value.size();
-    if (length == 0 || length > 16 || output.remaining() < header_size + length * sizeof(char16_t))
+    if (length == 0 || length > 32 || output.remaining() < header_size + length)
         return false;
 
     writer next = output;
     const auto record = next.reserve(header_size + length);
-    if (!write_short_latin1(record.subspan(header_size), value))
+    const auto payload = record.subspan(header_size);
+    if (!(length <= 16 ? write_short_latin1(payload, value) : write_medium_latin1(payload.data(), value)))
         return false;
 
     store_count(record, static_cast<std::int32_t>(length * 2 + 1));
@@ -97,11 +118,11 @@ public:
         constexpr auto header_size = sizeof(std::int32_t);
         constexpr auto fixed_width = header_size + Suffix;
         const auto length = value.size();
-        if (length < 8 || length > 16 || available_.size() < fixed_width + length * sizeof(char16_t))
+        if (length < 8 || length > 32 || available_.size() < fixed_width + length)
             return false;
 
         auto* payload = available_.data() + header_size;
-        if (!write_short_latin1_wide(payload, value))
+        if (!(length <= 16 ? write_short_latin1_wide(payload, value) : write_medium_latin1(payload, value)))
             return false;
         store_count(available_, static_cast<std::int32_t>(length * 2 + 1));
         if constexpr (Suffix != 0)

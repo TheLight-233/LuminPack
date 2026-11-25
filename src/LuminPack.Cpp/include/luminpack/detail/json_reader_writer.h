@@ -316,6 +316,49 @@ public:
     requires scalar<T> && (!std::same_as<T, char16_t>)
     [[nodiscard]] T read_number()
     {
+        if constexpr (Encoding == json_encoding::utf8)
+        {
+            // from_chars can find the end and convert in one pass. Restrict its
+            // wider grammar to JSON before publishing the cursor.
+            const auto bytes = input_.subspan(position_);
+            if (!bytes.empty())
+            {
+                const auto* first = reinterpret_cast<const char*>(bytes.data());
+                const auto* end = first + bytes.size();
+                const auto* digits = first + (*first == '-');
+                if (digits != end && *digits >= '0' && *digits <= '9' &&
+                    (*digits != '0' || digits + 1 == end || digits[1] < '0' || digits[1] > '9'))
+                {
+                    T value;
+                    const auto result = [&] {
+                        if constexpr (std::floating_point<T>)
+                            return std::from_chars(first, end, value, std::chars_format::fixed);
+                        else
+                            return std::from_chars(first, end, value);
+                    }();
+                    const auto* stop = result.ptr;
+                    if (result.ec == std::errc{} && (stop == end || *stop == ',' || *stop == '}' ||
+                        *stop == ']' || *stop == ' ' || *stop == '\t' || *stop == '\r' || *stop == '\n'))
+                    {
+                        if constexpr (std::floating_point<T>)
+                        {
+                            // Fixed format excludes exponents; from_chars also accepts "1.".
+                            if (stop[-1] == '.')
+                                return parse_checked_number<T>();
+                        }
+                        position_ += static_cast<std::size_t>(stop - first);
+                        return value;
+                    }
+                }
+            }
+        }
+        return parse_checked_number<T>();
+    }
+
+private:
+    template<class T>
+    [[nodiscard]] T parse_checked_number()
+    {
         const auto token = number_token();
         if constexpr (Encoding == json_encoding::utf8)
             return parse_number<T>(std::string_view(reinterpret_cast<const char*>(token.data()), token.size()));
@@ -332,7 +375,6 @@ public:
         }
     }
 
-private:
     template<class T>
     static T parse_number(std::string_view token)
     {

@@ -590,7 +590,7 @@ void validation()
 {
     constexpr auto utf8 = json_encoding::utf8;
     using floating = json_codec<luminpack::scalar_codec<double>>;
-    for (const auto bad : {"01", "1.", "1e+", "1e999", "NaN", "true", "2 false", "-"})
+    for (const auto bad : {"01", "1.", "1e+", "1e999", "NaN", "true", "2 false", "-", "1.e2", "-.5", "+1", "1.0e+", "-nan"})
     {
         malformed([&] { (void)read_json_document<floating, utf8>(bytes(std::string_view(bad))); },
             "Reject an invalid or overflowing JSON number.");
