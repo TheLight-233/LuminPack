@@ -111,7 +111,7 @@ internal static partial class PortableGenerateCommand
                     Line("    return numeric ? new Map(Object.entries(Object.fromEntries(fields))) : fields; }");
                 }
                 Line("  const entries=new Map(); let count=0; r.expect('['); if(r.consume(']')) return entries;");
-                Line($"  do {{ r.count(count++); r.count(1); r.depth(d+1); r.expect('['); const key=gr{k}(r,d+2); if(key===null) r.miss(); r.expect(','); entries.set(key,gr{v}(r,d+2)); r.expect(']'); }} while(r.consume(',')); r.expect(']'); return entries;");
+                Line($"  do {{ r.count(count++); r.depth(d+1); r.expect('['); const key=gr{k}(r,d+2); if(key===null) r.miss(); r.expect(','); entries.set(key,gr{v}(r,d+2)); r.expect(']'); }} while(r.consume(',')); r.expect(']'); return entries;");
             }
             Line("}");
             Line($"function gw{name}(out: DocumentOutput,x: unknown,d: number): void {{");

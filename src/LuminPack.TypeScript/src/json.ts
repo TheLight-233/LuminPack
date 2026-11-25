@@ -199,7 +199,7 @@ export class OrderedJsonCursor {
 }
 
 /** Retains number lexemes until the member codec knows their CLR width. */
-export function parseJson(text: string, maxDepth: number, maxCollection: number, keyOrder?: WeakMap<object, string[]>): JsonValue {
+export function parseJson(text: string, maxDepth: number, maxCollection: number, keyOrder?: WeakMap<object, string[]>, possiblePairs?: Set<JsonValue[]>): JsonValue {
     let index = 0;
     const number = /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/y;
     const bad = () => { throw new WireError("Invalid LuminPack JSON document."); };
@@ -228,7 +228,7 @@ export function parseJson(text: string, maxDepth: number, maxCollection: number,
         return bad();
     }
 
-    function value(depth: number): JsonValue {
+    function value(depth: number, arrayElement = false): JsonValue {
         space();
         const c = text[index];
         if (c === '"') return string();
@@ -240,8 +240,12 @@ export function parseJson(text: string, maxDepth: number, maxCollection: number,
                 const items: JsonValue[] = [];
                 if (text[index] === "]") { index++; return items; }
                 do {
-                    if (items.length === maxCollection) throw new WireError("LuminPack JSON array exceeds its limit.");
-                    items.push(value(depth + 1));
+                    if (items.length >= maxCollection) {
+                        if (!possiblePairs || !arrayElement || items.length !== 1)
+                            throw new WireError("LuminPack JSON array exceeds its limit.");
+                        possiblePairs.add(items);
+                    }
+                    items.push(value(depth + 1, true));
                     space();
                     if (text[index] === "]") { index++; return items; }
                 } while (text[index++] === ",");

@@ -503,7 +503,13 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         }
         const state = new ReadState();
         if (this.trackedJson) state.keyOrder = new WeakMap();
-        const value = parseJson(text, this.jsonDepth, this.limits.maxCollection, state.keyOrder);
+        // With a one-entry quota the parser needs the wire shape to distinguish [key,value] from a collection.
+        const pairs = this.limits.maxCollection === 1 ? new Set<JsonValue[]>() : undefined;
+        const value = parseJson(text, this.jsonDepth, this.limits.maxCollection, state.keyOrder, pairs);
+        if (pairs?.size) {
+            this.checkDictionaryPairs(this.rootWire ?? this.root!, value, pairs);
+            if (pairs.size) throw new WireError("LuminPack JSON array exceeds its limit.");
+        }
         return (this.rootWire ? this.readJsonWire(this.rootWire, value, encoding, state) :
             this.readJsonContract(this.root!, value, encoding, state)) as T;
     }
@@ -1429,7 +1435,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 if (input.consume("]")) return values;
                 let count = 0;
                 do {
-                    if (++count > maximum || maximum < 2) throw orderedJsonMiss;
+                    if (++count > maximum) throw orderedJsonMiss;
                     input.depth(depth + 1);
                     input.expect("[");
                     const key = this.readOrderedJsonWire(wire.key, input, utf8, depth + 2);
@@ -1442,6 +1448,47 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 return values;
             }
             default: throw orderedJsonMiss;
+        }
+    }
+
+    private checkDictionaryPairs(shape: Wire | Plan, value: JsonValue, pairs: Set<JsonValue[]>): void {
+        if (!pairs.size || value === null || typeof value !== "object" || value instanceof JsonNumber) return;
+        if ("contract" in shape) {
+            if (shape.contract.sequenceWire) return this.checkDictionaryPairs(shape.contract.sequenceWire, value, pairs);
+            if (Array.isArray(value) || shape.contract.kind === "Custom") return;
+            if (shape.contract.kind === "Union") {
+                const type = shape.byHash.get(jsonUint(value.$type));
+                if (type) this.checkDictionaryPairs(this.plan(type), value.$value, pairs);
+                return;
+            }
+            for (const name of Object.keys(value)) {
+                const member = shape.jsonByName.get(name);
+                if (member) this.checkDictionaryPairs(member.wire, value[name], pairs);
+            }
+            return;
+        }
+        switch (shape.kind) {
+            case "contract": return this.checkDictionaryPairs(this.plan(shape.type), value, pairs);
+            case "nullable": return this.checkDictionaryPairs(shape.element, value, pairs);
+            case "sequence": case "rectangular": {
+                const items = shape.kind === "sequence" ? value : !Array.isArray(value) && value.Values;
+                if (Array.isArray(items)) for (const item of items) this.checkDictionaryPairs(shape.element, item, pairs);
+                return;
+            }
+            case "pair": case "tuple":
+                if (Array.isArray(value)) shape.elements.forEach((wire, i) => this.checkDictionaryPairs(wire, value[i], pairs));
+                return;
+            case "dictionary":
+                if (Array.isArray(value)) {
+                    for (const pair of value) {
+                        if (!Array.isArray(pair) || pair.length !== 2) continue;
+                        pairs.delete(pair);
+                        this.checkDictionaryPairs(shape.key, pair[0], pairs);
+                        this.checkDictionaryPairs(shape.value, pair[1], pairs);
+                    }
+                } else if (shape.key.kind === "string") {
+                    for (const item of Object.values(value)) this.checkDictionaryPairs(shape.value, item, pairs);
+                }
         }
     }
 

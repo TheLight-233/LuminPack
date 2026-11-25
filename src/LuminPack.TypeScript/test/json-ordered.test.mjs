@@ -14,6 +14,19 @@ function codec(members, options) {
     }, options);
 }
 
+test("counts dictionary entries independently of their fixed pair width", () => {
+    const dictionary = { kind: "dictionary", key: int, value: int };
+    const model = codec([{ name: "Map", wire: dictionary }], { limits: { maxCollection: 1 } });
+    const value = { Map: new Map([[7, 9]]) };
+    assert.deepEqual(model.readJson(model.writeJson(value, "utf8"), "utf8"), value);
+    assert.deepEqual(model.readJson(utf8(' { "Map": [ [7, 9] ] }'), "utf8"), value);
+    for (const input of ['{"Map":[[7,9],[8,9]]}', '{"Map":[[7,9,8]]}', '{"Map":[[7,9]],"Unknown":[[1,2]]}'])
+        assert.throws(() => model.readJson(utf8(input), "utf8"), WireError);
+    const nested = codec([{ name: "Map", wire: { ...dictionary, value: { kind: "sequence", element: int } } }],
+        { limits: { maxCollection: 1 } });
+    assert.throws(() => nested.readJson(utf8(' { "Map": [[7,[1,2]]] }'), "utf8"), WireError);
+});
+
 test("uses the same complete heads for ordered UTF-8 and UTF-16 records", () => {
     const model = codec([
         { name: "First", wire: int },
