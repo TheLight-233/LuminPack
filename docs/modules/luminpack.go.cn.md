@@ -4,6 +4,14 @@
 
 Go 模块读写 LuminPack 二进制，以及 UTF-8 或 UTF-16LE JSON。生成的 Go 文件嵌入共享契约的根 schema。[跨语言契约](../portable-runtime.cn.md)
 
+## 支持范围
+
+四端共同支持的集合范围包括数组、`List<T>` 和 `Dictionary<TKey,TValue>`。根或字段可以是 `int`、`float`，也可以是 `Dictionary<int,List<float>>` 这样的闭合类型。对元素或值可空的集合，请在导出端 C# 项目中调用该闭合类型的序列化方法，以便清单记录二进制布局。
+
+跨语言契约覆盖按位置编码的记录、声明式 Union 多态、Version 版本描述、记录引用追踪，以及应用提供的 Custom 编解码器。Custom 负载和外部注册的 Union 分支需要在接收端绑定对应回调。自动注册的 Custom JSON 使用 UTF-16。普通记录按值处理，需要保留对象身份或循环引用时，在 C# 契约上启用追踪。
+
+对可生成强类型代码的闭合按位置编码的根，可直接使用生成函数。下文的 Message 可通过 `message, err := generated.DecodeMessageBinary(data)` 读取二进制；检查错误后调用 `generated.EncodeMessageJSON(message)` 写出 UTF-8 JSON。生成模型使用强类型切片和有序字典条目。Version、引用追踪、注册分支、Custom 或 UTF-16 JSON 使用下文的 schema API。
+
 ## 从源码安装并生成绑定
 
 使用 Go 1.23 或更高版本。在应用的 `go.mod` 中添加运行时模块依赖，并通过 `replace` 指向本地仓库。

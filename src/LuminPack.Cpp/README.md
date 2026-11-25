@@ -4,6 +4,14 @@
 
 The C++20 runtime reads and writes LuminPack Binary and UTF-8 or UTF-16LE JSON over caller-owned contiguous buffers. Generated codecs include the public header `<luminpack/luminpack.h>` and link the `LuminPack::Cpp` static library. The runtime selects supported SIMD kernels at run time. [Cross-language contracts](../../docs/portable-runtime.md)
 
+## Supported contracts
+
+The shared collection scope covers arrays, `List<T>` and `Dictionary<TKey,TValue>`. A root or field can be an `int`, a `float`, or a closed collection such as `Dictionary<int,List<float>>`. Include a closed serializer call in the exporting C# project for collections of nullable values so the manifest records their Binary layout.
+
+The portable contract covers positional records, declared Union cases, Version descriptors, tracked record identity and application-supplied Custom codecs. Register callbacks on the receiving runtime for Custom payloads and externally registered Union cases. Automatic Custom JSON uses UTF-16. Ordinary records use value semantics. Enable tracking on the C# contract when identity or cycles matter.
+
+Ordinary recursive nodes use owning pointers. A Union case can own a recursive subtree. The generator rejects a path from an owning recursive node through a Union back to owning recursion, and a tracked descendant that closes such a cycle. See the recursion rules below before choosing the DTO ownership model.
+
 ## Build
 
 Run from the repository root. For CMake versions before 3.30, use a build path without a `#` character.

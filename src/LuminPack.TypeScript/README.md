@@ -4,6 +4,14 @@
 
 The TypeScript ESM runtime reads and writes LuminPack Binary and UTF-8 or UTF-16LE JSON. The generator emits model types, a root codec, and a function for applying application bindings. [Cross-language contracts](../../docs/portable-runtime.md)
 
+## Supported contracts
+
+The shared collection scope covers arrays, `List<T>` and `Dictionary<TKey,TValue>`. A root or field can be an `int`, a `float`, or a closed collection such as `Dictionary<int,List<float>>`. Include a closed serializer call in the exporting C# project for collections of nullable values so the manifest records their Binary layout.
+
+The portable contract covers positional records, declared Union cases, Version descriptors, tracked record identity and application-supplied Custom codecs. Register callbacks on the receiving runtime for Custom payloads and externally registered Union cases. Automatic Custom JSON uses UTF-16. Ordinary records use value semantics. Enable tracking on the C# contract when identity or cycles matter.
+
+Import the generated `codec` for the root, or call `bindCodec(options)` to supply registrations. Use arrays for lists and a Map for each dictionary. Generated Binary record bodies and eligible UTF-8 JSON writers run behind the same API. The returned model retains bigint fields and typed Union payloads.
+
 ## Build and generate
 
 Build `@luminpack/typescript` from source with Node.js and npm.

@@ -4,6 +4,14 @@
 
 C++20 运行时使用调用方提供的连续缓冲区读写 LuminPack 二进制，以及 UTF-8 或 UTF-16LE JSON。生成的 codec 包含公开头文件 `<luminpack/luminpack.h>`，链接 `LuminPack::Cpp` 静态库。运行时按硬件能力选择 SIMD 内核。[跨语言契约](../portable-runtime.cn.md)
 
+## 支持范围
+
+四端共同支持的集合范围包括数组、`List<T>` 和 `Dictionary<TKey,TValue>`。根或字段可以是 `int`、`float`，也可以是 `Dictionary<int,List<float>>` 这样的闭合类型。对元素或值可空的集合，请在导出端 C# 项目中调用该闭合类型的序列化方法，以便清单记录二进制布局。
+
+跨语言契约覆盖按位置编码的记录、声明式 Union 多态、Version 版本描述、记录引用追踪，以及应用提供的 Custom 编解码器。Custom 负载和外部注册的 Union 分支需要在接收端绑定对应回调。自动注册的 Custom JSON 使用 UTF-16。普通记录按值处理，需要保留对象身份或循环引用时，在 C# 契约上启用追踪。
+
+普通递归节点由指针独占所有权，Union 分支可以拥有递归子树。若独占递归节点经 Union 回到独占递归，或经追踪后代闭合这种环，生成器会拒绝。选择 DTO 所有权模型时请参阅下文的递归规则。
+
 ## 构建
 
 在仓库根目录运行。CMake 3.30 之前的版本需要使用不含 `#` 的构建输出路径。

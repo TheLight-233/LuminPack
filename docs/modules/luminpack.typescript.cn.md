@@ -4,6 +4,14 @@
 
 TypeScript ESM 运行时读写 LuminPack 二进制，以及 UTF-8 或 UTF-16LE JSON。生成器输出模型类型、根 codec 和用于绑定应用 codec 的入口。[跨语言契约](../portable-runtime.cn.md)
 
+## 支持范围
+
+四端共同支持的集合范围包括数组、`List<T>` 和 `Dictionary<TKey,TValue>`。根或字段可以是 `int`、`float`，也可以是 `Dictionary<int,List<float>>` 这样的闭合类型。对元素或值可空的集合，请在导出端 C# 项目中调用该闭合类型的序列化方法，以便清单记录二进制布局。
+
+跨语言契约覆盖按位置编码的记录、声明式 Union 多态、Version 版本描述、记录引用追踪，以及应用提供的 Custom 编解码器。Custom 负载和外部注册的 Union 分支需要在接收端绑定对应回调。自动注册的 Custom JSON 使用 UTF-16。普通记录按值处理，需要保留对象身份或循环引用时，在 C# 契约上启用追踪。
+
+从生成模块导入根类型的 `codec`，需要注册回调时调用 `bindCodec(options)`。列表使用数组，字典使用 Map。生成的二进制记录代码和符合条件的 UTF-8 JSON 写入代码都由同一入口调用。返回模型保留 bigint 字段和带类型标识的 Union 负载。
+
 ## 构建并生成绑定
 
 使用 Node.js 和 npm 从源码构建 `@luminpack/typescript`。

@@ -4,6 +4,14 @@
 
 The Go module reads and writes LuminPack Binary and UTF-8 or UTF-16LE JSON. A generated Go file embeds the root schema from the shared contract. [Cross-language contracts](../../docs/portable-runtime.md)
 
+## Supported contracts
+
+The shared collection scope covers arrays, `List<T>` and `Dictionary<TKey,TValue>`. A root or field can be an `int`, a `float`, or a closed collection such as `Dictionary<int,List<float>>`. Include a closed serializer call in the exporting C# project for collections of nullable values so the manifest records their Binary layout.
+
+The portable contract covers positional records, declared Union cases, Version descriptors, tracked record identity and application-supplied Custom codecs. Register callbacks on the receiving runtime for Custom payloads and externally registered Union cases. Automatic Custom JSON uses UTF-16. Ordinary records use value semantics. Enable tracking on the C# contract when identity or cycles matter.
+
+For an eligible closed positional root, use the generated typed functions directly. For the Message example, decode Binary with `message, err := generated.DecodeMessageBinary(data)`. After checking the error, call `generated.EncodeMessageJSON(message)` for UTF-8 JSON. The generated model uses typed slices and ordered dictionary entries. For Version, tracking, registered cases, Custom or UTF-16 JSON, use the schema API shown below.
+
 ## Install from source and generate
 
 Use Go 1.23 or later. Add the runtime module requirement and a local replacement to the application's `go.mod`. Set the replacement to the path of your checkout.

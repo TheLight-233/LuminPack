@@ -4,6 +4,14 @@
 
 The Java runtime exchanges LuminPack Binary and UTF-8 or UTF-16LE JSON. A generated Java class holds the root codec and the contract exported from the C# model. [Cross-language contracts](../../docs/portable-runtime.md)
 
+## Supported contracts
+
+The shared collection scope covers arrays, `List<T>` and `Dictionary<TKey,TValue>`. A root or field can be an `int`, a `float`, or a closed collection such as `Dictionary<int,List<float>>`. Include a closed serializer call in the exporting C# project for collections of nullable values so the manifest records their Binary layout.
+
+The portable contract covers positional records, declared Union cases, Version descriptors, tracked record identity and application-supplied Custom codecs. Register callbacks on the receiving runtime for Custom payloads and externally registered Union cases. Automatic Custom JSON uses UTF-16. Ordinary records use value semantics. Enable tracking on the C# contract when identity or cycles matter.
+
+Use the generated root codec with a Map for a record, List for an array or list, and Map for a dictionary. Reuse the codec across documents and reuse the same record Map within a document for repeated tracked references.
+
 ## Build and generate
 
 Use JDK 17 or later. From the repository root, generate a binding for the shared guide's `Example.Message` model and compile it with the runtime sources.
