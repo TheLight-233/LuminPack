@@ -148,7 +148,7 @@ jobs:
             --input "$work/raw/cpp.csv" --input "$work/raw/java.csv" --input "$work/raw/go.csv" \
             --input "$work/raw/typescript.csv" --input "$work/raw/rust.csv" --input "$work/raw/python.csv" --source-url "$source" --host 'GitHub Actions Ubuntu x64'
           printf '{"source_url":"%s","commit":"%s"}\n' "$source" "$GITHUB_SHA" > "$work/charts/provenance.json"
-          echo 'Download `portable-benchmark-charts` for the six light/dark chart pairs and summary.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Download the portable-benchmark-charts artifact for the six light/dark chart pairs and summary.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: portable-benchmark-charts
