@@ -22,7 +22,7 @@ jobs:
         with:
           global-json-file: global.json
           dotnet-version: 10.0.x
-      - run: python3 benchmarks/LuminPack.Benchmark.Portable/prepare.py .tmp/portable-benchmark/models --cpp
+      - run: python3 benchmarks/LuminPack.Benchmark.Portable/prepare.py .tmp/portable-benchmark/models --cpp --generated
       - uses: actions/upload-artifact@v4
         with:
           name: portable-benchmark-fixtures
@@ -78,7 +78,8 @@ jobs:
         working-directory: benchmarks/LuminPack.Benchmark.Go
         run: |
           go version > ../../.tmp/portable-benchmark/results/go-runtime.txt
-          go run . ../../.tmp/portable-benchmark/models ../../.tmp/portable-benchmark/results/go.csv
+          cp -r ../../.tmp/portable-benchmark/models/go generated
+          go run -tags luminpack_generated . ../../.tmp/portable-benchmark/models ../../.tmp/portable-benchmark/results/go.csv
       - name: Benchmark TypeScript
         if: matrix.language == 'typescript'
         run: |
@@ -86,7 +87,9 @@ jobs:
           npm ci --prefix src/LuminPack.TypeScript
           npm run build --prefix src/LuminPack.TypeScript
           npm ci --prefix benchmarks/LuminPack.Benchmark.TypeScript
-          node benchmarks/LuminPack.Benchmark.TypeScript/benchmark.mjs .tmp/portable-benchmark/models .tmp/portable-benchmark/results/typescript.csv
+          cp -r .tmp/portable-benchmark/models/typescript benchmarks/LuminPack.Benchmark.TypeScript/generated
+          src/LuminPack.TypeScript/node_modules/.bin/tsc --strict --target ES2022 --module NodeNext --moduleResolution NodeNext benchmarks/LuminPack.Benchmark.TypeScript/generated/*.ts
+          node benchmarks/LuminPack.Benchmark.TypeScript/benchmark.mjs --generated .tmp/portable-benchmark/models .tmp/portable-benchmark/results/typescript.csv
       - uses: actions/upload-artifact@v4
         with:
           name: portable-benchmark-raw-${{ matrix.language }}

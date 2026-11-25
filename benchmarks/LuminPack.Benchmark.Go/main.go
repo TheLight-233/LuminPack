@@ -22,6 +22,8 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
+var generatedCases func(string, []byte, []byte) ([]benchmark, error)
+
 type referenceLibrary struct {
 	name, format string
 	encode       func(any) ([]byte, error)
@@ -197,8 +199,15 @@ func prepare(directory, model string) ([]benchmark, error) {
 		return nil, errors.New("LuminPack JSON round trip changed the benchmark model")
 	}
 	var cases []benchmark
-	cases = addCases(cases, model, "binary", "LuminPack", luminBinary, binaryEncode, binaryDecode)
-	cases = addCases(cases, model, "json", "LuminPack", luminJSON, jsonEncode, jsonDecode)
+	if generatedCases != nil {
+		cases, err = generatedCases(model, binary, jsonDocument)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		cases = addCases(cases, model, "binary", "LuminPack", luminBinary, binaryEncode, binaryDecode)
+		cases = addCases(cases, model, "json", "LuminPack", luminJSON, jsonEncode, jsonDecode)
+	}
 	for _, library := range baselineLibraries {
 		encode := func() ([]byte, error) { return library.encode(typed) }
 		decode := func(data []byte) (any, error) {

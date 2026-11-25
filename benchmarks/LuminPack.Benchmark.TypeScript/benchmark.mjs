@@ -16,15 +16,19 @@ const safeWideInteger = BigInt(Number.MAX_SAFE_INTEGER);
 const now = process.hrtime.bigint;
 let sink;
 
-function readModels(directory) {
+function readModels(directory, generated) {
     return ["simple", "serialize"].map(name => {
         const manifest = JSON.parse(readFileSync(join(directory, name + ".manifest.json"), "utf8"));
         assert.equal(manifest.binaryProfile, 2, name + " must use the default UTF-16 Length binary profile");
         const binary = readFileSync(join(directory, name + ".bin"));
         const json = readFileSync(join(directory, name + ".utf8.json"));
-        const luminpack = createCodec(manifest);
+        const luminpack = generated?.get(name) ?? createCodec(manifest);
         const luminValue = luminpack.readBinary(binary);
         assert.deepEqual(luminpack.readJson(json, "utf8"), luminValue, name + " managed Binary/JSON parity");
+        if (generated) {
+            assert.deepEqual(Buffer.from(luminpack.writeBinary(luminValue)), binary);
+            assert.deepEqual(Buffer.from(luminpack.writeJson(luminValue, "utf8")), json);
+        }
         checkSafeIntegers(luminValue);
         return { name, luminpack, luminValue, genericValue: JSON.parse(json.toString("utf8")), manifest };
     });
@@ -159,6 +163,7 @@ function sample(task, duration) {
 const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
+        generated: { type: "boolean", default: false },
         samples: { type: "string", default: "9" },
         "sample-ms": { type: "string", default: "100" },
         "warmup-ms": { type: "string", default: "200" },
@@ -178,7 +183,9 @@ function positiveInteger(value, option) {
 const samples = positiveInteger(values.samples, "samples");
 const sampleDuration = BigInt(positiveInteger(values["sample-ms"], "sample-ms")) * 1_000_000n;
 const warmupDuration = BigInt(positiveInteger(values["warmup-ms"], "warmup-ms")) * 1_000_000n;
-const tasks = readModels(resolve(positionals[0])).flatMap(prepare);
+const generated = values.generated ? new Map(await Promise.all(["simple", "serialize"].map(async name =>
+    [name, (await import("./generated/" + name + ".js")).codec]))) : undefined;
+const tasks = readModels(resolve(positionals[0]), generated).flatMap(prepare);
 const output = resolve(positionals[1]);
 const rows = [csvHeader];
 if (!values["verify-only"]) {

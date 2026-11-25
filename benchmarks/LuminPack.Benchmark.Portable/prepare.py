@@ -29,6 +29,7 @@ def build(project, artifacts, export=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("models", type=Path, help="Destination for the shared fixtures and projected contracts.")
+    parser.add_argument("--generated", action="store_true", help="Also generate Go and TypeScript benchmark modules.")
     parser.add_argument("--cpp", action="store_true", help="Also generate C++ benchmark headers.")
     parser.add_argument("--codegen-dll", type=Path, help="Reuse a compiled LuminPack.Codegen assembly.")
     parser.add_argument("--managed-dll", type=Path, help="Reuse a compiled fixture producer with contract export enabled.")
@@ -43,6 +44,14 @@ def main():
     run("dotnet", codegen, "export", producer.with_name("LuminPack.Benchmark.dll"), manifest)
     for name, root in MODELS.items():
         run("dotnet", codegen, "project", manifest, root, models / f"{name}.manifest.json")
+        if args.generated:
+            go = models / "go"
+            ts = models / "typescript"
+            go.mkdir(exist_ok=True)
+            ts.mkdir(exist_ok=True)
+            run("dotnet", codegen, "generate", "--language", "go", manifest, root, go / f"{name}.go")
+            run("dotnet", codegen, "generate", "--language", "typescript", "--runtime-import",
+                "../../../src/LuminPack.TypeScript/dist/index.js", manifest, root, ts / f"{name}.ts")
         if args.cpp:
             run("dotnet", codegen, "generate", "--language", "cpp", manifest, root, models / f"{name}-benchmark.hpp")
             shutil.copyfile(models / f"{name}.utf16.json", models / f"{name}.json")
