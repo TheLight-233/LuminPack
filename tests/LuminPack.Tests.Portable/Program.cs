@@ -7,6 +7,12 @@ using LuminPack.Option;
 using LuminPackPortableFixtures;
 using BenchmarkSerializer = Benchmark::LuminPack.LuminPackSerializer;
 
+if (args is ["write-primitive-roots" or "read-primitive-roots", var primitiveDirectory])
+{
+    PrimitiveRootFixtures.Exchange(primitiveDirectory, args[0] == "write-primitive-roots");
+    return 0;
+}
+
 if (args is ["write-strings" or "read-strings", var stringsDirectory])
 {
     if (args[0] == "write-strings")
@@ -39,7 +45,7 @@ if (args is ["write-json-numbers" or "read-json-numbers", var numberDirectory])
 
 if (args is not ["read" or "write", var directory])
 {
-    Console.Error.WriteLine("Usage: LuminPack.Tests.Portable <read|write|read-strings|write-strings|read-ordered-json|write-ordered-json|read-json-numbers|write-json-numbers> <directory>");
+    Console.Error.WriteLine("Usage: LuminPack.Tests.Portable <read|write|read-primitive-roots|write-primitive-roots|read-strings|write-strings|read-ordered-json|write-ordered-json|read-json-numbers|write-json-numbers> <directory>");
     return 2;
 }
 

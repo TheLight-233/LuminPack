@@ -183,7 +183,8 @@ internal static class PortableGenerateCommand
             "string" => "string | null",
             "contract" when declarations.ContainsKey(scalar!) => "Contract_" + Identifier(scalar!) + "<" + arrayViews + ">",
             "nullable" => TypeScriptType((JsonObject)wire["element"]!, declarations, arrayViews) + " | null",
-            "sequence" => TypeScriptSequence((JsonObject)wire["element"]!, declarations, arrayViews),
+            "sequence" => TypeScriptSequence((JsonObject)wire["element"]!, declarations, arrayViews) +
+                (wire["required"]?.GetValue<bool>() == true ? string.Empty : " | null"),
             "dictionary" => "Map<NonNullable<" + TypeScriptType((JsonObject)wire["key"]!, declarations, arrayViews) + ">, " +
                 TypeScriptType((JsonObject)wire["value"]!, declarations, arrayViews) + "> | null",
             "pair" or "tuple" => "[" + string.Join(", ", PortableManifest.Objects(wire, "elements")
@@ -218,8 +219,8 @@ internal static class PortableGenerateCommand
             _ => null
         } : null;
         string array = "Array<" + TypeScriptType(element, declarations, arrayViews) + ">";
-        return view == null || arrayViews == "false" ? array + " | null" :
-            array + " | (" + arrayViews + " extends true ? " + view + " : never) | null";
+        return view == null || arrayViews == "false" ? array :
+            array + " | (" + arrayViews + " extends true ? " + view + " : never)";
     }
 
     /// <summary>Checks a package or source identifier component.</summary>

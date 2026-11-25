@@ -86,7 +86,7 @@ type Wire = { rawCollection?: boolean; layout?: Storage } & (
     | { kind: "scalar"; type: string }
     | { kind: "string" }
     | { kind: "contract"; type: string }
-    | { kind: "sequence"; element: Wire; family?: string }
+    | { kind: "sequence"; element: Wire; family?: string; required?: boolean }
     | { kind: "rectangular"; element: Wire; rank: number }
     | { kind: "dictionary"; key: Wire; value: Wire }
     | { kind: "nullable"; element: Wire; nullableEncoding?: number; nullableLayout?: Storage; nativeNullableElement?: boolean }
@@ -108,6 +108,7 @@ interface Member {
 interface UnionCase { id: string; type?: string; hash: number; tag?: number; }
 
 interface Contract {
+    binaryMemberCount?: number;
     id: string;
     kind: string;
     profile: BinaryProfile & { trackReferences?: boolean };
@@ -198,6 +199,11 @@ function storageSet(value: object, path: (string | number)[], leaf: unknown): vo
     put(current as Target, String(path[path.length - 1]), leaf);
 }
 
+function nullSequence(wire: Extract<Wire, { kind: "sequence" }>): [] | null {
+    if (wire.required) throw new WireError("Null LuminPack collection base.");
+    return defaultMemory(wire.family) ? [] : null;
+}
+
 function defaultMemory(family?: string): boolean {
     return family === "System.Memory" || family === "System.ReadOnlyMemory" || family === "System.Buffers.ReadOnlySequence";
 }
@@ -276,6 +282,9 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             const type = identity(contract.id);
             if (this.plans.has(type)) throw new WireError("Duplicate LuminPack contract " + type + ".");
             const members = contract.members ?? [];
+            if (contract.binaryMemberCount !== undefined &&
+                (contract.binaryMemberCount < 0 || contract.binaryMemberCount !== members.length - 1))
+                throw new WireError("Invalid LuminPack collection base member count.");
             const jsonByName = new Map<string, Member>();
             for (const member of members) {
                 if (!this.encodedJsonNames.has(member.name)) this.encodedJsonNames.set(member.name, JSON.stringify(member.name) + ":");
@@ -425,7 +434,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
     private zero(wire: Wire): unknown {
         switch (wire.kind) {
             case "scalar": return defaultScalar(wire.type, this.nativeBytes);
-            case "sequence": return defaultMemory(wire.family) ? [] : null;
+            case "sequence": return wire.required || defaultMemory(wire.family) ? [] : null;
             case "pair": case "tuple": return wire.elements.map(item => this.zero(item));
             case "contract": {
                 const plan = this.plan(wire.type);
@@ -654,7 +663,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             }
             case "sequence": {
                 const elements = this.readSequence(wire.element, input, profile, state, undefined, this.segmentedElements(wire));
-                return elements ?? (defaultMemory(wire.family) ? [] : null);
+                return elements ?? nullSequence(wire);
             }
             case "dictionary": {
                 const count = input.count(this.minWidth(wire.key, profile) + this.minWidth(wire.value, profile));
@@ -750,7 +759,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 else for (let index = 1; index < fixedWidth; index++) output.u8(0);
                 return;
             case "sequence": {
-                if (value === null && !defaultMemory(wire.family)) { output.i32(-1); return; }
+                if (value === null && nullSequence(wire) === null) { output.i32(-1); return; }
                 const elements = this.primitiveCollectionValues(wire.element, value ?? [], this.limits.maxCollection);
                 if (Array.isArray(elements)) {
                     this.writeElements(wire.element, output, elements, profile, state, this.segmentedElements(wire));
@@ -843,7 +852,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             if (contract.kind === "Record" && (!caseBody || tracked)) {
                 const marker = input.u8();
                 if (marker === 255) return null;
-                if (marker !== contract.members.length || marker > 249)
+                if (marker !== (contract.binaryMemberCount ?? contract.members.length) || marker > 249)
                     throw new WireError("Invalid LuminPack positional member count.");
             }
             for (const member of contract.members) put(result, member.name, this.readMember(member, input, profile, state));
@@ -866,7 +875,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 return;
             }
             const record = object(value);
-            if (contract.members.length > 249) throw new WireError("Too many LuminPack record members.");
+            if ((contract.binaryMemberCount ?? contract.members.length) > 249) throw new WireError("Too many LuminPack record members.");
             const tracked = contract.profile.trackReferences === true;
             if (tracked) {
                 const reference = this.referenceIndex(state, record, contract.id);
@@ -875,7 +884,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 if (reference.existing) return;
             }
             if (contract.versioned) { this.writeVersion(plan, output, record, profile, state); return; }
-            if (contract.kind === "Record" && (!caseBody || tracked)) output.u8(contract.members.length);
+            if (contract.kind === "Record" && (!caseBody || tracked)) output.u8(contract.binaryMemberCount ?? contract.members.length);
             for (const member of contract.members) this.writeMember(member, output, this.field(record, member), profile, state);
         } finally { state.depth--; }
     }
@@ -1173,7 +1182,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
             case "contract": return this.readOrderedJsonContract(this.jsonPlan(wire.type), input, utf8, depth);
             case "nullable": return input.consume("null") ? null : this.readOrderedJsonWire(wire.element, input, utf8, depth);
             case "sequence": {
-                if (input.consume("null")) return defaultMemory(wire.family) ? [] : null;
+                if (input.consume("null")) return nullSequence(wire);
                 input.depth(depth);
                 input.expect("[");
                 const values: unknown[] = [];
@@ -1244,7 +1253,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 return value;
             case "contract": return this.readJsonContract(this.plan(wire.type), value, encoding, state);
             case "nullable": return value === null ? null : this.readJsonWire(wire.element, value, encoding, state);
-            case "sequence": return value === null ? (defaultMemory(wire.family) ? [] : null) :
+            case "sequence": return value === null ? nullSequence(wire) :
                 jsonArray(value, this.limits.maxCollection).map(item => this.readJsonWire(wire.element, item, encoding, state));
             case "pair": case "tuple": {
                 const values = jsonArray(value, wire.elements.length);
@@ -1317,7 +1326,7 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
                 else this.writeJsonWire(wire.element, value, encoding, state, parts);
                 return;
             case "sequence":
-                if (value === null && !defaultMemory(wire.family)) parts.push("null");
+                if (value === null && nullSequence(wire) === null) parts.push("null");
                 else this.writeJsonElements(wire.element, this.primitiveCollectionValues(wire.element,
                     value ?? [], this.limits.maxCollection), encoding, state, parts);
                 return;

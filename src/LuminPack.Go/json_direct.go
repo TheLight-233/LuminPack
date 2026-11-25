@@ -102,7 +102,7 @@ func (r *directJSONReader) contract(c *contract, depth int) any {
 }
 
 func (r *directJSONReader) record(c *contract, depth int) Record {
-	result := make(Record, len(c.Members))
+	result := c.newJSONRecord()
 	ordinal := 0
 	for first := true; ; first = false {
 		if ordinal < len(c.Members) {
@@ -179,7 +179,7 @@ func (r *directJSONReader) shape(d *descriptor, depth int) any {
 		return r.scalar(d, depth)
 	}
 	if r.scan.null() {
-		if d.Kind == "sequence" && isMemory(d) {
+		if d.Kind == "sequence" && nullSequenceIsEmpty(d) {
 			return []any{}
 		}
 		return nil

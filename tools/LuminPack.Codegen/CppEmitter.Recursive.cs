@@ -10,12 +10,13 @@ internal sealed partial class CppEmitter
     private bool isolatedRecursiveEntries;
 
     /// <summary>Finds the records whose C++ storage must break a cycle in the projected member graph.</summary>
-    /// <param name="root">The requested closed model.</param>
-    private void AnalyzeRecursiveRecords(JsonElement root)
+    /// <param name="rootType">The normalized model or standalone collection type.</param>
+    /// <param name="rootProfile">The operation root policy.</param>
+    private void AnalyzeRecursiveRecords(string rootType, JsonElement rootProfile)
     {
         var reachable = new Dictionary<string, string[]>(StringComparer.Ordinal);
-        string rootType = Normalize(Text(root, "type"));
-        Visit(rootType);
+        foreach (string child in RecursiveDependencies(rootType))
+            Visit(child);
         foreach (var item in reachable)
         {
             if (Text(contracts[item.Key], "kind") != "Record" ||
@@ -40,14 +41,14 @@ internal sealed partial class CppEmitter
             if (isolatedRecursiveEntries)
             {
                 if (recursiveRecords.Any(type => Reaches(type, IsUnion)))
-                    throw Missing(Text(root, "id"), "an owning recursive subtree that reaches a Union");
+                    throw Missing(rootType, "an owning recursive subtree that reaches a Union");
                 if (boundaries.Any(type => IsUnion(type) && reachable[type].Any(recursiveRecords.Contains)))
-                    throw Missing(Text(root, "id"), "an owning recursive record used directly as a Union case");
+                    throw Missing(rootType, "an owning recursive record used directly as a Union case");
                 if (boundaries.Any(type => Reaches(type, recursiveRecords.Contains) &&
                         reachable[type].Any(child => Reaches(child, candidate => candidate == type))))
-                    throw Missing(Text(root, "id"), "a recursive reference or Union boundary above an owning recursive subtree");
+                    throw Missing(rootType, "a recursive reference or Union boundary above an owning recursive subtree");
                 if (reachable.Keys.Any(type => HasFiniteLimit(type, "maxDepth")))
-                    throw Missing(Text(root, "id"), "a finite Binary depth shared by owning recursion and references or a Union");
+                    throw Missing(rootType, "a finite Binary depth shared by owning recursion and references or a Union");
 
                 foreach (string type in recursiveRecords)
                     if (Reaches(type, IsTracked))
@@ -57,20 +58,20 @@ internal sealed partial class CppEmitter
                 IEnumerable<string> trackedDescendants = outgoing.Where(IsTracked);
                 if (trackedDescendants.Any(type => Reaches(type, recursiveRecords.Contains) ||
                         reachable[type].Any(child => Reaches(child, candidate => candidate == type))))
-                    throw Missing(Text(root, "id"), "a recursive tracked descendant of an owning recursive subtree");
+                    throw Missing(rootType, "a recursive tracked descendant of an owning recursive subtree");
                 if (outgoing.Any(type => HasIndependentLimit(type, "maxCollection") || HasIndependentLimit(type, "maxString")))
-                    throw Missing(Text(root, "id"), "an outgoing recursive subtree with independent Binary collection or string limits");
+                    throw Missing(rootType, "an outgoing recursive subtree with independent Binary collection or string limits");
             }
             if (reachable.Keys.Any(type => HasFiniteLimit(type, "maxDepth") &&
                     Reaches(type, candidate => recursiveRecords.Contains(candidate) && Flag(contracts[candidate], "versioned"))))
-                throw Missing(Text(root, "id"), "a finite Binary depth across isolated recursive Version reads");
+                throw Missing(rootType, "a finite Binary depth across isolated recursive Version reads");
             if (!rootProjectsLimits && reachable.Keys.Any(type => type != rootType && HasFiniteLimit(type, "maxDepth") &&
                     Reaches(type, recursiveRecords.Contains)))
-                throw Missing(Text(root, "id"), "a recursive child with an independent Binary depth limit");
+                throw Missing(rootType, "a recursive child with an independent Binary depth limit");
             if (HasFiniteLimit(rootType, "maxDepth") && reachable.Keys.Any(type => Text(contracts[type], "kind") == "Record" &&
                     contracts[type].TryGetProperty("recursive", out JsonElement managed) &&
                     managed.ValueKind is JsonValueKind.True or JsonValueKind.False && managed.GetBoolean() != recursiveRecords.Contains(type)))
-                throw Missing(Text(root, "id"), "managed Binary depth accounting outside the projected recursive record graph");
+                throw Missing(rootType, "managed Binary depth accounting outside the projected recursive record graph");
         }
 
         bool IsUnion(string type) => Text(contracts[type], "kind") == "Union";
@@ -81,14 +82,14 @@ internal sealed partial class CppEmitter
 
         bool HasFiniteLimit(string type, string limit)
         {
-            JsonElement profile = contracts[type].GetProperty("profile");
+            JsonElement profile = type == rootType ? rootProfile : contracts[type].GetProperty("profile");
             return !Flag(profile, "trusted") && profile.TryGetProperty(limit, out JsonElement value) &&
                 value.ValueKind == JsonValueKind.Number && value.GetInt32() < int.MaxValue;
         }
 
         bool HasIndependentLimit(string type, string limit) => HasFiniteLimit(type, limit) &&
             (!HasFiniteLimit(rootType, limit) || contracts[type].GetProperty("profile").GetProperty(limit).GetInt32() !=
-                root.GetProperty("profile").GetProperty(limit).GetInt32());
+                rootProfile.GetProperty(limit).GetInt32());
 
         bool Reaches(string start, Func<string, bool> matches)
         {
@@ -112,6 +113,8 @@ internal sealed partial class CppEmitter
             IEnumerable<string> cases = contract.TryGetProperty("cases", out JsonElement types) && types.ValueKind == JsonValueKind.Array
                 ? types.EnumerateArray().Select(item => Text(item, "type"))
                 : [];
+            if (contract.TryGetProperty("collectionBase", out JsonElement collection) && collection.ValueKind == JsonValueKind.Object)
+                members = members.Append(Text(collection, "type"));
             string[] dependencies = members.Concat(cases).SelectMany(RecursiveDependencies).Distinct(StringComparer.Ordinal).ToArray();
             reachable.Add(type, dependencies);
             foreach (string child in dependencies)

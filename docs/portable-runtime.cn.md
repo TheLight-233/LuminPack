@@ -50,6 +50,8 @@ dotnet run --project tools/LuminPack.Codegen -c Release -- export path/to/Contra
 
 在仓库根目录运行，每条命令指定一种目标语言和一个根类型。使用完整模型名，或导出文件中的闭合泛型 `id`。包含命令行特殊字符的名称需要用引号包裹，例如 `'Example.Box<string>'`。
 
+根类型也可以是四端共有的基础类型或闭合的集合，例如 `int`、`float[]`、`System.Collections.Generic.List<int?>` 和 `System.Collections.Generic.Dictionary<int,float>`。如果集合元素或字典值可空，请在导出契约的 C# 项目中为该集合保留闭合的序列化调用，重新生成清单，以导出 Binary 使用的 CLR 存储布局。启用 `IncludeCollectionBase = true` 的 List 派生类通过 JSON 和可移植记录的 `$items` 访问继承的元素，C++ 字段名为 `collection_items`。Binary 头部只计入声明的字段。
+
 ```sh
 dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language cpp .tmp/contracts.json Example.Message .tmp/message.h
 dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language java .tmp/contracts.json Example.Message .tmp/Message.java
@@ -87,6 +89,8 @@ dotnet run --project tools/LuminPack.Codegen -c Release -- project .tmp/contract
 ## 验证互通
 
 互通测试在 .NET 中生成 `SimpleClass` 和 `CharacterSaveData`，通过 Java、Go、TypeScript 读写二进制、UTF-8 JSON 和 UTF-16 JSON，再由 .NET 验证结果。`strings` 测试组将六种二进制配置与托管端生成的数据逐字节对比。C++ 的互通测试通过 CMake 运行。[C++ 指南](modules/luminpack.cpp.cn.md#验证基准模型)
+
+`primitive-roots` 测试使用 Binary、UTF-8 JSON 和 UTF-16 JSON 交换独立根值、可空集合和 List 派生类，并在样本目录生成 C++ 头文件。将 CMake 选项 `LUMINPACK_CPP_PRIMITIVE_ROOT_FIXTURES` 指向生成的 `managed-models` 目录，即可运行 `luminpack_cpp_primitive_roots` 测试。
 
 `json-numbers` 测试组逐字节比较 UTF-8 和 UTF-16 JSON，并验证读回的二进制位。C# XJB 表更新后，运行 `python tools/xjb-tables/emit_portable.py` 重新生成其他语言的表，再用支持 WebAssembly 的 Clang 和链接器运行 `node src/LuminPack.TypeScript/scripts/build-json-number.mjs`，重新构建 TypeScript 内嵌的内核。
 

@@ -217,7 +217,7 @@ func (r *binaryReader) body(c *contract, p int, body bool, target Record) any {
 		if count == 255 {
 			return nil
 		}
-		if int(count) != len(c.Members) {
+		if int(count) != c.headerCount() {
 			fail(r.pos, "positional member count does not match contract")
 		}
 	}
@@ -305,10 +305,10 @@ func (w *binaryWriter) body(c *contract, p int, body bool, data any) {
 	}
 	value := asRecord(data)
 	if !body && !inlineStruct(c) {
-		if len(c.Members) > 249 {
+		if c.headerCount() > 249 {
 			fail(-1, "too many positional fields")
 		}
-		w.byte(byte(len(c.Members)))
+		w.byte(byte(c.headerCount()))
 	}
 	for i := range c.Members {
 		m := &c.Members[i]
@@ -444,7 +444,7 @@ func (r *binaryReader) shape(d *descriptor, p int) any {
 func (r *binaryReader) sequence(d *descriptor, p int) any {
 	n := r.count(r.s.minimum(d.Element, p))
 	if n < 0 {
-		if isMemory(d) {
+		if nullSequenceIsEmpty(d) {
 			return []any{}
 		}
 		return nil
@@ -553,7 +553,7 @@ func (w *binaryWriter) shape(d *descriptor, value any, p int) {
 	case "contract":
 		w.contract(w.s.get(d.Type), value, p, false)
 	case "sequence":
-		if value == nil && !isMemory(d) {
+		if value == nil && !nullSequenceIsEmpty(d) {
 			w.count(-1)
 			return
 		}
@@ -638,6 +638,14 @@ func (w *binaryWriter) shape(d *descriptor, value any, p int) {
 	default:
 		fail(-1, "unsupported field descriptor "+d.Kind)
 	}
+}
+
+// nullSequenceIsEmpty handles an explicit null at a sequence boundary.
+func nullSequenceIsEmpty(d *descriptor) bool {
+	if d.Required {
+		fail(-1, "null collection base")
+	}
+	return isMemory(d)
 }
 
 func isMemory(d *descriptor) bool {

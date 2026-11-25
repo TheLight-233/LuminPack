@@ -89,7 +89,7 @@ type descriptor struct {
 	Elements              []*descriptor
 	Rank                  int
 	Profile               *int
-	Memory                bool
+	Memory, Required      bool
 	Width                 int
 	Family                string
 	EnumType              string
@@ -112,7 +112,23 @@ type profile struct {
 	MaxInput, MaxCollection, MaxString, MaxDepth *int
 }
 
+func (c *contract) headerCount() int {
+	if c.BinaryMemberCount != nil {
+		return *c.BinaryMemberCount
+	}
+	return len(c.Members)
+}
+
+func (c *contract) newJSONRecord() Record {
+	result := make(Record, len(c.Members))
+	if c.BinaryMemberCount != nil {
+		result["$items"] = []any{}
+	}
+	return result
+}
+
 type contract struct {
+	BinaryMemberCount                *int
 	ID, Type, Kind, StorageKind      string
 	Profile                          profile
 	Versioned                        bool
@@ -219,6 +235,9 @@ func LoadSchema(data []byte) (*Schema, error) {
 				return nil, fmt.Errorf("luminpack: duplicate contract %s", id)
 			}
 			s.types[id] = c
+		}
+		if c.BinaryMemberCount != nil && (*c.BinaryMemberCount < 0 || *c.BinaryMemberCount != len(c.Members)-1) {
+			return nil, fmt.Errorf("luminpack: invalid collection base member count for %s", c.ID)
 		}
 		c.byName = make(map[string]*member, len(c.Members))
 		for i := range c.Members {

@@ -148,8 +148,8 @@ struct record_payload_codec
     }
 
 private:
-    template<class, class...>
-    friend struct record_codec;
+    template<class, std::size_t, class...>
+    friend struct counted_record_codec;
 
     using members = std::tuple<Members...>;
     template<std::size_t Index>
@@ -294,14 +294,35 @@ private:
     }
 };
 
+/// Validates the non-null List<T> body appended after ordinary positional members.
+template<class Codec>
+struct collection_base_binary
+{
+    using value_type = typename Codec::value_type;
+    static constexpr auto minimum_size = Codec::minimum_size;
+
+    static value_type read(reader& input, auto&... context)
+    {
+        auto value = detail::read_codec<Codec>(input, context...);
+        if (!value) throw wire_error("Null LuminPack collection base.");
+        return value;
+    }
+
+    static void write(writer& output, const value_type& value, auto&... context)
+    {
+        if (!value) throw wire_error("Null LuminPack collection base.");
+        detail::write_codec<Codec>(output, value, context...);
+    }
+};
+
 /// An ordinary positional DTO. Field codecs are supplied in .NET member order.
-template<class T, class... Members>
-struct record_codec
+template<class T, std::size_t Count, class... Members>
+struct counted_record_codec
 {
     using value_type = std::optional<T>;
     using payload = record_payload_codec<T, Members...>;
     static constexpr std::size_t minimum_size = 1;
-    static_assert(sizeof...(Members) <= 249);
+    static_assert(Count <= 249);
 
     template<class... Context>
     static value_type read(reader& input, Context&... context)
@@ -313,7 +334,7 @@ struct record_codec
             input = next;
             return std::nullopt;
         }
-        if (*members != sizeof...(Members))
+        if (*members != Count)
             throw wire_error("LuminPack positional member count does not match the codec.");
         if constexpr (payload::read_owned)
         {
@@ -359,19 +380,22 @@ struct record_codec
         if constexpr (payload::fixed_width != 0)
         {
             auto bytes = output.reserve(1 + payload::fixed_width);
-            bytes.front() = static_cast<std::byte>(sizeof...(Members));
+            bytes.front() = static_cast<std::byte>(Count);
             payload::template write_reserved<0, payload::fixed_width>(bytes.data() + 1, value,
                 std::index_sequence_for<Members...>{});
         }
         else
         {
             writer next = output;
-            write_object_header(next, static_cast<std::uint8_t>(sizeof...(Members)));
+            write_object_header(next, static_cast<std::uint8_t>(Count));
             payload::write(next, value, context...);
             output = next;
         }
     }
 };
+
+template<class T, class... Members>
+struct record_codec : counted_record_codec<T, sizeof...(Members), Members...> {};
 
 /// Adapts app-owned methods that implement both sides of a GeneratorType.Custom contract.
 template<class T, auto Read, auto Write, std::size_t MinimumSize = 0>

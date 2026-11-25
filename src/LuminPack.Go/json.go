@@ -183,7 +183,7 @@ func (r *jsonReader) contract(c *contract, value any) any {
 		}
 		return Union{selected.target.ID, result}
 	}
-	result := make(Record, len(c.Members))
+	result := c.newJSONRecord()
 	if c.Profile.TrackReferences {
 		if id, ok := object.prop("$ref"); ok {
 			key := uint32(r.s.scalarValue("uint", id).(uint64))
@@ -220,7 +220,7 @@ func (r *jsonReader) shape(d *descriptor, value any) any {
 		return r.contract(r.s.get(d.Type), value)
 	}
 	if value == nil {
-		if d.Kind == "sequence" && isMemory(d) {
+		if d.Kind == "sequence" && nullSequenceIsEmpty(d) {
 			return []any{}
 		}
 		if d.Kind != "scalar" {
@@ -530,7 +530,7 @@ func (w *jsonWriter) shape(d *descriptor, value any) {
 		return
 	}
 	if value == nil {
-		if d.Kind == "sequence" && isMemory(d) {
+		if d.Kind == "sequence" && nullSequenceIsEmpty(d) {
 			w.append("[]")
 			return
 		}

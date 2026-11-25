@@ -55,14 +55,43 @@ internal sealed class PortableManifest
         }
         else
         {
-            source["rootWire"] = projector.Resolve(type, "root");
+            string key = RootKey(type);
+            JsonNode? shape = (source["roots"] as JsonObject)?.FirstOrDefault(entry => RootKey(entry.Key) == key).Value;
+            if (shape?["formatter"] is JsonObject formatter)
+                source["rootWire"] = projector.ResolveFormatter(formatter, "root");
+            else
+            {
+                CheckRootLayout(key);
+                source["rootWire"] = projector.Resolve(type, "root");
+            }
+            binaryProfile ??= source["rootProfile"]?["binary"]?.GetValue<int>();
         }
+        source.Remove("roots");
         source["root"] = type;
         source["binaryProfile"] = binaryProfile ?? 2;
         source["nativeIntegerBytes"] = nativeIntegerBytes;
         source["nativeScalarAlignment"] = nativeScalarAlignment;
         source["contracts"] = new JsonArray(projector.reachable.Values.Cast<JsonNode>().ToArray());
         return source;
+    }
+
+    /// <summary>Matches CLR primitive aliases and nullable spellings in exported root identities.</summary>
+    /// <param name="type">The CLI or compiler spelling of a closed root.</param>
+    /// <returns>The comparison key for a formatter lookup.</returns>
+    internal static string RootKey(string type)
+    {
+        string key = Normalize(type).Replace(" ", string.Empty, StringComparison.Ordinal);
+        key = System.Text.RegularExpressions.Regex.Replace(key, @"[\w.]+",
+            match => Scalars.GetValueOrDefault(match.Value, match.Value == "System.String" ? "string" : match.Value));
+        return System.Text.RegularExpressions.Regex.Replace(key, @"\bSystem\.Nullable<([\w.]+)>", "$1?");
+    }
+
+    /// <summary>Requires the producer layout for nullable value slots in standalone collections.</summary>
+    /// <param name="key">The normalized root comparison key.</param>
+    internal static void CheckRootLayout(string key)
+    {
+        if (System.Text.RegularExpressions.Regex.IsMatch(key, @"\b(bool|byte|sbyte|short|ushort|char|int|uint|long|ulong|float|double|nint|nuint)\?(?=[,>\[])"))
+            throw new InvalidOperationException("Export a closed serializer call for " + key + " to specify its nullable collection layout.");
     }
 
     /// <summary>Projects one contract and schedules nested members or Union cases once, including recursive references.</summary>
@@ -75,6 +104,10 @@ internal sealed class PortableManifest
             throw new InvalidOperationException("No exported LuminPack contract for " + type + ".");
         if (source["typeParameters"] is JsonArray { Count: > 0 })
             throw new InvalidOperationException("A portable root requires closed contracts: " + type + ".");
+        if (source["sequenceBase"] != null)
+            throw new InvalidOperationException("A self-referential collection body requires a portable sequence codec: " + type + ".");
+        if (source["dynamicVersion"]?.GetValue<bool>() == true)
+            throw new InvalidOperationException("A portable Version contract requires closed field descriptors: " + type + ".");
         var contract = (JsonObject)source.DeepClone();
         reachable.Add(type, contract);
         foreach (JsonObject member in Objects(contract, "members"))
@@ -87,6 +120,18 @@ internal sealed class PortableManifest
                 wire["type"]?.GetValue<string>() is "nint" or "nuint" && size.GetValue<int>() is 4 or 8 &&
                 size.GetValue<int>() != nativeIntegerBytes)
                 throw new InvalidOperationException("Native integer width differs from the manifest at " + label + ".");
+        }
+        if (contract["collectionBase"] is JsonObject collection)
+        {
+            var members = (JsonArray)contract["members"]!;
+            contract["binaryMemberCount"] = members.Count;
+            JsonObject items = ResolveFormatter(collection, type + ".$items");
+            items["required"] = true;
+            members.Add(new JsonObject
+            {
+                ["name"] = "$items", ["profile"] = new JsonObject(),
+                ["wire"] = items
+            });
         }
         foreach (JsonObject item in Objects(contract, "cases"))
             VisitContract(Normalize(Text(item, "type")));

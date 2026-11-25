@@ -122,7 +122,7 @@ final class JsonDirect {
     }
 
     private Object readSequence(Json.Reader reader, Schema.Wire wire, int depth) {
-        if (reader.consumeNull()) return wire.memory() ? List.of() : null;
+        if (reader.consumeNull()) return wire.nullSequenceIsEmpty() ? List.of() : null;
         reader.checkDepth(depth);
         reader.expect('[');
         reader.space();
@@ -271,7 +271,7 @@ final class JsonDirect {
     }
 
     private void writeSequence(JsonUtf8Writer output, Schema.Wire wire, Object value, int depth) {
-        if (value == null && !wire.memory()) { output.nullValue(); return; }
+        if (value == null && !wire.nullSequenceIsEmpty()) { output.nullValue(); return; }
         checkDepth(depth);
         List<?> items = value == null ? List.of() : Schema.array(value);
         general.checkCollection(items.size());

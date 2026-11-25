@@ -167,7 +167,7 @@ final class JsonDocument {
     }
 
     private Object sequence(Schema.Wire wire, Object value, boolean write) {
-        if (value == null) return wire.memory() ? List.of() : null;
+        if (value == null) return wire.nullSequenceIsEmpty() ? List.of() : null;
         return sequenceElements(wire.element, Schema.array(value), write);
     }
 

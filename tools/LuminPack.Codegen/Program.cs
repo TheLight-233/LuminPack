@@ -37,6 +37,8 @@ catch (Exception error) when (error is IOException or UnauthorizedAccessExceptio
 internal static class ContractExport
 {
     private const string MetadataKey = "LuminPack.Cpp.Contract.v1";
+    private const string RootMetadataKey = "LuminPack.Portable.Root.v1";
+    private const string ProfileMetadataKey = "LuminPack.Portable.Profile.v1";
     private const string CompleteBinaryInputMetadataKey = "LuminPack.Cpp.CompleteBinaryInput.v1";
 
     /// <summary>Reads compiler-emitted metadata and replaces the manifest after validation succeeds.</summary>
@@ -55,6 +57,8 @@ internal static class ContractExport
 
         AssemblyDefinition definition = metadata.GetAssemblyDefinition();
         var rows = new SortedDictionary<string, JsonElement>(StringComparer.Ordinal);
+        var roots = new SortedDictionary<string, JsonElement>(StringComparer.Ordinal);
+        JsonElement profile = default;
         bool? completeBinaryInput = null;
         foreach (CustomAttributeHandle attribute in definition.GetCustomAttributes())
         {
@@ -69,14 +73,21 @@ internal static class ContractExport
             }
             using JsonDocument document = JsonDocument.Parse(entry.Value);
             JsonElement data = document.RootElement;
+            if (entry.Key == ProfileMetadataKey)
+            {
+                if (profile.ValueKind != JsonValueKind.Undefined || data.ValueKind != JsonValueKind.Object)
+                    throw new InvalidOperationException("Invalid LuminPack root profile.");
+                profile = data.Clone();
+                continue;
+            }
             if (data.ValueKind != JsonValueKind.Object || !data.TryGetProperty("id", out JsonElement identity) ||
                 identity.ValueKind != JsonValueKind.String || string.IsNullOrEmpty(identity.GetString()))
                 throw new InvalidOperationException("A LuminPack contract row has no type identity.");
-            if (!rows.TryAdd(identity.GetString()!, data.Clone()))
+            if (!(entry.Key == RootMetadataKey ? roots : rows).TryAdd(identity.GetString()!, data.Clone()))
                 throw new InvalidOperationException("Duplicate LuminPack contract for " + identity.GetString() + ".");
         }
 
-        if (rows.Count == 0)
+        if (rows.Count == 0 && roots.Count == 0)
             throw new InvalidOperationException("No LuminPack contracts in this assembly. Enable LuminPackExportContract in its build.");
 
         OutputFile.Replace(assemblyPath, manifestPath, stream =>
@@ -87,6 +98,18 @@ internal static class ContractExport
             writer.WriteString("assembly", metadata.GetString(definition.Name));
             if (completeBinaryInput.HasValue)
                 writer.WriteBoolean("requireCompleteBinaryInput", completeBinaryInput.Value);
+            if (profile.ValueKind != JsonValueKind.Undefined)
+            {
+                writer.WritePropertyName("rootProfile");
+                profile.WriteTo(writer);
+            }
+            writer.WriteStartObject("roots");
+            foreach (var entry in roots)
+            {
+                writer.WritePropertyName(entry.Key.Replace("global::", string.Empty, StringComparison.Ordinal));
+                entry.Value.GetProperty("shape").WriteTo(writer);
+            }
+            writer.WriteEndObject();
             writer.WriteStartArray("contracts");
             foreach (JsonElement row in rows.Values)
                 row.WriteTo(writer);
@@ -118,7 +141,7 @@ internal static class ContractExport
         if (blob.ReadUInt16() != 1)
             return null;
         string? key = blob.ReadSerializedString();
-        if (key is not (MetadataKey or CompleteBinaryInputMetadataKey))
+        if (key is not (MetadataKey or CompleteBinaryInputMetadataKey or RootMetadataKey or ProfileMetadataKey))
             return null;
         string? row = blob.ReadSerializedString();
         if (row == null || blob.ReadUInt16() != 0 || blob.RemainingBytes != 0)

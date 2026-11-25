@@ -91,7 +91,7 @@ final class BinaryDocument {
         if (markerPresent) {
             int count = input.readU8();
             if (count == NULL) return null;
-            if (count != type.members.size()) throw fail("Unexpected LuminPack member count in " + type.id);
+            if (count != type.binaryMemberCount) throw fail("Unexpected LuminPack member count in " + type.id);
         }
         if (type.kind.equals("Struct") && Layout.readStruct(this, input, type, result, profile, depth + 1, false)) return result;
         readMembers(input, type, result, profile, depth + 1);
@@ -134,7 +134,7 @@ final class BinaryDocument {
             return;
         }
         if (type.kind.equals("Struct") && Layout.writeStruct(this, output, type, map, profile, depth + 1, false)) return;
-        if (!isInlineStruct(type) && (!caseBody || type.profile.track())) output.writeU8(type.members.size());
+        if (!isInlineStruct(type) && (!caseBody || type.profile.track())) output.writeU8(type.binaryMemberCount);
         writeMembers(output, type, map, profile, depth + 1);
     }
 
@@ -212,7 +212,7 @@ final class BinaryDocument {
             case SCALAR -> readScalar(input, wire.type);
             case STRING -> input.readString(profile);
             case CONTRACT -> readContract(input, wire.contract, profile, depth, false);
-            case SEQUENCE -> readSequence(input, wire.element, profile, depth, wire.memory(), wire.segmented());
+            case SEQUENCE -> readSequence(input, wire, profile, depth);
             case DICTIONARY -> readDictionary(input, wire, profile, depth);
             case PAIR, TUPLE -> Layout.readAggregate(this, input, wire, profile, depth);
             case RECTANGULAR -> readRectangular(input, wire, profile, depth);
@@ -230,7 +230,7 @@ final class BinaryDocument {
             case SCALAR -> writeScalar(output, wire.type, value);
             case STRING -> output.writeString(value == null ? null : Schema.string(value), profile);
             case CONTRACT -> writeContract(output, wire.contract, value, profile, depth, false);
-            case SEQUENCE -> writeSequence(output, wire.element, value, profile, depth, wire.memory(), wire.segmented());
+            case SEQUENCE -> writeSequence(output, wire.element, value, profile, depth, value == null && wire.nullSequenceIsEmpty(), wire.segmented());
             case DICTIONARY -> writeDictionary(output, wire, value, profile, depth);
             case PAIR, TUPLE -> Layout.writeAggregate(this, output, wire, value, profile, depth);
             case RECTANGULAR -> writeRectangular(output, wire, value, profile, depth);
@@ -242,10 +242,10 @@ final class BinaryDocument {
         }
     }
 
-    private Object readSequence(BinaryCursor.Reader input, Schema.Wire element, int profile, int depth, boolean memory, boolean segmented) {
-        int count = input.readCollectionCount(minimum(element));
-        if (count < 0) return memory ? List.of() : null;
-        return readElements(input, element, count, profile, depth, segmented);
+    private Object readSequence(BinaryCursor.Reader input, Schema.Wire wire, int profile, int depth) {
+        int count = input.readCollectionCount(minimum(wire.element));
+        if (count < 0) return wire.nullSequenceIsEmpty() ? List.of() : null;
+        return readElements(input, wire.element, count, profile, depth, wire.segmented());
     }
 
     private List<Object> readElements(BinaryCursor.Reader input, Schema.Wire element, int count, int profile, int depth,
@@ -681,7 +681,7 @@ final class BinaryDocument {
     static void defaults(Schema.Contract type, Map<String, Object> members) {
         for (Schema.Field field : type.members)
             if (!members.containsKey(field.name)) members.put(field.name,
-                field.wire.kind == SCALAR ? defaultScalar(field.wire.type) : field.wire.memory() ? List.of() : null);
+                field.wire.kind == SCALAR ? defaultScalar(field.wire.type) : (field.wire.required || field.wire.memory()) ? List.of() : null);
     }
 
     private Object readCompressed(BinaryCursor.Reader input, Schema.Wire wire, int profile, int depth) {

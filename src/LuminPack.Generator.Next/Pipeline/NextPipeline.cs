@@ -108,7 +108,7 @@ internal static partial class NextPipeline
             if (roots.Count != 0 || custom.Count != 0 || callRoots.Count != 0)
             {
                 GeneratorOptions options = GeneratorOptionsFactory.From(compilation);
-                string source = PortableContractExport.Render(roots, callRoots.Values, options,
+                string source = PortableContractExport.Render(roots, callRoots, options,
                     model => TypeModelFactory.TryCreateCppNativeStorage(model, compilation, options),
                     TypeModelFactory.CreateCppRawCompoundStorage(compilation, options), custom, TypeModelFactory.AssemblyPolicy(compilation),
                     production.CancellationToken);

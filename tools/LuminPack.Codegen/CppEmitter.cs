@@ -50,16 +50,38 @@ internal sealed partial class CppEmitter
         using JsonDocument manifest = JsonDocument.Parse(File.ReadAllBytes(manifestPath));
         var emitter = new CppEmitter(manifest.RootElement, useRtti);
         JsonElement declaration = emitter.contracts.Values.FirstOrDefault(item => Text(item, "id") == root);
-        if (declaration.ValueKind != JsonValueKind.Object)
-            throw new InvalidOperationException("No LuminPack C++ contract for root " + root + ".");
+        JsonElement document = manifest.RootElement;
 
         emitter.code.Append("namespace luminpack_generated::root_").Append(Identifier(root));
         if (binaryProfile.HasValue)
             emitter.code.Append("_binary_").Append(BinaryProfiles.Names[binaryProfile.Value]);
         emitter.code.Append("\n{\n");
-        emitter.AnalyzeRecursiveRecords(declaration);
-        JsonElement profile = declaration.GetProperty("profile");
-        Binding binding = emitter.BindContract(declaration, binaryProfile ?? profile.GetProperty("binary").GetInt32());
+        JsonElement profile;
+        Binding binding;
+        if (declaration.ValueKind == JsonValueKind.Object)
+        {
+            profile = declaration.GetProperty("profile");
+            emitter.AnalyzeRecursiveRecords(Normalize(Text(declaration, "type")), profile);
+            binding = emitter.BindContract(declaration, binaryProfile ?? profile.GetProperty("binary").GetInt32());
+        }
+        else
+        {
+            profile = document.TryGetProperty("rootProfile", out var declaredProfile) ? declaredProfile :
+                JsonSerializer.SerializeToElement(new { binary = 2, jsonEncoding = 1, jsonDepth = 1024,
+                    maxCollection = int.MaxValue, maxString = int.MaxValue });
+            int active = binaryProfile ?? profile.GetProperty("binary").GetInt32();
+            emitter.AnalyzeRecursiveRecords(Normalize(root), profile);
+            string key = PortableManifest.RootKey(root);
+            JsonElement shape = document.TryGetProperty("roots", out var shapes)
+                ? shapes.EnumerateObject().FirstOrDefault(entry => PortableManifest.RootKey(entry.Name) == key).Value : default;
+            if (shape.ValueKind == JsonValueKind.Object)
+                binding = emitter.BindShape(shape, active, root);
+            else
+            {
+                PortableManifest.CheckRootLayout(key);
+                binding = emitter.BindType(root, active, root, false);
+            }
+        }
         emitter.EmitDeferredRecordsAndRttiUnions();
         emitter.EmitRoot(binding, profile);
         emitter.EmitRootBinaryReadFacade(manifest.RootElement);
@@ -120,7 +142,7 @@ internal sealed partial class CppEmitter
     {
         string owner = Text(contract, "id");
         if (contract.GetProperty("sequenceBase").ValueKind != JsonValueKind.Null ||
-            contract.GetProperty("collectionBase").ValueKind != JsonValueKind.Null || Flag(contract, "dynamicVersion"))
+            Flag(contract, "dynamicVersion"))
             throw Missing(owner, "an inherited collection body or dynamic Version schema");
 
         bool version = Flag(contract, "versioned");
@@ -163,6 +185,15 @@ internal sealed partial class CppEmitter
             jsonMembers.Add(new JsonMember(property, pointer, member.Json, names));
         }
 
+        bool collectionBase = contract.GetProperty("collectionBase").ValueKind == JsonValueKind.Object;
+        if (collectionBase)
+        {
+            Binding items = BindFormatter(contract.GetProperty("collectionBase"), profile, owner + ".$items");
+            string pointer = "&" + storage + "::collection_items";
+            declarations.Add("    " + items.Type + " collection_items{std::in_place};");
+            binaryMembers.Add(Apply("luminpack::record_member", [pointer, Apply("luminpack::collection_base_binary", [items.Binary])]));
+            jsonMembers.Add(new JsonMember("$items", pointer, Apply("luminpack::collection_base_json", [items.Json]), []));
+        }
         if (trackedStorage == null || definedReferenceStorage.Add(storage))
         {
             string inheritance = RttiInheritance(Normalize(Text(contract, "type")));
@@ -182,13 +213,20 @@ internal sealed partial class CppEmitter
         string binary = name + (recursive ? "_binary_body" : "_binary");
         if (version)
             Alias(binary, "luminpack::version_codec", new[] { name, Profile(profile) }.Concat(binaryMembers));
+        else if (collectionBase)
+            Alias(binary, "luminpack::counted_record_codec", new[] { name, Integer(binaryMembers.Count - 1) }.Concat(binaryMembers));
         else
             Alias(binary, "luminpack::record_codec", new[] { name }.Concat(binaryMembers));
         int[]? orderedRuns = contract.TryGetProperty("jsonInt32Runs", out JsonElement runs) && runs.ValueKind == JsonValueKind.Array
             ? runs.EnumerateArray().Select(static item => item.GetInt32()).ToArray()
             : null;
-        EmitJsonBody(name + "_json_body", name, jsonMembers, orderedRuns,
-            generatedIntegerProperties: ReadGeneratedJsonIntegerProperties(contract));
+        bool[]? integerProperties = ReadGeneratedJsonIntegerProperties(contract);
+        if (collectionBase)
+        {
+            if (orderedRuns != null) orderedRuns = [.. orderedRuns, 0];
+            if (integerProperties != null) integerProperties = [.. integerProperties, false];
+        }
+        EmitJsonBody(name + "_json_body", name, jsonMembers, orderedRuns, generatedIntegerProperties: integerProperties);
         if (recursive)
         {
             recursiveRecordBodies.Add(name);
@@ -339,6 +377,8 @@ internal sealed partial class CppEmitter
                 bare.StartsWith("System.Collections.Generic.Dictionary<", StringComparison.Ordinal) ||
                 (contracts.TryGetValue(bare, out JsonElement reference) && IsReferenceContract(reference)))
                 type = bare;
+            else
+                return Optional(BindType(bare, profile, label, required), 0);
         }
         if (type is "string" or "System.String")
         {
@@ -382,6 +422,8 @@ internal sealed partial class CppEmitter
         {
             string family = type[..open];
             string arguments = type[(open + 1)..^1];
+            if (family == NullableDefinition)
+                return Optional(BindType(arguments, profile, label, false), 0);
             if (family == "System.Collections.Generic.List")
                 return Sequence(BindType(arguments, profile, label, false));
             if (family == "System.Collections.Generic.Dictionary")

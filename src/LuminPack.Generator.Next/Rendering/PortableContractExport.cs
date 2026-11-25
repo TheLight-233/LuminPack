@@ -30,7 +30,7 @@ internal static class PortableContractExport
     /// <param name="assemblyPolicy">The document policy for the registered fallback.</param>
     /// <param name="cancellationToken">Cancels the projection.</param>
     /// <returns>Source containing assembly metadata, or an empty string when no payloads are available.</returns>
-    internal static string Render(IEnumerable<TypeModel> roots, IEnumerable<MemberModel> callRoots, GeneratorOptions options,
+    internal static string Render(IEnumerable<TypeModel> roots, IReadOnlyDictionary<string, MemberModel> callRoots, GeneratorOptions options,
         Func<StructModel, (int Strategy, FormatterStorageModel Layout)?> getNativeStorage,
         Func<FormatterModel, FormatterStorageModel?> getRawCompoundStorage,
         IEnumerable<(string Id, string Type, bool Reference, bool Json)> custom, WirePolicy assemblyPolicy,
@@ -42,7 +42,7 @@ internal static class PortableContractExport
             contracts[model.Identity.MetadataName] = model;
         foreach (TypeModel model in declarations)
             AddDependencies(contracts, model, cancellationToken);
-        foreach (MemberModel root in callRoots)
+        foreach (MemberModel root in callRoots.Values)
             AddMember(contracts, root, cancellationToken);
 
         StringBuilder? source = null;
@@ -67,9 +67,17 @@ internal static class PortableContractExport
                     ("typeParameters", Array.Empty<string>()), ("profile", Profile(assemblyPolicy)),
                     ("customReference", declaration.Reference), ("customJson", declaration.Json)));
         }
+        foreach (var entry in callRoots.OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Append(Object(("id", entry.Key), ("shape", Shape(entry.Value, getRawCompoundStorage))),
+                "LuminPack.Portable.Root.v1");
+        }
+        if (source != null)
+            Append(Profile(assemblyPolicy), "LuminPack.Portable.Profile.v1");
         return source?.ToString() ?? string.Empty;
 
-        void Append(object contract)
+        void Append(object contract, string key = MetadataKey)
         {
             json.Clear();
             Value(json, contract);
@@ -78,7 +86,7 @@ internal static class PortableContractExport
                 .Append(CompleteBinaryInputMetadataKey).Append("\", \"")
                 .Append(options.RequireCompleteBinaryInput ? "true" : "false").Append("\")]\n");
             source.Append("[assembly: global::System.Reflection.AssemblyMetadataAttribute(\"")
-                .Append(MetadataKey).Append("\", ")
+                .Append(key).Append("\", ")
                 .Append(SymbolDisplay.FormatLiteral(json.ToString(), true)).Append(")]\n");
         }
     }
@@ -105,6 +113,8 @@ internal static class PortableContractExport
         cancellationToken.ThrowIfCancellationRequested();
         foreach (MemberModel member in model.Members)
             AddMember(contracts, member, cancellationToken);
+        if (model is RecordModel { CollectionBase: { } collection })
+            AddFormatter(contracts, collection, cancellationToken);
         if (model is UnionModel union)
         {
             foreach (UnionCaseModel item in union.Cases)

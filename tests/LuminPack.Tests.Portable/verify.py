@@ -94,6 +94,23 @@ def suite_routes(suite):
             for fmt, suffix in FORMATS[1:]:
                 filename = "strings" + suffix
                 yield Route(root, filename, filename, fmt, fmt, reject=True)
+        case "primitive-roots":
+            derived = "LuminPackPortableFixtures.PrimitiveList"
+            for name, root in (
+                ("scalar", "System.Int32"), ("float", "float"), ("bools", "bool[]"),
+                ("nested", "System.Collections.Generic.Dictionary<int,System.Collections.Generic.List<float>>"),
+                ("array", "int?[]"), ("empty", "int?[]"), ("null", "int?[]"),
+                ("list", "System.Collections.Generic.List<float?>"),
+                ("dict", "System.Collections.Generic.Dictionary<int,int?>"),
+                ("derived", derived),
+            ):
+                filename = name + ".bin"
+                yield Route(root, filename, filename, "binary", "binary", exact=filename)
+                for fmt, suffix in FORMATS[1:]:
+                    yield Route(root, filename, name + suffix, "binary", fmt, exact=name + suffix)
+                    yield Route(root, name + suffix, name + ".from-" + fmt + ".bin", fmt, "binary", exact=filename)
+            for fmt, filename in (("binary", "derived-null.bin"), ("json-utf8", "derived-null.json")):
+                yield Route(derived, filename, filename + ".invalid", fmt, fmt, expected_failure=True)
         case "ordered-json":
             fmt = "json-utf8"
             container = "LuminPackPortableFixtures.OrderedJsonContainer"
@@ -337,7 +354,7 @@ def typescript_runner(args):
 
 
 def prepare_inputs(args, work, codegen, routes):
-    if args.suite in ("benchmarks", "strings", "ordered-json", "json-numbers"):
+    if args.suite in ("benchmarks", "strings", "ordered-json", "json-numbers", "primitive-roots"):
         project = HERE / "LuminPack.Tests.Portable.csproj"
     else:
         name = "LuminPack.Tests.Cpp." + SUITES[args.suite]
@@ -351,7 +368,7 @@ def prepare_inputs(args, work, codegen, routes):
                build_dotnet(project, work / "managed", export=True, properties=properties.get(args.suite, ())))
     inputs = work / "managed-models"
     operation = {"native-layout": "write-native", "strings": "write-strings", "ordered-json": "write-ordered-json",
-                 "json-numbers": "write-json-numbers"}.get(args.suite, "write")
+                 "primitive-roots": "write-primitive-roots", "json-numbers": "write-json-numbers"}.get(args.suite, "write")
     write = [args.managed_dotnet, managed, operation, inputs]
     if args.suite == "version-archive":
         write.append(ROOT / "tests/LuminPack.Tests.Aot/Fixtures/version-revision-1.bin")
@@ -384,6 +401,10 @@ def prepare_inputs(args, work, codegen, routes):
         if args.native_scalar_alignment:
             flags += ["--native-scalar-alignment", str(args.native_scalar_alignment)]
         invoke(["dotnet", codegen, "project", *flags, manifest, root, schema])
+        if args.suite == "primitive-roots":
+            first = next(route for route in routes if route.root == root)
+            header = inputs / Path(first.input).with_suffix(".hpp")
+            invoke(["dotnet", codegen, "generate", "--language", "cpp", manifest, root, header])
         if args.suite == "ordered-json" and root == ORDERED_JSON_ROOT:
             assert_ordered_json_contract(schema)
         schemas[(root, profile)] = schema
@@ -498,7 +519,7 @@ def verify_alternate_tagged(command, schema, canonical, outputs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("benchmarks", "strings", "ordered-json", "json-numbers", *SUITES), default="benchmarks")
+    parser.add_argument("--suite", choices=("benchmarks", "strings", "ordered-json", "json-numbers", "primitive-roots", *SUITES), default="benchmarks")
     parser.add_argument("--language", choices=LANGUAGES, action="append", help="Repeat to select multiple runtimes. The default runs all three.")
     parser.add_argument("--fixtures", type=Path, help="Reuse a manifest and documents emitted by the selected managed suite.")
     parser.add_argument("--manifest", type=Path, help="Use this manifest for reused fixtures stored separately from their manifest.")
@@ -543,7 +564,7 @@ def main():
         exchange(command, inputs, outputs, schemas, routes, args.fixtures / "out" if args.fixtures else None)
         verify_layout_edits(args.suite, command, inputs, outputs, schemas)
         operation = {"native-layout": "read-native", "strings": "read-strings", "ordered-json": "read-ordered-json",
-                     "json-numbers": "read-json-numbers"}.get(args.suite, "read")
+                     "primitive-roots": "read-primitive-roots", "json-numbers": "read-json-numbers"}.get(args.suite, "read")
         invoke([args.managed_dotnet, managed, operation, outputs])
         print(f"{backend}: verified {args.suite} managed round trips.", flush=True)
 

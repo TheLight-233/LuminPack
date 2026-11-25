@@ -532,6 +532,26 @@ private:
 };
 
 /// JSON object codec for a nullable class DTO.
+/// Validates the inherited List<T> when its JSON property is present.
+template<class Codec>
+struct collection_base_json
+{
+    using value_type = typename Codec::value_type;
+
+    static value_type read(auto& input)
+    {
+        auto value = Codec::read(input);
+        if (!value) throw wire_error("Null LuminPack collection base.");
+        return value;
+    }
+
+    static void write(auto& output, const value_type& value)
+    {
+        if (!value) throw wire_error("Null LuminPack collection base.");
+        Codec::write(output, value);
+    }
+};
+
 template<class T, class... Members>
 using json_record_codec = json_optional_codec<json_record_body<T, Members...>>;
 

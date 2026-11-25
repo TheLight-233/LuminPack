@@ -71,6 +71,7 @@ final class Schema {
         final String type;
         final String kind;
         final Profile profile;
+        final int binaryMemberCount;
         final boolean versioned;
         final boolean wideTags;
         final boolean unionRegistration;
@@ -102,6 +103,9 @@ final class Schema {
                 members.add(field);
                 if (names.putIfAbsent(field.name, field) != null) throw fail("Duplicate member " + field.name);
             }
+            binaryMemberCount = integer(metadata.get("binaryMemberCount"), members.size());
+            if (metadata.containsKey("binaryMemberCount") && binaryMemberCount != members.size() - 1)
+                throw fail("Invalid LuminPack collection base member count");
             jsonFields = members.toArray(Field[]::new);
             versionFields = versioned ? members.toArray(Field[]::new) : null;
             versionDescriptors = versioned ? new long[versionFields.length] : null;
@@ -126,7 +130,7 @@ final class Schema {
             resolved = true;
             if (!list(metadata.get("typeParameters")).isEmpty()) throw fail("Open LuminPack type " + id);
             if (!List.of("Record", "Struct", "Union", "Custom").contains(kind)) throw fail("Unsupported contract kind " + kind);
-            if (members.size() > 249) throw fail("LuminPack records support up to 249 members");
+            if (binaryMemberCount < 0 || binaryMemberCount > 249) throw fail("LuminPack records support up to 249 members");
             for (Field field : members) {
                 if (field.wire == null) throw fail("Missing wire descriptor for " + id + '.' + field.name);
                 field.wire.resolve(contracts);
@@ -199,6 +203,7 @@ final class Schema {
         final List<Wire> elements;
         final int rank;
         final String family;
+        final boolean required;
         final Map<?, ?> metadata;
         volatile Layout.Plan layoutPlan;
         volatile Layout.NullablePlan nullablePlan;
@@ -227,6 +232,7 @@ final class Schema {
             value = metadata.get("value") instanceof Map<?, ?> item ? new Wire(item) : null;
             elements = list(metadata.get("elements")).stream().map(item -> new Wire(object(item))).toList();
             rank = integer(metadata.get("rank"), 0);
+            required = flag(metadata, "required");
             family = metadata.get("family") instanceof String name ? normalize(name) : "";
         }
 
@@ -240,6 +246,11 @@ final class Schema {
             if (key != null) key.resolve(contracts);
             if (value != null) value.resolve(contracts);
             for (Wire child : elements) child.resolve(contracts);
+        }
+
+        boolean nullSequenceIsEmpty() {
+            if (required) throw fail("Null LuminPack collection base");
+            return memory();
         }
 
         boolean memory() {

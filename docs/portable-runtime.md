@@ -50,6 +50,8 @@ dotnet run --project tools/LuminPack.Codegen -c Release -- export path/to/Contra
 
 From the repository root, choose one target language and one root per command. Use the full model name or the exact closed generic `id` from the manifest. Quote names containing shell metacharacters, such as `'Example.Box<string>'`.
 
+A root can also be a shared primitive or a closed collection, for example `int`, `float[]`, `System.Collections.Generic.List<int?>`, or `System.Collections.Generic.Dictionary<int,float>`. For nullable collection elements or values, include a closed serializer call for that exact collection in the exporting C# project and regenerate the manifest. This exports the CLR slot layout used by Binary. A derived List with `IncludeCollectionBase = true` exposes its inherited elements as `$items` in JSON and portable records (`collection_items` in C++). The Binary header counts only declared fields.
+
 ```sh
 dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language cpp .tmp/contracts.json Example.Message .tmp/message.h
 dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language java .tmp/contracts.json Example.Message .tmp/Message.java
@@ -87,6 +89,8 @@ Place options before the manifest path.
 ## Verify an exchange
 
 The interoperability harness writes `SimpleClass` and `CharacterSaveData` in .NET, passes Binary, UTF-8 JSON, and UTF-16 JSON through Java, Go, and TypeScript, then has .NET verify the results. The `strings` suite checks the six Binary profiles against managed bytes. The C++ guide has its CMake interoperability commands. [C++ guide](../src/LuminPack.Cpp/README.md#verify-the-benchmark-models)
+
+The `primitive-roots` suite exchanges Binary and both JSON encodings for standalone roots, nullable collections and a List subclass. It writes C++ headers alongside the fixtures. Set the CMake option `LUMINPACK_CPP_PRIMITIVE_ROOT_FIXTURES` to that `managed-models` directory and run the `luminpack_cpp_primitive_roots` test.
 
 The `json-numbers` suite compares exact UTF-8 and UTF-16 JSON bytes and verifies the decoded Binary bits. After changing the checked-in C# XJB tables, run `python tools/xjb-tables/emit_portable.py` to regenerate the portable tables. Then run `node src/LuminPack.TypeScript/scripts/build-json-number.mjs` with a WebAssembly-capable Clang and linker to rebuild the embedded TypeScript kernel.
 
