@@ -460,7 +460,15 @@ internal static class UnionEmitter
         {
             w.Line("if (tag == uint.MaxValue)");
             w.Open();
-            w.Line(reader + "." + (model.UnionWide ? "TryPeekWideUnionHeader" : "TryPeekUnionHeader") + "(out ushort registeredTag);");
+            if (model.UnionWide)
+            {
+                w.Line("if (!" + reader + ".TryPeekWideUnionHeader(out ushort registeredTag))");
+                w.Indented(() => w.Line(w.A("LuminPackExceptionHelper") + ".ThrowFormatException(\"Invalid registered Union tag header.\");"));
+            }
+            else
+            {
+                w.Line(reader + ".TryPeekUnionHeader(out ushort registeredTag);");
+            }
             w.Line("if (" + "global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(" + "registeredTag" + ", out var registeredFormatter" +
                 string.Empty + ") && registeredFormatter" + string.Empty + ".ReadValue != null)");
             w.Open();

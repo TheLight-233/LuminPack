@@ -39,9 +39,8 @@ std::uint16_t read_registered_union_tag(reader& input)
     {
         if (marker == registered_union_wide_marker)
             return input.read<std::uint16_t>();
-        // A managed wide-header probe assigns zero for the remaining reserved markers.
         if (marker > registered_union_wide_marker)
-            return 0;
+            throw wire_error("Invalid registered Union tag header.");
     }
     return marker;
 }

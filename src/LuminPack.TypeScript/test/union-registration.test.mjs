@@ -31,6 +31,17 @@ test("reserves both the declared numeric Union tag and generated case hash", () 
     }
 });
 
+test("distinguishes wide tag zero from reserved headers", () => {
+    const codec = bind(true, 42, 0x10000, 0);
+    const value = { type: "External", value: 7 };
+    const bytes = codec.writeBinary(value);
+    assert.deepEqual(codec.readBinary(bytes), value);
+    for (let marker = 251; marker <= 255; marker++) {
+        bytes[4] = marker;
+        assert.throws(() => codec.readBinary(bytes), WireError);
+    }
+});
+
 test("round trips free numeric tags in narrow and wide Unions", () => {
     const value = { type: "External", value: 7 };
     for (const [wide, registeredTag, header] of [[false, 255, [255]], [true, 65535, [250, 255, 255]]]) {

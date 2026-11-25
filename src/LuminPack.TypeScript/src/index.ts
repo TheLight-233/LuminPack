@@ -1149,7 +1149,8 @@ class CompiledCodec<T, TInput> implements Codec<T, TInput> {
         if (hash === 0) return null;
         if (hash === 0xffff_ffff && plan.contract.unionRegistration) {
             const header = input.u8();
-            const tag = !plan.contract.unionWideTags ? header : header === 250 ? input.u16() : header > 250 ? 0 : header;
+            if (plan.contract.unionWideTags && header > 250) throw new WireError("Invalid registered Union tag header.");
+            const tag = plan.contract.unionWideTags && header === 250 ? input.u16() : header;
             const entry = plan.registeredByTag.get(tag);
             if (!entry) throw new WireError("Unknown registered LuminPack Union tag.");
             return { type: identity(entry.type), value: entry.codec.readBinary(input) };

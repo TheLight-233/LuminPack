@@ -161,7 +161,7 @@ final class BinaryDocument {
             int tag = input.readU8();
             if (union.wideTags) {
                 if (tag == 250) tag = input.readU16();
-                else if (tag > 250) tag = 0;
+                else if (tag > 250) throw fail("Invalid registered Union tag header");
             }
             return new LuminPack.RegisteredUnionValue(tag,
                 bindings.registered(union, tag).readBinary(new LuminPack.WireReader(input, profile)));

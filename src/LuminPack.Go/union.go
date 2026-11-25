@@ -65,7 +65,7 @@ func (r *binaryReader) registeredTag(c *contract) uint16 {
 			return r.u16()
 		}
 		if marker > 250 {
-			return 0
+			fail(r.pos-1, "invalid registered Union tag header")
 		}
 	}
 	return uint16(marker)
