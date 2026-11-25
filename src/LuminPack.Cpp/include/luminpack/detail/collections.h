@@ -321,6 +321,21 @@ struct self_list_binary
     static constexpr bool list_body = true;
     using sequence = list_codec<Element>;
 
+    struct payload
+    {
+        using value_type = T;
+        static constexpr auto minimum_size = sequence::minimum_size;
+
+        static T read(reader& input, auto&... context)
+        {
+            T result;
+            read_into(input, result, context...);
+            return result;
+        }
+
+        static void write(writer& output, const T& value, auto&... context) { write_body(output, value, context...); }
+    };
+
     static void read_into(reader& input, T& destination, auto&... context)
     {
         auto values = sequence::read(input, context...);

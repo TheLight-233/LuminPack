@@ -551,6 +551,7 @@ struct self_list_json_items
 template<class T, class Items>
 struct self_list_json_body
 {
+    using value_type = T;
     static T read(auto& input)
     {
         T result;

@@ -165,7 +165,7 @@ dotnet run --project tools/LuminPack.Codegen -c Release -- generate --language c
 
 自引用 List 类在 Binary 中使用集合长度，在 JSON 中使用数组。生成的 C++ 节点通过 `items` 向量访问元素。启用引用跟踪时，由图持有节点，JSON 使用 `$id` 和 `$value`。普通递归树可以包含分支无环的 Union 字段。
 
-启用引用跟踪的对象或普通 RTTI Union case 可以通过字段持有普通递归子树。普通递归子树也可以引用非递归的跟踪对象。图文档拥有跟踪对象，递归字段独立拥有各自解码的值。递归类直接作为 Union case、递归子树的 Union 后代再次进入拥有型递归，或跟踪对象重新进入递归时，生成器会给出诊断。诊断也覆盖后代独立的输入限制、混合递归图的有限深度，以及隔离 Version 读取的有限深度。
+启用引用跟踪的对象或普通 RTTI Union case 可以通过字段持有普通递归子树。普通递归子树也可以引用非递归的跟踪对象。图文档拥有跟踪对象，递归字段独立拥有各自解码的值。普通递归记录本身也可以作为 Union case：首个节点采用分支负载，其子节点保留普通记录头。自引用 List 作为 Union case 时使用集合长度。递归子树的 Union 后代再次进入拥有型递归，或跟踪对象重新进入递归时，生成器会给出诊断。诊断也覆盖后代独立的输入限制、混合递归图的有限深度，以及隔离 Version 读取的有限深度。
 
 普通 Version 类可以作为生成的 variant 或 RTTI Union case。其二进制载荷与外层文档共享 Version schema 注册表。Binary 和 JSON 读取器接受已知 Version case 内的 null 载荷，返回 null Union 值。
 

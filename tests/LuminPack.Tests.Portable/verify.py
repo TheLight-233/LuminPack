@@ -95,7 +95,7 @@ def suite_routes(suite):
                 filename = "strings" + suffix
                 yield Route(root, filename, filename, fmt, fmt, reject=True)
         case "recursive-lists":
-            for stem, model in (("list", "SelfList"), ("tracked", "SharedList"), ("wide", "SharedList"), ("tree", "UnionTree")):
+            for stem, model in (("list", "SelfList"), ("tracked", "SharedList"), ("wide", "SharedList"), ("tree", "UnionTree"), ("choice", "IRecursiveChoice"), ("list-case", "IRecursiveChoice")):
                 root = "LuminPackPortableFixtures." + model
                 yield Route(root, stem + ".bin", stem + ".json", "binary", "json-utf8", exact=stem + ".json")
                 yield Route(root, stem + ".json", stem + ".bin", "json-utf8", "binary", exact=stem + ".bin")

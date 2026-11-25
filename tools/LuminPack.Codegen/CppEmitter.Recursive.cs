@@ -6,6 +6,7 @@ internal sealed partial class CppEmitter
     private readonly HashSet<string> recursiveReferenceTypes = new(StringComparer.Ordinal);
     private readonly HashSet<string> recursiveReferenceBindings = new(StringComparer.Ordinal);
     private readonly Queue<(JsonElement Contract, string Name, int Profile)> deferredRecursiveRecords = new();
+    private readonly HashSet<string> recursiveUnionCases = new(StringComparer.Ordinal);
     private readonly HashSet<string> recursiveLists = new(StringComparer.Ordinal);
     private readonly List<string> recursiveRecordBodies = new();
     private bool isolatedRecursiveEntries;
@@ -43,8 +44,9 @@ internal sealed partial class CppEmitter
             {
                 if (recursiveRecords.Any(type => Reaches(type, child => IsUnion(child) && Reaches(child, recursiveRecords.Contains))))
                     throw Missing(rootType, "a Union below owning recursion that leads back to an owning recursive record");
-                if (boundaries.Any(type => IsUnion(type) && reachable[type].Any(recursiveRecords.Contains)))
-                    throw Missing(rootType, "an owning recursive record used directly as a Union case");
+                foreach (string union in boundaries.Where(IsUnion))
+                    foreach (string type in reachable[union].Where(recursiveRecords.Contains))
+                        recursiveUnionCases.Add(type);
                 if (boundaries.Any(type => Reaches(type, recursiveRecords.Contains) &&
                         reachable[type].Any(child => Reaches(child, candidate => candidate == type))))
                     throw Missing(rootType, "a recursive reference or Union boundary above an owning recursive subtree");
@@ -166,7 +168,10 @@ internal sealed partial class CppEmitter
     /// <returns>The binding to an owning recursive pointer.</returns>
     private Binding DeclareRecursiveRecord(JsonElement contract, (string Type, int Profile) key, string name)
     {
-        var binding = new Binding("std::unique_ptr<" + name + ">", name + "_binary", name + "_json", RecordStorage: name);
+        bool unionCase = recursiveUnionCases.Contains(key.Type);
+        string jsonPayload = Flag(contract, "versioned") ? $"luminpack::json_version_union_payload<{name}_json_body>" : name + "_json_body";
+        var binding = new Binding("std::unique_ptr<" + name + ">", name + "_binary", name + "_json",
+            unionCase ? name + "_binary_body::payload" : null, unionCase ? jsonPayload : null, RecordStorage: name);
         bool tracking = recursiveReferenceTypes.Contains(key.Type);
         if (tracking)
             recursiveReferenceBindings.Add(name);
@@ -198,7 +203,10 @@ internal sealed partial class CppEmitter
         code.Append("};\nstruct ").Append(binding.Json).Append("\n{\n    using value_type = ").Append(binding.Type).Append(";\n")
             .Append("    static value_type read(auto&);\n    static void write(auto&, const value_type&);\n};\n");
         generated.Add(key, binding);
-        deferredRecursiveRecords.Enqueue((contract, name, key.Profile));
+        if (unionCase)
+            EmitRecord(contract, name, key.Profile);
+        else
+            deferredRecursiveRecords.Enqueue((contract, name, key.Profile));
         return binding;
     }
 
@@ -213,8 +221,12 @@ internal sealed partial class CppEmitter
         string storage = trackedStorage ?? name;
         var binding = generated[(Normalize(Text(contract, "type")), profile)];
         if (trackedStorage == null || definedReferenceStorage.Add(storage))
+        {
             code.Append("struct ").Append(storage).Append(RttiInheritance(Normalize(Text(contract, "type"))))
-                .Append("\n{\n    std::vector<").Append(binding.Type).Append("> items;\n};\n");
+                .Append("\n{\n    std::vector<").Append(binding.Type).Append("> items;\n");
+            MarkRttiCaseSlots(storage);
+            code.Append("};\n");
+        }
         string body = Apply("luminpack::detail::self_list_binary", [storage, binding.Binary]);
         string jsonItems = Apply("luminpack::detail::self_list_json_items", [binding.Json]);
         if (trackedStorage != null)

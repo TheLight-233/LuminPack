@@ -1,8 +1,10 @@
 #include "interop_models.h"
+#include "choice.hpp"
 #include "list.hpp"
 #include "tracked.hpp"
 #include "tree.hpp"
 
+namespace choice = luminpack_generated::root_LuminPackPortableFixtures_x002eIRecursiveChoice;
 namespace list = luminpack_generated::root_LuminPackPortableFixtures_x002eSelfList;
 namespace tracked = luminpack_generated::root_LuminPackPortableFixtures_x002eSharedList;
 namespace tree = luminpack_generated::root_LuminPackPortableFixtures_x002eUnionTree;
@@ -27,6 +29,8 @@ int main(int argc, char** argv)
     using namespace luminpack;
     if (argc != 2) return 2;
     const std::filesystem::path directory(argv[1]);
+    exchange<choice::root_binary, choice::root_json>(directory, "choice");
+    exchange<choice::root_binary, choice::root_json>(directory, "list-case");
     exchange<list::root_binary, list::root_json>(directory, "list");
     exchange<tree::root_binary, tree::root_json>(directory, "tree");
     const auto binary = interop_models::load(directory / "tracked.bin");

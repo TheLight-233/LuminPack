@@ -21,10 +21,13 @@ internal static class RecursiveListFixtures
         var wide = new SharedList();
         wide.AddRange(Enumerable.Repeat<SharedList>(null!, 255));
         var tree = new UnionTree { Child = new UnionTree { Choice = new Leaf { Value = 123 } } };
+        IRecursiveChoice choice = new RecursiveCase { Value = 11, Child = new RecursiveCase { Value = 22 } };
         var buffer = new ArrayBufferWriter<byte>();
         Check("list", LuminPackSerializer.Serialize(list));
         Check("tracked", LuminPackSerializer.Serialize(tracked));
         Check("wide", LuminPackSerializer.Serialize(wide));
+        Check("list-case", LuminPackSerializer.Serialize<IRecursiveChoice>(list));
+        Check("choice", LuminPackSerializer.Serialize(choice));
         Check("tree", LuminPackSerializer.Serialize(tree));
         if (write)
         {
@@ -37,6 +40,10 @@ internal static class RecursiveListFixtures
             File.WriteAllBytes(Path.Combine(directory, "invalid.bin"), [0, 0, 255, 255, 255, 255]);
             LuminPackSerializer.SerializeJson<UnionTree, LuminPackUtf8LengthOptions>(tree, buffer);
             Save("tree");
+            LuminPackSerializer.SerializeJson<IRecursiveChoice, LuminPackUtf8LengthOptions>(choice, buffer);
+            Save("choice");
+            LuminPackSerializer.SerializeJson<IRecursiveChoice, LuminPackUtf8LengthOptions>(list, buffer);
+            Save("list-case");
         }
         else
         {
@@ -61,7 +68,7 @@ internal static class RecursiveListFixtures
     }
 }
 
-[LuminPackable] public sealed partial class SelfList : List<SelfList>;
+[LuminPackable] public sealed partial class SelfList : List<SelfList>, IRecursiveChoice;
 [LuminPackable, LuminPackOption(TrackReferences = true)] public sealed partial class SharedList : List<SharedList>;
 [LuminPackable, LuminPackUnion(41, typeof(Leaf))] public partial interface ILeaf;
 [LuminPackable] public sealed partial class Leaf : ILeaf { public int Value; }
@@ -69,4 +76,11 @@ internal static class RecursiveListFixtures
 {
     public UnionTree? Child;
     public ILeaf? Choice;
+}
+
+[LuminPackable, LuminPackUnion(12, typeof(RecursiveCase)), LuminPackUnion(13, typeof(SelfList))] public partial interface IRecursiveChoice;
+[LuminPackable] public sealed partial class RecursiveCase : IRecursiveChoice
+{
+    public int Value;
+    public RecursiveCase? Child;
 }
