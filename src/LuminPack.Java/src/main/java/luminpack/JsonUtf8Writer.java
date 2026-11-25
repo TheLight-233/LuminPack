@@ -76,7 +76,10 @@ final class JsonUtf8Writer {
 
     void floating(float value) {
         reserve(JsonNumberFormatter.MAX_BYTES);
-        position += numbers.floating(buffer, position, value);
+        int integer = (int) value;
+        if (integer == value && integer > -16777216 && integer < 16777216 && Float.floatToRawIntBits(value) != Integer.MIN_VALUE)
+            position += JsonNumberFormatter.signed32(buffer, position, integer);
+        else position += numbers.floating(buffer, position, value);
     }
 
     void floating(double value) {

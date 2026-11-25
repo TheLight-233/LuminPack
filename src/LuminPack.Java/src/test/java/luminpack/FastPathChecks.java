@@ -15,11 +15,27 @@ public final class FastPathChecks {
         boolean vector = args.length == 1 && args[0].equals("vector");
         require((provider != null) == vector, "Unexpected vector provider state");
         if (provider != null) checkScans(provider);
+        checkPositionalRecord();
         checkStrings();
         checkScalarBlock();
         checkScalarRoot();
         checkOrderedJson();
         checkFloatingJson();
+    }
+
+    private static void checkPositionalRecord() {
+        var fields = new PositionalRecord.Fields(new String[]{"value", "next"});
+        var slots = new Object[]{42, null};
+        var record = new PositionalRecord(fields, slots);
+        require(record.containsKey("next") && !record.containsKey("old"), "Positional record key presence");
+        require(PositionalRecord.slots(record, fields) == slots, "Schema-local field slots");
+        var view = record.entrySet();
+        var first = view.iterator().next();
+        require(first.getKey().equals("value") && first.setValue(3).equals(42), "Mutable ordered entry");
+        record.put("extra", true);
+        record.remove("next");
+        require(view.size() == 2 && record.get("value").equals(3), "Live record view after mutation");
+        require(PositionalRecord.slots(record, fields) == null, "Updated records use current entries");
     }
 
     private static void checkScans(StringKernels provider) {
@@ -153,8 +169,8 @@ public final class FastPathChecks {
         for (String token : List.of("-0", "-0.00", "0.000001", "9999999", "-321.125", "9.999999", "12.123456",
             "1.000000059604644775390625", "1e-38")) {
             var reader = new Json.Reader(token, 4);
-            Number value = reader.shortDecimal();
-            if (value == null) value = (Number) reader.value(0);
+            double shortcut = reader.shortDecimal();
+            Number value = Double.isNaN(shortcut) ? (Number) reader.value(0) : Double.valueOf(shortcut);
             require(reader.atEnd() && Double.doubleToRawLongBits(value.doubleValue()) ==
                 Double.doubleToRawLongBits(Double.parseDouble(token)), "Double decimal parsing");
             require(Float.floatToRawIntBits(value.floatValue()) == Float.floatToRawIntBits(Float.parseFloat(token)),

@@ -85,7 +85,7 @@ final class BinaryDocument {
             if ((!type.sequenceBase && input.peekU8() == NULL) || references.putIfAbsent(id, new Reference(type, result, id)) != null)
                 throw fail("Invalid LuminPack reference definition");
         } else {
-            result = new LinkedHashMap<>(type.members.size());
+            result = type.versioned || type.kind.equals("Struct") ? new LinkedHashMap<>(type.members.size()) : null;
         }
 
         checkDepth(depth, depthLimit);
@@ -98,6 +98,12 @@ final class BinaryDocument {
             if (count != type.binaryMemberCount) throw fail("Unexpected LuminPack member count in " + type.id);
         }
         if (type.kind.equals("Struct") && Layout.readStruct(this, input, type, result, profile, depth + 1, false)) return result;
+        if (result == null) {
+            Schema.Field[] fields = type.jsonFields;
+            Object[] slots = new Object[fields.length];
+            for (int i = 0; i < fields.length; i++) slots[i] = readField(input, fields[i], profile, depth + 1, 0);
+            return new PositionalRecord(type.positions, slots);
+        }
         readMembers(input, type, result, profile, depth + 1);
         return result;
     }
@@ -190,7 +196,12 @@ final class BinaryDocument {
     }
 
     void writeMembers(BinaryCursor.Writer output, Schema.Contract type, Map<?, ?> value, int profile, int depth) {
-        for (Schema.Field field : type.members) writeField(output, field, value.get(field.name), profile, depth, 0);
+        Object[] slots = PositionalRecord.slots(value, type.positions);
+        Schema.Field[] fields = type.jsonFields;
+        for (int i = 0; i < fields.length; i++) {
+            Schema.Field field = fields[i];
+            writeField(output, field, slots == null ? value.get(field.name) : slots[i], profile, depth, 0);
+        }
     }
 
     Object readField(BinaryCursor.Reader input, Schema.Field field, int profile, int depth, int nullableWidth) {

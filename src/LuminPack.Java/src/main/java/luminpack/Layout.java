@@ -220,7 +220,7 @@ final class Layout {
             children[index] = leaf(field.wire.type, fieldWidth, leaves);
         }
         if (leaves.isEmpty()) throw fail("Empty LuminPack storage for " + contract.id);
-        return create(new RecordNode(fields, children), leaves, Math.multiplyExact(width, fields.length),
+        return create(new RecordNode(fields, children, contract.positions), leaves, Math.multiplyExact(width, fields.length),
             List.of(), List.of(), false);
     }
 
@@ -295,7 +295,7 @@ final class Layout {
             names[index] = name;
             children[index] = shape(document, member.wire, object(row.get("storage")), leaves, depth + 1);
         }
-        return new RecordNode(names, children);
+        return new RecordNode(names, children, Arrays.equals(names, contract.positions.names) ? contract.positions : new PositionalRecord.Fields(names));
     }
 
     private static String aggregateName(int kind, int index) {
@@ -727,10 +727,14 @@ final class Layout {
         }
     }
 
-    private record RecordNode(String[] names, Node[] children) implements Node {
+    private record RecordNode(String[] names, Node[] children, PositionalRecord.Fields fields) implements Node {
         public Object read(Object[] values, Padding padding) {
-            Map<String, Object> value = padding == null ? new LinkedHashMap<>(names.length) :
-                new PaddedRecord(names.length, padding);
+            if (padding == null) {
+                Object[] slots = new Object[names.length];
+                for (int i = 0; i < slots.length; i++) slots[i] = children[i].read(values, null);
+                return new PositionalRecord(fields, slots);
+            }
+            Map<String, Object> value = new PaddedRecord(names.length, padding);
             readInto(value, values);
             return value;
         }
@@ -741,22 +745,23 @@ final class Layout {
         }
 
         public void collect(Object value, Object[] values) {
-            Map<?, ?> fields = object(value);
+            Map<?, ?> map = object(value);
+            Object[] slots = PositionalRecord.slots(map, fields);
             for (int index = 0; index < names.length; index++)
-                children[index].collect(fields.get(names[index]), values);
+                children[index].collect(slots == null ? map.get(names[index]) : slots[index], values);
         }
 
         public Object readSequential(BinaryCursor.Reader input) {
-            Map<String, Object> value = new LinkedHashMap<>(names.length);
-            for (int index = 0; index < names.length; index++)
-                value.put(names[index], children[index].readSequential(input));
-            return value;
+            Object[] slots = new Object[names.length];
+            for (int i = 0; i < slots.length; i++) slots[i] = children[i].readSequential(input);
+            return new PositionalRecord(fields, slots);
         }
 
         public void writeSequential(BinaryDocument document, BinaryCursor.Writer output, Object value) {
-            Map<?, ?> fields = object(value);
+            Map<?, ?> map = object(value);
+            Object[] slots = PositionalRecord.slots(map, fields);
             for (int index = 0; index < names.length; index++)
-                children[index].writeSequential(document, output, fields.get(names[index]));
+                children[index].writeSequential(document, output, slots == null ? map.get(names[index]) : slots[index]);
         }
     }
 

@@ -80,6 +80,8 @@ final class Schema {
         final boolean customJson;
         final List<Field> members = new ArrayList<>();
         final Field[] jsonFields;
+        final PositionalRecord.Fields positions;
+        final boolean floatRow;
         final Map<String, Field> names = new HashMap<>();
         final Map<Integer, Field> versionNames = new HashMap<>();
         final Field[] versionFields;
@@ -111,6 +113,9 @@ final class Schema {
             if (metadata.containsKey("binaryMemberCount") && binaryMemberCount != members.size() - 1)
                 throw fail("Invalid LuminPack collection base member count");
             jsonFields = members.toArray(Field[]::new);
+            positions = new PositionalRecord.Fields(members.stream().map(field -> field.name).toArray(String[]::new));
+            floatRow = kind.equals("Struct") && !members.isEmpty() && members.stream().allMatch(
+                field -> field.wire != null && field.wire.kind == Wire.SCALAR && field.wire.type.equals("float"));
             versionFields = versioned ? members.toArray(Field[]::new) : null;
             versionDescriptors = versioned ? new long[versionFields.length] : null;
             for (int index = 0; index < members.size(); index++) {

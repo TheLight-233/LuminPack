@@ -71,7 +71,7 @@ final class JsonDirect {
             }
         } else {
             Schema.Field[] fields = type.jsonFields;
-            var result = new LinkedHashMap<String, Object>(fields.length * 4 / 3 + 1);
+            Object[] result = new Object[fields.length];
             int index = 0;
             for (; index < fields.length; index++) {
                 reader.space();
@@ -79,10 +79,10 @@ final class JsonDirect {
                 reader.space();
                 Schema.Field field = fields[index];
                 if (!reader.match(field.jsonName.token())) break;
-                result.put(field.name, readWire(reader, field.wire, depth + 1));
+                result[index] = type.floatRow ? readFloat(reader, depth + 1) : readWire(reader, field.wire, depth + 1);
             }
             reader.space();
-            if (index == fields.length && reader.consume('}')) return result;
+            if (index == fields.length && reader.consume('}')) return new PositionalRecord(type.positions, result);
         }
         // The general reader handles sparse, reordered, escaped, former, unknown and duplicate names.
         reader.position(start);
@@ -109,11 +109,17 @@ final class JsonDirect {
         return general.string(reader.value(depth));
     }
 
+    private Float readFloat(Json.Reader reader, int depth) {
+        double value = reader.shortDecimal();
+        return Double.isNaN(value) ? (Float) general.scalar("float", reader.value(depth)) : (float) value;
+    }
+
     private Object readScalar(Json.Reader reader, String type, int depth) {
         return switch (type) {
-            case "float", "double" -> {
-                Number value = reader.shortDecimal();
-                yield general.scalar(type, value == null ? reader.value(depth) : value);
+            case "float" -> readFloat(reader, depth);
+            case "double" -> {
+                double value = reader.shortDecimal();
+                yield Double.isNaN(value) ? general.scalar(type, reader.value(depth)) : value;
             }
             case "int" -> Math.toIntExact(reader.signedInteger());
             case "long" -> reader.signedInteger();
@@ -227,10 +233,20 @@ final class JsonDirect {
         Map<?, ?> record = Schema.object(value);
         output.token('{');
         Schema.Field[] fields = type.jsonFields;
-        for (int i = 0; i < fields.length; i++) {
-            Schema.Field field = fields[i];
-            output.raw(i == 0 ? field.firstJsonHead : field.nextJsonHead);
-            writeWire(output, field.wire, record.get(field.name), depth + 1);
+        Object[] slots = PositionalRecord.slots(record, type.positions);
+        if (type.floatRow && slots != null) {
+            for (int i = 0; i < fields.length; i++) {
+                Schema.Field field = fields[i];
+                output.raw(i == 0 ? field.firstJsonHead : field.nextJsonHead);
+                if (slots[i] instanceof Float f) output.floating(f);
+                else writeScalar(output, "float", slots[i]);
+            }
+        } else {
+            for (int i = 0; i < fields.length; i++) {
+                Schema.Field field = fields[i];
+                output.raw(i == 0 ? field.firstJsonHead : field.nextJsonHead);
+                writeWire(output, field.wire, slots == null ? record.get(field.name) : slots[i], depth + 1);
+            }
         }
         output.token('}');
     }

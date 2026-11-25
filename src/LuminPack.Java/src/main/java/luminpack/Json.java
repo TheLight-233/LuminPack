@@ -353,7 +353,7 @@ final class Json {
         // are exact even in binary32. A binary64 quotient can safely narrow here:
         // a non-midpoint ratio is at least 1/(2^24 * 10^6) from a single midpoint
         // relative to its binade, outside binary64 rounding error.
-        Double shortDecimal() {
+        double shortDecimal() {
             space();
             int cursor = position;
             boolean negative = cursor < text.length() && text.charAt(cursor) == '-';
@@ -363,25 +363,25 @@ final class Json {
             while (cursor < text.length()) {
                 int digit = text.charAt(cursor) - '0';
                 if (digit < 0 || digit > 9) break;
-                if (cursor - start >= 7 || cursor != start && coefficient == 0) return null;
+                if (cursor - start >= 7 || cursor != start && coefficient == 0) return Double.NaN;
                 coefficient = coefficient * 10 + digit;
                 cursor++;
             }
-            if (cursor == start) return null;
+            if (cursor == start) return Double.NaN;
             int scale = 1;
             if (cursor < text.length() && text.charAt(cursor) == '.') {
                 int fraction = ++cursor;
                 while (cursor < text.length()) {
                     int digit = text.charAt(cursor) - '0';
                     if (digit < 0 || digit > 9) break;
-                    if (cursor - start > 7 || cursor - fraction >= 6) return null;
+                    if (cursor - start > 7 || cursor - fraction >= 6) return Double.NaN;
                     coefficient = coefficient * 10 + digit;
                     scale *= 10;
                     cursor++;
                 }
-                if (cursor == fraction) return null;
+                if (cursor == fraction) return Double.NaN;
             }
-            if (cursor < text.length() && (text.charAt(cursor) == 'e' || text.charAt(cursor) == 'E')) return null;
+            if (cursor < text.length() && (text.charAt(cursor) == 'e' || text.charAt(cursor) == 'E')) return Double.NaN;
             position = cursor;
             double value = (double) coefficient / scale;
             return negative ? -value : value;
