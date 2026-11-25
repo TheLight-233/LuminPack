@@ -133,13 +133,14 @@ public sealed class NinoCoverageRegressionTest
     /// <param name="half">The binary16 bits.</param>
     /// <param name="single">The binary32 bits.</param>
     /// <param name="wide">The binary64 bits.</param>
-    /// <param name="signalingNaNs">Whether the values use signaling NaN encodings.</param>
     [Theory]
-    [InlineData((ushort)0x8000, 0x80000000u, 0x8000000000000000ul, false)]
-    [InlineData((ushort)0x03ff, 0x007fffffu, 0x000ffffffffffffful, false)]
-    [InlineData((ushort)0x7e01, 0xffc00001u, 0x7ff8deadbeef0001ul, false)]
-    [InlineData((ushort)0x7c01, 0x7f800001u, 0x7ff0000000000001ul, true)]
-    public void BinaryFloatingPointRoundTripsExactBits(ushort half, uint single, ulong wide, bool signalingNaNs)
+    [InlineData((ushort)0x8000, 0x80000000u, 0x8000000000000000ul)]
+    [InlineData((ushort)0x03ff, 0x007fffffu, 0x000ffffffffffffful)]
+    [InlineData((ushort)0x7e01, 0xffc00001u, 0x7ff8deadbeef0001ul)]
+    [InlineData((ushort)0x7c01, 0x7f800001u, 0x7ff0000000000001ul)]
+    [InlineData((ushort)0xfc00, 0xff800042u, 0xfff0000000000000ul)]
+    [InlineData((ushort)0x7c00, 0x7f800000u, 0xfff0000000000042ul)]
+    public void BinaryFloatingPointRoundTripsExactBits(ushort half, uint single, ulong wide)
     {
         byte[] halfBytes = new byte[sizeof(ushort)];
         byte[] singleBytes = new byte[sizeof(uint)];
@@ -158,16 +159,18 @@ public sealed class NinoCoverageRegressionTest
 
         byte[] singleReturn = LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<float>(singleBytes));
         byte[] wideReturn = LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<double>(wideBytes));
-        if (signalingNaNs && RuntimeInformation.ProcessArchitecture == Architecture.X86)
+        CheckReturnedBits(single, BinaryPrimitives.ReadUInt32LittleEndian(singleReturn), 0x7f800000u, 0x00400000u);
+        CheckReturnedBits(wide, BinaryPrimitives.ReadUInt64LittleEndian(wideReturn), 0x7ff0000000000000ul, 0x0008000000000000ul);
+
+        static void CheckReturnedBits(ulong original, ulong returned, ulong exponentMask, ulong quietBit)
         {
-            // The x86 CLR uses the x87 return register for by-value floating-point results.
-            if (BinaryPrimitives.ReadUInt32LittleEndian(singleReturn) != single)
-                BinaryPrimitives.WriteUInt32LittleEndian(singleBytes, single | 0x00400000u);
-            if (BinaryPrimitives.ReadUInt64LittleEndian(wideReturn) != wide)
-                BinaryPrimitives.WriteUInt64LittleEndian(wideBytes, wide | 0x0008000000000000ul);
+            // An x87 by-value return may quiet a signaling NaN while retaining its sign and payload.
+            bool signaling = (original & exponentMask) == exponentMask &&
+                (original & quietBit) == 0 && (original & (quietBit - 1)) != 0;
+            if (signaling && RuntimeInformation.ProcessArchitecture == Architecture.X86 && returned == (original | quietBit))
+                return;
+            Assert.Equal(original, returned);
         }
-        Assert.Equal(singleBytes, singleReturn);
-        Assert.Equal(wideBytes, wideReturn);
     }
 
     /// <summary>Checks versioned sequence records and preserves a previously borrowed read-only memory slice.</summary>
