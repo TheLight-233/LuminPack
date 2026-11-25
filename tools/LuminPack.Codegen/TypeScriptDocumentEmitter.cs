@@ -10,14 +10,17 @@ internal static partial class PortableGenerateCommand
     /// <returns>Whether a complete document codec was generated.</returns>
     private static bool EmitTypeScriptDocument(StringBuilder output, JsonObject schema)
     {
-        if (schema["rootWire"] != null) return false;
+        if (schema["rootWire"] != null)
+            return false;
         var contracts = PortableManifest.Objects(schema, "contracts").ToDictionary(
             c => PortableManifest.Normalize((string)c["type"]!), StringComparer.Ordinal);
         var shapes = new Dictionary<string, JsonObject>();
         string Id(string type) => "C" + Identifier(PortableManifest.Normalize(type));
         string Shape(JsonObject w) => (string)w["kind"]! switch
         {
-            "contract" => Id((string)w["type"]!), "scalar" => "S" + (string)w["type"]!, "string" => "Text",
+            "contract" => Id((string)w["type"]!),
+            "scalar" => "S" + (string)w["type"]!,
+            "string" => "Text",
             "sequence" => "List_" + Shape((JsonObject)w["element"]!),
             _ => "Dict_" + Shape((JsonObject)w["key"]!) + "_" + Shape((JsonObject)w["value"]!)
         };
@@ -26,24 +29,28 @@ internal static partial class PortableGenerateCommand
             bool supported = (string?)w["kind"] switch
             {
                 "scalar" => (string?)w["type"] is "int" or "long" or "byte" or "float" or "bool",
-                "contract" => contracts.ContainsKey(PortableManifest.Normalize((string)w["type"]!)), "string" => true,
+                "contract" => contracts.ContainsKey(PortableManifest.Normalize((string)w["type"]!)),
+                "string" => true,
                 "sequence" => (bool?)w["required"] != true && (string?)w["family"] is not ("System.Memory" or "System.ReadOnlyMemory" or "System.Buffers.ReadOnlySequence") && Accept((JsonObject)w["element"]!),
                 "dictionary" => (string?)w["key"]?["kind"] is "string" or "scalar" &&
                     Accept((JsonObject)w["key"]!) && Accept((JsonObject)w["value"]!),
                 _ => false
             };
-            if (supported && (string?)w["kind"] != "contract") shapes.TryAdd(Shape(w), w);
+            if (supported && (string?)w["kind"] != "contract")
+                shapes.TryAdd(Shape(w), w);
             return supported;
         }
         if (contracts.Values.Any(c => (string?)c["kind"] is not ("Record" or "Struct" or "Union") ||
             c["sequenceWire"] != null || c["sequenceBase"] != null || (bool?)c["profile"]?["trackReferences"] == true ||
             PortableManifest.Objects(c, "members").Any(m => m["wire"] is not JsonObject w || !Accept(w) ||
                 ((string)m["name"]!).Length == 0 || char.IsAsciiDigit(((string)m["name"]!)[0]) ||
-                ((string)m["name"]!).Any(ch => ch < ' ' || ch > '~' || ch is '"' or '\\')))) return false;
+                ((string)m["name"]!).Any(ch => ch < ' ' || ch > '~' || ch is '"' or '\\'))))
+            return false;
         var heads = new Dictionary<string, int>(StringComparer.Ordinal);
         string Head(string text)
         {
-            if (!heads.TryGetValue(text, out var index)) heads.Add(text, index = heads.Count);
+            if (!heads.TryGetValue(text, out var index))
+                heads.Add(text, index = heads.Count);
             return "jsonHead" + index;
         }
         string WriteHead(string text)
@@ -67,12 +74,19 @@ internal static partial class PortableGenerateCommand
             {
                 string method = kind == "string" ? "checkedString()" : (string)wire["type"]! switch
                 {
-                    "int" => "int32()", "float" => "floating(true)", "long" => "long()", "byte" => "byte()", _ => "boolean()"
+                    "int" => "int32()",
+                    "float" => "floating(true)",
+                    "long" => "long()",
+                    "byte" => "byte()",
+                    _ => "boolean()"
                 };
                 string store = kind == "string" ? "out.text(x)" : (string)wire["type"]! switch
                 {
-                    "int" => "out.int(x)", "float" => "out.float(x,true)", "long" => "out.long(x)",
-                    "byte" => "out.byte(x)", _ => "out.bool(x)"
+                    "int" => "out.int(x)",
+                    "float" => "out.float(x,true)",
+                    "long" => "out.long(x)",
+                    "byte" => "out.byte(x)",
+                    _ => "out.bool(x)"
                 };
                 Line($"function gr{name}(r: DocumentCursor, _d: number): unknown {{ return r.{method}; }}");
                 Line($"function gw{name}(out: DocumentOutput,x: unknown,_d: number): void {{ {store}; }}");
@@ -117,7 +131,8 @@ internal static partial class PortableGenerateCommand
                     Line("  const fields: Record<string,unknown>=Object.create(null);for(const [key,value] of entries){if(typeof key!=='string')out.invalid();fields[key]=value;}");
                     Line($"  out.token(123);for(const key of Object.keys(fields)){{if(!first)out.token(44);first=false;out.text(key);out.token(58);gw{v}(out,fields[key],d);}}out.token(125);");
                 }
-                else Line($"  out.token(91);for(const [key,value] of entries){{if(!first)out.token(44);first=false;out.token(91);gw{k}(out,key,d);out.token(44);gw{v}(out,value,d);out.token(93);}}out.token(93);");
+                else
+                    Line($"  out.token(91);for(const [key,value] of entries){{if(!first)out.token(44);first=false;out.token(91);gw{k}(out,key,d);out.token(44);gw{v}(out,value,d);out.token(93);}}out.token(93);");
             }
             Line("}");
         }
@@ -128,7 +143,8 @@ internal static partial class PortableGenerateCommand
             var cases = PortableManifest.Objects(c, "cases").ToArray();
             bool union = (string?)c["kind"] == "Union", nullable = (string?)c["kind"] != "Struct";
             Line($"function gr{name}(r: DocumentCursor,d: number): unknown {{");
-            if (nullable) Line("  if(r.consume('null'))return null;");
+            if (nullable)
+                Line("  if(r.consume('null'))return null;");
             Line("  r.depth(d);");
             if (union)
             {
@@ -141,38 +157,43 @@ internal static partial class PortableGenerateCommand
             }
             else
             {
-                if (fields.Length == 0) Line("  r.expect('{');");
+                if (fields.Length == 0)
+                    Line("  r.expect('{');");
                 for (int i = 0; i < fields.Length; i++)
                 {
                     var f = fields[i];
                     string head = (i == 0 ? "{" : ",") + Quote((string)f["name"]!) + ":";
                     Line($"  r.expect({Quote(head)});const v{i}=gr{Shape((JsonObject)f["wire"]!)}(r,d+1);");
                 }
-                Line("  r.expect('}');return {" + string.Join(",", fields.Select((f,i) => (string?)f["name"] == "__proto__" ? $"[\"__proto__\"]:v{i}" : $"{Quote((string)f["name"]!)}:v{i}")) + "};");
+                Line("  r.expect('}');return {" + string.Join(",", fields.Select((f, i) => (string?)f["name"] == "__proto__" ? $"[\"__proto__\"]:v{i}" : $"{Quote((string)f["name"]!)}:v{i}")) + "};");
             }
             Line("}");
             Line($"function gw{name}(out: DocumentOutput,x: unknown,d: number): void {{");
             Line("  out.depth(d);");
-            if (nullable) Line("  if(x===null){out.ascii('null');return;}");
+            if (nullable)
+                Line("  if(x===null){out.ascii('null');return;}");
             Line("  const obj=out.object(x);");
             if (union)
             {
                 Line("  if(typeof obj.type!=='string'||obj.value==null)return out.invalid();switch(obj.type.replace(/global::/g,'').trim()){");
                 foreach (var item in cases)
-                    Line($"    case {Quote(PortableManifest.Normalize((string)item["id"]!))}:out.literal({Head("{\"$type\":"+item["hash"]+",\"$value\":")});gw{Id((string)item["type"]!)}(out,obj.value,d+1);break;");
+                    Line($"    case {Quote(PortableManifest.Normalize((string)item["id"]!))}:out.literal({Head("{\"$type\":" + item["hash"] + ",\"$value\":")});gw{Id((string)item["type"]!)}(out,obj.value,d+1);break;");
                 Line("    default:return out.invalid();}out.token(125);");
             }
             else
             {
-                if (fields.Length == 0) Line("  out.token(123);");
-                for (int i=0; i<fields.Length;i++)
+                if (fields.Length == 0)
+                    Line("  out.token(123);");
+                for (int i = 0; i < fields.Length; i++)
                 {
-                    var f=fields[i]; var wire=(JsonObject)f["wire"]!;
-                    string field=Quote((string)f["name"]!), head=(i==0?"{":",")+Quote((string)f["name"]!)+":";
-                    string fallback=(string?)wire["kind"] switch {
-                        "scalar" => (string?)wire["type"] switch { "bool"=>"false","long"=>"0n",_=>"0" },
-                        "contract" when (string?)contracts[PortableManifest.Normalize((string)wire["type"]!)]["kind"]=="Struct" => $"out.zero({Quote((string)c["id"]!)},{i})",
-                        _=>"null"
+                    var f = fields[i];
+                    var wire = (JsonObject)f["wire"]!;
+                    string field = Quote((string)f["name"]!), head = (i == 0 ? "{" : ",") + Quote((string)f["name"]!) + ":";
+                    string fallback = (string?)wire["kind"] switch
+                    {
+                        "scalar" => (string?)wire["type"] switch { "bool" => "false", "long" => "0n", _ => "0" },
+                        "contract" when (string?)contracts[PortableManifest.Normalize((string)wire["type"]!)]["kind"] == "Struct" => $"out.zero({Quote((string)c["id"]!)},{i})",
+                        _ => "null"
                     };
                     Line($"  {WriteHead(head)};gw{Shape(wire)}(out,Object.prototype.hasOwnProperty.call(obj,{field})?obj[{field}]:{fallback},d+1);");
                 }

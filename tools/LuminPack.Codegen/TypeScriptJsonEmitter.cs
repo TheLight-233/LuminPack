@@ -21,7 +21,8 @@ internal static partial class PortableGenerateCommand
             }).ToArray();
             // Integer property names reorder under Object.keys. Escaped names use the runtime's ECMAScript spelling.
             if (fields.Length == 0 || fields.Any(f => f.Name.Length == 0 || char.IsAsciiDigit(f.Name[0]) ||
-                f.Name.Any(ch => ch < ' ' || ch > '~' || ch is '"' or '\\'))) continue;
+                f.Name.Any(ch => ch < ' ' || ch > '~' || ch is '"' or '\\')))
+                continue;
             output.Append("  { type: ").Append(Quote(PortableManifest.Text(contract, "id")))
                 .Append(", names: [").Append(string.Join(", ", fields.Select(f => Quote(f.Name))))
                 .Append("], kinds: [").Append(string.Join(", ", fields.Select(f => Quote(f.Kind)))).AppendLine("],");
@@ -32,8 +33,12 @@ internal static partial class PortableGenerateCommand
                 var (name, kind) = fields[i];
                 string read = kind switch
                 {
-                    "int" => "input.i32()", "float" => "input.f32()", "double" => "input.f64()",
-                    "long" => "input.i64()", "byte" => "input.u8()", _ => $"nested[{i}](input, profile, state)"
+                    "int" => "input.i32()",
+                    "float" => "input.f32()",
+                    "double" => "input.f64()",
+                    "long" => "input.i64()",
+                    "byte" => "input.u8()",
+                    _ => $"nested[{i}](input, profile, state)"
                 };
                 output.Append("      [").Append(Quote(name)).Append("]: ").Append(read).AppendLine(",");
             }
@@ -49,15 +54,21 @@ internal static partial class PortableGenerateCommand
                         .Append(", Object.prototype.hasOwnProperty.call(value, ").Append(field).Append(") ? value[")
                         .Append(field).Append("] : ").Append(zero).AppendLine(", 8);");
                 }
-                else output.Append("      nested[").Append(i).AppendLine("](output, value, profile, state);");
+                else
+                    output.Append("      nested[").Append(i).AppendLine("](output, value, profile, state);");
             }
             output.AppendLine("    },\n    read(input, utf8, depth, nested) {");
             for (int i = 0; i < fields.Length; i++)
             {
                 string read = fields[i].Kind switch
                 {
-                    "int" => "input.int32()", "float" => "input.floating(true)", "double" => "input.floating(false)",
-                    "string" => "input.checkedString()", "long" => "input.long()", "byte" => "input.byte()", "bool" => "input.boolean()",
+                    "int" => "input.int32()",
+                    "float" => "input.floating(true)",
+                    "double" => "input.floating(false)",
+                    "string" => "input.checkedString()",
+                    "long" => "input.long()",
+                    "byte" => "input.byte()",
+                    "bool" => "input.boolean()",
                     _ => $"nested[{i}](input, utf8, depth)"
                 };
                 output.Append("      input.expect(").Append(Head(i)).Append(");\n      const v").Append(i)
@@ -77,7 +88,8 @@ internal static partial class PortableGenerateCommand
                         .Append(Quote(kind)).Append(", Object.prototype.hasOwnProperty.call(value, ").Append(field)
                         .Append(") ? value[").Append(field).Append("] : ").Append(zero).AppendLine(", 8));");
                 }
-                else output.Append("      parts.push(").Append(Head(i)).Append(");\n      nested[").Append(i)
+                else
+                    output.Append("      parts.push(").Append(Head(i)).Append(");\n      nested[").Append(i)
                     .AppendLine("](value, encoding, state, parts);");
             }
             output.AppendLine("      parts.push(\"}\");\n    },\n    writeBytes(value, state, out, nested) {");
@@ -87,10 +99,13 @@ internal static partial class PortableGenerateCommand
                 output.Append("      out.ascii(").Append(Head(i)).AppendLine(");");
                 string field = Quote(name);
                 string value = $"Object.prototype.hasOwnProperty.call(value, {field}) ? value[{field}] : 0";
-                if (kind == "int") output.Append("      out.int(").Append(value).AppendLine(");");
-                else if (kind is "float" or "double") output.Append("      out.float(").Append(value)
+                if (kind == "int")
+                    output.Append("      out.int(").Append(value).AppendLine(");");
+                else if (kind is "float" or "double")
+                    output.Append("      out.float(").Append(value)
                     .Append(kind == "float" ? ", true" : ", false").AppendLine(");");
-                else output.Append("      nested[").Append(i).AppendLine("](value, \"utf8\", state, out);");
+                else
+                    output.Append("      nested[").Append(i).AppendLine("](value, \"utf8\", state, out);");
             }
             output.AppendLine("      out.token(125);\n    },\n  },");
         }
